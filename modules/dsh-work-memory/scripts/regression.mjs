@@ -207,10 +207,12 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   rmSync(bkRoot, { recursive: true, force: true })
   mkdirSync(bkRoot, { recursive: true })
   writeFileSync(join(bkRoot, 'MEMORY.md'), '[id:deadbeef0001] [2026-09-11] [tag:常规] 备份空值用例\n', 'utf8')
+  const defaultBackupBefore = existsSync(defaultBackupDir())
   const rNull = backupMemory(bkRoot, { backupDir: null, keep: 999 })
   // 当天备份已存在时返回 skipped（此时无 dir 字段）；两种结果都说明 null 没把默认目录顶掉
   check('机制：backupDir=null 不抛错且指向默认目录', rNull.ok === true && (rNull.skipped === true || String(rNull.dir || '').startsWith(defaultBackupDir())))
-  if (rNull.ok && rNull.dir) rmSync(rNull.dir, { recursive: true, force: true }) // 清理，别污染真实备份区
+  if (rNull.ok && rNull.dir) rmSync(rNull.dir, { recursive: true, force: true }) // 清理当天目录
+  if (!defaultBackupBefore) rmSync(defaultBackupDir(), { recursive: true, force: true }) // 本用例若新建了默认父目录，一并清掉，别在用户 home 留空目录
   rmSync(bkRoot, { recursive: true, force: true })
 }
 

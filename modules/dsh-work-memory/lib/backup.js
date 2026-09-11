@@ -15,17 +15,12 @@ import { todayStamp } from './clock.js'
 
 /**
  * 默认备份根目录：~/.dsh/memories/work-memory-backup（可在设置里改 backupDir）。
+ *
+ * 只**返回路径**、不建目录——建目录由真正写备份时做（`backupMemory` 里 mkdirSync）。
+ * 早前这里顺手 mkdir 会留下空目录（回归测试用 `backupDir: null` 走默认路径时就会凭空造一个）。
  * 注意：不要硬编码盘符路径——非 Windows 平台会把 `E:\…` 当相对路径，凭空建出怪目录。
  */
 export function defaultBackupDir() {
-  const candidates = []
-  candidates.push(join(homedir(), '.dsh', 'memories', 'work-memory-backup'))
-  for (const c of candidates) {
-    try {
-      mkdirSync(c, { recursive: true })
-      return c
-    } catch { /* try next */ }
-  }
   return join(homedir(), '.dsh', 'memories', 'work-memory-backup')
 }
 
