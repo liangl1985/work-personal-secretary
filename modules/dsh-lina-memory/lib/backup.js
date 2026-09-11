@@ -1,8 +1,8 @@
 /**
  * lina-memory — 记忆库自动备份。
  *
- * 全量复制记忆库到备份目录（默认 E:\lina\backup\memories\lina，
- * 与系统盘分离，防磁盘故障/误删），按天目录 backup-YYYY-MM-DD，
+ * 全量复制记忆库到备份目录（默认 ~/.dsh/memories/lina-memory-backup，
+ * 与主库分离，防误删/故障），按天目录 backup-YYYY-MM-DD，
  * 保留最近 backupKeep 份（默认 7）。
  * 与归档同一节奏：写库懒触发（每天至多一次，当天目录存在即跳过）。
  * @module lina-memory/backup
@@ -14,21 +14,19 @@ import { homedir } from 'node:os'
 import { todayStamp } from './clock.js'
 
 /**
- * 默认备份根目录：Windows 优先 E 盘（与系统盘分离），其余平台用 ~/.dsh。
- * 注意：`E:\…` 只在 win32 下作为候选——否则在 Linux/macOS（含 CI）上会被当成
- * 相对路径，凭空建出名为 `E:\lina\…` 的怪目录。
+ * 默认备份根目录：~/.dsh/memories/lina-memory-backup（可在设置里改 backupDir）。
+ * 注意：不要硬编码盘符路径——非 Windows 平台会把 `E:\…` 当相对路径，凭空建出怪目录。
  */
 export function defaultBackupDir() {
   const candidates = []
-  if (process.platform === 'win32') candidates.push(join('E:\\', 'lina', 'backup', 'memories', 'lina'))
-  candidates.push(join(homedir(), '.dsh', 'memories', 'lina-backup'))
+  candidates.push(join(homedir(), '.dsh', 'memories', 'lina-memory-backup'))
   for (const c of candidates) {
     try {
       mkdirSync(c, { recursive: true })
       return c
     } catch { /* try next */ }
   }
-  return join(homedir(), '.dsh', 'memories', 'lina-backup')
+  return join(homedir(), '.dsh', 'memories', 'lina-memory-backup')
 }
 
 /**
@@ -100,7 +98,7 @@ export function listBackups(root, opts = {}) {
  * - 跳过临时/锁文件；镜像与主库同名，回填无损。
  *
  * @param {string} root - 记忆库根目录
- * @param {string} obsidianDir - Obsidian 镜像目录（如 E:\lina\00_全局记忆）
+ * @param {string} obsidianDir - Obsidian 镜像目录（设置项 obsidianSyncDir）
  * @param {object} opts - { prune = true }
  * @returns {object} { ok, dir, files, pruned, error? }
  */

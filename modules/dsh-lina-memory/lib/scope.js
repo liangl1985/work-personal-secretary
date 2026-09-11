@@ -1,7 +1,7 @@
 /**
  * lina-memory — 写入范围的分类决策（护栏核心，纯函数、无依赖、可单测）
  *
- * 2026-09-11 主人批准：此前 `scope` 默认 project 但 `branch` 默认 null，
+ * 2026-09-11 使用者批准：此前 `scope` 默认 project 但 `branch` 默认 null，
  * 而 project 无 branch 时兜底写 MEMORY.md（全局）→ 项目类记忆静默污染全局。
  * 这里把决策收成一处，规则：
  *   1. branch 优先取显式参数，其次会话推断（由调用方传入 resolvedBranch）；
@@ -16,8 +16,8 @@ export const WRITE_SCOPES = ['global', 'user', 'project', 'daily']
 
 /** 给模型看的分类判据（写进工具描述，保持单一真源） */
 export const SCOPE_CRITERIA = [
-  'global=只放跨模块且不随项目变的根本内容：莉娜身份/性格/保密红线/协作铁律/长期工作约定（稀缺资源）；',
-  'user=主人的个人画像、偏好、习惯、对莉娜的交互要求；',
+  'global=只放跨模块且不随项目变的根本内容：助手身份/性格/保密红线/协作铁律/长期工作约定（稀缺资源）；',
+  'user=使用者的个人画像、偏好、习惯、对助手的交互要求；',
   'project=与某个具体项目/插件/任务有关的经验、决策、踩坑、待办（默认落点，需 branch）；',
   'daily=当天发生的流水与一次性记录。',
 ].join('')

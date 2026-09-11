@@ -1,5 +1,5 @@
 /**
- * lina-memory —— 莉娜的记忆插件 · Web 客户端半（DSH 0.1.5-rc.1 原生架构）
+ * lina-memory —— 记忆插件 · Web 客户端半（DSH 0.1.5-rc.1 原生架构）
  *
  * 0.2.0 的 UI 是「conversation.view 列表槽 + 手写 fetch + useState 轮询」，
  * 属于 0.1.2 时代的写法。0.3.0 起改为官方原生扩展点：
@@ -10,7 +10,7 @@
  *   4. 入口    tab 类型的 guide 入口框 → ctx.sidebarRight.openTab(kind)
  *   5. 配置    host 侧 settings 命名空间 → 设置页「插件」分区自动生成配置卡片
  *
- * 记忆数据的真相源仍是 host 侧的纯 Markdown 库（~/.dsh/memories/lina）；
+ * 记忆数据的真相源仍是 host 侧的纯 Markdown 库（记忆库目录）；
  * host 只通过 /lina-memory/api 路由提供读写，客户端不再拼接裸 URL。
  */
 
@@ -28,7 +28,7 @@ window.__ModuleLoader__.load({
     const TAB_KIND = 'lina-memory'
     const POLL_MS = 5000
     /** 构建标记：面板页脚可见，用来确认渲染进程跑的到底是哪一版 bundle */
-    const BUILD = 'v1.0.1'
+    const BUILD = 'v1.0.2'
 
     /**
      * host 路由的基址。
@@ -82,7 +82,7 @@ window.__ModuleLoader__.load({
     const ZH = {
       'tab.title': '记忆',
       'guide.title': '记忆库',
-      'guide.description': '莉娜的执行层记忆：统计 · 条目 · 待确认 · 图谱',
+      'guide.description': '执行层记忆：统计 · 条目 · 待确认 · 关系',
       'panel.title': '记忆库',
       'panel.loading': '读取中…',
       'panel.search': '检索条目…',
@@ -125,7 +125,7 @@ window.__ModuleLoader__.load({
     const EN = {
       'tab.title': 'Memory',
       'guide.title': 'Memory',
-      'guide.description': "Lina's execution-layer memory: stats, entries, review queue, graph",
+      'guide.description': 'Execution-layer memory: stats, entries, review queue, relations',
       'panel.title': 'Memory',
       'panel.loading': 'Loading…',
       'panel.search': 'Search entries…',
@@ -404,7 +404,7 @@ window.__ModuleLoader__.load({
       const graph = graphRes?.value?.graph ?? { entities: [], edges: [] }
       const loading = overviewRes?.value === undefined
 
-      // ---- 关系数据（2026-09-11 主人定：图谱降级为"关系数据 + 条目相关列表"）----
+      // ---- 关系数据（2026-09-11 使用者定：图谱降级为"关系数据 + 条目相关列表"）----
       // GRAPH.json 仍是关系真源；面板不再画 SVG 图，而是给每条记忆标注「相关 N」并可展开。
       const rawNodes = Array.isArray(graph?.entities) ? graph.entities : []
       const labelById = new Map(rawNodes.map((n, i) => [typeof n === 'string' ? n : String(n?.id ?? i),

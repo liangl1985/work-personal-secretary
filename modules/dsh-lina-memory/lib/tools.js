@@ -88,7 +88,7 @@ export function createTools(deps) {
     if (!content) return { ok: false, error: 'content 不能为空' }
     const tag = args.tag || '常规'
 
-    // ---- 分类护栏（2026-09-11 主人批准）----
+    // ---- 分类护栏（2026-09-11 使用者批准）----
     // 决策收在 lib/scope.js（纯函数、可单测）：auto 有分支→project/无分支→daily；
     // project 无分支直接报错，**不再静默写进全局**；global/user 必须显式指定。
     const target = resolveWriteScope({
@@ -100,9 +100,9 @@ export function createTools(deps) {
     const scope = target.scope
     const branch = target.branch
 
-    // 子代理门控：global/user 是主人级记忆，只允许主代理直接写入
+    // 子代理门控：global/user 是使用者级记忆，只允许主代理直接写入
     if (execInfo.subagent && (scope === 'global' || scope === 'user')) {
-      return { ok: false, error: '子代理不可直接写入全局/用户记忆，请由主代理（主人对话）写入' }
+      return { ok: false, error: '子代理不可直接写入全局/用户记忆，请由主代理（主对话）写入' }
     }
 
     const files = memoryFiles(root, { branch })
@@ -126,10 +126,10 @@ export function createTools(deps) {
           return { ok: true, queued: true, duplicate: true, message: '该内容已在待确认队列中，未重复提交' }
         }
         onSuggestion({ content: entry, scope, branch: scope === 'project' ? branch : null, source: 'memory_remember' })
-        return { ok: true, queued: true, message: '已进入待确认队列，等待用户批准' }
+        return { ok: true, queued: true, message: '已进入待确认队列，等待使用者批准' }
       }
       store.add(entry)
-      // 图谱登记（2026-09-11 主人要求）：记忆落盘时就登记节点，
+      // 图谱登记（2026-09-11 使用者要求）：记忆落盘时就登记节点，
       // 不再只在 memory_link 时才出现——否则各范围图谱是空的
       registerEntry(root, entry)
       return { ok: true, file: filePath, tag }
@@ -151,7 +151,7 @@ export function createTools(deps) {
     const branch = args.branch || null
     const files = memoryFiles(root, { branch })
 
-    // 归档范围：查 ARCHIVE（冷数据，默认不注入）；**命中即转热**（主人 2026-09-11 定）：
+    // 归档范围：查 ARCHIVE（冷数据，默认不注入）；**命中即转热**（2026-09-11 定）：
     // 把命中的条目按原 id、原文写回它原来所属的范围，从冷区移出。
     if (scope === 'archive') {
       const pool = archiveEntries(root, Math.max(limit * 4, 40))
@@ -268,14 +268,14 @@ export function createTools(deps) {
     defineTool({
       name: 'memory_remember',
       description:
-        '记录一条长期记忆。内容进入记忆库：tag=关键 的条目会进入待确认队列等待用户批准；tag=常规 直接写入。内容重复（与已存条目或待确认队列相同）时不会重复写入。子代理（subagent）不能直接写入 global/user 范围。'
+        '记录一条长期记忆。内容进入记忆库：tag=关键 的条目会进入待确认队列等待使用者批准；tag=常规 直接写入。内容重复（与已存条目或待确认队列相同）时不会重复写入。子代理（subagent）不能直接写入 global/user 范围。'
         + '\n【分类判据·必须遵守，2026-09-11 定】' + SCOPE_CRITERIA
         + '\n判据口诀：**"换个项目还成立吗？"** 成立→global/user；不成立→project（带 branch）。'
         + ' 项目类记忆写进全局是最常见的误分类，务必避免；scope 省略时按 auto 处理（有项目分支→project，否则→daily）。',
       parameters: {
         content: { type: 'string', required: true, description: '记忆内容（一句话，具体明确）' },
         tag: { type: 'string', enum: ['关键', '常规', '临时', '敏感'], description: '重要性标签，默认 常规' },
-        scope: { type: 'string', enum: ['auto', 'global', 'user', 'project', 'daily'], description: '写入范围，默认 auto：有项目分支→project，无分支→daily。global 仅限跨模块根本内容（身份/性格/红线/长期约定）；user=主人画像与偏好；project=某项目/插件/任务相关（默认落点）；daily=当天流水。global/user 必须显式指定。' },
+        scope: { type: 'string', enum: ['auto', 'global', 'user', 'project', 'daily'], description: '写入范围，默认 auto：有项目分支→project，无分支→daily。global 仅限跨模块根本内容（身份/性格/红线/长期约定）；user=使用者画像与偏好；project=某项目/插件/任务相关（默认落点）；daily=当天流水。global/user 必须显式指定。' },
         branch: { type: 'string', description: '项目名（scope=project 时使用；省略则从会话工作目录推断，推断不出会报错而不会写进全局）' },
       },
       output: {

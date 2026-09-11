@@ -1,5 +1,5 @@
 /**
- * lina-memory — 莉娜的全局执行层记忆插件（DSH 标准插件 host 半）。
+ * lina-memory — 执行层记忆插件（DSH 标准插件 host 半）。
  *
  * 核心能力（对齐官方规范）：
  * 1. 热记忆注入：ctx.systemPrompt.context() 注入记忆快照（每轮常驻）
@@ -8,7 +8,7 @@
  * 4. Web API：ctx.webServer.register() 可视化记忆管理
  * 5. 运行时可配置：ctx.settings.register() 原生设置命名空间（设置→插件 卡片）
  *
- * 零依赖（node:fs），本地优先（~/.dsh/memories/lina）。
+ * 零依赖（node:fs），本地优先（默认 ~/.dsh/memories/lina-memory，可在设置里改）。
  * @module lina-memory
  */
 
@@ -122,7 +122,7 @@ export function apply(ctx, config = {}) {
         // indexOf 崩溃）。无变化时返回上次文本（官方按内容 diff 保持缓存稳定）。
         if (snapshot === lastSnapshot) return lastText
         lastSnapshot = snapshot
-        // 标题词可配（发布通用化为「记忆」，本机设为「莉娜的记忆」）
+        // 标题词可配（默认「记忆」，可在设置里改成任意名称）
         lastText = snapshot ? '【' + (cfg.personaLabel || '记忆') + '】\n' + snapshot : ''
         return lastText
       },
@@ -354,7 +354,7 @@ export function apply(ctx, config = {}) {
           '· 转冷：DAILY ' + report.dailies + ' 个文件、条目 ' + report.entries + ' 条',
           '· 冷区：' + before.length + ' → ' + after.length + ' 个文件',
         ]
-        // 转冷预审结果（主人 2026-09-11 定：到期≠立即冷，先自动判断）
+        // 转冷预审结果（2026-09-11 定：到期≠立即冷，先自动判断）
         if (liveArchiveCfg.triageEnabled !== false) {
           const autoKept = (report.kept || []).filter((k) => k.by === 'auto')
           const heldByMe = (report.kept || []).filter((k) => k.by !== 'auto')
@@ -368,7 +368,7 @@ export function apply(ctx, config = {}) {
           for (const c of preCold.slice(0, 6)) lines.push('    ✖ 预判将冷 [' + String(c.scope || '') + '] ' + String(c.label || '').slice(0, 34) + '（还有 ' + c.inDays + ' 天）')
           const ask = report.ask || []
           if (ask.length > 0) {
-            lines.push('· ⏳ 待判断 ' + ask.length + ' 条（信号不足/矛盾，由莉娜判定，不推给主人；超 ' + String(liveArchiveCfg.triageGraceDays ?? 7) + ' 天未判则自然转冷）：')
+            lines.push('· ⏳ 待判断 ' + ask.length + ' 条（信号不足/矛盾，由助手判定，不推给使用者；超 ' + String(liveArchiveCfg.triageGraceDays ?? 7) + ' 天未判则自然转冷）：')
             for (const a of ask.slice(0, 10)) {
               lines.push('    - ' + a.id + ' [' + String(a.excerpt || a.label || '').slice(0, 40) + ']'
                 + (a.pre ? '（尚未到期）' : '')
@@ -417,7 +417,7 @@ export function apply(ctx, config = {}) {
     },
   }))
 
-  // ---- 3.10 转冷预审判定 /memory_triage（主人 2026-09-11 定：到期≠立即冷） ----
+  // ---- 3.10 转冷预审判定 /memory_triage（2026-09-11 定：到期≠立即冷） ----
   disposers.push(ctx.commands.register({
     name: 'memory_triage',
     description: '转冷预审判定：列出「待判断」条目，或 /memory_triage keep <id>（保留并顺延）、/memory_triage cold <id>（现在转冷）',
@@ -431,11 +431,11 @@ export function apply(ctx, config = {}) {
           if (!id) return { kind: 'error', text: '用法：/memory_triage ' + action + ' <条目id>' }
           const ttl = liveArchiveCfg.projectTtlDays || 30
           if (action === 'keep') {
-            const r = keepEntry(root, id, { days: ttl, reason: reason || '莉娜判定：仍需留在热区' })
+            const r = keepEntry(root, id, { days: ttl, reason: reason || '助手判定：仍需留在热区' })
             if (!r.ok) return { kind: 'error', text: r.error || '保留失败' }
             return { kind: 'success', text: '已保留到 ' + r.record.until + '（' + r.label + '）\n理由：' + r.record.reason }
           }
-          const r = archiveEntryById(root, id, { reason: reason || '莉娜判定：自然转冷', ttlDays: ttl })
+          const r = archiveEntryById(root, id, { reason: reason || '助手判定：自然转冷', ttlDays: ttl })
           if (!r.ok) return { kind: 'error', text: r.error || '转冷失败' }
           if (r.deferred) return { kind: 'success', text: '已判定转冷（尚未到期）：' + id + '（' + r.label + '）\n到期日 ' + r.until + ' 自动转冷，之后不再询问\n理由：' + r.record.reason }
           return { kind: 'success', text: '已转冷：' + id + '（' + r.label + '）→ ARCHIVE/entries.md\n仍可用 memory_recall(scope=archive) 检索，命中即转热' }

@@ -53,7 +53,7 @@ export const MEMORY_SETTINGS_SCHEMA = z.object({
   memoryDir: z.string().default('')
     .description('记忆库根目录；留空 = ~/.dsh/memories/<插件命名空间>'),
   personaLabel: z.string().default('记忆')
-    .description('注入快照的标题词，默认「记忆」（本机可设为「莉娜的记忆」）'),
+    .description('注入快照的标题词，默认「记忆」'),
   injectMemory: z.boolean().default(true)
     .description('每轮对话注入记忆 runtime 快照（关闭后记忆库仍可用，只是不再自动注入）'),
   snapshotOrder: z.natural().default(500)
@@ -83,7 +83,7 @@ export const MEMORY_SETTINGS_SCHEMA = z.object({
   triageGraceDays: z.natural().default(7)
     .description('预审「待判断」条目的宽限天数：超过仍未判定则自然转冷（0 = 不宽限）'),
   triageAskInSnapshot: z.boolean().default(true)
-    .description('有「转冷待判断」条目时，在注入快照里提醒莉娜去判定（/memory_triage）'),
+    .description('有「转冷待判断」条目时，在注入快照里提醒助手去判定（/memory_triage）'),
   globalWarnCount: z.natural().default(20)
     .description('全局记忆条数告警阈值：超过时注入快照里会出现整理提醒（0 = 关闭）'),
   backupEnabled: z.boolean().default(true)

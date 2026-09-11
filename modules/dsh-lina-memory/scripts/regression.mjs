@@ -275,7 +275,7 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   rmSync(root, { recursive: true, force: true })
 }
 
-// ---------- 4.8 TTL 起始点（2026-09-11 主人提醒：7 天的起点必须是被使用那天） ----------
+// ---------- 4.8 TTL 起始点（2026-09-11 使用者提醒：7 天的起点必须是被使用那天） ----------
 {
   const { ttlRef, daysUntilCold } = await import(pathToFileURL(join(lib, 'archive.js')).href)
   const { readAccess, pruneAccess, touchAccess } = await import(pathToFileURL(join(lib, 'access.js')).href)
@@ -334,7 +334,7 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   rmSync(lRoot, { recursive: true, force: true })
 }
 
-// ---------- 4.9 转冷预审（2026-09-11 主人定：到期≠立即冷，先做辅助判断） ----------
+// ---------- 4.9 转冷预审（2026-09-11 使用者定：到期≠立即冷，先做辅助判断） ----------
 {
   const tri = await import(pathToFileURL(join(lib, 'triage.js')).href)
   const a = await import(pathToFileURL(join(lib, 'archive.js')).href)
@@ -349,14 +349,14 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   const d = (n) => addDays(today, n)
 
   // 判定纯函数：三类信号
-  const jKeep = tri.judgeEntry(makeEntry('【待办】插件 A 的权限模型还需主人确认，下一步做 B', { date: d(-40), tag: '常规' }), {
+  const jKeep = tri.judgeEntry(makeEntry('【待办】插件 A 的权限模型还需使用者确认，下一步做 B', { date: d(-40), tag: '常规' }), {
     today, recentDailyTexts: ['今天继续做插件 A 的权限模型'], graphDegree: 1, accessCount: 0,
   })
   check('预审：未完结 + 图谱关联 + 与近 7 天日志相关 → keep', jKeep.decision === 'keep' && jKeep.score >= 3)
   const jCold = tri.judgeEntry(makeEntry('【插件 B 已装·2026-08-16】已完成安装并验证通过', { date: d(-40), tag: '常规' }), { today })
   check('预审：完成/一次性信号 → cold', jCold.decision === 'cold' && jCold.score < 0)
   const jAsk = tri.judgeEntry(makeEntry('插件 C 的某个实现细节记录', { date: d(-40), tag: '常规' }), { today })
-  check('预审：无信号 → ask（交莉娜判断，不推给主人）', jAsk.decision === 'ask' && jAsk.score === 0)
+  check('预审：无信号 → ask（交助手判断，不推给使用者）', jAsk.decision === 'ask' && jAsk.score === 0)
   check('预审：关键条目永不判冷', tri.judgeEntry(makeEntry('全局红线', { date: d(-400), tag: '关键' }), { today }).decision === 'keep')
   const jSuperseded = tri.judgeEntry(makeEntry('插件 D 的配置方式：改 X 文件', { date: d(-60), tag: '常规' }), {
     today, hotTexts: [makeEntry('插件 D 的配置方式：改 X 文件（已改为 Y 方式）', { date: d(-1), tag: '常规' })],
@@ -368,9 +368,9 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
     makeEntry('今天继续做插件 A 的权限模型', { date: today, tag: '常规' }),
   ]), 'utf8')
   writeFileSync(join(root, 'MEMORY.md'), serializeEntries([
-    makeEntry('莉娜协作铁律：插件 A 的权限模型以主人确认为准', { date: d(-100), tag: '关键' }),
+    makeEntry('通用协作铁律：插件 A 的权限模型以使用者确认为准', { date: d(-100), tag: '关键' }),
   ]), 'utf8')
-  const keepEntryRaw = makeEntry('【待办】插件 A 的权限模型还需主人确认，下一步做 B', { date: d(-40), tag: '常规' })
+  const keepEntryRaw = makeEntry('【待办】插件 A 的权限模型还需使用者确认，下一步做 B', { date: d(-40), tag: '常规' })
   const coldEntryRaw = makeEntry('【插件 B 已装·2026-08-16】已完成安装并验证通过', { date: d(-40), tag: '常规' })
   const askEntryRaw = makeEntry('插件 C 的某个实现细节记录', { date: d(-40), tag: '常规' })
   writeFileSync(join(root, 'PROJECTS', '预审用例.md'), serializeEntries([keepEntryRaw, coldEntryRaw, askEntryRaw]), 'utf8')
@@ -396,10 +396,10 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   check('预审：待判断超宽限 → 自然转冷', !readFileSync(join(root, 'PROJECTS', '预审用例.md'), 'utf8').includes('[id:' + idAsk + ']')
     && r2.coldTimeout.some((x) => x.id === idAsk) && r2.entries >= 1)
 
-  // 莉娜手动判定：keep / cold
-  const rKeep = a.keepEntry(root, idKeep, { days: 30, reason: '主人明确要求长期留热' })
+  // 助手手动判定：keep / cold
+  const rKeep = a.keepEntry(root, idKeep, { days: 30, reason: '使用者明确要求长期留热' })
   check('预审：/memory_triage keep 记保留窗口', rKeep.ok === true && String(rKeep.record.reason).includes('长期'))
-  const rCold = a.archiveEntryById(root, idKeep, { reason: '莉娜判定：一次性内容' })
+  const rCold = a.archiveEntryById(root, idKeep, { reason: '助手判定：一次性内容' })
   const caseeFile = join(root, 'PROJECTS', '预审用例.md')
   const txtAfterCold = existsSync(caseeFile) ? readFileSync(caseeFile, 'utf8') : ''
   check('预审：/memory_triage cold 立即转冷并可检索', rCold.ok === true
@@ -418,7 +418,7 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   const preColdRaw = makeEntry('插件 I 的机制说明（已判冷，尚未到期）', { date: d(-25), tag: '常规' })
   writeFileSync(join(root, 'PROJECTS', '判冷用例.md'), serializeEntries([preColdRaw]), 'utf8')
   const idPreCold = extractEntryId(preColdRaw)
-  const rc = a.archiveEntryById(root, idPreCold, { reason: '莉娜判定：机制已入 README', ttlDays: 30 })
+  const rc = a.archiveEntryById(root, idPreCold, { reason: '助手判定：机制已入 README', ttlDays: 30 })
   check('预审：未到期判冷 → 只记判定并推迟到到期日', rc.ok === true && rc.deferred === true && Boolean(rc.until))
   const r4 = a.runArchive(root, { projectTtlDays: 30, userTtlDays: 90, dailyRetentionDays: 7, force: true, triageEnabled: true })
   check('预审：已判冷条目未到期时不提前搬走、也不再进待判断',
@@ -446,7 +446,7 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
     makeEntry('今天继续做插件 F 的权限模型', { date: today, tag: '常规' }),
   ]), 'utf8')
   // 三条都还没到期（TTL 30）：left = 5 / 4 / 3
-  const soonKeep = makeEntry('【待办】插件 F 的权限模型还需主人确认', { date: d(-25), tag: '常规' })
+  const soonKeep = makeEntry('【待办】插件 F 的权限模型还需使用者确认', { date: d(-25), tag: '常规' })
   const soonCold = makeEntry('【插件 G 已装】已完成安装并验证通过', { date: d(-26), tag: '常规' })
   const soonAsk = makeEntry('插件 H 的某个实现细节记录', { date: d(-27), tag: '常规' })
   writeFileSync(join(root, 'PROJECTS', '预判用例.md'), serializeEntries([soonKeep, soonCold, soonAsk]), 'utf8')
@@ -462,7 +462,7 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
     r.preCold.some((x) => x.id === idCold2) && txt.includes('[id:' + idCold2 + ']') && r.entries === 0)
   check('提前预审：到期前判定为 ask 的提前进待判断队列',
     r.ask.some((x) => x.id === idAsk2 && x.pre === true) && a.listPending(root).some((p) => p.id === idAsk2))
-  check('提前预审：due 清单带 verdict（主人在保养时能看到"将冷/预判"）',
+  check('提前预审：due 清单带 verdict（在保养时能看到"将冷/预判"）',
     r.due.some((x) => x.verdict === 'cold') && r.due.every((x) => typeof x.inDays === 'number'))
   rmSync(root, { recursive: true, force: true })
 }

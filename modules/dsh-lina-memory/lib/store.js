@@ -17,7 +17,7 @@ const LOCK_RETRY_MS = 25
 export function defaultMemoryRoot() {
   const dshHome = process.env.DSH_HOME?.trim()
   const base = dshHome && dshHome.length > 0 ? dshHome : join(homedir(), '.dsh')
-  return join(base, 'memories', 'lina')
+  return join(base, 'memories', 'lina-memory')
 }
 
 export function genEntryId() {

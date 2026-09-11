@@ -1,7 +1,7 @@
 /**
  * lina-memory — 冷热分层（归档 / 转热）
  *
- * 2026-09-11 主人定：**三级记忆模型**
+ * 2026-09-11 使用者定：**三级记忆模型**
  *   - 全局记忆（MEMORY.md）：**永不遗忘**，不参与任何 TTL；
  *   - 热记忆（USER.md / PROJECTS / DAILY）：到期转冷；
  *   - 冷记忆（ARCHIVE/）：不注入、可检索，**被取出使用时转热**（写回原范围）。
@@ -38,7 +38,7 @@ const MAINTAIN_MARK = '.last-maintain'
 export const NOTICE_DAYS = 7
 
 /**
- * 「到期基准日」= TTL 的**起始点**（主人 2026-09-11 特别指出要把这条讲清楚）。
+ * 「到期基准日」= TTL 的**起始点**（2026-09-11 特别指出要把这条讲清楚）。
  *
  *     基准日 = max(写入日, 最后使用日)
  *
@@ -144,7 +144,7 @@ export function runArchive(root, opts = {}) {
 
     // ---- 1. DAILY 过期 → 按周合并进 ARCHIVE ----
     // 以**文件**为单位判到期：基准日 = max(文件名日期, 文件内任一条目的最后使用日)。
-    // 主人 2026-09-11 提醒的起始点问题：7 天内**被用过**的日志不该因为"文件日期老"就被合并。
+    // 2026-09-11 提醒的起始点问题：7 天内**被用过**的日志不该因为"文件日期老"就被合并。
     const dailyDir = join(root, 'DAILY')
     const access = readAccess(root)
     if (existsSync(dailyDir)) {
@@ -187,9 +187,9 @@ export function runArchive(root, opts = {}) {
         if (f.endsWith('.md')) scopes.push({ key: 'project', label: 'PROJECTS/' + f, file: join(projDir, f), ttl: cfg.projectTtlDays })
       }
     }
-    // 注意：**全局 MEMORY.md 不进入该列表**（永不遗忘）——主人 2026-09-11 定
+    // 注意：**全局 MEMORY.md 不进入该列表**（永不遗忘）——2026-09-11 定
     const archived = []
-    // ---- 转冷预审（主人 2026-09-11 定：到期≠立即转冷，先做一次辅助判断）----
+    // ---- 转冷预审（2026-09-11 定：到期≠立即转冷，先做一次辅助判断）----
     const triageOn = opts.triageEnabled !== false
     const grace = Number.isFinite(Number(opts.triageGraceDays)) ? Number(opts.triageGraceDays) : 7
     const triage = triageOn ? readTriage(root) : { kept: {}, pending: {} }
@@ -216,14 +216,14 @@ export function runArchive(root, opts = {}) {
           continue
         }
         const scopeToken = sc.key === 'project' ? sc.label.replace(/^PROJECTS\//, '').replace(/\.md$/, '') : sc.key
-        // ① 已有保留判定（自动/莉娜/主人）→ 继续留热
+        // ① 已有保留判定（自动/助手/使用者）→ 继续留热
         const held = keepUntil(triage, id, today)
         if (held) {
           report.kept.push({ id, scope: sc.key, label: sc.label, until: held.until, by: held.by, reason: held.reason, pre: dueSoon })
           keep.push(e)
           continue
         }
-        // ①' 已判定为冷（莉娜拍板）→ 不再询问，到期即冷
+        // ①' 已判定为冷（助手拍板）→ 不再询问，到期即冷
         const settledCold = coldVerdict(triage, id)
         if (settledCold && dueSoon) {
           report.preCold.push({ id, scope: sc.key, label: sc.label, inDays: left, score: 0, reason: settledCold.reason || '已判定为冷' })
@@ -271,7 +271,7 @@ export function runArchive(root, opts = {}) {
             keep.push(e)
             continue
           }
-          // 宽限期内莉娜也没判 → 自然转冷（不再拖）
+          // 宽限期内助手也没判 → 自然转冷（不再拖）
           report.coldTimeout.push({ id, scope: sc.key, label: sc.label, waited })
         }
         // ③ cold：到期就转冷；未到期只记"预判自然转冷"，等它到期
@@ -424,10 +424,10 @@ export function listPending(root) {
 }
 
 /**
- * 转冷预审判定①：**保留**（莉娜或主人判定该条仍需留在热区）。
+ * 转冷预审判定①：**保留**（助手或使用者判定该条仍需留在热区）。
  * 只记保留窗口，不改条目原文、不伪造"被使用"记录。
  */
-export function keepEntry(root, id, { reason = '判定：仍需留在热区', days = 30, by = 'lina', today = todayStamp() } = {}) {
+export function keepEntry(root, id, { reason = '判定：仍需留在热区', days = 30, by = 'assistant', today = todayStamp() } = {}) {
   if (!id) return { ok: false, error: 'id 不能为空' }
   return withDirLock(root, () => {
     const hit = findHotEntry(root, id)
@@ -440,7 +440,7 @@ export function keepEntry(root, id, { reason = '判定：仍需留在热区', da
 }
 
 /** 转冷预审判定②：**转冷**（已到期立即移入 ARCHIVE；未到期只记判定，到期时静默转冷） */
-export function archiveEntryById(root, id, { reason = 'triage-cold', by = 'lina', today = todayStamp(), ttlDays = null } = {}) {
+export function archiveEntryById(root, id, { reason = 'triage-cold', by = 'assistant', today = todayStamp(), ttlDays = null } = {}) {
   if (!id) return { ok: false, error: 'id 不能为空' }
   return withDirLock(root, () => {
     const hit = findHotEntry(root, id)
