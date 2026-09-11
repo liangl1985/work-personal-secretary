@@ -1,4 +1,4 @@
-# 记忆插件 bundle patch — 挂载 lina-memory entry（标准 bundle 方式）。
+# 记忆插件 bundle patch — 挂载 work-memory entry（标准 bundle 方式）。
 # 由 dsh.profile.bundles + dsh plugin add 安装，勿手动插入主 profile patch。
 #
 # 这里的 config 是**部署默认层（base）**，并保持**中性**（不含任何个人路径/称呼）：
@@ -6,8 +6,8 @@
 # 个性化（如注入标题词、Obsidian 镜像目录、备份目录）请在**profile 的 cordis.patch.yml**
 # 里按 id 覆盖，或直接在设置页改；不要改这里。
 - insert:
-    - id: lina-memory
-      name: 'dsh-lina-memory'
+    - id: work-memory
+      name: 'dsh-work-memory'
       config:
         injectMemory: true        # 热记忆注入开关（设置页可改，免重启）
         snapshotOrder: 500        # runtime 上下文快照顺序（注册期固定，改动需重启）

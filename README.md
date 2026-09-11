@@ -10,7 +10,7 @@
 
 | 子项目 | 包名 | 状态 | 说明 |
 |---|---|---|---|
-| [`modules/dsh-lina-memory`](modules/dsh-lina-memory) | `dsh-lina-memory` | ✅ 可用（v1.0.1） | 执行层长期记忆：**三级记忆模型**（全局永不遗忘 / 热记忆按 TTL 转冷 / 冷归档被用到即转热）+ **转冷预审** + 会话原生注入 + `remember`/`recall`/`link` 工具 + 右侧边栏面板 + Obsidian 镜像。运行时 id 为 `lina-memory` |
+| [`modules/dsh-work-memory`](modules/dsh-work-memory) | `dsh-work-memory` | ✅ 可用（v1.0.1） | 执行层长期记忆：**三级记忆模型**（全局永不遗忘 / 热记忆按 TTL 转冷 / 冷归档被用到即转热）+ **转冷预审** + 会话原生注入 + `remember`/`recall`/`link` 工具 + 右侧边栏面板 + Obsidian 镜像。运行时 id 为 `work-memory` |
 
 后续候选（待定，需先确认许可证与必要性）：插件市场、多代理团队引擎、工程方法类技能（以 DSH 原生 `SKILL.md` 形态纳入，非插件层）。
 
@@ -19,7 +19,7 @@
 ```text
 work-personal-secretary/
 ├── modules/<子项目>/          # 每个子项目是一个可独立测试/打包的单元
-│   └── dsh-lina-memory/       #   记忆插件（含自己的 package.json / README / CHANGELOG / 回归）
+│   └── dsh-work-memory/       #   记忆插件（含自己的 package.json / README / CHANGELOG / 回归）
 ├── .github/workflows/ci.yml   # 仓库级 CI：遍历所有子项目跑回归
 └── README.md
 ```
@@ -28,10 +28,10 @@ work-personal-secretary/
 
 ```bash
 # 跑某个子项目的回归
-node modules/dsh-lina-memory/scripts/regression.mjs
+node modules/dsh-work-memory/scripts/regression.mjs
 
 # 语法自检
-node --check modules/dsh-lina-memory/lib/index.js
+node --check modules/dsh-work-memory/lib/index.js
 ```
 
 - 每个子项目**零运行时依赖**（只用 node 内置模块），回归脚本可直接执行，CI 不需要 `npm install`。

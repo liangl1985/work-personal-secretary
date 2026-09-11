@@ -1,10 +1,10 @@
 /**
- * lina-memory — 本地时间工具（2026-09-11 定：所有日期/时间以**本地时区**为准）
+ * work-memory — 本地时间工具（2026-09-11 定：所有日期/时间以**本地时区**为准）
  *
  * 此前全用 `Date.prototype.toISOString()`（UTC）：本地 08:00 之前写的记忆会被算进
  * "昨天"，归档排期也按 UTC 走。现在统一从这里取，日界 = 本地 00:00（中国时间）。
  *
- * @module lina-memory/clock
+ * @module work-memory/clock
  */
 
 const pad = (n, w = 2) => String(n).padStart(w, '0')

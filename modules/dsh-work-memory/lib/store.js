@@ -1,5 +1,5 @@
 /**
- * lina-memory — memory storage layer.
+ * work-memory — memory storage layer.
  */
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -17,7 +17,7 @@ const LOCK_RETRY_MS = 25
 export function defaultMemoryRoot() {
   const dshHome = process.env.DSH_HOME?.trim()
   const base = dshHome && dshHome.length > 0 ? dshHome : join(homedir(), '.dsh')
-  return join(base, 'memories', 'lina-memory')
+  return join(base, 'memories', 'work-memory')
 }
 
 export function genEntryId() {
@@ -155,7 +155,7 @@ export function withDirLock(dir, fn) {
   }
 
   mkdirSync(dir, { recursive: true })
-  const lockPath = join(dir, '.lina-memory.lock')
+  const lockPath = join(dir, '.work-memory.lock')
   const deadline = Date.now() + LOCK_TIMEOUT_MS
   let acquired = false
   while (!acquired) {
@@ -173,7 +173,7 @@ export function withDirLock(dir, fn) {
           continue
         }
       } catch { continue }
-      if (Date.now() > deadline) throw new Error('lina-memory: lock timeout')
+      if (Date.now() > deadline) throw new Error('work-memory: lock timeout')
       const t = Date.now()
       while (Date.now() - t < LOCK_RETRY_MS) { /* spin */ }
     }

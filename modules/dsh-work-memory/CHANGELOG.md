@@ -1,12 +1,27 @@
 # CHANGELOG
 
-本插件的版本历史。**1.0.1 起包名定为 `dsh-lina-memory`**（1.0.0 是三级记忆模型定型的可发布终结版）。
+本插件的版本历史。**1.0.3 起包名与运行时 id 全部中性化（`dsh-work-memory` / `work-memory`）**（1.0.0 是三级记忆模型定型的可发布终结版）。
+
+## 1.0.3 — 2026-09-11（标识符中性化）
+
+发布件不得携带任何私有标识，因此包名与运行时 id 一并改为中性：
+
+- 包名 `dsh-lina-memory` → **`dsh-work-memory`**
+- 插件运行时 id `lina-memory` → **`work-memory`**，随之统一：
+  - settings 命名空间（设置页卡片键）、`/work-memory/api` 路由、`dsh-resource://work-memory/…` 协议、面板 tab id/kind、store 持久化键、快照 order 键、锁文件 `.work-memory.lock`
+  - 默认记忆库目录 `~/.dsh/memories/work-memory`、默认备份目录 `~/.dsh/memories/work-memory-backup`
+- **升级提示（老实例）**：
+  1. profile 的 `dependencies` 键与 `dsh.profile.bundles` 同步改为 `dsh-work-memory`；
+  2. 设置页用户层命名空间由 `lina-memory` 改为 `work-memory`（把原配置搬过去；未搬则回到默认值）；
+  3. **重启 DSH** 生效；
+  4. 记忆库数据本身不动——若用户层已显式指定 `memoryDir`，路径不变；未指定者请把 `memoryDir` 指回原有库，避免读到新的空目录。
+- 客户端 bundle 有改动 → 版本 **1.0.3**（revision 缓存规则）。
 
 ## 1.0.2 — 2026-09-11（发布去个人化）
 
 发布件不得夹带个人身份与私有路径（发布版不面向特定使用者），因此：
 
-- **默认记忆库路径通用化**：`~/.dsh/memories/lina` → **`~/.dsh/memories/lina-memory`**；默认备份目录改为 `~/.dsh/memories/lina-memory-backup`，并**移除硬编码盘符路径**（Windows 上的 `E:\…` 候选会让非 Windows 平台建出怪目录）。
+- **默认记忆库路径通用化**：原先的私有默认目录 → **`~/.dsh/memories/work-memory`**；默认备份目录改为 `~/.dsh/memories/work-memory-backup`，并**移除硬编码盘符路径**（Windows 上的 `E:\…` 候选会让非 Windows 平台建出怪目录）。
   - 升级提示：老用户请在**设置页用户层**显式指定 `memoryDir`（指向原有记忆库）与 `backupDir`，数据即可零迁移。
 - **文案与注释去个人化**：面板引导描述（中/英）、设置项描述、快照里的「转冷待判断」提醒、工具输出与代码注释中的私有助手名/私有称呼一律改为**助手 / 使用者**通用表述；`LICENSE` 版权署名改为项目所有者。
 - **转冷预审标记词补充通用叫法**：`DECISION_MARKERS` 增加「使用者定 / 使用者批准 / 用户要求 / 产品要求」，保留原有叫法以兼容既有条目。
@@ -14,10 +29,10 @@
 
 ## 1.0.1 — 2026-09-11（包名定名）
 
-- **包名 `@lina/dsh-lina-memory` → `dsh-lina-memory`**（发布名与安装名统一）：同步改 `cordis.patch.yml` 的 bundle `name`、客户端 `__ModuleLoader__.load({ id })`、profile 的 `dependencies` 键与 `dsh.profile.bundles`。
-  - 插件**运行时 id 仍是 `lina-memory`**（`export const name` / settings 命名空间 / 面板 tab id / `/lina-memory/api` 路由 / `dsh-resource://lina-memory/…` 协议都不变）→ 记忆数据、设置用户层、Obsidian 镜像**零迁移**。
+- **包名 `（旧私有 scoped 包名）` → `dsh-work-memory`**（发布名与安装名统一）：同步改 `cordis.patch.yml` 的 bundle `name`、客户端 `__ModuleLoader__.load({ id })`、profile 的 `dependencies` 键与 `dsh.profile.bundles`。
+  - 插件**运行时 id 仍是 `work-memory`**（`export const name` / settings 命名空间 / 面板 tab id / `/work-memory/api` 路由 / `dsh-resource://work-memory/…` 协议都不变）→ 记忆数据、设置用户层、Obsidian 镜像**零迁移**。
   - 客户端 bundle 有改动（id + BUILD 标记）→ 版本号必须升（bundle 按 revision 缓存）；面板页脚应显示 `v1.0.1`。
-- `repository` / `homepage` 指向集成体仓库 `github.com/liangl1985/work-personal-secretary`（子目录 `modules/dsh-lina-memory`），`author: liangl1985`。
+- `repository` / `homepage` 指向集成体仓库 `github.com/liangl1985/work-personal-secretary`（子目录 `modules/dsh-work-memory`），`author: liangl1985`。
 
 ## 1.0.0 — 2026-09-11（可发布终结版）
 

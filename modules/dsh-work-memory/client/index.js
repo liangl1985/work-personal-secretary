@@ -1,5 +1,5 @@
 /**
- * lina-memory —— 记忆插件 · Web 客户端半（DSH 0.1.5-rc.1 原生架构）
+ * work-memory —— 记忆插件 · Web 客户端半（DSH 0.1.5-rc.1 原生架构）
  *
  * 0.2.0 的 UI 是「conversation.view 列表槽 + 手写 fetch + useState 轮询」，
  * 属于 0.1.2 时代的写法。0.3.0 起改为官方原生扩展点：
@@ -11,24 +11,24 @@
  *   5. 配置    host 侧 settings 命名空间 → 设置页「插件」分区自动生成配置卡片
  *
  * 记忆数据的真相源仍是 host 侧的纯 Markdown 库（记忆库目录）；
- * host 只通过 /lina-memory/api 路由提供读写，客户端不再拼接裸 URL。
+ * host 只通过 /work-memory/api 路由提供读写，客户端不再拼接裸 URL。
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-lina-memory',
+  id: 'dsh-work-memory',
   factory: (require) => {
     const React = require('react')
     const { defineStore } = require('@deepseek-ai/dsh-client-store')
     const h = React.createElement
 
-    const NS = 'lina-memory'
-    const PROTOCOL = 'lina-memory'
-    const API = '/lina-memory/api'
-    const TAB_ID = 'lina-memory'
-    const TAB_KIND = 'lina-memory'
+    const NS = 'work-memory'
+    const PROTOCOL = 'work-memory'
+    const API = '/work-memory/api'
+    const TAB_ID = 'work-memory'
+    const TAB_KIND = 'work-memory'
     const POLL_MS = 5000
     /** 构建标记：面板页脚可见，用来确认渲染进程跑的到底是哪一版 bundle */
-    const BUILD = 'v1.0.2'
+    const BUILD = 'v1.0.3'
 
     /**
      * host 路由的基址。
@@ -117,7 +117,7 @@ window.__ModuleLoader__.load({
       'panel.approve': '批准',
       'panel.reject': '拒绝',
       'panel.remove': '删除',
-      'panel.footer': 'lina-memory · 本地 Markdown 记忆库',
+      'panel.footer': 'work-memory · 本地 Markdown 记忆库',
       'panel.failed': '读取失败',
       'panel.none': '资源通道未就绪（无提供方）',
       'panel.admin': '配置请在 设置 → 插件 中调整',
@@ -160,7 +160,7 @@ window.__ModuleLoader__.load({
       'panel.approve': 'Approve',
       'panel.reject': 'Reject',
       'panel.remove': 'Remove',
-      'panel.footer': 'lina-memory · local Markdown memory',
+      'panel.footer': 'work-memory · local Markdown memory',
       'panel.failed': 'Read failed',
       'panel.none': 'Resource channel unavailable (no provider)',
       'panel.admin': 'Configure under Settings → Plugins',
@@ -293,18 +293,18 @@ window.__ModuleLoader__.load({
                 if (signal.aborted) return
               }
             },
-          }), 'lina-memory: resource protocol')
+          }), 'work-memory: resource protocol')
           probe.registered = true
         } catch (err) {
           probe.registerError = String(err?.message || err)
-          console.warn('lina-memory client: resource provider 注册失败', err)
+          console.warn('work-memory client: resource provider 注册失败', err)
         }
       })
     }
 
     // ------------------------------------------------ 原生状态：store 席位
     const panelStore = defineStore({
-      persist: 'lina-memory.panel',
+      persist: 'work-memory.panel',
       init: () => ({ scope: 'global', name: '', newName: '', confirmArchive: false, expanded: '', draft: '', search: '', revision: 0, busy: false, message: '' }),
       actions: {
         setScope: (d, scope) => { d.scope = scope; d.confirmArchive = false; d.expanded = '' },
@@ -698,7 +698,7 @@ window.__ModuleLoader__.load({
             description: () => tr('guide.description'),
             icon: () => h('span', { style: { fontSize: '18px' } }, '🧠'),
           }],
-        }), 'lina-memory: sidebar tab type')
+        }), 'work-memory: sidebar tab type')
       })
 
       ctx.inject(['slots'], (scope) => {
@@ -709,7 +709,7 @@ window.__ModuleLoader__.load({
           store: panelStore,
           // 诊断探针随 props 进组件（面板会显示提供方状态与最近错误）
           inject: () => ({ probe }),
-        }, MemoryPanel)), 'lina-memory: sidebar tab body')
+        }, MemoryPanel)), 'work-memory: sidebar tab body')
       })
     }
 
@@ -722,10 +722,10 @@ window.__ModuleLoader__.load({
             const a = scope.locale.register(NS, 'zh', ZH)
             const b = scope.locale.register(NS, 'en', EN)
             return () => { a?.(); b?.() }
-          }, 'lina-memory: dictionaries'))
+          }, 'work-memory: dictionaries'))
         })
       } catch (err) {
-        console.warn('lina-memory client: locale 注册失败（回退内置中文）', err)
+        console.warn('work-memory client: locale 注册失败（回退内置中文）', err)
       }
 
       installResourceProvider(ctx)

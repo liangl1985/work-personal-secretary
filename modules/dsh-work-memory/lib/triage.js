@@ -1,5 +1,5 @@
 /**
- * lina-memory — **转冷预审**（到期条目的"该不该冷"辅助判断）
+ * work-memory — **转冷预审**（到期条目的"该不该冷"辅助判断）
  *
  * 2026-09-11 定：
  *   > 「转冷前会做一次判断吗？……应该结合近期日志及热记忆和全局记忆等内容做一次辅助判断，
@@ -18,7 +18,7 @@
  *
  * 判定是**纯函数**（`judgeEntry`），输入全部来自调用方传入的上下文，便于单测与复演。
  *
- * @module lina-memory/triage
+ * @module work-memory/triage
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'

@@ -1,5 +1,5 @@
 /**
- * lina-memory — 执行层记忆插件（DSH 标准插件 host 半）。
+ * work-memory — 执行层记忆插件（DSH 标准插件 host 半）。
  *
  * 核心能力（对齐官方规范）：
  * 1. 热记忆注入：ctx.systemPrompt.context() 注入记忆快照（每轮常驻）
@@ -8,8 +8,8 @@
  * 4. Web API：ctx.webServer.register() 可视化记忆管理
  * 5. 运行时可配置：ctx.settings.register() 原生设置命名空间（设置→插件 卡片）
  *
- * 零依赖（node:fs），本地优先（默认 ~/.dsh/memories/lina-memory，可在设置里改）。
- * @module lina-memory
+ * 零依赖（node:fs），本地优先（默认 ~/.dsh/memories/work-memory，可在设置里改）。
+ * @module work-memory
  */
 
 import { join } from 'node:path'
@@ -27,7 +27,7 @@ import { readAccess, pruneAccess } from './access.js'
 import { readTriage } from './triage.js'
 import { installSettings } from './settings.js'
 
-export const name = 'lina-memory'
+export const name = 'work-memory'
 export const inject = ['systemPrompt', 'tools', 'commands', 'settings', 'webServer']
 
 export function apply(ctx, config = {}) {
@@ -59,10 +59,10 @@ export function apply(ctx, config = {}) {
       backupDir: next.backupDir,
       keep: next.backupKeep,
     })
-    ctx.logger?.debug?.('lina-memory: 设置已更新')
+    ctx.logger?.debug?.('work-memory: 设置已更新')
   })
 
-  const root = cfg.memoryDir || join(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'), 'memories', 'lina')
+  const root = cfg.memoryDir || join(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'), 'memories', 'work-memory')
   mkdirSync(root, { recursive: true })
   for (const dir of ['DAILY', 'PROJECTS']) mkdirSync(join(root, dir), { recursive: true })
 
@@ -89,7 +89,7 @@ export function apply(ctx, config = {}) {
       } catch { /* best-effort，不影响对话 */ }
     }
     disposers.push(ctx.systemPrompt.context({
-      name: 'lina-memory:snapshot',
+      name: 'work-memory:snapshot',
       order: cfg.snapshotOrder,
       text: (context) => {
         if (!cfg.injectMemory) return ''
@@ -471,7 +471,7 @@ export function apply(ctx, config = {}) {
   try {
     disposers.push(installApi(ctx, { root }))
   } catch (err) {
-    ctx.logger?.warn?.('lina-memory: web API 安装失败: ' + (err?.message || err))
+    ctx.logger?.warn?.('work-memory: web API 安装失败: ' + (err?.message || err))
   }
   return () => {
     for (const d of disposers) {

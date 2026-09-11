@@ -1,11 +1,11 @@
 /**
- * lina-memory — 记忆库自动备份。
+ * work-memory — 记忆库自动备份。
  *
- * 全量复制记忆库到备份目录（默认 ~/.dsh/memories/lina-memory-backup，
+ * 全量复制记忆库到备份目录（默认 ~/.dsh/memories/work-memory-backup，
  * 与主库分离，防误删/故障），按天目录 backup-YYYY-MM-DD，
  * 保留最近 backupKeep 份（默认 7）。
  * 与归档同一节奏：写库懒触发（每天至多一次，当天目录存在即跳过）。
- * @module lina-memory/backup
+ * @module work-memory/backup
  */
 
 import { existsSync, mkdirSync, readdirSync, rmSync, cpSync, statSync } from 'node:fs'
@@ -14,19 +14,19 @@ import { homedir } from 'node:os'
 import { todayStamp } from './clock.js'
 
 /**
- * 默认备份根目录：~/.dsh/memories/lina-memory-backup（可在设置里改 backupDir）。
+ * 默认备份根目录：~/.dsh/memories/work-memory-backup（可在设置里改 backupDir）。
  * 注意：不要硬编码盘符路径——非 Windows 平台会把 `E:\…` 当相对路径，凭空建出怪目录。
  */
 export function defaultBackupDir() {
   const candidates = []
-  candidates.push(join(homedir(), '.dsh', 'memories', 'lina-memory-backup'))
+  candidates.push(join(homedir(), '.dsh', 'memories', 'work-memory-backup'))
   for (const c of candidates) {
     try {
       mkdirSync(c, { recursive: true })
       return c
     } catch { /* try next */ }
   }
-  return join(homedir(), '.dsh', 'memories', 'lina-memory-backup')
+  return join(homedir(), '.dsh', 'memories', 'work-memory-backup')
 }
 
 /**

@@ -1,4 +1,4 @@
-# dsh-lina-memory · DSH 记忆插件
+# dsh-work-memory · DSH 记忆插件
 
 > 为 **DeepSeek Harness（DSH）** 打造的**执行层长期记忆**插件：三级记忆模型 + 会话原生热注入 + remember/recall/link 工具 + 右侧边栏管理面板 + Obsidian 镜像。
 > 零运行时依赖（只用 `node:fs`），全程**本地**、**不联网**、**无遥测**。
@@ -43,7 +43,7 @@
 **命令**：`/memory_review`、`/memory_archive`、`/memory_backup`、`/memory_audit`（分类巡检 + 关联枢纽/孤儿 + 预审状态）、`/memory_maintain`（周保养 + 预审）、`/memory_triage`（转冷预审判定）、`/memory_promote <id>`（冷转热）。
 **面板**（右侧边栏 →「记忆库」）：统计四格 / 范围切换 / 项目与日期选择器（项目分类可**新建**与**归档**）/ 检索 / 条目增删 / 待确认批准 / 「相关 N」关系明细。
 **镜像**：可把记忆库单向同步到 Obsidian vault（`obsidianSyncDir`），用于迁移与人工翻阅。
-**配置**：设置 → 插件 → 插件配置 → `lina-memory`（23 项，除 `snapshotOrder` 外**免重启生效**）。
+**配置**：设置 → 插件 → 插件配置 → `work-memory`（23 项，除 `snapshotOrder` 外**免重启生效**）。
 
 ## 三、安装（DSH 插件标准方式）
 
@@ -60,7 +60,7 @@ dsh plugin --profile desktop install
 # 4) 重启 DSH 生效
 ```
 > 本包自带 `cordis.patch.yml`（声明于 `dsh.bundle.patch`），由 bundle 机制自动挂载 entry；**不要**手动往主 profile patch 里插 entry。
-> 个性化（标题词 / Obsidian 目录 / 备份目录）请写在**设置页用户层**（或 `~/.dsh/settings.yaml` 的 `lina-memory` 段）——注意 profile 的 `id` 定向 `config` 是**整块替换**，会顶掉插件自带默认值，不推荐。
+> 个性化（标题词 / Obsidian 目录 / 备份目录）请写在**设置页用户层**（或 `~/.dsh/settings.yaml` 的 `work-memory` 段）——注意 profile 的 `id` 定向 `config` 是**整块替换**，会顶掉插件自带默认值，不推荐。
 
 **依赖**：只有 peer（由 DSH 宿主运行时提供）：`@deepseek-ai/dsh-tools`、`cordis`、`schemastery`、若干 `@deepseek-ai/dsh-client-*`、`react@18`。**没有运行时依赖**。
 

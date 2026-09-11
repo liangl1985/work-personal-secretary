@@ -1,8 +1,8 @@
 /**
- * lina-memory — model tools: remember / recall / link.
+ * work-memory — model tools: remember / recall / link.
  * 认知词汇原语（借鉴 Mnemon）：记 / 召回 / 关联。
  * 按官方规范使用 defineTool()：parameters DSL + execute(args, exec) + output。
- * @module lina-memory/tools
+ * @module work-memory/tools
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'

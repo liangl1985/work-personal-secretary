@@ -1,5 +1,5 @@
 /**
- * lina-memory — 设置命名空间（DSH 0.1.5-rc.1 原生设置服务）
+ * work-memory — 设置命名空间（DSH 0.1.5-rc.1 原生设置服务）
  *
  * 0.2.0 时代配置只来自 profile 的 cordis.patch.yml（改一次要重启）。
  * 0.3.0 起改用官方 `ctx.settings` 命名空间：
@@ -9,13 +9,13 @@
  *
  * 依赖 `@deepseek-ai/schemastery`（宿主运行时自带，peer）。
  *
- * @module lina-memory/settings
+ * @module work-memory/settings
  */
 
 import z from '@deepseek-ai/schemastery'
 
 /** 设置命名空间名（设置页卡片按它派发） */
-export const SETTINGS_NS = 'lina-memory'
+export const SETTINGS_NS = 'work-memory'
 
 /**
  * 兜底默认值：与 schema 默认值保持一致。
@@ -134,9 +134,9 @@ export function installSettings(ctx, baseConfig = {}) {
     scope.watch(() => {
       current = toConfig(scope.get())
     })
-    ctx.logger?.debug?.('lina-memory: 设置命名空间已注册（设置→插件 可配置）')
+    ctx.logger?.debug?.('work-memory: 设置命名空间已注册（设置→插件 可配置）')
   } catch (err) {
-    ctx.logger?.warn?.('lina-memory: 设置服务不可用，退回组合配置：' + (err?.message || err))
+    ctx.logger?.warn?.('work-memory: 设置服务不可用，退回组合配置：' + (err?.message || err))
     scope = null
   }
 

@@ -1,5 +1,5 @@
 /**
- * lina-memory — 图谱（GRAPH.json）读写与登记
+ * work-memory — 图谱（GRAPH.json）读写与登记
  *
  * 2026-09-11 使用者指出：图谱只在 `memory_link` 时登记，**记忆落盘时完全不碰图谱**，
  * 导致「偏好」范围只有一个点、项目范围没有节点。这里把图谱维护收成一处：
@@ -8,7 +8,7 @@
  *   - `memory_link` → `linkEntries` 建边（并顺手登记两端节点）。
  * 纯文件操作 + 一个带锁的便利入口，便于单测。
  *
- * @module lina-memory/graph
+ * @module work-memory/graph
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'

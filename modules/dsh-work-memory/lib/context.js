@@ -1,5 +1,5 @@
 /**
- * lina-memory — 热记忆快照生成（每轮注入）
+ * work-memory — 热记忆快照生成（每轮注入）
  *
  * 2026-09-11 使用者批准的**取舍规则**（写死在此，参数可在设置页调）：
  *   1. 分段上限：全局 20 / 偏好 12 / 项目 16 / 今日 8；总字符 maxChars 默认 4000；
@@ -13,7 +13,7 @@
  * **红线**：本模块**只读**，绝不刷新 `.access.json`（见 lib/access.js）——每轮注入不算
  * "被用到"，否则热记忆永远顺延、TTL 失效（2026-09-11 指出的起始点问题）。
  *
- * @module lina-memory/context
+ * @module work-memory/context
  */
 
 import { join } from 'node:path'

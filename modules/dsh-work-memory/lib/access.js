@@ -1,5 +1,5 @@
 /**
- * lina-memory — 记忆"被用到"的跟踪（`.access.json`）
+ * work-memory — 记忆"被用到"的跟踪（`.access.json`）
  *
  * 2026-09-11 使用者定：**"访问跟踪直接做"** —— 热记忆的 TTL 判据不是"写入多久"，
  * 而是"最近有没有被用到"：归档判定取 `max(写入日, 最后使用日)`，**常用的旧记忆不会被归档**。
@@ -13,7 +13,7 @@
  * `/memory_maintain` 自身。这条是**红线**：注入会把热记忆每轮都送进上下文，若算作
  * "使用"，全库将永远停在热区、TTL 永不生效——2026-09-11 特别提醒过这个起始点。
  *
- * @module lina-memory/access
+ * @module work-memory/access
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'

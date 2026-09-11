@@ -1,6 +1,6 @@
 {
-  "name": "dsh-lina-memory",
-  "version": "1.0.2",
+  "name": "dsh-work-memory",
+  "version": "1.0.3",
   "description": "DSH 记忆插件（执行层长期记忆）：三级记忆模型（全局永不遗忘 / 热记忆按周转冷 / 冷记忆被用到即转热）+ 会话原生注入 + remember·recall·link 工具 + 右侧边栏面板 + Obsidian 镜像。Composable three-tier memory plugin for DeepSeek Harness.",
   "keywords": [
     "deepseek",
@@ -67,9 +67,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/liangl1985/work-personal-secretary.git",
-    "directory": "modules/dsh-lina-memory"
+    "directory": "modules/dsh-work-memory"
   },
-  "homepage": "https://github.com/liangl1985/work-personal-secretary/tree/main/modules/dsh-lina-memory#readme",
+  "homepage": "https://github.com/liangl1985/work-personal-secretary/tree/main/modules/dsh-work-memory#readme",
   "author": "liangl1985",
   "publishConfig": {
     "access": "public"

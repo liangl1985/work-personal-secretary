@@ -1,5 +1,5 @@
 /**
- * lina-memory — 写入范围的分类决策（护栏核心，纯函数、无依赖、可单测）
+ * work-memory — 写入范围的分类决策（护栏核心，纯函数、无依赖、可单测）
  *
  * 2026-09-11 使用者批准：此前 `scope` 默认 project 但 `branch` 默认 null，
  * 而 project 无 branch 时兜底写 MEMORY.md（全局）→ 项目类记忆静默污染全局。
@@ -9,7 +9,7 @@
  *   3. scope=project 但没有 branch → **报错**，绝不静默写进全局；
  *   4. global / user 必须显式指定（各自不带 branch）。
  *
- * @module lina-memory/scope
+ * @module work-memory/scope
  */
 
 export const WRITE_SCOPES = ['global', 'user', 'project', 'daily']

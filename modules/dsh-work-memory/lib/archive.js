@@ -1,5 +1,5 @@
 /**
- * lina-memory — 冷热分层（归档 / 转热）
+ * work-memory — 冷热分层（归档 / 转热）
  *
  * 2026-09-11 使用者定：**三级记忆模型**
  *   - 全局记忆（MEMORY.md）：**永不遗忘**，不参与任何 TTL；
@@ -16,7 +16,7 @@
  * 归档时在 `ARCHIVE/.archive-index.json` 记录 `id → {scope,file,archivedAt}`，
  * 转热时据此**按原 id、原文**写回原范围（这也是"冷记忆拿出来处理时转为热记忆"的落点）。
  *
- * @module lina-memory/archive
+ * @module work-memory/archive
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'

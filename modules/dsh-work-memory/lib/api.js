@@ -1,8 +1,8 @@
 ﻿/**
- * lina-memory — Web GUI API.
+ * work-memory — Web GUI API.
  * 记忆可视化管理的后端：列表/详情/编辑/批准/拒绝/归档/图谱。
  * 同源保护（Content-Type JSON + Origin 校验）。
- * @module lina-memory/api
+ * @module work-memory/api
  */
 
 import { URL } from 'node:url'
@@ -15,7 +15,7 @@ import { memoryFiles, sanitize } from './context.js'
 import { listArchive, runArchive } from './archive.js'
 import { listBackups, backupMemory, defaultBackupDir } from './backup.js'
 
-const API_ROOT = '/lina-memory/api'
+const API_ROOT = '/work-memory/api'
 
 function sendJson(res, status, body) {
   const text = JSON.stringify(body)
@@ -367,7 +367,7 @@ export function installApi(ctx, deps) {
     try {
       disposers.push(ctx.webServer.register({ kind: 'exact', path: API_ROOT + p, handler }))
     } catch (err) {
-      ctx.logger?.warn?.('lina-memory: 精确路由注册失败 ' + p + '：' + (err?.message || err))
+      ctx.logger?.warn?.('work-memory: 精确路由注册失败 ' + p + '：' + (err?.message || err))
     }
   }
   return () => {

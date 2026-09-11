@@ -1,5 +1,5 @@
 /**
- * lina-memory — 回归测试（node scripts/regression.mjs）
+ * work-memory — 回归测试（node scripts/regression.mjs）
  * 覆盖：存储层（解析/序列化/去重比对）、归档（DAILY 按月合并/条目 TTL/关键保留/防抖）、
  * 快照（活动日志过滤）、子代理门控（在可解析 dsh-tools 的环境下）。
  * 零外部依赖可跑核心部分；门控部分在 DSH 安装环境自动启用。
@@ -197,7 +197,7 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   })
   const nestedMs = Date.now() - t0
   check('机制：嵌套 withDirLock 可重入（<500ms，修复前 5000ms 超时）', nestedMs < 500)
-  check('机制：嵌套结束后锁文件已释放', !existsSync(join(lockDir, '.lina-memory.lock')))
+  check('机制：嵌套结束后锁文件已释放', !existsSync(join(lockDir, '.work-memory.lock')))
   check('机制：嵌套内层确实执行了', existsSync(join(lockDir, 'inner.txt')))
   rmSync(lockDir, { recursive: true, force: true })
 
