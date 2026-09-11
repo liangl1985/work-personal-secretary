@@ -1,0 +1,17 @@
+# 依赖与构建产物（本仓库子项目零运行时依赖，回归只用 node 内置模块）
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# 回归/临时产物
+.regression-tmp/
+.regression-tmp-*/
+.regression-lock/
+
+# 杂项
+*.log
+*.tmp
+*.lock
+.DS_Store
+Thumbs.db

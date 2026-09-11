@@ -1,0 +1,29 @@
+# 记忆插件 bundle patch — 挂载 lina-memory entry（标准 bundle 方式）。
+# 由 dsh.profile.bundles + dsh plugin add 安装，勿手动插入主 profile patch。
+#
+# 这里的 config 是**部署默认层（base）**，并保持**中性**（不含任何个人路径/称呼）：
+#   解析值 = schema 默认值 ← 本文件 base ← profile 的 cordis.patch.yml ← 设置页用户覆盖层
+# 个性化（如注入标题词、Obsidian 镜像目录、备份目录）请在**profile 的 cordis.patch.yml**
+# 里按 id 覆盖，或直接在设置页改；不要改这里。
+- insert:
+    - id: lina-memory
+      name: 'dsh-lina-memory'
+      config:
+        injectMemory: true        # 热记忆注入开关（设置页可改，免重启）
+        snapshotOrder: 500        # runtime 上下文快照顺序（注册期固定，改动需重启）
+        snapshotMaxChars: 4000    # 快照字符上限（超出按优先级截断并标注未注入条数）
+        snapshotLimitGlobal: 20   # 分段上限（全局/偏好/项目/今日）
+        snapshotLimitUser: 12
+        snapshotLimitProject: 16
+        snapshotLimitDaily: 8
+        reviewEnabled: true       # 关键记忆需确认（待批准队列，免重启）
+        dailyAutoLog: true        # 每轮自动写今日活动日志（防抖 10 分钟，免重启）
+        maintainWarnDays: 7       # 距上次 /memory_maintain 超过 N 天在快照里提醒周保养
+        globalWarnCount: 20       # 全局记忆条数告警阈值（超过时快照里出现整理提醒；0 = 关闭）
+        # —— 冷热分层：全局永不遗忘 / 热记忆到期转冷 / 冷记忆被用到即转热 ——
+        archiveEnabled: true
+        dailyRetentionDays: 7     # DAILY 保留 7 天，更早按周合并进 ARCHIVE/daily-YYYY-Www.md
+        projectTtlDays: 30        # 项目记忆 TTL（被 memory_recall 用到过的顺延）
+        userTtlDays: 90           # 偏好记忆 TTL
+        backupEnabled: true       # 自动备份（写库懒触发，每天至多一次）
+        backupKeep: 7             # 保留最近备份份数

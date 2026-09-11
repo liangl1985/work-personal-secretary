@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  modules:
+    name: 子项目回归
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.x', '24.x']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      # 子项目零运行时依赖：不装依赖，直接语法自检 + 跑各自回归
+      - name: 语法自检（node --check 全量 JS）
+        run: |
+          for f in $(git ls-files '*.js' '*.mjs'); do node --check "$f"; done
+
+      - name: 子项目回归
+        run: |
+          for t in $(git ls-files '*/scripts/regression.mjs'); do
+            echo "== $t =="
+            node "$t"
+          done
+
+      - name: 子项目必需文件自检
+        run: |
+          fail=0
+          for pkg in $(git ls-files | grep -E '(^|/)package.json$'); do
+            d=$(dirname "$pkg")
+            for f in README.md CHANGELOG.md LICENSE; do
+              if [ -f "$d/$f" ]; then :; else echo "缺少 $d/$f"; fail=1; fi
+            done
+          done
+          if [ "$fail" -ne 0 ]; then exit 1; fi
+          echo "子项目必需文件齐备"

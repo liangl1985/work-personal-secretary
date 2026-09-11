@@ -1,0 +1,78 @@
+{
+  "name": "dsh-lina-memory",
+  "version": "1.0.1",
+  "description": "DSH 记忆插件（执行层长期记忆）：三级记忆模型（全局永不遗忘 / 热记忆按周转冷 / 冷记忆被用到即转热）+ 会话原生注入 + remember·recall·link 工具 + 右侧边栏面板 + Obsidian 镜像。Composable three-tier memory plugin for DeepSeek Harness.",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "memory",
+    "long-term-memory",
+    "agent-memory",
+    "obsidian",
+    "personal-assistant"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client",
+    "scripts",
+    "cordis.patch.yml",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node scripts/regression.mjs",
+    "check": "node --check lib/index.js && node --check client/index.js",
+    "prepack": "node scripts/regression.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
+        "@deepseek-ai/dsh-client-resources",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-resources": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-store": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
+    "react": "^18.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liangl1985/work-personal-secretary.git",
+    "directory": "modules/dsh-lina-memory"
+  },
+  "homepage": "https://github.com/liangl1985/work-personal-secretary/tree/main/modules/dsh-lina-memory#readme",
+  "author": "liangl1985",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}
