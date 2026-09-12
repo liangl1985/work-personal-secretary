@@ -4,7 +4,7 @@
 #   - 本模块的**能力实现是 Python 脚本 + DSH 原生技能**（skills/ + scripts/），
 #     宿主半只负责"环境自检入口"与设置项，不做文档处理本身（避免在 Node 侧重复造轮子）。
 #   - 硬前置（由 doctor.py 检测并报告，不在安装时自动装）：
-#       1) Python >= 3.10（由 PyMuPDF 1.28+ / fontTools 4.65+ 的 requires_python 决定）
+#       1) Python >= 3.10（由 PyMuPDF 1.28+ 与 Pillow 12+ 的 requires_python 决定）
 #       2) WPS Office（比对 / 公式重算 / 透视 / 页码目录 依赖其 COM 接口）
 #   - 中性默认层：不含任何个人路径/称呼；个性化请在设置页用户层覆盖。
 - insert:

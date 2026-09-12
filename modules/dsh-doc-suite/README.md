@@ -19,7 +19,7 @@
 
 | 前置 | 要求 | 为什么 |
 |---|---|---|
-| **Python** | **>= 3.10**（建议 3.12） | 由 `PyMuPDF 1.28+` 与 `fontTools 4.65+` 的 `requires_python: >=3.10` 决定（其余依赖只要求 >=3.8/3.9） |
+| **Python** | **>= 3.10**（建议 3.12） | 由 **PyMuPDF 1.28+** 与 **Pillow 12+** 的 `requires_python: >=3.10` 决定（其余依赖只要求 >=3.8/3.9） |
 | **WPS Office** | 已安装且 COM 可实例化 | **比对 / 公式重算 / 透视 / 页码目录**全部依赖 WPS COM；`doctor.py` 会自动探测可用 ProgID（本机实测为 `KWPS.Application`） |
 | Windows 调用约定 | 一律 `py -3`，**不要用 `python`** | `python` 可能是 Microsoft Store 别名 stub（报 "Python was not found"，exit 9009） |
 
@@ -31,10 +31,7 @@
 # 1) 装依赖（必需）
 py -3 -m pip install -r requirements.txt
 
-# 2) 可选补强（解锁 PPT 自动缩字号）
-py -3 -m pip install -r requirements-optional.txt
-
-# 3) 自检（唯一入口；缺什么它告诉你补什么）
+# 2) 自检（唯一入口；缺什么它告诉你补什么）
 py -3 doctor.py            # 人类可读报告
 py -3 doctor.py --json     # 供插件 /doc-doctor 解析
 py -3 doctor.py --fix      # 显式确认后才执行 pip 安装（不装解释器）
@@ -81,5 +78,5 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 ## 六、许可与归属
 
 - 本模块代码：MIT（见 `LICENSE` 与 `NOTICE`）。
-- 依赖库许可：python-docx(MIT) / openpyxl(MIT) / python-pptx(MIT) / PyMuPDF(**AGPL-3.0 或商业许可**，注意分发口径) / pdfplumber(MIT) / pypdf(BSD-3) / Pillow(**HPND**，MIT-CMU 系) / fontTools(MIT) / pywin32(PSF) —— **随包分发时需复核 PyMuPDF 的 AGPL 口径**（本模块只"依赖"而不"内置"其代码，通常按依赖声明处理，但对外发布前请确认）。
+- 依赖库许可：python-docx(MIT) / openpyxl(MIT) / python-pptx(MIT) / PyMuPDF(**AGPL-3.0 或商业许可**，注意分发口径) / pdfplumber(MIT) / pypdf(BSD-3) / Pillow(**HPND**，MIT-CMU 系) / pywin32(PSF) —— **随包分发时需复核 PyMuPDF 的 AGPL 口径**（本模块只"依赖"而不"内置"其代码，通常按依赖声明处理，但对外发布前请确认）。
 - **WPS Office 不随包**，需使用者自行安装并遵守其许可。

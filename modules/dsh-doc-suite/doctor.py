@@ -43,7 +43,7 @@ for _s in (sys.stdout, sys.stderr):
     except Exception:
         pass
 
-MIN_PYTHON = (3, 10)          # 由 PyMuPDF 1.28+ / fontTools 4.65+ 的 requires_python 决定
+MIN_PYTHON = (3, 10)          # 由 PyMuPDF 1.28+ 与 Pillow 12+ 的 requires_python 决定（两者都要求 >=3.10）
 RECOMMENDED = "3.12"
 
 MODULE_DIR = Path(__file__).resolve().parent
@@ -68,7 +68,6 @@ DEPS = [
     ("pypdf", "pypdf", True, "PDF 结构操作"),
     ("PIL", "Pillow", True, "图片处理（页面转图/内嵌图）"),
     ("win32com", "pywin32", True, "WPS COM 调用（Windows）"),
-    ("fontTools", "fontTools", False, "保留项：当前无子命令使用（autofit 已改用 Pillow 测量）"),
 ]
 
 # WPS COM 可能出现的 ProgID（用户级 HKCU 或 WOW6432Node 注册，实测本机可用）
@@ -95,7 +94,7 @@ def check_python():
             info.update({"launcher": " ".join(cmd), "version": text,
                          "ok": ver >= MIN_PYTHON, "evidence": " ".join(cmd) + " → " + text})
             if not info["ok"]:
-                info["fix"] = ("解释器过旧：需 >= %s（由 PyMuPDF/fontTools 决定），建议装 %s：\n"
+                info["fix"] = ("解释器过旧：需 >= %s（由 PyMuPDF/Pillow 决定），建议装 %s：\n"
                                "      winget install -e --id Python.Python.%s\n"
                                "      或 https://www.python.org/downloads/windows/"
                                % (".".join(map(str, MIN_PYTHON)), RECOMMENDED, RECOMMENDED))

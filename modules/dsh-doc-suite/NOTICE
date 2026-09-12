@@ -22,7 +22,6 @@ modules/dsh-doc-suite/ 下的 Node 侧代码（lib/）、Python 脚本（scripts
   pypdf            BSD-3-Clause
   Pillow           HPND（MIT-CMU 系）
   pywin32          PSF-2.0
-  fontTools        MIT（可选补强）
 
 三、外部软件（硬前置，不随包、不内置）
 --------------------------------------

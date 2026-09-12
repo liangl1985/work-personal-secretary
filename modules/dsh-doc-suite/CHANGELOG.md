@@ -1,3 +1,10 @@
+## 0.1.3 — 2026-09-12（移除 fontTools 可选依赖）
+
+- **移除 `fontTools`**：它唯一的用途是 python-pptx 的 `fit_text()`，而该方法按空白断词、**对中文不可用**（见 0.1.2）；`autofit` 已改用 Pillow。
+  查实依据：模块内**无任何代码 `import`**；**无任何依赖声明它**（`pip show fontTools` → `Required-by:` 为空；`pypdf` 仅在 extras `[fonts]`/`[full]` 下需要，未启用）。
+- **整文件删除 `requirements-optional.txt`**（已无可选补强项），并清理全部引用：`package.json` 的 `files` 白名单、`doctor.py`（检查项 + 「Python ≥3.10 依据」表述）、`NOTICE`（许可条目）、`README`（安装步骤 + 依赖许可列表）、`requirements.txt` 与 `cordis.patch.yml` 的注释。
+- **Python 门槛不变**：`>=3.10` 的依据改由必需依赖 **PyMuPDF 1.28+** 与 **Pillow 12+** 支撑（两者 `requires-python` 均为 `>=3.10`）。
+- 本次只删**声明与检测项**，不会卸载本机已装的 fontTools（留着无害）。doctor 自检结论仍为「环境就绪」。
 ## 0.1.2 — 2026-09-12（PPT 自动缩字号 `autofit`）
 
 - **新增 `ppt_tool.py autofit`**：文本框自动缩字号（文字溢出时逐磅下探到放得下）。
