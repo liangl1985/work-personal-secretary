@@ -44,7 +44,7 @@ DEPS = [
     ("docx", "python-docx", True, "Word 读写"),
     ("openpyxl", "openpyxl", True, "Excel 读写"),
     ("pptx", "python-pptx", True, "PPT 制作"),
-    ("fitz", "PyMuPDF", True, "PDF 只读精确提取"),
+    ("pymupdf", "PyMuPDF", True, "PDF 只读精确提取"),
     ("pdfplumber", "pdfplumber", True, "PDF 表格提取"),
     ("pypdf", "pypdf", True, "PDF 结构操作"),
     ("PIL", "Pillow", True, "图片处理（页面转图/内嵌图）"),
@@ -93,13 +93,28 @@ def check_python():
 
 def check_deps():
     rows = []
+    import warnings
     for mod, pip_name, required, purpose in DEPS:
         try:
-            m = importlib.import_module(mod)
-            version = getattr(m, "__version__", "") or (getattr(m, "version", "") if mod == "fitz" else "")
+            with warnings.catch_warnings():
+                # PyMuPDF 1.28+ 会对旧的 `import fitz` 发弃用警告；统一走 pymupdf 并静音
+                warnings.simplefilter("ignore")
+                m = importlib.import_module(mod)
+            version = getattr(m, "__version__", "") or (getattr(m, "version", "") if mod == "pymupdf" else "")
             rows.append({"module": mod, "pip": pip_name, "required": required, "ok": True,
                          "version": str(version), "purpose": purpose})
         except Exception as e:  # noqa: BLE001
+            # 兼容旧版 PyMuPDF：只有 fitz 没有 pymupdf
+            if mod == "pymupdf":
+                try:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        import fitz  # type: ignore
+                    rows.append({"module": "fitz", "pip": pip_name, "required": required, "ok": True,
+                                 "version": str(getattr(fitz, "VersionBind", "")), "purpose": purpose})
+                    continue
+                except Exception:
+                    pass
             rows.append({"module": mod, "pip": pip_name, "required": required, "ok": False,
                          "version": "", "purpose": purpose, "error": str(e)[:120]})
     return rows
