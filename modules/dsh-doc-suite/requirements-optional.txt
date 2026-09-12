@@ -1,5 +1,8 @@
 # dsh-doc-suite —— 可选补强（不装也能用，装了体验更好）
 #
-# fontTools：解锁 PPT 自动缩字号（python-pptx 的 fit_text() 在其缺失时抛 UnicodeDecodeError）
+# fontTools：**当前无子命令使用**（原为 python-pptx 的 fit_text() 预留）。
+#   2026-09-12 实测结论：fit_text() 内部按空白断词（pptx/text/layout.py 的 _LineSource 用 str.split()），
+#   中文长句没有空格 → 整句被当成一个"词" → 永远超宽 → 二分查找返回 None → 抛 TypeError，**对中文不可用**。
+#   ppt_tool.py autofit 已改用 Pillow（必需依赖）自研测量 + 按字符断行。此行保留仅为环境兼容性参考。
 # 要求 Python >= 3.10
 fontTools>=4.65.0

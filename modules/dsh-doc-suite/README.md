@@ -72,7 +72,7 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 | 2 | **修订作者名** | `app.UserName` 改不动 `CompareDocuments` 的作者（且赋值会污染 WPS 全局配置）→ 已改为**在产物 OOXML 层改写** `w:ins/w:del` 的 `w:author`，默认取系统用户名，`--author` 可覆盖 |
 | 3 | **WPS COM 不认相对路径** | `SaveAs` 传相对路径会报 3011；模块内已用 `os.path.abspath()` / `Path.resolve()` 绝对化处理，**其他脚本调用 WPS 时注意同一坑** |
 | 4 | PDF 硬边界 | 合并单元格表格与旋转页表格**必然失真且不报错** → 已改为**主动告警**；图片提取到的是内嵌版（非原件）；加密 PDF 需口令且 `pypdf` 提中文乱码（PyMuPDF 正常） |
-| 5 | PPT 无自动排版 | `fit_text()` 依赖 fontTools；无动画 API、页码无 API；**排版靠模板预制** |
+| 5 | PPT 排版 | **无动画 API、页码无 API**，整体排版靠模板预制；**缩字号已提供 `autofit` 子命令**（Pillow 自研测量，中文友好）。**不用** python-pptx 的 `fit_text()`：它按空格断词，对中文不可用（实测抛 `TypeError: cannot unpack non-iterable NoneType`） |
 | 6 | Excel | `recalc` 对 `.xls` 旧格式未实测；`pivot` 不做小计行识别（源区域含"合计"行会被当行项目） |
 | 7 | ~~技能里的脚本路径~~ **已解决（2026-09-12）** | `skills/*/SKILL.md` 已改用占位符 `<DOC_SUITE_SCRIPTS>`，不再含作者机器绝对路径；解析方式 = `py -3 doctor.py --emit-skill-paths` |
 | 8 | **脚本存在两份副本** | 模块内 `scripts/` 与工作区 `<workspace>/scripts/`（技能历史上指向后者）。**二者必须同步**；对外分发只认模块内那份。建议后续由集成包统一提供，工作区不再保留副本 |

@@ -68,7 +68,7 @@ DEPS = [
     ("pypdf", "pypdf", True, "PDF 结构操作"),
     ("PIL", "Pillow", True, "图片处理（页面转图/内嵌图）"),
     ("win32com", "pywin32", True, "WPS COM 调用（Windows）"),
-    ("fontTools", "fontTools", False, "PPT 自动缩字号（可选补强）"),
+    ("fontTools", "fontTools", False, "保留项：当前无子命令使用（autofit 已改用 Pillow 测量）"),
 ]
 
 # WPS COM 可能出现的 ProgID（用户级 HKCU 或 WOW6432Node 注册，实测本机可用）

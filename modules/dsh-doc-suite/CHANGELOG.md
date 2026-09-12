@@ -1,3 +1,14 @@
+## 0.1.2 — 2026-09-12（PPT 自动缩字号 `autofit`）
+
+- **新增 `ppt_tool.py autofit`**：文本框自动缩字号（文字溢出时逐磅下探到放得下）。
+  - **刻意不用 python-pptx 的 `fit_text()`**：2026-09-12 实测它内部按空白断词（`pptx/text/layout.py` 的 `_LineSource` 用 `str.split()`），
+    中文长句没有空格 → 整句被当成一个"词" → 永远超宽 → 二分查找返回 `None` → 抛 `TypeError: cannot unpack non-iterable NoneType`，**对中文不可用**。
+  - 改为 **Pillow 自研测量 + 按字符断行**（中英文都算得准）；`--font-file` 可直接指定字体文件（最可靠），
+    省略时按 `--font` / 文本框已有字体名映射到系统字体（微软雅黑 msyh.ttc / 黑体 simhei.ttf / 宋体 simsun.ttc / 等线 Deng.ttf 等）。
+  - 参数：`--out`（另存，原文件不动）/ `--slide 1,3-5` / `--max-size 40` / `--min-size 8`（**下限保护**：到下限仍放不下则按下限写入并**告警**，提示拆页或精简文字）/ `--dry-run`；默认**就地修改并先备份**（`.bak-autofit-<时间戳>`）。
+  - 退出码：缺 Pillow / 找不到可用字体 → **5**；`--font-file` 不存在 → **2**（中文单行错误，无堆栈）。
+  - 实测：32 pt → 13 pt（5 行）；极端溢出框触发下限保护告警；就地修改生成备份、原文件可回溯。
+- `fontTools` 由"解锁自动缩字号"降级为**保留项**（当前无子命令使用）；`requirements-optional.txt`、`doctor.py`、README 局限表、`skills/office-ppt/SKILL.md` 同步更正。
 # Changelog · dsh-doc-suite
 
 本模块遵循语义化版本。变更分三类：**新增** / **修复** / **变更（可能影响下游）**。
