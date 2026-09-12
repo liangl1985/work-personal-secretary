@@ -67,7 +67,7 @@ dsh plugin --profile desktop add <本模块路径或包名>
 | 4 | PDF 硬边界 | 合并单元格表格与旋转页表格**必然失真且不报错** → 已改为**主动告警**；图片提取到的是内嵌版（非原件）；加密 PDF 需口令且 `pypdf` 提中文乱码（PyMuPDF 正常） |
 | 5 | PPT 无自动排版 | `fit_text()` 依赖 fontTools；无动画 API、页码无 API；**排版靠模板预制** |
 | 6 | Excel | `recalc` 对 `.xls` 旧格式未实测；`pivot` 不做小计行识别（源区域含"合计"行会被当行项目） |
-| 7 | ~~技能里的脚本路径~~ **已解决（2026-09-13）** | `skills/*/SKILL.md` 已改用占位符 `<DOC_SUITE_SCRIPTS>`，不再含作者机器绝对路径；解析方式 = `py -3 doctor.py --emit-skill-paths` |
+| 7 | ~~技能里的脚本路径~~ **已解决（2026-09-12）** | `skills/*/SKILL.md` 已改用占位符 `<DOC_SUITE_SCRIPTS>`，不再含作者机器绝对路径；解析方式 = `py -3 doctor.py --emit-skill-paths` |
 | 8 | **脚本存在两份副本** | 模块内 `scripts/` 与工作区 `<workspace>/scripts/`（技能历史上指向后者）。**二者必须同步**；对外分发只认模块内那份。建议后续由集成包统一提供，工作区不再保留副本 |
 | 9 | 非原生格式"尽力而为" | `word read` / `excel read` 对非 docx/xlsx 文件会回落 WPS COM 读取（读到内容即成功），`ppt read` 则直接报 `PackageNotFoundError`；三种行为不完全一致，属有意保留（WPS 能读 .txt/.csv 这类纯文本） |
 

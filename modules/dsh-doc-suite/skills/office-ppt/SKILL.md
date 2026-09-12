@@ -61,4 +61,4 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_tool.py images "输入.pptx" "输出目录\
 - 生成的是基础版式（标题+正文），复杂版式（图示、SmartArt、动画）需要人工在 WPS 中调整。
 - 导出 PDF/PNG 依赖本机 WPS Office COM（KWPP）。
 - 大纲中的图片暂不支持自动嵌入；如需要，把图片路径写进大纲并说明。
-- 自 2026-09-13 起，输入文件不存在/是目录会给出**中文单行错误并 exit 2**（不再是裸 Traceback）；排障时设 `DOC_SUITE_DEBUG=1` 可看完整堆栈。
+- 自 2026-09-12 起，输入文件不存在/是目录会给出**中文单行错误并 exit 2**（不再是裸 Traceback）；排障时设 `DOC_SUITE_DEBUG=1` 可看完整堆栈。

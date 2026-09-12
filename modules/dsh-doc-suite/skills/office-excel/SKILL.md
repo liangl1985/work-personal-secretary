@@ -68,4 +68,4 @@ py -3 <DOC_SUITE_SCRIPTS>\office\excel_tool.py merge "合并.xlsx" a.xlsx b.xlsx
 - 旧格式 `.xls`/`.et` 的读取与 PDF 导出走 WPS COM，需要本机 WPS Office；`recalc` 对 `.xls` 未实测。
 - `pivot` 不做小计行识别：源区域里若有"合计"行，会被当成一个行项目，注意排除。
 - 大数据量（>10 万行）建议用 CSV 中转，避免 openpyxl 内存压力。
-- 自 2026-09-13 起，输入文件不存在/是目录、工作表名写错，都会给出**中文单行错误并 exit 2**（表名写错时还会列出可用表名）；排障时设 `DOC_SUITE_DEBUG=1` 可看完整堆栈。
+- 自 2026-09-12 起，输入文件不存在/是目录、工作表名写错，都会给出**中文单行错误并 exit 2**（表名写错时还会列出可用表名）；排障时设 `DOC_SUITE_DEBUG=1` 可看完整堆栈。

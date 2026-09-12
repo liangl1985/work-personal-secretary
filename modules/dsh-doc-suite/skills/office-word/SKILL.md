@@ -57,4 +57,4 @@ py -3 <DOC_SUITE_SCRIPTS>\office\word_tool.py compare "旧版.docx" "新版.docx
 - 生成文档默认中文字体为微软雅黑；需要模板样式时，先人工做一个 docx 骨架，再用 `edit` 填充。
 - 转换 PDF 与红线比对依赖本机 **WPS Office**；报 `WPS 打开/处理文件失败` 时，先确认文件没被 WPS 占用、路径没有写错。
 - 输入文件若本身已带修订（`w:ins`/`w:del`），`compare` 默认拒绝（加上 `--allow-tracked` 才继续）。
-- 自 2026-09-13 起，输入文件不存在/是目录会给出**中文单行错误并 exit 2**（不再是裸 Traceback）；排障时设 `DOC_SUITE_DEBUG=1` 可看完整堆栈。
+- 自 2026-09-12 起，输入文件不存在/是目录会给出**中文单行错误并 exit 2**（不再是裸 Traceback）；排障时设 `DOC_SUITE_DEBUG=1` 可看完整堆栈。

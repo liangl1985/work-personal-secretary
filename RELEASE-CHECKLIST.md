@@ -31,7 +31,7 @@
 - [ ] 打包白名单（`files`）覆盖 lib / client / scripts / skills / cordis.patch.yml / CHANGELOG / LICENSE / README
 - [ ] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
 
-## 三点五、文档模块硬前置与路径（2026-09-13 增）
+## 三点五、文档模块硬前置与路径（2026-09-12 增）
 
 - [ ] README 明写 `dsh-doc-suite` 的两条**硬前置**：**Python ≥ 3.10**（建议 3.12，Windows 用 `py -3`）+ **WPS Office**（COM 通道）
 - [ ] 明确声明**不自动安装**解释器与 WPS；缺什么由 `doctor.py` 检测并打印可复制的修复命令
