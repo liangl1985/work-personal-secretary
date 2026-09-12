@@ -9,6 +9,10 @@ yarn.lock
 .regression-tmp-*/
 .regression-lock/
 
+# Python 字节码（dsh-doc-suite 运行/py_compile 自动生成，不入库）
+__pycache__/
+*.pyc
+
 # 杂项
 *.log
 *.tmp
