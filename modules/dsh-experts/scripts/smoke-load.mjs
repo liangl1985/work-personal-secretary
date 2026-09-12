@@ -43,7 +43,22 @@ function makeCtx() {
       },
     },
     systemPrompt: { context: (def) => { captured.contexts.push(def); return () => {} } },
-    tools: { register: (def) => { captured.tools.push(def); return () => {} } },
+    // 模拟官方 dsh-tools 的注册校验（真机在此抛错，2026-09-12 实际踩过）：
+    //   TypeError: tool "x" must declare output { schema, render, presentationMeta? }
+    // 并校验参数必须用 DSL（属性内 required: true），不是 JSON Schema。
+    tools: {
+      register: (def) => {
+        if (!def || typeof def.name !== 'string') throw new Error('tool 必须声明 name')
+        if (!def.output || typeof def.output !== 'object' || !def.output.schema || typeof def.output.render !== 'function') {
+          throw new Error('tool "' + (def && def.name) + '" must declare output { schema, render, presentationMeta? }')
+        }
+        if (def.parameters && (def.parameters.type || def.parameters.properties)) {
+          throw new Error('tool "' + def.name + '" 的 parameters 必须用 DSL（属性内 required: true），不是 JSON Schema')
+        }
+        captured.tools.push(def)
+        return () => {}
+      },
+    },
     commands: { register: (def) => { captured.commands.push(def); return () => {} } },
   }
 }
@@ -132,19 +147,38 @@ await t('/expert use 临时注入 → 注入回调切换；/expert off → 不�
   assert.ok(back.includes('【身份视角·'), 'auto 后未恢复自动注入')
 })
 
-await t('expert_recall 工具：按 id 取 persona 正文', async () => {
-  const out = await captured.tools[0].execute({ id: 'legal-criminal' })
-  assert.ok(out.includes('## 角色'), '未返回 persona 正文：' + out.slice(0, 80))
+await t('expert_recall 工具：按 id 取 persona 正文（返回结构化对象）', async () => {
+  const r = await captured.tools[0].execute({ id: 'legal-criminal' })
+  assert.equal(r.ok, true)
+  assert.equal(r.kind, 'persona')
+  assert.equal(r.id, 'legal-criminal')
+  assert.ok(String(r.text).includes('## 角色'), '未返回 persona 正文：' + String(r.text).slice(0, 80))
 })
 
 await t('expert_recall 工具：按 query 返回最匹配专家', async () => {
-  const out = await captured.tools[0].execute({ query: '客户要做等保测评' })
-  assert.ok(out.includes('【匹配】'), '未返回匹配头：' + out.slice(0, 80))
+  const r = await captured.tools[0].execute({ query: '客户要做等保测评' })
+  assert.equal(r.ok, true)
+  assert.equal(r.kind, 'match')
+  assert.ok(String(r.text).includes('【匹配】'), '未返回匹配头')
 })
 
 await t('expert_recall 工具：list 模式列出全部专家', async () => {
-  const out = await captured.tools[0].execute({ list: true })
-  assert.ok(out.includes('专家库 · 共'), '未列出总数：' + out.slice(0, 80))
+  const r = await captured.tools[0].execute({ list: true })
+  assert.equal(r.ok, true)
+  assert.equal(r.kind, 'listing')
+  assert.ok(String(r.text).includes('专家库 · 共'), '未列出总数')
+})
+
+await t('expert_recall：render 产出可见文本（官方 output 契约）', () => {
+  const def = captured.tools[0]
+  const blocks = def.output.render({}, { ok: true, kind: 'persona', text: 'X' })
+  assert.ok(Array.isArray(blocks) && blocks[0].type === 'text' && blocks[0].text === 'X', 'render 输出异常')
+})
+
+await t('未知 id 返回 ok:false 的结构化错误（不抛异常）', async () => {
+  const r = await captured.tools[0].execute({ id: 'no-such-expert' })
+  assert.equal(r.ok, false)
+  assert.ok(String(r.error).includes('未找到专家'))
 })
 
 await t('未知 id 给出明确提示而非抛错', async () => {

@@ -2,6 +2,21 @@
 
 本插件的版本历史。
 
+## 0.1.1 — 2026-09-12（工具契约修复 · 真机加载失败）
+
+**症状**：真机启动报 `dsh-plugin-desktop: plugin tree failed to load: failed to apply loader entry experts (dsh-experts): tool "expert_recall" must declare output { schema, render, presentationMeta? }`。
+
+**修复**
+- **工具定义改为官方结构**：`parameters` 用官方 **DSL**（属性内 `required: true`），不再是 JSON Schema 的 `properties` / `required` 数组；`output` 改为 `{ schema, render }`；`execute` 返回**结构化对象**（`{ ok, kind, id, name, score, reasons, text, error }`），由 `render` 负责呈现（官方 "lossless JSON" 要求）。
+- **改用官方 `defineTool()` 辅助**（`@deepseek-ai/dsh-tools`）；无宿主依赖时自动降级为等价普通对象，本地自测照跑。
+- **命令 handler 宽容解构**：`async (input, exec)`，会话信息依次从 `input.session` / `exec.agent.session` / `exec.session` 取，取不到则退化为全局状态。
+- **冒烟测试补官方契约校验**：mock 的 `tools.register` 现在会像真机一样拒绝不合规的 `output` 与 JSON-Schema 式 `parameters` —— 这类错误以后在本地就会被拦下。
+
+**顺带修正（打分调参）**
+- `keywordEach` 0.12 → **0.20**、`keywordCap` 0.48 → **0.60**：修掉"岗位先验把单关键词命中抬过跨域密集命中"的偏差。例：`expert_recall` 查「客户要做三级等保测评」原先返回本域的**网络安全售前**，现正确返回**等保测评**。
+
+**测试**：回归 25/25 · 装载冒烟 18/18 · 共存 7/7；另加"profile 副本加载校验"（对实际安装副本按官方契约做加载校验，仅本机排查用）。
+
 ## 0.1.0 — 2026-09-12（首发）
 
 专家库模块首次落地：把"每次临场手写专家人设"变成"按需调用现成专家定义"。

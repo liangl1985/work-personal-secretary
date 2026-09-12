@@ -20,6 +20,12 @@ dsh plugin --profile desktop add github:liangl1985/work-personal-secretary#modul
 # 或随集成体整包安装后，本模块由 dsh.profile.bundles 自动挂载
 ```
 
+> **改了源码，怎么让 DSH 用上新版**（踩过两次坑）：
+> 1. pnpm 对 `file:` 依赖有缓存 —— 只改源码后 `dsh plugin add <路径>` 常报 `Already up to date` 而**不同步**。可靠顺序是：**升 `package.json` 的补丁版本** → `dsh plugin --profile desktop install --force` → 仍不同步就删掉 `~/.dsh/profiles/<profile>/node_modules/dsh-experts` 再 `dsh plugin add`；
+> 2. 同步后**逐文件比对 SHA256**（源码 ↔ profile 副本）确认一致，再**重启 DSH**（新模块/新版本必须重启才加载）。
+>
+> **别用 PowerShell 的 `Set-Content -Encoding utf8` 改 profile 的 JSON/设置文件**：它会写 BOM，DSH 读 profile 时 `JSON.parse` 会直接失败；`settings.yaml` 也应用 Node 的 `fs`（明确 UTF-8、无 BOM）来写。
+
 ## 使用流程（核心机制）
 
 **常驻注入的只有一位** —— 切合使用者身份的「身份专家」（`identityExpert`；留空取本人岗位域第一位）。

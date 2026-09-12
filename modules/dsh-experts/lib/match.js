@@ -22,8 +22,8 @@ export const WEIGHTS = {
   explicit: 1.0,      // /expert use <id> 或消息里点名某位专家
   domain: 0.35,       // 命中本人岗位默认域（短任务"帮我看看这个"靠它兜底）
   branch: 0.15,       // 命中会话工作目录推断出的域
-  keywordEach: 0.12,  // 每个触发关键词命中
-  keywordCap: 0.48,   // 关键词合计上限（4 个命中即可压过岗位先验）
+  keywordEach: 0.2,   // 每个触发关键词命中（**两个命中即可压过岗位先验**）
+  keywordCap: 0.6,    // 关键词合计上限
   roleTagEach: 0.05,  // 每个角色标签命中
   roleTagCap: 0.1,    // 角色标签合计上限
 }

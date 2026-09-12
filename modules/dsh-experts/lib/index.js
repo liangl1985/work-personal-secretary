@@ -20,6 +20,19 @@ import { activeExperts, allExperts, findExpert, groupByDomain, domainById, split
 import { selectExperts, rankExperts, BRANCH_DOMAIN_HINTS } from './match.js'
 import { buildInjection, buildManualInjection } from './inject.js'
 
+/**
+ * 官方工具辅助 `defineTool`（宿主运行时 `@deepseek-ai/dsh-tools` 提供）。
+ * 取不到时退回**等价普通对象** —— 这样在没有宿主依赖的环境（CI / 本机自测）里
+ * 模块仍能加载，脚本照跑。真机上优先用官方 helper（它会做规范化与校验）。
+ */
+let defineTool = null
+try {
+  defineTool = (await import('@deepseek-ai/dsh-tools')).defineTool
+} catch {
+  defineTool = null
+}
+const asTool = (def) => (typeof defineTool === 'function' ? defineTool(def) : def)
+
 export const name = 'dsh-experts'
 export const inject = ['systemPrompt', 'tools', 'commands', 'settings']
 
@@ -166,43 +179,78 @@ export function apply(ctx, config = {}) {
   }
 
   // ---- 2. 工具：现取现用（派子代理时内联进 prompt） ----
-  disposers.push(ctx.tools.register({
+  disposers.push(ctx.tools.register(asTool({
     name: 'expert_recall',
     description: '取出某位专家的 persona 正文（现取现用，不常驻上下文）。用于：派子代理时把 persona 内联进 subagent.prompt；或临时按某位专家的视角工作。不传 id 时按 query 关键词返回最匹配的专家。',
+    // 官方参数 DSL：属性内 required: true（**不是** JSON Schema 的 properties/required 数组）
     parameters: {
-      type: 'object',
-      properties: {
-        id: { type: 'string', description: '专家 id（如 presales-bid-proposal）；省略则用 query 匹配' },
-        query: { type: 'string', description: '任务描述或关键词，用于选出最匹配的专家' },
-        list: { type: 'boolean', description: '仅列出可用专家清单（含域、一句话定位、激活状态）' },
-      },
-      additionalProperties: false,
+      id: { type: 'string', description: '专家 id（如 presales-bid-proposal）；省略则用 query 匹配' },
+      query: { type: 'string', description: '任务描述或关键词，用于选出最匹配的专家' },
+      list: { type: 'boolean', description: '仅列出可用专家清单（含域、一句话定位、激活状态）' },
     },
-    output: { type: 'string', description: 'persona 正文，或专家清单' },
+    // 官方 output 结构：{ schema, render }；execute 返回结构化对象，render 负责显示
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          ok: { type: 'boolean', required: true },
+          kind: { type: 'string' },
+          id: { type: 'string' },
+          name: { type: 'string' },
+          score: { type: 'number' },
+          reasons: { type: 'array', items: { type: 'string' } },
+          text: { type: 'string' },
+          error: { type: 'string' },
+        },
+      },
+      render: (args, value) => [{ type: 'text', text: String(value?.text ?? value?.error ?? '') }],
+    },
+    isConcurrencySafe: () => true,
     execute: async (args = {}) => {
       const c = cfg()
-      if (args.list) return listText(c)
+      if (args.list) {
+        return { ok: true, kind: 'listing', text: listText(c) }
+      }
       if (args.id) {
         const entry = findExpert(args.id)
-        if (!entry) return '未找到专家：' + args.id + '\n\n' + listText(c, { compact: true })
+        if (!entry) {
+          return { ok: false, kind: 'error', error: '未找到专家：' + args.id + '\n\n' + listText(c, { compact: true }) }
+        }
         const body = buildManualInjection(entry, { banner: false })
-        return body || ('专家 ' + entry.id + ' 的 persona 文件缺失：' + (entry.file || '(未登记)'))
+        if (!body) {
+          return { ok: false, kind: 'error', error: '专家 ' + entry.id + ' 的 persona 文件缺失：' + (entry.file || '(未登记)') }
+        }
+        return { ok: true, kind: 'persona', id: entry.id, name: entry.name, text: body }
       }
       const pool = activeExperts(c)
       const source = pool.length > 0 ? pool : allExperts()
       const { ranked } = selectExperts(source, { text: String(args.query || ''), defaultDomain: c.defaultDomain }, c)
       const top = ranked[0]
-      if (!top || top.score <= 0) return '没有匹配的专家。\n\n' + listText(c, { compact: true })
+      if (!top || top.score <= 0) {
+        return { ok: false, kind: 'no-match', error: '没有匹配的专家。\n\n' + listText(c, { compact: true }) }
+      }
       const body = buildManualInjection(top.entry, { banner: false })
-      return '【匹配】' + top.entry.name + '（' + top.entry.id + '，' + top.score + '，' + top.reasons.join('；') + '）\n\n' + body
+      return {
+        ok: true,
+        kind: 'match',
+        id: top.entry.id,
+        name: top.entry.name,
+        score: top.score,
+        reasons: top.reasons,
+        text: '【匹配】' + top.entry.name + '（' + top.entry.id + '，' + top.score + '，' + top.reasons.join('；') + '）\n\n' + body,
+      }
     },
-  }))
+  })))
 
   // ---- 3. 命令：/expert（list / use / off / auto / status / setup / why） ----
   disposers.push(ctx.commands.register({
     name: 'expert',
     description: '专家库：/expert list 列专家 · use <id> 临时注入 · off 关闭 · auto 恢复自动 · status 当前状态 · setup 安装引导 · why <文本> 看打分',
-    handler: async ({ rawInput, session } = {}) => {
+    handler: async (input = {}, exec) => {
+      const rawInput = input?.rawInput
+      // 会话信息在不同宿主版本可能落在 input.session 或 exec.agent.session —— 三处都试，取不到则退化为全局状态
+      const session = input?.session || exec?.agent?.session || exec?.session
       const c = cfg()
       const sid = sessionKey(session?.agent?.session || session)
       const argv = String(rawInput || '').trim().split(/\s+/).filter(Boolean)
