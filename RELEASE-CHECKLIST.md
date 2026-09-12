@@ -111,4 +111,8 @@
   - 后果：DSH 读 profile 时 `JSON.parse` 失败；YAML 报 `Nested mappings are not allowed in compact mappings`。
   - 正确做法：这类文件一律用 **Node 的 `fs`** 写（`fs.writeFileSync(path, text, 'utf8')`，明确 UTF-8、**无 BOM**）。
   - 改完自检（同样用 Node，不用 PowerShell 文本重定向）：JSON 能 `JSON.parse`、YAML 能解析、文件首字节**无 `EF BB BF`**。
+- [ ] **坑③：测试脚本取"今天"不要用 `toISOString()`** —— 它给的是 **UTC 日期**，而实现侧（`clock.js todayStamp()`）用**本地日期**。在 Asia/Shanghai 的 **00:00–08:00** 两者差一天：测试写 `DAILY/<UTC 日>.md`、查 `backup-<UTC 日>`，插件实际用本地日 → 相关用例在该时段**必然失败**，白天却全绿（本机已踩：work-memory 80/83；改 `todayStamp()` 后 83/83，v1.0.5）。
+  - 纪律：凡"今天"**一律 `todayStamp()`**；要对齐实现日期，先确认实现用的是哪个时区。
+  - **假绿比失败更危险**：同一窗口下「快照：过滤活动日志行」「备份：当日防抖 skipped」曾因文件名错位而**假通过**——测试没报错不等于在被检验。
+  - 自检手法：同一套回归**换 TZ 复跑**（`TZ=UTC node scripts/regression.mjs`）结果应不变；涉及日期/防抖/TTL 的用例尤其要跑。
 - [ ] 上述 SHA256 比对与 BOM 自检的结果记入本次发布/升级记录（出问题可回溯到具体文件）。
