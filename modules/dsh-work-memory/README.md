@@ -48,11 +48,12 @@
 ## 三、安装（DSH 插件标准方式）
 
 ```powershell
-# 1) 安装到 profile（<包名> 换成 npm 包名或本地路径）
-dsh plugin --profile desktop add <包名>
+# 1) 安装到 profile：clone 仓库后按本地路径安装（本机已验证）
+#    `dsh plugin add` 会自动写入 dependencies 并更新 `dsh.profile.bundles`
+dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-work-memory
 
-# 2) 在 profile 的 package.json 里把包名加入 dsh.profile.bundles
-#    ~/.dsh/profiles/desktop/package.json → dsh.profile.bundles: [..., "<包名>"]
+# 2) 确认 dsh.profile.bundles 已含该模块（`dsh plugin add` 通常会自动写入；
+#    未写入时再手加到 ~/.dsh/profiles/desktop/package.json 的 dsh.profile.bundles）
 
 # 3) 收起依赖图
 dsh plugin --profile desktop install

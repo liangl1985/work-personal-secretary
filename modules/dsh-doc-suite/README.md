@@ -57,7 +57,8 @@ py -3 doctor.py --emit-skill-paths   # 输出 JSON：scriptsDir / tools / skills
 
 ```powershell
 # 装进 profile（与集成体其他子模块一致）
-dsh plugin --profile desktop add <本模块路径或包名>
+# ① clone 仓库后按本地路径安装（本机已验证）
+dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 ```
 
 - 宿主半只注册一个命令：**`/doc-doctor`** —— 执行环境自检并回报结论与修复命令。

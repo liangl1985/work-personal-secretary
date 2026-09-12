@@ -16,10 +16,18 @@
 ## 安装
 
 ```bash
-dsh plugin --profile desktop add github:liangl1985/work-personal-secretary#modules/dsh-experts
-# 或随集成体整包安装后，本模块由 dsh.profile.bundles 自动挂载
+# ① 先取得仓库（clone，或用你已有的本地副本）
+git clone https://github.com/liangl1985/work-personal-secretary.git
+
+# ② 按「本地路径」安装本子模块 —— 本机已验证可用：
+#    dsh plugin add 会自动写入 dependencies，并更新 dsh.profile.bundles
+dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-experts
+
+# ③ 重启 DSH 生效
 ```
 
+> 写法说明：`github:<owner>/<repo>#<子目录>`（仓库子目录）这种形式**未经本机验证**（pnpm 对 `#` 段按分支/tag 解析），
+> 故文档采用上面的「本地路径」写法；待本模块发布 npm 后，可改为按包名安装（`dsh plugin --profile desktop add dsh-experts`）。
 > **改了源码，怎么让 DSH 用上新版**（踩过两次坑）：
 > 1. pnpm 对 `file:` 依赖有缓存 —— 只改源码后 `dsh plugin add <路径>` 常报 `Already up to date` 而**不同步**。可靠顺序是：**升 `package.json` 的补丁版本** → `dsh plugin --profile desktop install --force` → 仍不同步就删掉 `~/.dsh/profiles/<profile>/node_modules/dsh-experts` 再 `dsh plugin add`；
 > 2. 同步后**逐文件比对 SHA256**（源码 ↔ profile 副本）确认一致，再**重启 DSH**（新模块/新版本必须重启才加载）。
