@@ -41,6 +41,13 @@ jobs:
             node "$t"
           done
 
+      # dsh-doc-suite 是 Python 实现（Word/Excel/PPT/PDF），CI 只做语法自检；
+      # 运行时就绪性（PyMuPDF/WPS COM 等）由使用者本机 doctor.py 判定（Linux runner 装不了 WPS）。
+      - name: Python 语法自检（py_compile 全量 .py）
+        run: |
+          for f in $(git ls-files '*.py'); do python3 -m py_compile "$f"; done
+          echo "Python 语法自检通过"
+
       - name: 子项目必需文件自检
         run: |
           fail=0
