@@ -1,0 +1,59 @@
+{
+  "name": "dsh-doc-suite",
+  "version": "0.1.0",
+  "description": "DSH 文档能力模块（work-personal-secretary 子模块）：Word / Excel / PPT / PDF 四格式处理 —— 处理·比对·重算·制作排版·只读精确提取。需 Python >= 3.10 与 WPS Office（COM）。",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "document",
+    "word",
+    "excel",
+    "powerpoint",
+    "pdf",
+    "office",
+    "wps"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "skills",
+    "scripts",
+    "doctor.py",
+    "requirements.txt",
+    "requirements-optional.txt",
+    "cordis.patch.yml",
+    "NOTICE",
+    "README.md"
+  ],
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liangl1985/work-personal-secretary.git",
+    "directory": "modules/dsh-doc-suite"
+  },
+  "homepage": "https://github.com/liangl1985/work-personal-secretary/tree/main/modules/dsh-doc-suite#readme",
+  "author": "liangl1985",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,35 @@
+dsh-doc-suite — NOTICE
+======================
+
+本模块（work-personal-secretary 的子模块，包名 dsh-doc-suite）
+Copyright (c) 2026 liangl1985
+Licensed under the MIT License (see LICENSE).
+
+一、随包代码
+------------
+modules/dsh-doc-suite/ 下的 Node 侧代码（lib/）、Python 脚本（scripts/）、技能（skills/）、
+自检脚本（doctor.py）与文档，均为本项目自有代码，采用 MIT 许可。
+
+二、运行时依赖（不随包内置，由使用者安装）
+------------------------------------------
+本模块的 Python 脚本依赖以下第三方库，其许可与归属如下（请在对外分发时一并复核）：
+
+  python-docx      MIT
+  openpyxl         MIT
+  python-pptx      MIT
+  PyMuPDF          GNU AGPL-3.0（或 Artifex 商业许可）※ 分发前请确认口径
+  pdfplumber       MIT
+  pypdf            BSD-3-Clause
+  Pillow           HPND（MIT-CMU 系）
+  pywin32          PSF-2.0
+  fontTools        MIT（可选补强）
+
+三、外部软件（硬前置，不随包、不内置）
+--------------------------------------
+  WPS Office —— 使用者自行安装并遵守其许可。本模块仅通过其公开 COM 接口调用
+  （比对 / 公式重算 / 数据透视 / 页码与目录域）。
+
+四、数据与隐私
+--------------
+本模块全部处理在**本机**完成：不联网、不上传文档内容、无遥测。
+（例外：若使用者自行调用云端服务，属其自主行为，与本模块无关。）

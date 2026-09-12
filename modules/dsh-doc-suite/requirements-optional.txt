@@ -1,0 +1,5 @@
+# dsh-doc-suite —— 可选补强（不装也能用，装了体验更好）
+#
+# fontTools：解锁 PPT 自动缩字号（python-pptx 的 fit_text() 在其缺失时抛 UnicodeDecodeError）
+# 要求 Python >= 3.10
+fontTools>=4.65.0
