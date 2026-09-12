@@ -69,7 +69,7 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
     .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 presales-bid-proposal,finance-accountant）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 /expert use <id> 临时注入'),
 
   expertInjectMax: z.natural().default(1)
-    .description('每轮最多注入几位专家：1（默认）/ 2 / 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 约 1–2KB），且只在分数接近且跨域时才补第 2/3 位'),
+    .description('每轮最多注入几位专家：1（默认）/ 2 / 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB），且只在分数接近且跨域时才补第 2/3 位'),
 
   expertSecondThreshold: z.number().default(0.8)
     .description('第 2/3 位专家的门槛：其分数 ≥ 第 1 位 × 该值时才注入（默认 0.8；仅 expertInjectMax ≥ 2 时生效）'),

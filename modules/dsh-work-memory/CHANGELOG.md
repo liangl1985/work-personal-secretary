@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 1.0.4 — 2026-09-12（手动归档漏传分级 TTL 修复）
+
+- **修复**：`/memory_archive` 手动归档只传了 `dailyRetentionDays`，并带了一个 `archive.js` 里**并不存在**的 `entryTtlDays`（分级 TTL 改造的遗留）。后果：**使用者在设置页自定义「项目 TTL / 偏好 TTL」后，手动归档仍按默认 30 / 90 天执行**。现改为传齐 `dailyRetentionDays` / `projectTtlDays` / `userTtlDays`（与自动归档一致）。
+- 影响面：**仅手动** `/memory_archive`；自动归档（写库懒触发）一直正确。
+- 回归：83/83。
+- 来源：2026-09-12 集成体全面更新时由子代理核对 README 与实现时揪出。
+
 本插件的版本历史。**1.0.3 起包名与运行时 id 全部中性化（`dsh-work-memory` / `work-memory`）**（1.0.0 是三级记忆模型定型的可发布终结版）。
 
 ## 1.0.3 — 2026-09-11（标识符中性化）

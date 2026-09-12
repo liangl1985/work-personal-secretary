@@ -188,9 +188,13 @@ export function apply(ctx, config = {}) {
     description: '执行记忆衰减归档（过期 DAILY 按月合并、常规条目超期移入 ARCHIVE）',
     handler: async () => {
       try {
+        // 分级 TTL：三个都要传。
+        // （原先只传 dailyRetentionDays 且带了已废弃的 entryTtlDays —— 后者在 archive.js 里
+        //   并不存在，导致手动 /memory_archive 在自定义「项目 TTL / 偏好 TTL」时不生效）
         const result = runArchive(root, {
           dailyRetentionDays: cfg.dailyRetentionDays,
-          entryTtlDays: cfg.entryTtlDays,
+          projectTtlDays: cfg.projectTtlDays,
+          userTtlDays: cfg.userTtlDays,
         })
         if (result.skipped) return { kind: 'success', text: result.reason }
         const files = listArchive(root)

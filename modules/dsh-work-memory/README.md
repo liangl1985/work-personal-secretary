@@ -1,7 +1,7 @@
 # dsh-work-memory · DSH 记忆插件
 
 > 为 **DeepSeek Harness（DSH）** 打造的**执行层长期记忆**插件：三级记忆模型 + 会话原生热注入 + remember/recall/link 工具 + 右侧边栏管理面板 + Obsidian 镜像。
-> 零运行时依赖（只用 `node:fs`），全程**本地**、**不联网**、**无遥测**。
+> 零运行时依赖（只用 Node 内置模块：`node:fs` / `node:path` / `node:os` / `node:url` / `node:crypto`），全程**本地**、**不联网**、**无遥测**。
 
 ---
 
@@ -43,7 +43,7 @@
 **命令**：`/memory_review`、`/memory_archive`、`/memory_backup`、`/memory_audit`（分类巡检 + 关联枢纽/孤儿 + 预审状态）、`/memory_maintain`（周保养 + 预审）、`/memory_triage`（转冷预审判定）、`/memory_promote <id>`（冷转热）。
 **面板**（右侧边栏 →「记忆库」）：统计四格 / 范围切换 / 项目与日期选择器（项目分类可**新建**与**归档**）/ 检索 / 条目增删 / 待确认批准 / 「相关 N」关系明细。
 **镜像**：可把记忆库单向同步到 Obsidian vault（`obsidianSyncDir`），用于迁移与人工翻阅。
-**配置**：设置 → 插件 → 插件配置 → `work-memory`（23 项，除 `snapshotOrder` 外**免重启生效**）。
+**配置**：设置 → 插件 → 插件配置 → `work-memory`（24 项，除 `snapshotOrder` 外**免重启生效**）。
 
 ## 三、安装（DSH 插件标准方式）
 

@@ -289,7 +289,7 @@
         "path": "data/zh/security/security-penetration-tester.md + categories/04-quality-security/penetration-tester.md",
         "license": "MIT",
         "adapted": true,
-        "note": "改写为合规服务视角（授权/流程/报告/整改/法律边界），不写攻击手法",
+        "note": "改写为合规服务视角（授权/流程/报告/整改/法律边界），不写攻击手法；上游 dsh-plugin-t-expert 的 GitHub 仓库已 404，许可仅依据 npm 元数据（MIT），**溯源受限** → 发布前需复核或改用 VoltAgent/awesome-claude-code-subagents 的同源条目",
         "review": "pending"
       }
     },
