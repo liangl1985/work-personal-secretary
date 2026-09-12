@@ -117,7 +117,9 @@ const { buildSnapshot } = await import(pathToFileURL(join(lib, 'context.js')).hr
   const root = join(here, '..', '.regression-tmp')
   rmSync(root, { recursive: true, force: true })
   mkdirSync(join(root, 'DAILY'), { recursive: true })
-  const today = new Date().toISOString().slice(0, 10)
+  // 必须与实现同源（clock.js todayStamp = 本地日期）。用 toISOString() 取的是 UTC 日期，
+  // 在 Asia/Shanghai 00:00–08:00 会与本地日期差一天 → 写进 DAILY/<UTC>.md 而快照读 DAILY/<本地>.md。
+  const today = todayStamp()
   const daily = new MemoryStore(join(root, 'DAILY', today + '.md'))
   daily.ensure()
   daily.add(makeEntry('今日：真实日志条目', { tag: '常规' }))
@@ -141,11 +143,11 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   store.ensure()
   store.add(makeEntry('备份测试条目', { tag: '常规' }))
   const r1 = backupMemory(root, { backupDir: bdir, keep: 3 })
-  check('备份：全量复制成功', r1.ok === true && r1.files >= 1 && existsSync(join(bdir, 'backup-' + new Date().toISOString().slice(0, 10), 'MEMORY.md')))
+  check('备份：全量复制成功', r1.ok === true && r1.files >= 1 && existsSync(join(bdir, 'backup-' + todayStamp(), 'MEMORY.md')))
   const r2 = backupMemory(root, { backupDir: bdir, keep: 3 })
   check('备份：当日防抖 skipped', r2.skipped === true)
   // keep 清理：删除今日目录模拟次日 + 伪造 3 个更早备份（共 4 份 > keep=3）
-  rmSync(join(bdir, 'backup-' + new Date().toISOString().slice(0, 10)), { recursive: true, force: true })
+  rmSync(join(bdir, 'backup-' + todayStamp()), { recursive: true, force: true })
   mkdirSync(join(bdir, 'backup-2000-01-01'), { recursive: true })
   mkdirSync(join(bdir, 'backup-2000-01-02'), { recursive: true })
   mkdirSync(join(bdir, 'backup-2000-01-03'), { recursive: true })
@@ -309,7 +311,7 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   const ttlProj = join(lRoot, 'PROJECTS')
   mkdirSync(ttlProj, { recursive: true })
   writeFileSync(join(ttlProj, '用例.md'), serializeEntries([
-    makeEntry('40天前但被关联过（应保留）', { date: new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10), tag: '常规' }),
+    makeEntry('40天前但被关联过（应保留）', { date: todayStamp(new Date(Date.now() - 40 * 86400000)), tag: '常规' }),
   ]), 'utf8')
   const lentId = extractEntryId(new MemoryStore(join(ttlProj, '用例.md')).entries()[0])
   g.linkEntries(lRoot, { from: { id: lentId, label: 'x' }, to: { id: idA, label: 'y' }, relation: '相关' })
