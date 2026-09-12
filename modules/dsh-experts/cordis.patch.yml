@@ -1,0 +1,29 @@
+# 专家库 bundle patch —— 挂载 experts entry（宿主半：按需注入 + 专家工具/命令 + 设置项）。
+# 由 dsh.profile.bundles + dsh plugin add 安装，勿手动插入主 profile patch。
+#
+# 这里的 config 是**部署默认层（base）**，并保持**中性**（不含任何个人路径/称呼）：
+#   解析值 = schema 默认值 ← 本文件 base ← profile 的 cordis.patch.yml ← 设置页用户覆盖层
+# 个性化（本人岗位 defaultDomain、全局激活哪些专家 enabledDomains/enabledExperts）请在
+# **设置页**改（免重启），或在该 profile 的 cordis.patch.yml 里按 id 覆盖；不要改这里。
+#
+# 主人 2026-09-12 定的四条口径在 config 注释里写明，便于交付时一眼看懂：
+#   ① 默认注入 1 位（expertInjectMax: 1），可调 2/3 —— 调大时设置页会提示"占用较多 TOKEN"；
+#   ② 岗位关联（defaultDomain）是**打分先验**（权重最高的信号），决定任务优先从哪个专业角度拆解；
+#   ③ enabledDomains / enabledExperts 是可选的**收窄**（默认全量参与匹配 —— 若拿岗位当白名单，
+#      跨域任务就命中不了本域之外的专家，例如"客户要做三级等保测评"会被本域售前挡住）；
+#   ④ 未注入的专家走临时注入（/expert use <id>、expert_recall），不常驻上下文。
+- insert:
+    - id: experts
+      name: 'dsh-experts'
+      config:
+        expertsEnabled: true      # 总开关（设置页可改，免重启）
+        injectOrder: 480          # runtime 快照顺序：略早于记忆快照(500)，让"专家视角"先立起来（改动需重启）
+        defaultDomain: 'presales' # 本人岗位默认域（安装引导会问一次；会计岗改成 finance 即可，无需改代码）
+        identityExpert: ''        # 常驻注入的**唯一身份专家**（id）；留空 = 取 defaultDomain 域的第一位
+        enabledDomains: ''        # 把匹配范围收窄到这些域（逗号分隔）；留空 = 全量参与（岗位只作先验）
+        enabledExperts: ''        # 把匹配范围收窄到这些专家 id（逗号分隔）；留空 = 不收窄
+        expertInjectMax: 1        # 每轮最多注入几位专家：1（默认）/ 2 / 3 —— >1 会占用较多 TOKEN
+        expertSecondThreshold: 0.8 # 第 2/3 位的分数门槛：Top-N ≥ Top-1 × 该值，且须跨域
+        expertMinScore: 0.35      # 低于此分不注入（宁缺勿滥，保持通用助手行为）
+        expertShowBanner: true    # 注入时显示「当前专家视角」标识
+        expertSetupDone: false    # 安装引导是否已问过本人岗位

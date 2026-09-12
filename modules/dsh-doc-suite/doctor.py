@@ -10,6 +10,12 @@
   py -3 doctor.py --json         # 机器可读输出（供 DSH 插件 /doc-doctor 解析）
   py -3 doctor.py --fix          # 检测后执行 pip 安装（需使用者明确同意；不装解释器）
   py -3 doctor.py --skip-wps     # 跳过 WPS COM 检查（非 Windows 或已知没装 WPS 时）
+  py -3 doctor.py --emit-skill-paths   # 只输出本模块脚本/技能的**绝对路径**（供技能文档解析占位符）
+
+技能文档里的路径占位符（对外分发时不写死作者机器路径）：
+  <DOC_SUITE_SCRIPTS>  = 本模块 scripts/ 目录
+  <DOC_SUITE_SKILLS>   = 本模块 skills/ 目录
+  解析方法：`py -3 doctor.py --emit-skill-paths` 读出实际路径再替换。
 
 设计红线：
   1. **不自动安装 Python 解释器**（装解释器是系统级操作，需管理员权限与企业网络策略）；
@@ -28,6 +34,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 # 控制台编码兜底（Windows GBK 控制台打印中文/符号会崩）
 for _s in (sys.stdout, sys.stderr):
@@ -38,6 +45,18 @@ for _s in (sys.stdout, sys.stderr):
 
 MIN_PYTHON = (3, 10)          # 由 PyMuPDF 1.28+ / fontTools 4.65+ 的 requires_python 决定
 RECOMMENDED = "3.12"
+
+MODULE_DIR = Path(__file__).resolve().parent
+SCRIPTS_DIR = MODULE_DIR / "scripts"
+SKILLS_DIR = MODULE_DIR / "skills"
+
+# 技能文档里引用的工具（占位符 <DOC_SUITE_SCRIPTS> 的实际取值）
+TOOL_FILES = {
+    "word": "office/word_tool.py",
+    "excel": "office/excel_tool.py",
+    "ppt": "office/ppt_tool.py",
+    "pdf": "pdf/pdf_tool.py",
+}
 
 # (import 名, pip 名, 是否必需, 用途)
 DEPS = [
@@ -154,7 +173,22 @@ def main():
     ap.add_argument("--json", action="store_true", help="输出 JSON（供插件解析）")
     ap.add_argument("--fix", action="store_true", help="执行 pip 安装缺失的库（不安装解释器）")
     ap.add_argument("--skip-wps", action="store_true", help="跳过 WPS COM 检查")
+    ap.add_argument("--emit-skill-paths", action="store_true",
+                    help="只输出脚本/技能绝对路径 JSON（供技能文档解析 <DOC_SUITE_SCRIPTS> 占位符）")
     args = ap.parse_args()
+
+    if args.emit_skill_paths:
+        py = check_python()
+        print(json.dumps({
+            "moduleDir": str(MODULE_DIR),
+            "scriptsDir": str(SCRIPTS_DIR),
+            "skillsDir": str(SKILLS_DIR),
+            "pythonLauncher": py["launcher"] if py["ok"] else (sys.executable or "py -3"),
+            "tools": {k: str(SCRIPTS_DIR / v) for k, v in TOOL_FILES.items()},
+            "skills": {d.name: str(d / "SKILL.md") for d in sorted(SKILLS_DIR.iterdir())
+                       if d.is_dir()} if SKILLS_DIR.is_dir() else {},
+        }, ensure_ascii=False, indent=2))
+        return 0
 
     py = check_python()
     deps = check_deps()

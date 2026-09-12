@@ -1,0 +1,64 @@
+{
+  "name": "dsh-experts",
+  "version": "0.1.0",
+  "description": "DSH 专家库模块（work-personal-secretary 子模块）：按岗位关联的专家 persona 库——默认每轮只注入 1 位（可调 2/3，设置页提示 TOKEN 开销），其余按需临时注入；派子代理时把 persona 内联进 prompt，使任务从对应专业角度被拆解。",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "experts",
+    "persona",
+    "prompt-library",
+    "subagent",
+    "presales",
+    "finance",
+    "legal"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "experts",
+    "scripts",
+    "cordis.patch.yml",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node scripts/regression.mjs",
+    "smoke": "node scripts/smoke-load.mjs",
+    "coexist": "node scripts/coexist.mjs",
+    "check": "node --check lib/index.js && node --check lib/match.js && node --check lib/store.js && node --check lib/inject.js && node --check lib/settings.js && node --check lib/limits.js"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liangl1985/work-personal-secretary.git",
+    "directory": "modules/dsh-experts"
+  },
+  "homepage": "https://github.com/liangl1985/work-personal-secretary/tree/main/modules/dsh-experts#readme",
+  "author": "liangl1985",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}

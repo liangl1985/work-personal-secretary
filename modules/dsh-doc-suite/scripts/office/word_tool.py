@@ -1,13 +1,16 @@
 """Word 文档工具（.docx 走 python-docx；.doc/.wps 旧格式走 WPS COM）。
 
-用法：
-  python word_tool.py read <file>                     # 提取全文（含表格）
-  python word_tool.py info <file>                     # 统计信息
-  python word_tool.py create <out.docx> --title X --from-md a.md
-  python word_tool.py edit <file> --replace "旧=新" [--replace "a=b"] [--out out.docx]
-  python word_tool.py convert <src> <dst>             # 导出 PDF 等（WPS COM）
-  python word_tool.py compare A.docx B.docx --out-dir out [--author 名]
+用法（Windows 一律用 py -3，`python` 可能是 Microsoft Store 别名 stub）：
+  py -3 word_tool.py read <file>                      # 提取全文（含表格）
+  py -3 word_tool.py info <file>                      # 统计信息
+  py -3 word_tool.py create <out.docx> --title X --from-md a.md
+  py -3 word_tool.py edit <file> --replace "旧=新" [--replace "a=b"] [--out out.docx]
+  py -3 word_tool.py convert <src> <dst>              # 导出 PDF 等（WPS COM）
+  py -3 word_tool.py compare A.docx B.docx --out-dir out [--author 名]
                                                       # 比对：diff.txt + diff.html + tracked.docx
+
+参数形态（实测易踩）：read/info/edit 的文件、convert 的 <src> <dst>、compare 的 A/B 全是
+**位置参数**；compare 的 --out-dir 是**必填**。
 
 Markdown 支持：标题(#/##/###)、无序列表(-)、有序列表(1.)、表格(| a | b |)。
 
@@ -29,6 +32,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import cli_guard  # noqa: E402
 import wps_com  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
@@ -489,8 +494,9 @@ def main():
     p.set_defaults(fn=cmd_compare)
 
     args = parser.parse_args()
+    cli_guard.check_inputs(args)
     return args.fn(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli_guard.run(main))

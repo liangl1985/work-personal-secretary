@@ -24,11 +24,21 @@
 ## 三、工程门禁
 
 - [ ] 全部 JS `node --check` 通过
+- [ ] 全部 Python 脚本 `py -3 -m py_compile` 通过（`modules/dsh-doc-suite/`）
 - [ ] 各子项目回归全绿（`node modules/<模块>/scripts/regression.mjs`）
 - [ ] CI 在 Node 22 与 24 双版本通过
 - [ ] 客户端有改动的模块**已升版本号**（DSH 客户端 bundle 按 revision 缓存）
-- [ ] 打包白名单（`files`）覆盖 lib / client / scripts / cordis.patch.yml / CHANGELOG / LICENSE / README
+- [ ] 打包白名单（`files`）覆盖 lib / client / scripts / skills / cordis.patch.yml / CHANGELOG / LICENSE / README
 - [ ] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
+
+## 三点五、文档模块硬前置与路径（2026-09-13 增）
+
+- [ ] README 明写 `dsh-doc-suite` 的两条**硬前置**：**Python ≥ 3.10**（建议 3.12，Windows 用 `py -3`）+ **WPS Office**（COM 通道）
+- [ ] 明确声明**不自动安装**解释器与 WPS；缺什么由 `doctor.py` 检测并打印可复制的修复命令
+- [ ] `modules/dsh-doc-suite/skills/*/SKILL.md` 中**不得出现作者机器绝对路径**（形如 `<盘符>:\<个人工作区>\scripts\...`）；
+      统一使用占位符 `<DOC_SUITE_SCRIPTS>`，解析方式写进技能与 README（`doctor.py --emit-skill-paths`）
+- [ ] 技能含**子命令速查表**（位置参数 vs 选项参数易错点：`convert <src> <dst>` 无 `--to`、`merge/make` 输出在前等）
+- [ ] `doctor.py` 在本机跑通且结论为「环境就绪」（`/doc-doctor` 同源）
 
 ## 四、宿主兼容性
 

@@ -1,10 +1,13 @@
 """PowerPoint 工具（.pptx 走 python-pptx；旧格式与导出走 WPS COM）。
 
-用法：
-  python ppt_tool.py create <out.pptx> --title 标题 --subtitle 副标题 [--from-md a.md] [--template t.pptx]
-  python ppt_tool.py read <file>                            # 提取所有幻灯片文本
-  python ppt_tool.py convert <src> <dst>                    # 导出 PDF（WPS COM）
-  python ppt_tool.py images <src> <outdir>                  # 每页导出 PNG（WPS COM）
+用法（Windows 一律用 py -3，`python` 可能是 Microsoft Store 别名 stub）：
+  py -3 ppt_tool.py create <out.pptx> --title 标题 --subtitle 副标题 [--from-md a.md] [--template t.pptx]
+  py -3 ppt_tool.py read <file>                            # 提取所有幻灯片文本
+  py -3 ppt_tool.py convert <src> <dst>                    # 导出 PDF（WPS COM）
+  py -3 ppt_tool.py images <src> <outdir>                  # 每页导出 PNG（WPS COM）
+
+参数形态（实测易踩）：**全是位置参数**——convert 是 `convert <src> <dst>`（**没有** `--to`），
+images 是 `images <src> <outdir>`（**没有** `--out-dir`）。
 
 Markdown -> 幻灯片规则：
   # 标题        -> 新幻灯片（标题）
@@ -18,6 +21,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import cli_guard  # noqa: E402
 import wps_com  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
@@ -138,8 +143,9 @@ def main():
     p.set_defaults(fn=cmd_images)
 
     args = parser.parse_args()
+    cli_guard.check_inputs(args)
     return args.fn(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli_guard.run(main))

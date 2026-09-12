@@ -1,15 +1,18 @@
 """Excel 工具（.xlsx 走 openpyxl；.xls 旧格式走 WPS COM）。
 
-用法：
-  python excel_tool.py summary <file>                        # 概览：工作表与规模
-  python excel_tool.py read <file> [--sheet S] [--range A1:C10] [--json]
-  python excel_tool.py write <file> --cell A1=值 [--cell B2=...] [--sheet S]
-  python excel_tool.py write <file> --from-csv data.csv --sheet S
-  python excel_tool.py convert <file> <dst>                  # 导出 PDF / CSV（WPS COM）
-  python excel_tool.py chart <file> --sheet S --range A1:D10 --type line --out out.xlsx
-  python excel_tool.py merge <out.xlsx> f1.xlsx f2.xlsx [--mode rows|sheets]
-  python excel_tool.py recalc <file> [--sheet S] [--out out.xlsx]        # WPS COM 重算公式并保存
-  python excel_tool.py pivot <file> --source-range "S!A3:E23" --out out.xlsx [--rows 产品] [--values 数量]
+用法（Windows 一律用 py -3，`python` 可能是 Microsoft Store 别名 stub）：
+  py -3 excel_tool.py summary <file>                        # 概览：工作表与规模
+  py -3 excel_tool.py read <file> [--sheet S] [--range A1:C10] [--json]
+  py -3 excel_tool.py write <file> --cell A1=值 [--cell B2=...] [--sheet S]
+  py -3 excel_tool.py write <file> --from-csv data.csv --sheet S
+  py -3 excel_tool.py convert <file> <dst>                  # 导出 PDF / CSV（WPS COM）
+  py -3 excel_tool.py chart <file> [--sheet S] --range A1:D10 --type line --out out.xlsx
+  py -3 excel_tool.py merge <out.xlsx> f1.xlsx f2.xlsx [--mode rows|sheets]
+  py -3 excel_tool.py recalc <file> [--sheet S] [--out out.xlsx]        # WPS COM 重算公式并保存
+  py -3 excel_tool.py pivot <file> --source-range "S!A1:D7" --out out.xlsx [--rows 产品] [--values 数量]
+
+参数形态（实测易踩）：除 --out/--dst/--outdir 外，输入全是**位置参数**；pivot 的
+--source-range 必须指向**含表头的真实区域**（指向空区会 exit 4 并给出替代做法，这是设计如此）。
 
 recalc / pivot 说明（2026-09-12 新增，据实测）：
   - openpyxl 无计算引擎：写入公式后 data_only=True 读回是 None；recalc 走 KET COM
@@ -28,6 +31,8 @@ from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import cli_guard  # noqa: E402
 import wps_com  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
@@ -133,6 +138,10 @@ def cmd_read(args):
         print(wps_com.read_text(args.file, "excel"))
         return 0
     sheet = args.sheet or wb.sheetnames[0]
+    if sheet not in wb.sheetnames:
+        print(f"错误: 工作表不存在: {sheet}", file=sys.stderr)
+        print(f"提示: 该工作簿可用工作表: {'、'.join(wb.sheetnames)}", file=sys.stderr)
+        return 2
     ws = wb[sheet]
     if args.range:
         (r1, c1), (r2, c2) = parse_range(args.range)
@@ -199,7 +208,12 @@ def cmd_chart(args):
 
     (r1, c1), (r2, c2) = parse_range(args.range)
     wb = load_workbook(args.file)
-    ws = wb[args.sheet]
+    sheet = args.sheet or wb.sheetnames[0]
+    if sheet not in wb.sheetnames:
+        print(f"错误: 工作表不存在: {sheet}", file=sys.stderr)
+        print(f"提示: 该工作簿可用工作表: {'、'.join(wb.sheetnames)}", file=sys.stderr)
+        return 2
+    ws = wb[sheet]
     cls = {"line": LineChart, "bar": BarChart, "col": BarChart, "pie": PieChart}[args.type]
     chart = cls()
     if args.type == "col":
@@ -473,7 +487,7 @@ def main():
     p.add_argument("--cell", action="append", metavar="A1=值")
     p.add_argument("--from-csv")
     p.add_argument("--sheet")
-    p.set_defaults(fn=cmd_write)
+    p.set_defaults(fn=cmd_write, creates_file=True)
 
     p = sub.add_parser("convert")
     p.add_argument("src")
@@ -482,7 +496,7 @@ def main():
 
     p = sub.add_parser("chart")
     p.add_argument("file")
-    p.add_argument("--sheet", required=True)
+    p.add_argument("--sheet", help="工作表名（默认第一张表）")
     p.add_argument("--range", required=True)
     p.add_argument("--type", choices=["line", "bar", "col", "pie"], default="line")
     p.add_argument("--title", default="")
@@ -512,8 +526,9 @@ def main():
     p.set_defaults(fn=cmd_pivot)
 
     args = parser.parse_args()
+    cli_guard.check_inputs(args)
     return args.fn(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli_guard.run(main))

@@ -11,18 +11,29 @@
 | 子项目 | 包名 | 状态 | 说明 |
 |---|---|---|---|
 | [`modules/dsh-work-memory`](modules/dsh-work-memory) | `dsh-work-memory` | ✅ 可用（v1.0.1） | 执行层长期记忆：**三级记忆模型**（全局永不遗忘 / 热记忆按 TTL 转冷 / 冷归档被用到即转热）+ **转冷预审** + 会话原生注入 + `remember`/`recall`/`link` 工具 + 右侧边栏面板 + Obsidian 镜像。运行时 id 为 `work-memory` |
+| [`modules/dsh-doc-suite`](modules/dsh-doc-suite) | `dsh-doc-suite` | ✅ 可用（v0.1.0） | 文档能力：**Word 处理+比对（红线修订）/ Excel 处理+重算+透视 / PPT 制作+排版 / PDF 只读精确提取**。实现是 Python 脚本 + DSH 原生技能，宿主半只提供 `/doc-doctor` 自检入口 |
 
-后续候选（待定，需先确认许可证与必要性）：插件市场、多代理团队引擎、工程方法类技能（以 DSH 原生 `SKILL.md` 形态纳入，非插件层）。
+后续候选（待定，需先确认许可证与必要性）：插件市场、多代理团队引擎、专家库（角色提示词库，按需注入）。
+
+> **`dsh-doc-suite` 的硬前置**（安装前必须满足，`/doc-doctor` 会逐项检测并给出修复命令）：
+> **Python ≥ 3.10**（建议 3.12；Windows 一律用 `py -3`，不要用 `python`——它可能是 Microsoft Store 别名 stub）
+> 与 **WPS Office**（比对 / 公式重算 / 透视 / 格式转换全部依赖其 COM，本机实测 ProgID 为 `KWPS.Application`）。
+> **本集成体不会自动安装解释器或 WPS**。详见该子模块 README 第一节。
 
 ## 目录约定
 
 ```text
 work-personal-secretary/
-├── modules/<子项目>/          # 每个子项目是一个可独立测试/打包的单元
-│   └── dsh-work-memory/       #   记忆插件（含自己的 package.json / README / CHANGELOG / 回归）
-├── .github/workflows/ci.yml   # 仓库级 CI：遍历所有子项目跑回归
+├── modules/<子项目>/            # 每个子项目是一个可独立测试/打包的单元
+│   ├── dsh-work-memory/         #   记忆插件（含自己的 package.json / README / CHANGELOG / 回归）
+│   └── dsh-doc-suite/           #   文档能力模块（Python 脚本 + skills/ + doctor.py）
+├── .github/workflows/ci.yml     # 仓库级 CI：遍历所有子项目跑回归
 └── README.md
 ```
+
+**技能文档的路径约定**：`modules/dsh-doc-suite/skills/*/SKILL.md` 里的命令使用占位符
+`<DOC_SUITE_SCRIPTS>`（= 该模块的 `scripts/` 目录），**不写死任何作者机器的绝对路径**。
+解析方式：`py -3 <模块目录>\doctor.py --emit-skill-paths`（输出 JSON，含 `scriptsDir`）。
 
 ## 开发与验证
 
@@ -32,9 +43,14 @@ node modules/dsh-work-memory/scripts/regression.mjs
 
 # 语法自检
 node --check modules/dsh-work-memory/lib/index.js
+
+# 文档模块：环境自检（Python 依赖 + WPS COM）与路径解析
+py -3 modules/dsh-doc-suite/doctor.py
+py -3 modules/dsh-doc-suite/doctor.py --emit-skill-paths
 ```
 
-- 每个子项目**零运行时依赖**（只用 node 内置模块），回归脚本可直接执行，CI 不需要 `npm install`。
+- **JS 子项目**（`dsh-work-memory`）**零运行时依赖**（只用 node 内置模块），回归脚本可直接执行，CI 不需要 `npm install`。
+- **文档子模块**（`dsh-doc-suite`）的运行时依赖是 **Python 库 + WPS Office**，不经 npm；CI 只做语法自检（`py -3 -m py_compile`），环境就绪性交给使用者本机的 `doctor.py`。
 - 改客户端代码（`client/`）必须同步升该子项目的 `package.json` 版本：DSH 的客户端 bundle 按 revision 缓存，不升版本渲染进程不会重新拉取。
 - 装到 DSH profile 的方式见各子项目 README（`dsh plugin add` + `dsh.profile.bundles`）。
 

@@ -33,6 +33,14 @@ jobs:
             node "$t"
           done
 
+      # 装载冒烟（mock ctx 真跑 apply）与共存契约（与 dsh-work-memory 同 ctx 注册，不冲突）
+      - name: 装载冒烟与共存契约
+        run: |
+          for t in $(git ls-files '*/scripts/smoke-load.mjs' '*/scripts/coexist.mjs'); do
+            echo "== $t =="
+            node "$t"
+          done
+
       - name: 子项目必需文件自检
         run: |
           fail=0

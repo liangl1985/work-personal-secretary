@@ -1,0 +1,61 @@
+dsh-experts — 第三方来源与许可声明（THIRD-PARTY NOTICES）
+==========================================================
+
+本模块的专家 persona（experts/<域>/<id>.md）为**压缩改写**版本：保留身份定位、方法论要点、
+交付物骨架与自检清单，并做中国口径适配；原始许可与来源记录在 experts/index.json 的
+`source` 字段（`adapted: true` 表示经过改写，绝不假称原样）。
+
+--------------------------------------------------------------------------------
+一、MIT License 来源
+--------------------------------------------------------------------------------
+1.  jnMetaCode/agency-agents-zh
+    sales/sales-proposal-strategist.md、sales/sales-engineer.md、
+    specialized/government-digital-presales-consultant.md
+2.  VoltAgent/awesome-claude-code-subagents
+    categories/08-business-product/sales-engineer.md、
+    categories/03-infrastructure/incident-responder.md、
+    categories/04-quality-security/penetration-tester.md
+3.  Masriyan/Claude-Code-CyberSecurity-Skill
+    skills/18-ot-ics-security/SKILL.md、skills/07-incident-response/SKILL.md
+4.  daemon-blockint-tech/Agentic-Enteprises-Skill
+    scada-ics-cyber-security-specialist/（含 references/）、product-support-specialist/
+5.  openocta/openocta_skills
+    等保测评skill/skill.md（依据 GB/T 22239-2019）
+6.  kylin985ti/china-accounting-skills
+    business/（journal-entry、chart-of-accounts、month-end-close、balance-sheet、
+    profit-loss、cash-flow、vat-accounting、income-tax、individual-tax）、
+    audit/（cash-audit 等）、shared/（coa-reference、tax-rates-reference）
+7.  stevenup/invoice-ledger-skill
+8.  yaowenhu-pm/yaowenhu-skills（invoice-archive/）
+9.  kingselyjoe/dsh-legal-work-bench
+    preset/skills/01-commercial-legal、02-litigation-legal、08-corporate-legal、11-criminal-legal
+10. mizzlelover/gongwen-gbt9704-skill（GB/T 9704-2012 公文排版）
+11. ningzimu/codex-ppt-skill
+12. SerhiiKorniienko/bullshit-detector
+    skills/analysis/bullshit-detector/SKILL.md、RUBRIC.md
+13. dsh-plugin-t-expert（npm 包）
+    data/zh/security/security-penetration-tester.md
+14. nxl801/copilot-industrial-test-system（IEC 62443-4-2 语境参考）
+
+--------------------------------------------------------------------------------
+二、Apache License 2.0 来源
+--------------------------------------------------------------------------------
+1.  anthropics/knowledge-work-plugins
+    finance/variance-analysis、finance/financial-statements、finance/audit-support、
+    finance/sox-testing（已整体替换为中国企业内控规范口径）、operations/compliance-tracking
+2.  CSlawyer1985/claude-for-legal-ZH（中国法适配版）
+
+--------------------------------------------------------------------------------
+三、本集成体自撰（不假称来自上游）
+--------------------------------------------------------------------------------
+-   doc/doc-office.md —— 与本集成体 `dsh-doc-suite` 的四个技能
+    （office-word / office-excel / office-ppt / pdf-tools）精确对齐自撰，
+    只写"视角与交付规范"，不重复实现转换能力。
+
+--------------------------------------------------------------------------------
+四、许可义务
+--------------------------------------------------------------------------------
+-   MIT：随发布件保留版权声明与许可文本（本文件即声明；各上游 LICENSE 原文见其仓库）。
+-   Apache-2.0：保留版权、许可与 NOTICE 声明，并标注被修改之处（本模块均已改写，
+    详见 index.json 的 `source.adapted` / `source.note`）。
+-   若某条目的 `source` 缺失或标注为不确定，**该条目不随发布件分发**，仅供本机使用。

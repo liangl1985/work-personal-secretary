@@ -11,6 +11,9 @@
 | **PPT** | **制作 + 排版** | 生成、模板/母版/版式套用、占位符填充、EMU 级坐标与字号、图表/表格/图片、演讲者备注、批量生成；**排版上限取决于模板预制程度** |
 | **PDF** | **只读精确提取** | 文字、表格（**带 bbox**）、图片、书签/元数据；**旋转页/合并单元格/扫描件主动告警**（不做 PDF 制作、不做本地 OCR） |
 
+> **子命令速查**：每个格式的完整子命令、参数形态（位置参数 vs 选项）与易错点，见 `skills/<对应技能>/SKILL.md` 的「子命令速查」表。
+> 三个高频坑先记住：`convert <src> <dst>`（**没有** `--to`）、`ppt images <src> <outdir>`（**没有** `--out-dir`）、`merge/make` 的**输出参数在前**。
+
 ## 二、硬前置（安装前必须满足）
 
 | 前置 | 要求 | 为什么 |
@@ -34,7 +37,13 @@ py -3 -m pip install -r requirements-optional.txt
 py -3 doctor.py            # 人类可读报告
 py -3 doctor.py --json     # 供插件 /doc-doctor 解析
 py -3 doctor.py --fix      # 显式确认后才执行 pip 安装（不装解释器）
+
+# 4) 解析技能文档里的路径占位符（对外分发不写死绝对路径）
+py -3 doctor.py --emit-skill-paths   # 输出 JSON：scriptsDir / tools / skills
 ```
+
+> **技能文档的路径约定**：`skills/*/SKILL.md` 里的命令使用 `<DOC_SUITE_SCRIPTS>` 占位符
+> （= 本模块 `scripts/` 目录），解析方式就是上面的 `--emit-skill-paths`。
 
 内网/离线环境：用 `py -3 -m pip download -r requirements.txt --platform win_amd64 --python-version 312 -d vendor/wheels` 预先取包，再用 `--no-index --find-links vendor/wheels` 安装（本机 `pip cache` 为空，不能依赖缓存）。
 
@@ -58,7 +67,9 @@ dsh plugin --profile desktop add <本模块路径或包名>
 | 4 | PDF 硬边界 | 合并单元格表格与旋转页表格**必然失真且不报错** → 已改为**主动告警**；图片提取到的是内嵌版（非原件）；加密 PDF 需口令且 `pypdf` 提中文乱码（PyMuPDF 正常） |
 | 5 | PPT 无自动排版 | `fit_text()` 依赖 fontTools；无动画 API、页码无 API；**排版靠模板预制** |
 | 6 | Excel | `recalc` 对 `.xls` 旧格式未实测；`pivot` 不做小计行识别（源区域含"合计"行会被当行项目） |
-| 7 | **技能里的脚本路径** | 当前 `skills/*/SKILL.md` 中的命令指向工作区绝对路径（本机 `E:\lina\scripts\...`）。**对外分发前需改为模块内相对路径**（计划由 `doctor.py --emit-skill-paths` 生成） |
+| 7 | ~~技能里的脚本路径~~ **已解决（2026-09-13）** | `skills/*/SKILL.md` 已改用占位符 `<DOC_SUITE_SCRIPTS>`，不再含作者机器绝对路径；解析方式 = `py -3 doctor.py --emit-skill-paths` |
+| 8 | **脚本存在两份副本** | 模块内 `scripts/` 与工作区 `<workspace>/scripts/`（技能历史上指向后者）。**二者必须同步**；对外分发只认模块内那份。建议后续由集成包统一提供，工作区不再保留副本 |
+| 9 | 非原生格式"尽力而为" | `word read` / `excel read` 对非 docx/xlsx 文件会回落 WPS COM 读取（读到内容即成功），`ppt read` 则直接报 `PackageNotFoundError`；三种行为不完全一致，属有意保留（WPS 能读 .txt/.csv 这类纯文本） |
 
 ## 六、许可与归属
 

@@ -1,38 +1,39 @@
 """PDF 工具（PyMuPDF / pdfplumber / pypdf）。
 
-用法：
-  python pdf_tool.py info <pdf>
-  python pdf_tool.py text <pdf> [--pages 1-3,5] [--out out.txt]
-  python pdf_tool.py tables <pdf> [--pages ..] [--out out.xlsx|csv|json]
-  python pdf_tool.py merge <out.pdf> a.pdf b.pdf ...
-  python pdf_tool.py split <pdf> --pages 1-3 --out part.pdf
-  python pdf_tool.py images <pdf> [--pages ..] --outdir dir [--dpi 150]
-  python pdf_tool.py make <out.pdf> img1.png img2.jpg ... [--fit a4|auto]
-  python pdf_tool.py ocr <pdf> [--pages ..] [--out out.md]   # 需已配置视觉 API Key
+用法（Windows 一律用 py -3，`python` 可能是 Microsoft Store 别名 stub）：
+  py -3 pdf_tool.py info <pdf>
+  py -3 pdf_tool.py text <pdf> [--pages 1-3,5] [--out out.txt]
+  py -3 pdf_tool.py tables <pdf> [--pages ..] [--out out.xlsx|csv|json]
+  py -3 pdf_tool.py merge <out.pdf> a.pdf b.pdf ...
+  py -3 pdf_tool.py split <pdf> --pages 1-3 --out part.pdf
+  py -3 pdf_tool.py images <pdf> [--pages ..] --outdir dir [--dpi 150]
+  py -3 pdf_tool.py make <out.pdf> img1.png img2.jpg ... [--fit a4|auto]
+  py -3 pdf_tool.py ocr <pdf>                  # 【已退役】仅打印退役说明，不执行 OCR
+
+参数形态（实测易踩）：**输出参数在前**——`merge <out> <files...>`、`make <out> <图片...>`；
+`split --pages` 与 `images --outdir` 必填。
 
 说明：
   - text/tables 只对"文字型 PDF"有效；扫描件请先 images 转图交给基座原生识图（本机不做 OCR）。
   - text 会告警：旋转页（page.rotation != 0）→ 表格列序/阅读顺序可能反转。
   - text 会判定扫描件：整页无文本层且含图片时明确回报"此页为扫描件"，并给出转图片建议。
   - tables 走 PyMuPDF find_tables()，输出附 bbox 坐标；检测到合并单元格/空单元格时告警"该表可能失真"。
-  - ocr 复用 scripts/vision/describe_image.py，逐页转写为 Markdown（云端通道，默认走基座原生识图）。
+    找不到表格**不是错误**（exit 0），提示走 stderr。
+  - info 会校验文件头是否为 %PDF，非 PDF 只给尽力解析结果并告警。
+  - ocr 通道已于 2026-09-12 **退役**：不再本地 OCR、也不再调用云端视觉 API。
 """
 import argparse
 import json
 import re
-import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import lina_config  # noqa: E402
+import cli_guard  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
-
-VISION_SCRIPT = Path(__file__).resolve().parents[1] / "vision" / "describe_image.py"
 
 
 def parse_pages(spec, total):
@@ -53,9 +54,25 @@ def parse_pages(spec, total):
     return [p for p in pages if 1 <= p <= total]
 
 
+def _looks_like_pdf(path):
+    """文件头判定：前 1KB 里应出现 %PDF 魔术字（少数 PDF 前置垃圾字节）。"""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(1024)
+    except OSError:
+        return False
+    return b"%PDF" in head
+
+
 def cmd_info(args):
     import pymupdf as fitz
 
+    if not _looks_like_pdf(args.pdf):
+        print(
+            "⚠️ 警告: 该文件未检测到 %PDF 文件头，**它可能不是 PDF**"
+            "（扩展名或内容不符）；以下结果由 PyMuPDF 尽力解析，仅供参考。",
+            file=sys.stderr,
+        )
     doc = fitz.open(args.pdf)
     print(f"文件: {args.pdf}")
     print(f"页数: {doc.page_count}")
@@ -216,8 +233,12 @@ def cmd_tables(args):
                 file=sys.stderr,
             )
         else:
-            print("未提取到表格（可能是扫描件或无边框表格）")
-        return 1
+            print(
+                "提示: 未提取到表格（可能是无边框表格、纯图片排版或扫描件）——这不是错误。"
+                "若是扫描件，请用 images 转图后交基座原生识图。",
+                file=sys.stderr,
+            )
+        return 0
 
     suffix = Path(args.out).suffix.lower() if args.out else ""
     if suffix == ".json":
@@ -314,69 +335,18 @@ def cmd_make(args):
     return 0
 
 
-OCR_PROMPT = "请完整识别并转写这一页文档的全部文字内容，保留段落结构与标题层级，输出为 Markdown 格式。只输出转写结果，不要任何额外说明。"
+OCR_RETIRED_NOTE = """OCR 通道已于 2026-09-12 退役——本工具不再做本地 OCR，也不再调用任何云端视觉 API。
 
-OCR_TOOL = Path(__file__).resolve().parents[1] / "vision" / "ocr_tool.py"
-
-
-def _ocr_with_glm(pdf, pages):
-    """优先方案：智谱 glm-ocr 原生 PDF OCR（整文件一次调用，支持按页）。成功返回 Markdown，失败返回 None。"""
-    cmd = [sys.executable, str(OCR_TOOL), "ocr", str(Path(pdf).resolve())]
-    if pages:
-        cmd += ["--pages", pages]
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
-    if result.returncode == 0:
-        return result.stdout
-    print(f"[glm-ocr] {result.stderr.strip()}", file=sys.stderr)
-    return None
+替代做法（推荐顺序）：
+  1. 直接把图片/扫描件发给基座（DSH 原生识图），无需本工具参与；
+  2. 只想把扫描页取出来核对：py -3 pdf_tool.py images <pdf> --outdir <目录>
+  3. 判断 PDF 是文字型还是扫描件：py -3 pdf_tool.py text <pdf>（会明确回报"此页为扫描件"）
+"""
 
 
 def cmd_ocr(args):
-    import pymupdf as fitz
-
-    cfg = lina_config.load()
-    ocr_cfg = cfg.get("ocr") or {}
-    ocr_key = ocr_cfg.get("apiKey") or cfg["vision"].get("apiKey")
-
-    # 优先方案：智谱 glm-ocr 原生 PDF OCR（需认证/付费，ocr.enabled=true 才尝试）
-    if ocr_cfg.get("enabled", True) and ocr_key:
-        md = _ocr_with_glm(args.pdf, args.pages)
-        if md is not None:
-            if args.out:
-                Path(args.out).write_text(md, encoding="utf-8")
-                print(f"OK: GLM-OCR 完成，{len(md)} 字符 -> {args.out}")
-            else:
-                print(md)
-            return 0
-        # glm-ocr 失败，回落到逐页视觉方案
-
-    if not cfg["vision"].get("apiKey"):
-        print("错误: OCR 未配置 API Key。请在 .lina/config.json 填写 ocr.apiKey（推荐，GLM-OCR）或 vision.apiKey，或设置环境变量 LINA_OCR_API_KEY。", file=sys.stderr)
-        return 2
-
-    doc = fitz.open(args.pdf)
-    pages = parse_pages(args.pages, doc.page_count)
-    parts = []
-    with tempfile.TemporaryDirectory(prefix="lina-ocr-") as tmp:
-        for n in pages:
-            pix = doc.load_page(n - 1).get_pixmap(dpi=args.dpi)
-            img = Path(tmp) / f"page-{n:03d}.png"
-            pix.save(img)
-            result = subprocess.run(
-                [sys.executable, str(VISION_SCRIPT), "--image", str(img), "--prompt", OCR_PROMPT],
-                capture_output=True, text=True, encoding="utf-8",
-            )
-            if result.returncode != 0:
-                print(f"第 {n} 页 OCR 失败: {result.stderr.strip()}", file=sys.stderr)
-                continue
-            parts.append(f"<!-- 第 {n} 页 -->\n{result.stdout.strip()}")
-    doc.close()
-    out = "\n\n".join(parts)
-    if args.out:
-        Path(args.out).write_text(out, encoding="utf-8")
-        print(f"OK: OCR {len(parts)} 页 -> {args.out}")
-    else:
-        print(out)
+    """墓碑：保留子命令以免旧脚本静默跑偏，但只打印退役说明（exit 0）。"""
+    print(OCR_RETIRED_NOTE, file=sys.stderr)
     return 0
 
 
@@ -424,7 +394,9 @@ def main():
     p.add_argument("--fit", choices=["a4", "auto"], default="auto")
     p.set_defaults(fn=cmd_make)
 
-    p = sub.add_parser("ocr")
+    p = sub.add_parser("ocr", help="【已退役】原 OCR 通道；请改用基座原生识图",
+                       description="【已退役·2026-09-12】OCR 通道不再可用：本工具不做本地 OCR，"
+                                   "也不调用任何云端视觉 API。请把扫描件/图片直接交给基座原生识图。")
     p.add_argument("pdf")
     p.add_argument("--pages")
     p.add_argument("--out")
@@ -432,8 +404,9 @@ def main():
     p.set_defaults(fn=cmd_ocr)
 
     args = parser.parse_args()
+    cli_guard.check_inputs(args)
     return args.fn(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli_guard.run(main))
