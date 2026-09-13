@@ -163,10 +163,10 @@
 - [x] 仅使用当前 host 的**原生扩展点**（tools / commands / settings / resources / sidebarRightTabs / locale / skills），不用已弃用槽位
 - [x] `dsh --profile <profile> --dump-config` 退出码 0，且能看到各模块条目
 - [ ] 装到干净 profile 后**重启**验证：面板可开、工具可用、日志无报错 —— ⏳ 本机 desktop profile 已多次验证；**干净 profile** 未做（需另建 profile + 重启）
-- [ ] **真机重启后的专家库验收**（`dump-config` 退出码 0 只是前置，以下逐条实测）——2026-09-13 15:37 重启后已复验 4/5 项（见下方 ✅ 标注），仅 `expertInjectMax=2` 跨域补位待测：
+- [x] **真机重启后的专家库验收**（`dump-config` 退出码 0 只是前置，以下逐条实测）——**2026-09-13 全部 5/5 通过**（15:37 重启后复验 4 项 + 跨域补位真机实测）：
   - [x] `/expert status`：**身份专家**显示正确 —— ✅ 重启后复验：`settings.yaml` 的 `identityExpert: presales-ics-security` 与注入区【身份视角·工控安全售前】一致（= 设置 `identityExpert`；留空时应取岗位域第一位）
   - [x] 注入区含 **【处理路径】+【身份视角】** 两段 —— ✅ 重启后会话注入区即为该两段（身份视角即常驻的唯一一位）
-  - [ ] `expertInjectMax=2` 时，**跨域命中能补上第 2 位**专家（补位受 `expertSecondThreshold` 门槛约束）——⏳ 2026-09-13 P5 复核：**配置层已验**（该项解析值 = 2、无「已覆盖」徽章）；**引擎级已验**（`experts/CHANGELOG` 0.1.3 的三档对照 + `settings-api-test` §9 真实打分：`max=1` 挤掉 0.7 分对口专家、`max=2` 补入）；**真机注入区**待使用者发一句跨域任务确认出现【本轮命中·…】第 2 位
+  - [x] `expertInjectMax=2` 时，**跨域命中能补上第 2 位**专家（补位受 `expertSecondThreshold` 门槛约束）——✅ **2026-09-13 真机实测通过**（使用者 `/expert why` 截图）：任务「这份采购合同的钱怎么算、税怎么处理」→ 判定理由 **`identity+1`**，**注入名单 = `presales-ics-security`（身份专家）+ `legal-civil`（补位，0.25 证据分 / 「关键词·合同、标签·合同」）**；`finance-tax` 0.2 因 max=2 只补 1 位未入。配置层（解析值 2、无「已覆盖」徽章）与引擎级（0.1.3 三档对照 + `settings-api-test` §9）此前已验
   - [x] `/expert list` 列出 **20 位**专家、6 域齐全（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）——✅ 工具等价复验：返回 20 位，域分布 5/4/5/2/3/1 完全一致
   - [x] `/expert why <文本>` 的打分理由与实际命中一致（人工抽查 1–2 条）——✅ 复验：「客户要做三级等保测评，定级备案怎么走」→ `aftersales-djbh`（等保测评）score 0.7，理由「关键词·等保/测评/定级/备案/三级 + 标签·等保/测评」，与实际命中一致
 
@@ -199,4 +199,4 @@
 - [x] 本清单更新（勾掉已验项 + 补 P4 / 桌宠热区 / 配置引导页 / 设置页跳转验收）
 - [ ] **打 tag `v1.0.0` + GitHub Release** —— 对外动作，**等使用者确认**；Release 正文取根 `CHANGELOG.md` 的 v1.0.0 段
 - [ ] **干净 profile 重启验证** —— 需另建 profile + 重启（本机 desktop profile 已多次验证）
-- [ ] **`expertInjectMax=2` 真机跨域补位观察** —— 配置层与引擎级已验，需使用者在真机发一句跨域任务确认注入区出现【本轮命中·…】第 2 位
+- [x] **`expertInjectMax=2` 真机跨域补位观察** —— ✅ 通过（2026-09-13 真机截图：注入名单 `presales-ics-security` + `legal-civil`，理由 `identity+1`）
