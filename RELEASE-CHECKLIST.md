@@ -123,12 +123,12 @@
 - [x] 仅使用当前 host 的**原生扩展点**（tools / commands / settings / resources / sidebarRightTabs / locale / skills），不用已弃用槽位
 - [x] `dsh --profile <profile> --dump-config` 退出码 0，且能看到各模块条目
 - [ ] 装到干净 profile 后**重启**验证：面板可开、工具可用、日志无报错 —— ⏳ 本机 desktop profile 已多次验证；**干净 profile** 未做（需另建 profile + 重启）
-- [ ] **真机重启后的专家库验收**（`dump-config` 退出码 0 只是前置，以下逐条实测）——⏳ **待重启复验**：本次发布前修复把 experts 升到 v0.1.2，运行中的宿主仍是 v0.1.1，需重启 DSH 后逐条实测：
-  - [ ] `/expert status`：**身份专家**显示正确（= 设置 `identityExpert`；留空时应取岗位域第一位）
-  - [ ] 注入区含 **【处理路径】+【身份视角】** 两段（身份视角即常驻的唯一一位）
-  - [ ] `expertInjectMax=2` 时，**跨域命中能补上第 2 位**专家（补位受 `expertSecondThreshold` 门槛约束）
-  - [ ] `/expert list` 列出 **20 位**专家、6 域齐全（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）
-  - [ ] `/expert why <文本>` 的打分理由与实际命中一致（人工抽查 1–2 条）
+- [ ] **真机重启后的专家库验收**（`dump-config` 退出码 0 只是前置，以下逐条实测）——2026-09-13 15:37 重启后已复验 4/5 项（见下方 ✅ 标注），仅 `expertInjectMax=2` 跨域补位待测：
+  - [x] `/expert status`：**身份专家**显示正确 —— ✅ 重启后复验：`settings.yaml` 的 `identityExpert: presales-ics-security` 与注入区【身份视角·工控安全售前】一致（= 设置 `identityExpert`；留空时应取岗位域第一位）
+  - [x] 注入区含 **【处理路径】+【身份视角】** 两段 —— ✅ 重启后会话注入区即为该两段（身份视角即常驻的唯一一位）
+  - [ ] `expertInjectMax=2` 时，**跨域命中能补上第 2 位**专家（补位受 `expertSecondThreshold` 门槛约束）——⏳ 本机未设该项（默认 1），需临时调到 2 后发一句跨域任务观察；补位阈值逻辑由 `regression.mjs` 的「跨域 Top-2 门槛」用例覆盖
+  - [x] `/expert list` 列出 **20 位**专家、6 域齐全（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）——✅ 工具等价复验：返回 20 位，域分布 5/4/5/2/3/1 完全一致
+  - [x] `/expert why <文本>` 的打分理由与实际命中一致（人工抽查 1–2 条）——✅ 复验：「客户要做三级等保测评，定级备案怎么走」→ `aftersales-djbh`（等保测评）score 0.7，理由「关键词·等保/测评/定级/备案/三级 + 标签·等保/测评」，与实际命中一致
 
 ## 五、第三方合规
 
