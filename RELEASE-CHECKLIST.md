@@ -2,7 +2,7 @@
 
 > 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
 >
-> 集成体含三个子模块：`dsh-work-memory` v1.0.3、`dsh-doc-suite` v0.1.1、`dsh-experts` v0.1.1（2026-09-12 新增并已实装本机 desktop）。
+> 集成体含**四个子模块**：`dsh-work-memory` v1.0.3、`dsh-doc-suite` v0.1.1、`dsh-experts` v0.1.1（2026-09-12 新增）、`dsh-token-pet` v0.2.1-lina.1（2026-09-13 新增，**三方插件定制层**）；前三者已实装本机 desktop，桌宠为 `link:` 装机。
 
 ## 一、默认约定必须随包生效（2026-09-11 定）
 
@@ -83,6 +83,38 @@
 - [ ] `expertMinScore`（默认 0.35）为命中下限，低于下限走原生处理
 - [ ] 设置项齐全且默认值正确：`expertsEnabled` / `defaultDomain` / `identityExpert` / `enabledDomains` / `enabledExperts` / `expertInjectMax` / `expertSecondThreshold` / `expertMinScore` / `expertShowBanner`（另有一项 `expertSetupDone` 安装引导完成标记，由引导自动写入）
 - [ ] 注入块标题固定为 **【处理路径】+【身份视角·…】**（命中/临时注入时另有【本轮命中·…】/【临时注入·…】）
+
+## 三点七、桌宠定制层（dsh-token-pet，2026-09-13 增）
+
+> 性质特殊：**不是自研模块，而是三方插件（MIT）的定制层**——以补丁维护，**不 vendor 整包、不 vendor 素材**。
+
+### 结构与来源
+
+- [ ] 模块结构齐备：`README.md` / `CHANGELOG.md` / `LICENSE` / `NOTICE` / `cordis.patch.yml` / `patches/` / `scripts/` / `tests/`
+- [ ] `patches/0001-lina-customizations.patch` 存在，且 `patches/UPSTREAM-BASE.txt` 记录**基线 commit**（当前 `cc49233` / 上游 v0.2.0）
+- [ ] `LICENSE` = 上游 MIT 全文（Copyright (c) DSH Token Pet contributors），**未经改动**
+- [ ] `NOTICE` 写明上游项目与仓库、基线 commit、许可类型，以及**本定制层的改造边界**（只改源码；上游版权声明一律保留）
+- [ ] 版本号与上游可区分：`0.2.1-lina.1`（形如 `<上游版本>-lina.<n>`）
+- [ ] `cordis.patch.yml` 为**中性部署默认层**（不含个人路径/称呼）
+
+### 补丁质量
+
+- [ ] **补丁可干净应用**：`scripts/apply-customizations.ps1 -Target <克隆> -Check` 通过
+- [ ] **应用后与装机工作区一致**（逐文件 SHA256 比对，防补丁漏文件）
+- [ ] 补丁**不含个人绝对路径、称呼、凭据**（集成体第二节红线）
+- [ ] `README.md` 的改造清单与补丁实际内容一致（当前 12 个文件）
+
+### 素材与体积
+
+- [ ] **形象素材不入库**：仓库内**不得**出现 `.webp` 条带、上游 `assets/` 素材、或 `src/client/*.generated.ts` 等内嵌素材生成物
+- [ ] 模块体积与同级模块相当（当前 ≈ 82 KB；若骤增多为误加了素材/构建产物）
+- [ ] README 写明素材位置 `~/.dsh/data/dsh-token-pet/skins/<套装id>/`，并声明**属私有资产、不随包分发**
+
+### 验证与升级纪律
+
+- [ ] 回归测试**在应用补丁并 build 后的克隆目录**执行（`node tests/lina-skins.test.mjs`，8 项）——依赖上游构建产物 `lib/skins.js`，**CI 不跑它**
+- [ ] 集成体 CI 不因本模块失败（本模块不含 `scripts/regression.mjs` / `smoke-load.mjs` / `coexist.mjs`）
+- [ ] 上游升级后**重新应用补丁并复跑测试**，冲突按补丁意图手工合并，同时更新 `UPSTREAM-BASE.txt` 与 `CHANGELOG`
 
 ## 四、宿主兼容性
 
