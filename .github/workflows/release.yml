@@ -9,30 +9,24 @@ on:
         description: 要发布的 tag（如 v1.0.0）
         required: true
 
-# 建 Release 需要写 contents；GITHUB_TOKEN 由 runner 注入，无需额外密钥
+# 建 / 改 Release 需要写 contents；GITHUB_TOKEN 由 runner 注入，无需额外密钥
 permissions:
   contents: write
 
 jobs:
   release:
-    name: 创建 GitHub Release
+    name: 创建或同步 GitHub Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 正文取 CHANGELOG 里该版本段，末尾附「安装」；已存在则跳过（可重跑）
-      - name: 提取 CHANGELOG 段并建 Release
+      # 正文 = CHANGELOG 里该版本段 + 末尾附安装方式（CHANGELOG 是单一真相源）
+      - name: 生成 Release 正文
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          set -e
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG 已存在，跳过"
-            exit 0
-          fi
           awk -v tag="$TAG" '$0 ~ "^## " tag "( —| |$)" { on=1; next } on && /^## / { exit } on { print }' CHANGELOG.md > /tmp/notes.md
           cat >> /tmp/notes.md <<'EOF'
 
@@ -42,7 +36,7 @@ jobs:
 
           ```bash
           git clone https://github.com/liangl1985/work-personal-secretary.git
-          dsh plugin --profile <profile> add file:<克隆目录>/modules/work-personal-secretary
+          dsh plugin --profile desktop add <克隆目录>/modules/work-personal-secretary
           ```
 
           重启 DSH 后，在「设置 → 工作秘书 → 安装与检查」按需安装各子模块。
@@ -50,6 +44,18 @@ jobs:
           EOF
           echo "--- Release 正文预览 ---"
           cat /tmp/notes.md
+
+      - name: 创建或同步 Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -e
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file /tmp/notes.md
+            echo "Release $TAG 已存在 → 正文已按 CHANGELOG 同步"
+            exit 0
+          fi
           if ! out=$(gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md --verify-tag 2>&1); then
             msg=$(echo "$out" | tr '\n' '|' | sed 's/%/%25/g' | cut -c1-800)
             echo "::error title=Release 创建失败::$msg"

@@ -39,9 +39,11 @@
 
 ```bash
 git clone https://github.com/liangl1985/work-personal-secretary.git
-dsh plugin --profile <profile> add file:<克隆目录>/modules/work-personal-secretary
+dsh plugin --profile desktop add <克隆目录>/modules/work-personal-secretary   # profile 名换成你自己的
 # 重启 DSH → 设置 → 工作秘书 → 「安装与检查」→ 按需安装各子模块（页面内可指定仓库目录）
 ```
+
+> `dsh plugin` 是 `pnpm` 的代理（在 profile 目录下执行），所以 `add` 接受**目录路径**，落盘后 `dependencies` 记为 `file:<目录>`；子模块之间零运行时依赖，无需 `npm install`。
 
 **只装某一个子模块**（命令形态与上面一致）：
 
