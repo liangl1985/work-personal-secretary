@@ -155,7 +155,13 @@ ok(byId.python.status !== 'skip', 'python 项真执行：' + byId.python.status 
 if (byId.python.status === 'ok') {
   ok(/^\d+\.\d+/.test(byId.python.value), 'python 版本可解析：' + byId.python.value)
   ok(byId.pythonDeps.status !== 'skip', 'pythonDeps 项真执行：' + byId.pythonDeps.status + ' / ' + byId.pythonDeps.value)
-  ok(/^\d+\/8 就绪$/.test(byId.pythonDeps.value), 'pythonDeps 值形如 n/8 就绪：' + byId.pythonDeps.value)
+  if (byId.pythonDeps.value === '') {
+    // CI runner 一类环境：解释器在、pip 不可用 → value 为空，但必须明确 warn 并给出原因（不静默）
+    ok(byId.pythonDeps.status === 'warn' && /pip list|无法解析/.test(byId.pythonDeps.detail),
+      'pip 不可用 → 明确 warn 并给出原因：' + byId.pythonDeps.detail)
+  } else {
+    ok(/^\d+\/8 就绪$/.test(byId.pythonDeps.value), 'pythonDeps 值形如 n/8 就绪：' + byId.pythonDeps.value)
+  }
 } else {
   console.log('  ⚠️  本机未检测到 Python，跳过 pythonDeps 真跑断言（' + byId.python.detail + '）')
 }
@@ -317,14 +323,14 @@ const EXPECTED_FIX = {
 }
 const ALLOWED_ARGS = new Set(['install', '-e', '--id', '-m', 'pip', '-3'].concat(WINGET_FLAGS, Object.values(WINGET_PACKAGE_IDS), REQUIRED_PIP_PACKAGES))
 for (const id of Object.keys(EXPECTED_FIX)) {
-  const p = resolveFixCommand(id, { pythonOk: true, wingetOk: true })
+  const p = resolveFixCommand(id, { platform: 'win32', pythonOk: true, wingetOk: true })
   ok(p.ok === true && p.command === EXPECTED_FIX[id], id + ' → ' + (p.command || p.reason))
   ok(p.args.length > 0 && p.args.every((a) => ALLOWED_ARGS.has(a)), id + ' 参数全部来自固定集合（无外部输入）')
 }
 const EVIL = ['pythonDeps; calc', 'pythonDeps extra', 'pythonDeps && shutdown /s', '../../etc/passwd', 'PYTHONDEPS', 'a'.repeat(200), '', '   ', null, 123, {}, [], 'python' + String.fromCharCode(0)]
 let evilBad = []
 for (const e of EVIL) {
-  const p = resolveFixCommand(e, { pythonOk: true, wingetOk: true })
+  const p = resolveFixCommand(e, { platform: 'win32', pythonOk: true, wingetOk: true })
   const cmd = p.command + ' ' + p.args.join(' ')
   if (p.ok !== false || p.command !== '' || p.args.length !== 0) evilBad.push(JSON.stringify(e))
   const injected = typeof e === 'string' && e.trim() !== '' && (cmd.indexOf(e) >= 0)
@@ -332,13 +338,21 @@ for (const e of EVIL) {
 }
 ok(evilBad.length === 0, '非白名单 id 一律拒绝且不产出命令' + (evilBad.length ? '（问题：' + evilBad.join(', ') + '）' : ''))
 for (const id of ['host', 'node', 'subPlugins']) {
-  const p = resolveFixCommand(id, { pythonOk: true, wingetOk: true })
+  const p = resolveFixCommand(id, { platform: 'win32', pythonOk: true, wingetOk: true })
   ok(p.ok === false && /不支持自动补齐|手动/.test(p.reason), id + ' 属于只读项，拒绝代执行')
 }
-const pNoPy = resolveFixCommand('pythonDeps', { pythonOk: false, wingetOk: true })
+const pNoPy = resolveFixCommand('pythonDeps', { platform: 'win32', pythonOk: false, wingetOk: true })
 ok(pNoPy.ok === false && /Python/.test(pNoPy.reason), 'Python 缺失时 pythonDeps 拒绝代执行')
-const pNoWinget = resolveFixCommand('python', { pythonOk: true, wingetOk: false })
+const pNoWinget = resolveFixCommand('python', { platform: 'win32', pythonOk: true, wingetOk: false })
 ok(pNoWinget.ok === false && /未检测到 winget/.test(pNoWinget.reason), 'winget 缺失时 python 拒绝代执行')
+
+// 平台分支正向覆盖：断言不再靠「宿主恰好是 Windows」，非 Windows 行为单独锁死
+const pPosix = resolveFixCommand('python', { platform: 'linux', pythonOk: false, wingetOk: false })
+ok(pPosix.ok === false && /当前平台不支持 winget/.test(pPosix.reason),
+  '非 Windows 平台 → winget 类修复一律降级 manual（不误代执行）')
+const pPosixDeps = resolveFixCommand('pythonDeps', { platform: 'linux', pythonOk: true })
+ok(pPosixDeps.ok === true && /^python3 -m pip install /.test(pPosixDeps.command),
+  '非 Windows 平台 pythonDeps 用 python3 启动器：' + pPosixDeps.command)
 
 section('[5] /fix-all（ids 校验 / 固定顺序 / rejected，mock 执行）')
 const plan1 = resolveFixAllPlan(['wps', 'python', 'obsidian'])

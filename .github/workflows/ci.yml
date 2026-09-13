@@ -54,7 +54,7 @@ jobs:
             else
               fail=1
               echo "$out" | tail -n 60
-              detail=$(echo "$out" | grep -nE '✗|FAIL|失败|Error|error|Assertion|expected|actual' | head -n 15 | tr '\n' '|' | sed 's/%/%25/g' | cut -c1-1200)
+              detail=$(echo "$out" | grep -nE '❌|✗|FAIL|失败|Error|error|Assertion|expected|actual' | head -n 25 | tr '\n' '|' | sed 's/%/%25/g' | cut -c1-1500)
               echo "::error title=本体自测失败：$t::$detail"
               { echo "### ❌ $t"; echo; echo '```'; echo "$out" | tail -n 40; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
             fi
