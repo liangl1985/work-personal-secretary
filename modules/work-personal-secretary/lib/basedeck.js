@@ -105,6 +105,15 @@ export const DOC_SUITE_MODULE = 'dsh-doc-suite'
 export const SKILLS_DIR_NAME = 'skills'
 
 /**
+ * obsidianSyncDir 的**哨兵值**：客户端「不使用镜像」按钮会传它。
+ * 语义与三态严格区分：
+ *   ''         = 用探测到的现状 / 默认值（不覆盖）
+ *   '<路径>'   = 写入该路径
+ *   '__none__' = **显式写空值**（= 关闭镜像，等价 work-memory 的「留空 = 不同步」）
+ */
+export const NONE_SENTINEL_VALUE = '__none__'
+
+/**
  * 设置目标：只增改这 4 个键，其余内容逐字节保留。
  * kind=dir  → 缺值时可由引导填值 / 推导建议值；
  * kind=keep → 安装器**不预设**（岗位域与身份专家是使用者画像，写死会把行业钉死），
@@ -700,36 +709,90 @@ export function normalizePath(value) {
   }
 }
 
+/** 目录是否存在且确实是目录（读不到返回 false，不抛） */
+export function isDirectory(dir) {
+  if (!dir) return false
+  try {
+    return statSync(dir).isDirectory()
+  } catch (e) {
+    return false
+  }
+}
+
 /**
- * 解析工作区（**只读探测，不猜**）：
- *   ① 显式指定（设置项 workspace / 引导填值）：存在且是目录即可
- *   ② 默认：DSH_HOME 的上一级及其下的常见工作区名，且必须「看起来像工作区」
- *   ③ 都拿不到 → { workspace: null, source: 'none' }（显式失败）
- * @returns {{workspace:(string|null), source:'config'|'default'|'none', tried:string[]}}
+ * 是否为**用户主目录**。
+ * 硬护栏：任何来源（client / config / derived / cwd / default）都不允许把工作区落到这里 ——
+ * 「DSH_HOME 的上一级」正是用户主目录，且主目录下有 ~/.dsh，会把家目录误判成工作区，
+ * 导致 AGENTS.md 被写进家目录、技能装到 ~/.dsh/skills（既不生效又污染主目录）。
+ */
+export function isHomePath(dir, env = process.env) {
+  const d = normalizePath(dir)
+  if (!d) return false
+  const source = env || {}
+  const home = normalizePath(String(source.USERPROFILE || source.HOME || '').trim() || homedir())
+  if (!home) return false
+  return d.toLowerCase() === home.toLowerCase()
+}
+
+/**
+ * 解析工作区（**只读探测；绝不回退到用户主目录**）。
+ * 优先级：
+ *   ① 调用方显式传入（客户端表单 / 引导填值）                     → source = 'client'
+ *   ② 设置项 workspace（部署默认层）                              → source = 'config'
+ *   ③ 由 settings 的 work-memory.obsidianSyncDir **反推父目录**   → source = 'derived'
+ *   ④ process.cwd()（须 looksLikeWorkspace）                      → source = 'cwd'
+ *   ⑤ 显式注入的默认候选（确有合理默认时才由调用方传入）          → source = 'default'
+ *   ⑥ 都不可用 → { workspace: null, source: 'none' }（显式失败，不产出任何路径）
+ * @returns {{workspace:(string|null), source:'client'|'config'|'derived'|'cwd'|'default'|'none',
+ *            derivedFrom?:string, tried:string[]}}
  */
 export function resolveWorkspace(options = {}) {
   const env = options.env || process.env
+  const dshHome = options.dshHome ? normalizePath(options.dshHome) : resolveDshHome(env)
   const tried = []
-  const configWorkspace = typeof options.configWorkspace === 'string' ? options.configWorkspace.trim() : ''
+  const reject = (dir, why) => {
+    const tag = String(dir || '') + '（' + why + '）'
+    if (dir && tried.indexOf(tag) < 0) tried.push(tag)
+  }
+  const accept = (dir) => Boolean(dir) && dir !== dshHome && !isHomePath(dir, env) && isDirectory(dir)
 
-  if (configWorkspace) {
-    const dir = normalizePath(configWorkspace)
-    tried.push(dir)
-    try {
-      if (dir && statSync(dir).isDirectory()) return { workspace: dir, source: 'config', tried: tried }
-    } catch (e) { /* 无效设置项 → 降级继续探测 */ }
+  // ① 调用方显式传入
+  const explicit = normalizePath(options.workspace)
+  if (explicit) {
+    if (accept(explicit)) return { workspace: explicit, source: options.source || 'client', tried: tried }
+    reject(explicit, isHomePath(explicit, env) ? '是用户主目录，已拒绝' : '不是已存在的目录')
   }
 
-  const dshHome = options.dshHome ? normalizePath(options.dshHome) : resolveDshHome(env)
-  const base = dirname(dshHome)
-  const candidates = Array.isArray(options.candidates) && options.candidates.length > 0
-    ? options.candidates
-    : [base, join(base, 'workspace'), join(base, '工作区')]
-  for (const raw of candidates) {
+  // ② 设置项 workspace
+  const cfg = normalizePath(options.configWorkspace)
+  if (cfg) {
+    if (accept(cfg)) return { workspace: cfg, source: 'config', tried: tried }
+    reject(cfg, isHomePath(cfg, env) ? '是用户主目录，已拒绝' : '不是已存在的目录')
+  }
+
+  // ③ 由记忆镜像目录反推（镜像目录通常是 vault 下的一个子目录，其父目录即工作区）
+  const mirror = normalizePath(options.obsidianSyncDir)
+  if (mirror) {
+    const parent = dirname(mirror)
+    if (accept(parent)) return { workspace: parent, source: 'derived', derivedFrom: mirror, tried: tried }
+    if (accept(mirror)) return { workspace: mirror, source: 'derived', derivedFrom: mirror, tried: tried }
+    reject(parent, '记忆镜像目录的父目录不可用（不存在 / 是用户主目录 / 等于 DSH_HOME）')
+  }
+
+  // ④ 当前进程目录
+  const cwd = normalizePath(options.cwd || process.cwd())
+  if (cwd) {
+    if (accept(cwd) && looksLikeWorkspace(cwd)) return { workspace: cwd, source: 'cwd', tried: tried }
+    reject(cwd, isHomePath(cwd, env) ? '是用户主目录，已拒绝' : '不像工作区（无 AGENTS.md / .dsh / .git）')
+  }
+
+  // ⑤ 调用方显式注入的默认候选
+  const injected = Array.isArray(options.candidates) ? options.candidates : []
+  for (const raw of injected) {
     const dir = normalizePath(raw)
-    if (!dir || tried.indexOf(dir) >= 0) continue
-    tried.push(dir)
-    if (looksLikeWorkspace(dir)) return { workspace: dir, source: 'default', tried: tried }
+    if (!dir) continue
+    if (accept(dir) && looksLikeWorkspace(dir)) return { workspace: dir, source: 'default', tried: tried }
+    reject(dir, '默认候选不可用')
   }
 
   return { workspace: null, source: 'none', tried: tried }
@@ -745,11 +808,8 @@ export function safeWorkspaceParam(value) {
   if (!s) return { ok: false, empty: true, error: '未提供工作区路径' }
   const target = normalizePath(s)
   if (!isAbsolute(target)) return { ok: false, empty: false, error: '工作区必须是绝对路径：' + clip(s, 80) }
-  try {
-    if (!statSync(target).isDirectory()) return { ok: false, empty: false, error: '工作区不是目录：' + posix(target) }
-  } catch (e) {
-    return { ok: false, empty: false, error: '工作区不存在：' + posix(target) }
-  }
+  if (isHomePath(target)) return { ok: false, empty: false, error: '工作区不能是用户主目录（会把 AGENTS.md 写到家目录且不生效）：' + posix(target) }
+  if (!isDirectory(target)) return { ok: false, empty: false, error: '工作区不存在或不是目录：' + posix(target) }
   return { ok: true, workspace: target }
 }
 
@@ -776,13 +836,23 @@ export function resolveDeckContext(options = {}) {
   const dshHome = options.dshHome ? normalizePath(options.dshHome) : resolveDshHome(env)
   const moduleDir = normalizePath(options.moduleDir) || MODULE_DIR
 
-  let workspace = normalizePath(ovWorkspace) || normalizePath(options.workspace)
-  let workspaceSource = workspace ? 'config' : ''
-  if (!workspace) {
-    const r = resolveWorkspace({ configWorkspace: options.configWorkspace, dshHome: dshHome, env: env, candidates: options.candidates })
-    workspace = r.workspace
-    workspaceSource = r.source
-  }
+  // 先读设置：工作区可能要从记忆镜像目录（work-memory.obsidianSyncDir）反推
+  const settingsFile = normalizePath(options.settingsFile) || join(dshHome, 'settings.yaml')
+  const settingsRead = readSettingsValues(settingsFile, { strictNamespaces: ['work-memory', 'experts'] })
+  const values = settingsRead.values || {}
+
+  // 工作区解析（**绝不回退到用户主目录**）：client → config → derived → cwd → default → none
+  const wsResolved = resolveWorkspace({
+    workspace: ovWorkspace,
+    configWorkspace: normalizePath(options.workspace) || normalizePath(options.configWorkspace),
+    obsidianSyncDir: values['work-memory.obsidianSyncDir'],
+    cwd: options.cwd,
+    dshHome: dshHome,
+    env: env,
+    candidates: options.candidates,
+  })
+  const workspace = wsResolved.workspace
+  const workspaceSource = workspace ? wsResolved.source : 'none'
 
   const repoRootInfo = options.repoRoot
     ? { repoRoot: normalizePath(options.repoRoot), source: 'config', sourceDetail: 'config' }
@@ -793,21 +863,24 @@ export function resolveDeckContext(options = {}) {
       commonCandidates: options.commonCandidates,
     })
 
-  const settingsFile = normalizePath(options.settingsFile) || join(dshHome, 'settings.yaml')
-  const settingsRead = readSettingsValues(settingsFile, { strictNamespaces: ['work-memory', 'experts'] })
-  const values = settingsRead.values || {}
-
   const memoryDir = normalizePath(ovMemoryDir)
     || normalizePath(options.memoryDir)
     || normalizePath(values['work-memory.memoryDir'])
-    || (workspace ? join(dshHome, 'memories', basename(workspace)) : '')
+    || (workspace ? join(dshHome, 'memories', basename(workspace)) : join(dshHome, DEFAULT_MEMORY_SUBDIR))
   const backupDir = normalizePath(options.backupDir)
     || normalizePath(values['work-memory.backupDir'])
     || join(dshHome, DEFAULT_BACKUP_SUBDIR)
-  const obsidianSyncDir = normalizePath(ovObsidian)
-    || normalizePath(options.obsidianSyncDir)
-    || normalizePath(values['work-memory.obsidianSyncDir'])
-    || (workspace ? join(workspace, 'work-memory') : '')
+  // obsidianSyncDir：哨兵 __none__ = 显式关闭镜像（写空值，且不再回填默认）
+  const obsidianExplicitOff = ovObsidian === NONE_SENTINEL_VALUE
+  const obsidianSyncDir = obsidianExplicitOff ? ''
+    : (normalizePath(ovObsidian)
+      || normalizePath(options.obsidianSyncDir)
+      || normalizePath(values['work-memory.obsidianSyncDir'])
+      || (workspace ? join(workspace, 'work-memory') : ''))
+
+  // 记忆库名与记忆库根（供客户端做「使用默认」候选与路径拼接）
+  const libraryName = memoryDir ? basename(memoryDir) : ''
+  const memoryRoot = memoryDir ? dirname(memoryDir) : ''
 
   const templateFile = normalizePath(options.templateFile)
     || join(moduleDir, '..', '..', 'defaults', 'AGENTS.zh-CN.md')
@@ -823,6 +896,8 @@ export function resolveDeckContext(options = {}) {
     dshHome: dshHome,
     workspace: workspace,
     workspaceSource: workspaceSource,
+    workspaceDerivedFrom: wsResolved.derivedFrom || '',
+    workspaceTried: wsResolved.tried || [],
     repoRoot: repoRootInfo.repoRoot,
     repoRootSource: repoRootInfo.source,
     repoRootSourceDetail: repoRootInfo.sourceDetail,
@@ -832,6 +907,9 @@ export function resolveDeckContext(options = {}) {
     settingsFile: settingsFile,
     settingsRead: settingsRead,
     memoryDir: memoryDir,
+    libraryName: libraryName,
+    memoryRoot: memoryRoot,
+    obsidianExplicitOff: obsidianExplicitOff,
     memoryFile: memoryDir ? join(memoryDir, 'MEMORY.md') : '',
     backupDir: backupDir,
     obsidianSyncDir: obsidianSyncDir,
@@ -899,6 +977,23 @@ export function computeSetupNeeded(items) {
   return false
 }
 
+/**
+ * 工作区来源提示（界面必须让使用者看到「工作区是怎么来的」）。
+ * derived 来源必须显式提示确认 —— 它是从记忆镜像目录反推的，不是使用者直接指定的。
+ */
+export function workspaceNoteFor(ctx) {
+  if (!ctx.workspace) {
+    return '未解析到工作区：请显式填写工作区目录（安装器不会回退到用户主目录）'
+  }
+  if (ctx.workspaceSource === 'derived') {
+    return '工作区由记忆镜像目录反推（' + posix(ctx.workspaceDerivedFrom || '') + ' 的父目录：' + posix(ctx.workspace) + '），请确认'
+  }
+  if (ctx.workspaceSource === 'cwd') {
+    return '工作区取自当前进程目录：' + posix(ctx.workspace) + '，请确认'
+  }
+  return ''
+}
+
 /** 生成整个配置底座的 dry-run 计划（**只读**，绝不写盘） */
 export function planBaseDeck(options = {}) {
   const ctx = resolveDeckContext(options)
@@ -909,10 +1004,23 @@ export function planBaseDeck(options = {}) {
     if (spec.id === 'settings') return planSettings(ctx)
     return planDirs(ctx)
   })
+  const note = workspaceNoteFor(ctx)
+  if (note && (ctx.workspaceSource === 'derived' || ctx.workspaceSource === 'cwd')) {
+    // 受影响的两项（写工作区根 / 写工作区技能目录）把来源提示带进 detail
+    for (const it of items) {
+      if (it.id === 'agentsMd' || it.id === 'skills') it.detail = it.detail + '（' + note + '）'
+    }
+  }
   return {
     ok: true,
-    workspace: ctx.workspace ? posix(ctx.workspace) : null,
+    workspace: ctx.workspace ? posix(ctx.workspace) : '',
     workspaceSource: ctx.workspaceSource || 'none',
+    workspaceNote: note,
+    workspaceDerivedFrom: ctx.workspaceDerivedFrom ? posix(ctx.workspaceDerivedFrom) : '',
+    workspaceTried: ctx.workspaceTried || [],
+    libraryName: ctx.libraryName || '',
+    memoryRoot: ctx.memoryRoot ? posix(ctx.memoryRoot) : '',
+    memoryDir: ctx.memoryDir ? posix(ctx.memoryDir) : '',
     items: items,
     summary: summarize(items),
     setupNeeded: computeSetupNeeded(items),
@@ -1000,6 +1108,16 @@ function planMemorySeed(ctx) {
       target: ctx.memoryFile ? posix(ctx.memoryFile) : '',
       detail: seed.error,
       preview: { action: '种子文件不可用', blockVersion: '', contentHash: '', sampleLines: '' },
+    })
+  }
+
+  if (!ctx.memoryFile) {
+    return makeItem(spec, {
+      status: 'none',
+      target: '',
+      detail: '没有可用的记忆库目录（未解析到工作区且设置里没有 memoryDir），跳过（显式失败，不猜路径）',
+      preview: { action: '没有可用的记忆库目录，无法处理', blockVersion: '', contentHash: '', sampleLines: '' },
+      internal: { pending: [], newEntries: [], entries: [], text: '', exists: false },
     })
   }
 
@@ -1170,17 +1288,24 @@ function planSettings(ctx) {
     'work-memory.memoryDir': ctx.workspace ? posix(join(ctx.dshHome, 'memories', basename(ctx.workspace))) : '',
     'work-memory.obsidianSyncDir': ctx.workspace ? posix(join(ctx.workspace, 'work-memory')) : '',
   }
+  // 「不使用镜像」哨兵：写成空值（显式关闭），与「空串 = 用现状/默认」严格区分
+  const obsidianOff = ov.obsidianSyncDir === NONE_SENTINEL_VALUE
   const overrideValues = {
     'work-memory.memoryDir': asPath(ov.memoryDir),
-    'work-memory.obsidianSyncDir': asPath(ov.obsidianSyncDir),
+    'work-memory.obsidianSyncDir': obsidianOff ? '' : asPath(ov.obsidianSyncDir),
     'experts.defaultDomain': ov.defaultDomain,
     'experts.identityExpert': ov.identityExpert,
   }
+  const forceSet = { 'work-memory.obsidianSyncDir': obsidianOff }
 
   // 「留空会发生什么」必须显式写进 detail：避免 obsidianSyncDir 的留空变成隐性副作用
-  const obsidianHint = ctx.workspace
-    ? 'obsidianSyncDir 留空将镜像到 ' + posix(join(ctx.workspace, 'work-memory'))
-    : 'obsidianSyncDir 留空将镜像到 <工作区>/work-memory（当前未解析到工作区，无法给出具体路径）'
+  const obsidianCurrent = (ctx.settingsRead.values || {})['work-memory.obsidianSyncDir']
+  const obsidianClosed = ctx.obsidianExplicitOff || obsidianCurrent === ''
+  const obsidianHint = obsidianClosed
+    ? 'obsidianSyncDir 为空值（显式关闭镜像同步，不会回填默认目录）'
+    : (ctx.workspace
+      ? 'obsidianSyncDir 留空将镜像到 ' + posix(join(ctx.workspace, 'work-memory'))
+      : 'obsidianSyncDir 留空将镜像到 <工作区>/work-memory（当前未解析到工作区，无法给出具体路径）')
   const hintFor = (id) => (id === 'work-memory.obsidianSyncDir' ? '；' + obsidianHint : '')
 
   const writes = []
@@ -1188,12 +1313,25 @@ function planSettings(ctx) {
   for (const t of ctx.settingsTargets) {
     const id = t.ns + '.' + t.key
     const current = (ctx.settingsRead.values || {})[id]
-    const hasCurrent = current !== undefined && current !== ''
+    const present = current !== undefined
+    const hasCurrent = present && current !== ''
     const override = overrideValues[id] || ''
+    const forced = Boolean(forceSet[id])
 
-    if (override) {
+    if (override || forced) {
       writes.push({ ns: t.ns, key: t.key, value: override, action: 'set' })
-      keys.push({ ns: t.ns, key: t.key, label: t.label, value: override, action: hasCurrent && current === override ? 'upToDate' : 'write', detail: '引导填值，将写入' + hintFor(id) })
+      keys.push({
+        ns: t.ns, key: t.key, label: t.label, value: override,
+        action: forced ? (present && current === '' ? 'explicitOff' : 'setEmpty') : (hasCurrent && current === override ? 'upToDate' : 'write'),
+        detail: forced
+          ? '引导选择「不使用镜像」→ 显式写入空值（关闭镜像同步）'
+          : '引导填值，将写入' + hintFor(id),
+      })
+      continue
+    }
+    // obsidianSyncDir 已存在且为空 = 使用者此前**显式关闭**了镜像 → 视为已决策，不再回填默认值
+    if (id === 'work-memory.obsidianSyncDir' && present && current === '') {
+      keys.push({ ns: t.ns, key: t.key, label: t.label, value: '', action: 'explicitOff', detail: '已显式关闭镜像（写入空值，不再回填默认）' })
       continue
     }
     if (t.kind === 'keep') {
@@ -1824,8 +1962,12 @@ export function applyBaseDeck(ids, options = {}) {
     results: results,
     rejected: rejected,
     wroteAny: results.some((r) => r.wroteAny === true),
-    workspace: ctx.workspace ? posix(ctx.workspace) : null,
+    workspace: ctx.workspace ? posix(ctx.workspace) : '',
     workspaceSource: ctx.workspaceSource || 'none',
+    workspaceNote: workspaceNoteFor(ctx),
+    libraryName: ctx.libraryName || '',
+    memoryRoot: ctx.memoryRoot ? posix(ctx.memoryRoot) : '',
+    memoryDir: ctx.memoryDir ? posix(ctx.memoryDir) : '',
     durationMs: Date.now() - started,
   }
 }
@@ -1836,6 +1978,11 @@ export function publicPlan(plan) {
     ok: true,
     workspace: plan.workspace,
     workspaceSource: plan.workspaceSource,
+    workspaceNote: plan.workspaceNote || '',
+    workspaceDerivedFrom: plan.workspaceDerivedFrom || '',
+    libraryName: plan.libraryName || '',
+    memoryRoot: plan.memoryRoot || '',
+    memoryDir: plan.memoryDir || '',
     items: plan.items.map((it) => {
       const out = {}
       for (const k of Object.keys(it)) {

@@ -809,6 +809,16 @@ ok(itext.includes('首用必配项') && itext.includes('必填'), '表单标题�
 ok(itext.includes('可选'), '可选项标注「可选」')
 ok(itext.includes('写入前会自动备份') && itext.includes('只更新「工作秘书」标记块内的内容') && itext.includes('不会被改动'), '安全文案：自动备份 + 只改标记块 + 不动你自己的段落')
 ok(itext.includes('检查并预览'), '段 1 主按钮为「检查并预览」')
+ok(mod.inject.includes('uiWorkspace'), "模块 inject 已声明 'uiWorkspace'（原生目录选择）")
+const bdBrowse = findButtons(iTree).filter((b) => label(b) === '浏览…')
+ok(bdBrowse.length === 3, '三个目录字段各有「浏览…」按钮（实测 ' + bdBrowse.length + '）')
+ok(bdBrowse.every((b) => b.props.disabled === true), '服务缺失（无 uiWorkspace）时「浏览…」全部禁用（优雅降级）')
+ok(bdBrowse.every((b) => String(b.props.title || '').length > 0), '禁用的「浏览…」带 tooltip 说明，页面不崩')
+ok(findButtons(iTree).filter((b) => label(b) === '使用探测到的工作区').length === 1, '工作区目录有「使用探测到的工作区」候选')
+ok(findButtons(iTree).filter((b) => label(b).indexOf('使用默认（~/.dsh/memories/') >= 0).length === 1, '记忆库目录有「使用默认」候选')
+ok(findButtons(iTree).filter((b) => label(b) === '不使用镜像').length === 1
+  && findButtons(iTree).filter((b) => label(b) === '<工作区>/00_全局记忆').length === 1
+  && findButtons(iTree).filter((b) => label(b) === '<工作区>/work-memory').length === 1, 'Obsidian 库目录三个候选齐全（不使用镜像 / 00_全局记忆 / work-memory）')
 const domText = findSelects(iTree).length > 0 ? collect(findSelects(iTree)[0], []).join(' | ') : ''
 ok(['售前', '售后·技术支持', '会计财务', '法务', '文档', '核查·通用'].every((x) => domText.includes(x)), '工作岗位域下拉六项齐全')
 ok(findSelects(iTree)[0].props.value === '', '工作岗位域不默认预选（初始 value 为空）')
@@ -831,6 +841,7 @@ itext = collect(iTree, []).join(' | ')
 const iInputs = findInputs(iTree)
 ok(iInputs.length === 4 && iInputs[0].props.value === 'C:/work/space', '工作区目录默认预填当前工作区（实测 ' + iInputs.length + ' 个文本框）')
 ok(hasBtn(iTree, '检查并预览').length === 1 && hasBtn(iTree, '检查并预览')[0].props.disabled !== true, '工作区已填 → 「检查并预览」可用')
+ok(itext.includes('已按设置里的工作区配置填入'), 'workspaceSource=config → 工作区字段下方标明来源')
 
 // ── 段 2：检查与预览（GET 带 workspace，只读） ──────────────────
 const chkBtn = hasBtn(iTree, '检查并预览')[0]
@@ -986,6 +997,8 @@ findSelects(noneTree)[0].props.onChange({ target: { value: 'presales' } })
 hookCursor = 0
 effectQueue = []
 noneTree = expand(reg.render({ initialTab: 'init' }))
+ok(findInputs(noneTree)[0].props.value === '', 'workspaceSource=none → 工作区留空（不预填）')
+ok(collect(noneTree, []).join(' | ').indexOf('必须选择工作区') >= 0, 'workspaceSource=none → 字段下方提示「必须选择工作区」')
 hasBtn(noneTree, '检查并预览')[0].props.onClick()
 await tick(50)
 hookCursor = 0
@@ -1118,6 +1131,213 @@ for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在�
 await tick(50)
 ok(calls.length > 0 && calls[0].url === '/work-personal-secretary/api/basedeck', 'Web 载体 GET /basedeck 走根相对路径（' + (calls[0] && calls[0].url) + '）')
 ok(calls.every((c) => c.url.indexOf('dsh.internal') < 0), 'Web 载体不发合成基址请求（相对路径成功即止）')
+
+// ── workspaceSource 的预填与来源说明（derived / cwd / config） ──
+const bdSourceFetch = (source) => async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/basedeck') >= 0) {
+    return jsonRes({ ok: true, workspace: 'C:/work/space', workspaceSource: source, items: BD_ITEMS, summary: BD_GET.summary })
+  }
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+for (const pair of [['derived', '已按记忆镜像目录反推，请确认'], ['cwd', '已按当前工作目录填入，请确认'], ['config', '已按设置里的工作区配置填入']]) {
+  const srcName = pair[0]
+  const noteText = pair[1]
+  globalThis.fetch = bdSourceFetch(srcName)
+  hookSlots = []
+  hookCursor = 0
+  effectQueue = []
+  expand(reg.render({ initialTab: 'init' }))
+  for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+  await tick(50)
+  hookCursor = 0
+  effectQueue = []
+  const srcTree = expand(reg.render({ initialTab: 'init' }))
+  const srcText = collect(srcTree, []).join(' | ')
+  ok(findInputs(srcTree)[0].props.value === 'C:/work/space', 'workspaceSource=' + srcName + ' → 工作区已预填')
+  ok(srcText.includes(noteText), 'workspaceSource=' + srcName + ' → 标明来源「' + noteText + '」')
+}
+
+// ── 原生目录选择（uiWorkspace.pickDirectory）：点击填值 / 取消保持原值 ──
+const pickSeq = ['C:/picked/ws', null]
+const pickShell = (() => {
+  const reg3 = {}
+  const ctx3 = {
+    effect(fn) { return fn() },
+    logger: { debug() {}, warn() {}, info() {} },
+    locale: { register() { return () => {} }, bind() { return (k) => k } },
+    uiWorkspace: { pickDirectory: async () => (pickSeq.length ? pickSeq.shift() : null) },
+    slots: {
+      inject(slot, cb) { cb() },
+      register(meta, render) { reg3[meta.name] = { meta, render }; return () => {} },
+    },
+  }
+  return { registered: reg3, ctx: ctx3 }
+})()
+const pickCaptured = (() => {
+  let cap = null
+  // 不传 location = 桌面外壳载体（只走合成基址，每请求 1 次，便于计数断言）
+  const w = { __ModuleLoader__: { load(mod) { cap = mod } } }
+  new Function('window', src)(w) // eslint-disable-line no-new-func
+  return cap
+})()
+pickCaptured.factory((id) => {
+  if (id === 'react') return ReactStub
+  throw new Error('未预期的客户端依赖: ' + id)
+}).apply(pickShell.ctx)
+const pickReg = pickShell.registered['settings.section']
+globalThis.fetch = bdFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(pickReg.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+let pkTree = expand(pickReg.render({ initialTab: 'init' }))
+const pkBrowse = findButtons(pkTree).filter((b) => label(b) === '浏览…')
+ok(pkBrowse.length === 3 && pkBrowse.every((b) => b.props.disabled !== true), '有 uiWorkspace 服务时三个「浏览…」按钮可用')
+pkBrowse[0].props.onClick()
+await tick(30)
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(findInputs(pkTree)[0].props.value === 'C:/picked/ws', '点击「浏览…」把系统目录选择结果填入工作区')
+findButtons(pkTree).filter((b) => label(b) === '浏览…')[0].props.onClick()
+await tick(30)
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(findInputs(pkTree)[0].props.value === 'C:/picked/ws', '使用者取消选择（返回 null）时保持原值不变')
+
+// 候选按钮填值（工作区 / 记忆库 / Obsidian 三个）
+findInputs(pkTree)[0].props.onChange({ target: { value: 'D:/manual' } })
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+findButtons(pkTree).filter((b) => label(b) === '使用探测到的工作区')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(findInputs(pkTree)[0].props.value === 'C:/work/space', '「使用探测到的工作区」候选把探测值填回')
+
+findButtons(pkTree).filter((b) => label(b).indexOf('使用默认（~/.dsh/memories/') >= 0)[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(findInputs(pkTree)[1].props.value === '~/.dsh/memories/space', '记忆库候选填入默认路径（~/.dsh/memories/<库名>）')
+
+findButtons(pkTree).filter((b) => label(b) === '<工作区>/00_全局记忆')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(findInputs(pkTree)[2].props.value === 'C:/work/space/00_全局记忆', 'Obsidian 候选「<工作区>/00_全局记忆」填入拼接路径')
+findButtons(pkTree).filter((b) => label(b) === '<工作区>/work-memory')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(findInputs(pkTree)[2].props.value === 'C:/work/space/work-memory', 'Obsidian 候选「<工作区>/work-memory」填入拼接路径')
+findButtons(pkTree).filter((b) => label(b) === '不使用镜像')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+let pkText = collect(pkTree, []).join(' | ')
+ok(findInputs(pkTree)[2].props.value === '', '「不使用镜像」清空该字段')
+ok(pkText.includes('已选择不使用镜像'), '「不使用镜像」进入显式关闭状态且页面可见标注')
+ok(pkText.indexOf('留空将把记忆镜像到') < 0, '显式关闭状态下不再显示「留空将镜像到…」提示')
+const offBtn = findButtons(pkTree).filter((b) => label(b) === '不使用镜像')[0]
+ok(Boolean(offBtn) && offBtn.props.style && offBtn.props.style.background === '#f3f6ff', '「不使用镜像」按钮高亮（显式关闭生效）')
+
+// 点镜像候选 → 退出显式关闭
+findButtons(pkTree).filter((b) => label(b) === '<工作区>/work-memory')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+pkText = collect(pkTree, []).join(' | ')
+ok(findInputs(pkTree)[2].props.value === 'C:/work/space/work-memory'
+  && pkText.indexOf('已选择不使用镜像') < 0
+  && pkText.includes('留空将把记忆镜像到'), '点镜像候选 → 退出显式关闭状态（提示恢复）')
+
+// 手输路径 → 退出显式关闭
+findButtons(pkTree).filter((b) => label(b) === '不使用镜像')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(collect(pkTree, []).join(' | ').includes('已选择不使用镜像'), '再次点「不使用镜像」→ 重新进入显式关闭')
+findInputs(pkTree)[2].props.onChange({ target: { value: 'D:/mine/vault' } })
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+pkText = collect(pkTree, []).join(' | ')
+ok(findInputs(pkTree)[2].props.value === 'D:/mine/vault'
+  && pkText.indexOf('已选择不使用镜像') < 0, '手输路径 → 退出显式关闭状态')
+
+// 显式关闭 → 提交上报哨兵 __none__
+findButtons(pkTree).filter((b) => label(b) === '不使用镜像')[0].props.onClick()
+findSelects(pkTree)[0].props.onChange({ target: { value: 'presales' } })
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+ok(collect(pkTree, []).join(' | ').includes('已选择不使用镜像'), '选工作岗位域不会退出显式关闭状态')
+hasBtn(pkTree, '检查并预览')[0].props.onClick()
+await tick(50)
+hookCursor = 0
+effectQueue = []
+pkTree = expand(pickReg.render({ initialTab: 'init' }))
+calls.length = 0
+hasBtn(pkTree, '完成配置')[0].props.onClick()
+await tick(300)
+const offPosts = calls.filter((c) => c.method === 'POST')
+ok(offPosts.length === 5, '显式关闭状态下仍逐个 POST /basedeck（实测 ' + offPosts.length + '）')
+ok(offPosts.length > 0 && offPosts.every((c) => JSON.parse(String(c.body)).overrides.obsidianSyncDir === '__none__'), '显式关闭 → overrides.obsidianSyncDir = "__none__"')
+
+// ── pickDirectory 抛错：可读提示 + 原值不变 + 不崩 ──────────────
+const failReg = {}
+const failShell = {
+  ctx: {
+    effect(fn) { return fn() },
+    logger: { debug() {}, warn() {}, info() {} },
+    locale: { register() { return () => {} }, bind() { return (k) => k } },
+    uiWorkspace: { pickDirectory: async () => { throw new Error('picker-boom') } },
+    slots: {
+      inject(slot, cb) { cb() },
+      register(meta, render) { failReg[meta.name] = { meta, render }; return () => {} },
+    },
+  },
+}
+const failCaptured = (() => {
+  let cap = null
+  const w = { __ModuleLoader__: { load(mod) { cap = mod } } }
+  new Function('window', src)(w) // eslint-disable-line no-new-func
+  return cap
+})()
+failCaptured.factory((id) => {
+  if (id === 'react') return ReactStub
+  throw new Error('未预期的客户端依赖: ' + id)
+}).apply(failShell.ctx)
+const failRegS = failReg['settings.section']
+globalThis.fetch = bdFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(failRegS.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+let failTree = expand(failRegS.render({ initialTab: 'init' }))
+const failBefore = findInputs(failTree)[0].props.value
+findButtons(failTree).filter((b) => label(b) === '浏览…')[0].props.onClick()
+await tick(30)
+hookCursor = 0
+effectQueue = []
+failTree = expand(failRegS.render({ initialTab: 'init' }))
+const failText = collect(failTree, []).join(' | ')
+ok(failText.includes('目录选择失败：picker-boom'), 'pickDirectory 抛错 → 显示「目录选择失败：<原因>」')
+ok(findInputs(failTree)[0].props.value === failBefore, '选择失败时原值不变')
+ok(failText.includes('工作区目录') && findInputs(failTree).length === 4, '选择失败后页面照常渲染（不崩）')
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)

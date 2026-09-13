@@ -666,6 +666,104 @@ ok(existsSync(join(wsSingle, 'AGENTS.md')), '单 id 写入落到指定工作区'
 const singleAgain = await call('POST', '/basedeck', { ids: ['agentsMd'], dryRun: false, overrides: { workspace: wsSingle } }, REQ_HEADERS)
 ok(singleAgain.body.wroteAny === false && singleAgain.body.results[0].status === 'up_to_date', '本来就是最新 → wroteAny=false（客户端可据此区分）')
 
+section('[17] obsidianSyncDir 哨兵（__none__）与顶层 libraryName / memoryRoot')
+const wsOv = makeWorkspace('ov')
+const ovHome = join(TMP_ROOT, 'ovhome', '.dsh')
+const ovSettings = join(ovHome, 'settings.yaml')
+const ovMem = join(TMP_ROOT, 'ovmem')
+const ovPlan = (value, extra) => planBaseDeck(opts(Object.assign({ workspace: wsOv, settingsFile: ovSettings, memoryDir: ovMem, overrides: { workspace: wsOv, obsidianSyncDir: value } }, extra || {})))
+const obsKeyOf = (plan) => plan.items.filter((i) => i.id === 'settings')[0].settingsKeys.filter((k) => k.key === 'obsidianSyncDir')[0]
+
+const planEmptyOv = ovPlan('')
+ok(obsKeyOf(planEmptyOv).action === 'write' && obsKeyOf(planEmptyOv).value.replace(/\\/g, '/') === join(wsOv, 'work-memory').replace(/\\/g, '/'), '空串 → 用探测到的现状 / 默认（建议值 <工作区>/work-memory）')
+const mirrorX = join(TMP_ROOT, 'mirrorX')
+const planPathOv = ovPlan(mirrorX)
+ok(obsKeyOf(planPathOv).action === 'write' && obsKeyOf(planPathOv).value.replace(/\\/g, '/') === mirrorX.replace(/\\/g, '/'), '路径 → 写入该路径')
+
+const planOffOv = ovPlan('__none__')
+const kOff = obsKeyOf(planOffOv)
+ok(kOff.action === 'setEmpty' && kOff.value === '', '哨兵 __none__ → 显式写空值（不是 __none__ 字面量）')
+ok(kOff.detail.indexOf('不使用镜像') >= 0, '哨兵分支的 detail 说明「不使用镜像」')
+ok(planOffOv.items.filter((i) => i.id === 'settings')[0].detail.indexOf('关闭镜像同步') >= 0, 'settings 项 detail 说明已关闭镜像（不与「留空镜像」提示打架）')
+ok(planOffOv.items.filter((i) => i.id === 'dirs')[0].dirs.filter((d) => d.key === 'obsidianSyncDir')[0].state === 'skipped', '关闭镜像后不再规划镜像目录')
+
+const rOffOv = applyBaseDeckItem('settings', opts({ workspace: wsOv, settingsFile: ovSettings, memoryDir: ovMem, overrides: { workspace: wsOv, obsidianSyncDir: '__none__' }, dryRun: false }))
+assertInsideTmp(ovSettings, 'ovSettings')
+ok(rOffOv.ok === true && rOffOv.wroteAny === true, '哨兵真写成功（wroteAny=true）')
+const ovText = readBytes(ovSettings).toString('utf8')
+ok(/obsidianSyncDir: ''/.test(ovText), 'YAML 里落成空值（obsidianSyncDir 后跟两个单引号）')
+ok(ovText.indexOf('__none__') < 0, '哨兵字面量不会被写进配置文件')
+const planOffAgain = ovPlan('')
+ok(obsKeyOf(planOffAgain).action === 'explicitOff', '已显式关闭 → 再次计划标 explicitOff（空串不再覆盖它）')
+ok(planOffAgain.items.filter((i) => i.id === 'settings')[0].status === 'up_to_date', '已关闭 → settings 项 up_to_date（不写盘）')
+const ovSnap = statSnap(ovSettings)
+const rOffAgain = applyBaseDeckItem('settings', opts({ workspace: wsOv, settingsFile: ovSettings, memoryDir: ovMem, dryRun: false }))
+ok(rOffAgain.ok === true && rOffAgain.wroteAny === false && sameSnap(ovSnap, statSnap(ovSettings)), '关闭状态幂等：不写盘、不回填默认')
+
+const memLib = join(TMP_ROOT, 'memlib', 'mylib')
+const planFieldsLib = planBaseDeck(opts({ workspace: wsOv, settingsFile: ovSettings, memoryDir: memLib }))
+ok(planFieldsLib.libraryName === 'mylib', '顶层 libraryName = 记忆库目录名')
+ok(planFieldsLib.memoryRoot.replace(/\\/g, '/') === join(TMP_ROOT, 'memlib').replace(/\\/g, '/'), '顶层 memoryRoot = 记忆库根目录')
+const rGetFields = await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsRoute))
+ok(typeof rGetFields.body.libraryName === 'string' && typeof rGetFields.body.memoryRoot === 'string', 'GET /basedeck 顶层返回 libraryName / memoryRoot')
+const rPostFields = await call('POST', '/basedeck', { ids: ['settings'], overrides: { workspace: wsRoute } }, REQ_HEADERS)
+ok(typeof rPostFields.body.libraryName === 'string' && typeof rPostFields.body.memoryRoot === 'string', 'POST /basedeck 顶层返回 libraryName / memoryRoot')
+
+section('[16] 工作区解析优先级（client/config/derived/cwd/none）+ 家目录回归护栏')
+const wsDerived = makeWorkspace('derived')
+const mirrorDir = join(wsDerived, '00_mirror')
+mkdirSync(mirrorDir, { recursive: true })
+const derivedHome = join(TMP_ROOT, 'derivedhome', '.dsh')
+const derivedSettings = join(derivedHome, 'settings.yaml')
+writeText(derivedSettings, ['work-memory:', '  obsidianSyncDir: ' + mirrorDir.replace(/\\/g, '/'), ''].join(NL))
+const baseOpts = { env: {}, repoRoot: FAKE_REPO, moduleDir: FAKE_MODULE, now: FIXED_NOW }
+const planDerived = planBaseDeck(Object.assign({
+  dshHome: derivedHome,
+  settingsFile: derivedSettings,
+  cwd: join(TMP_ROOT, 'not-a-workspace'),
+}, baseOpts))
+ok(planDerived.workspaceSource === 'derived', 'settings 有 obsidianSyncDir → source=derived')
+ok(planDerived.workspace.replace(/\\/g, '/') === wsDerived.replace(/\\/g, '/'), '反推结果 = 镜像目录的父目录')
+ok(planDerived.workspaceNote.indexOf('反推') >= 0 && planDerived.workspaceNote.indexOf('请确认') >= 0, 'derived 必须给出「请确认」提示')
+ok(planDerived.items.filter((i) => i.id === 'agentsMd')[0].detail.indexOf('反推') >= 0, 'agentsMd 的 detail 带出反推提示')
+ok(planDerived.items.filter((i) => i.id === 'agentsMd')[0].target.replace(/\\/g, '/') === join(wsDerived, 'AGENTS.md').replace(/\\/g, '/'), 'agentsMd 目标落在反推出的工作区')
+
+const wsCwd = makeWorkspace('cwd')
+writeText(join(wsCwd, 'AGENTS.md'), '# cwd 工作区' + NL)
+const planCwd = planBaseDeck(Object.assign({
+  dshHome: FAKE_DSH,
+  settingsFile: join(TMP_ROOT, 'nowhere-cwd', 'settings.yaml'),
+  cwd: wsCwd,
+}, baseOpts))
+ok(planCwd.workspaceSource === 'cwd', '无 client/config/derived 时取 cwd')
+ok(planCwd.workspace.replace(/\\/g, '/') === wsCwd.replace(/\\/g, '/'), 'cwd 命中且落到正确目录')
+ok(planCwd.workspaceNote.indexOf('进程目录') >= 0, 'cwd 来源有提示')
+
+const planNone = planBaseDeck(Object.assign({
+  dshHome: FAKE_DSH,
+  settingsFile: join(TMP_ROOT, 'nonehome', '.dsh', 'settings.yaml'),
+  cwd: join(TMP_ROOT, 'not-a-workspace'),
+}, baseOpts))
+ok(planNone.workspaceSource === 'none' && planNone.workspace === '', '都不可用 → source=none 且 workspace 为空字符串')
+ok(planNone.items.filter((i) => i.id === 'agentsMd')[0].status === 'none' && planNone.items.filter((i) => i.id === 'agentsMd')[0].target === '', 'agentsMd 状态 none 且无目标路径')
+ok(planNone.items.filter((i) => i.id === 'skills')[0].target === '', 'skills 无目标路径')
+ok(planNone.workspaceNote.indexOf('不会回退到用户主目录') >= 0, 'none 时提示显式填写工作区（不猜）')
+const noneJson = JSON.stringify(planNone).replace(/\\/g, '/')
+const fakeHomePosix = join(TMP_ROOT, 'home').replace(/\\/g, '/')
+ok(noneJson.indexOf(fakeHomePosix + '/AGENTS.md') < 0 && noneJson.indexOf(fakeHomePosix + '/.dsh/skills') < 0, '返回里不含「类主目录/AGENTS.md」「类主目录/.dsh/skills」')
+const homePosix = homedir().replace(/\\/g, '/')
+ok(noneJson.indexOf(homePosix + '/AGENTS.md') < 0 && noneJson.indexOf(homePosix + '/.dsh/skills') < 0, '返回里不含「用户主目录/AGENTS.md」「用户主目录/.dsh/skills」（旧 bug 会产出这两条）')
+ok(!existsSync(join(TMP_ROOT, 'home', 'AGENTS.md')) && !existsSync(join(TMP_ROOT, 'home', '.dsh', 'skills')), '没有把 AGENTS.md / 技能写到类主目录')
+
+const rWs = resolveWorkspace({ dshHome: FAKE_DSH, env: {}, cwd: join(TMP_ROOT, 'not-a-workspace') })
+ok(rWs.source === 'none' && rWs.workspace === null, 'resolveWorkspace 不再回退到 DSH_HOME 的上一级（旧 bug 回归）')
+ok(Array.isArray(rWs.tried), '被拒候选留有 tried 记录，便于界面排查')
+
+const homeCheck = safeWorkspaceParam(homedir())
+ok(homeCheck.ok === false && homeCheck.error.indexOf('主目录') >= 0, 'safeWorkspaceParam 拒绝用户主目录（客户端传值也拦）')
+const wsRejectPlan = planBaseDeck(Object.assign({ overrides: { workspace: homedir() }, dshHome: FAKE_DSH, settingsFile: join(TMP_ROOT, 'nonehome2', '.dsh', 'settings.yaml'), cwd: join(TMP_ROOT, 'not-a-workspace') }, baseOpts))
+ok(wsRejectPlan.workspaceSource === 'none' && wsRejectPlan.workspace === '', 'overrides 传家目录 → 被拒并回落 none（不写主目录）')
+
 section('[14] 真实素材（真实 defaults）只读兼容性')
 const realTpl = join(MODULE_DIR, '..', '..', 'defaults', 'AGENTS.zh-CN.md')
 const realSeed = join(MODULE_DIR, '..', '..', 'defaults', 'global-memory.seed.md')

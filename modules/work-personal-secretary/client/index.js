@@ -152,6 +152,8 @@ window.__ModuleLoader__.load({
     }
     /** 预览最多展示的行数（原样展示，不折行不截断） */
     const INIT_PREVIEW_MAX = 20
+    /** 「不使用镜像」的显式关闭哨兵（宿主端收到该值即写入空值 = 不镜像） */
+    const OBSIDIAN_NO_MIRROR = '__none__'
     /** 逐项写入状态 → 文案键（写入语境：run = 写入中…） */
     const WRITE_STATE_KEYS = { wait: 'runWait', run: 'initWriting', ok: 'runOk', fail: 'runFail' }
     /** 写入执行顺序（客户端写死；展示顺序仍是 INIT_ORDER） */
@@ -347,6 +349,24 @@ window.__ModuleLoader__.load({
       initDomainGeneral: '核查·通用',
       initDomainPlaceholder: '请选择…',
       initDomainRequired: '请先选择你的工作方向',
+      initBrowse: '浏览…',
+      initBrowseTip: '选择目录',
+      initBrowseUnavailable: '当前载体不支持系统目录选择，请手动输入路径',
+      initCandDetectedWorkspace: '使用探测到的工作区',
+      initCandDefaultMemory: '使用默认（~/.dsh/memories/{n}）',
+      initCandNoMirror: '不使用镜像',
+      initCandNeedWorkspace: '需先填写工作区',
+      initObsidianOffNote: '已选择不使用镜像',
+      initCandMirrorAll: '<工作区>/00_全局记忆',
+      initCandMirrorWork: '<工作区>/work-memory',
+      initPickFailed: '目录选择失败：',
+      initWsFromClient: '已由客户端指定工作区，请确认',
+      initWsFromConfig: '已按设置里的工作区配置填入',
+      initWsFromDerived: '已按记忆镜像目录反推，请确认',
+      initWsFromCwd: '已按当前工作目录填入，请确认',
+      initWsFromDefault: '已取默认工作区，请确认',
+      initWsFromOther: '由本机服务提供，请确认',
+      initWsRequired: '必须选择工作区',
       initCheckPreview: '检查并预览',
       initChecking: '检查中…',
       initRecheck: '重新检查',
@@ -576,6 +596,24 @@ window.__ModuleLoader__.load({
       initDomainGeneral: 'Verification & general',
       initDomainPlaceholder: 'Select…',
       initDomainRequired: 'Choose your job domain first',
+      initBrowse: 'Browse…',
+      initBrowseTip: 'Choose a directory',
+      initBrowseUnavailable: 'The directory picker is unavailable in this shell; type the path manually.',
+      initCandDetectedWorkspace: 'Use detected workspace',
+      initCandDefaultMemory: 'Use default (~/.dsh/memories/{n})',
+      initCandNoMirror: 'No mirror',
+      initCandNeedWorkspace: 'Fill in the workspace first',
+      initObsidianOffNote: 'No mirror selected',
+      initCandMirrorAll: '<workspace>/00_全局记忆',
+      initCandMirrorWork: '<workspace>/work-memory',
+      initPickFailed: 'Directory picker failed: ',
+      initWsFromClient: 'Workspace set by the client; please confirm',
+      initWsFromConfig: 'Filled from the workspace setting',
+      initWsFromDerived: 'Inferred from the memory mirror directory; please confirm',
+      initWsFromCwd: 'Filled with the current working directory; please confirm',
+      initWsFromDefault: 'Default workspace used; please confirm',
+      initWsFromOther: 'Provided by the local service; please confirm',
+      initWsRequired: 'A workspace must be selected',
       initCheckPreview: 'Check & preview',
       initChecking: 'Checking…',
       initRecheck: 'Re-check',
@@ -804,6 +842,15 @@ window.__ModuleLoader__.load({
         background: '#f3f6ff', border: '1px solid #c7d2fe', borderRadius: '12px', padding: '10px 12px', marginBottom: '12px',
       },
       setupText: { fontSize: '13px', color: '#2b4c9b', fontWeight: 550 },
+      inputRow: { display: 'flex', gap: '6px', alignItems: 'center' },
+      candRow: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' },
+      candBtn: {
+        appearance: 'none', border: '1px solid #e3e5e9', background: '#f7f8f9', borderRadius: '7px',
+        padding: '3px 8px', fontSize: '11.5px', fontFamily: 'inherit', cursor: 'pointer',
+        color: '#4b5563', lineHeight: 1.4,
+      },
+      candBtnOn: { borderColor: '#c7d2fe', background: '#f3f6ff', color: '#2b4c9b' },
+      labelHintOn: { fontSize: '11.5px', color: '#2b4c9b', fontWeight: 550 },
     }
 
     function badge(text, extra) {
@@ -1130,6 +1177,32 @@ window.__ModuleLoader__.load({
       const w = (typeof s.toWrite === 'number' && isFinite(s.toWrite)) ? s.toWrite : 0
       const b = (typeof s.blocked === 'number' && isFinite(s.blocked)) ? s.blocked : 0
       return w + b
+    }
+
+    /** 取路径最后一段（工作区目录名通常就是记忆库名） */
+    function baseName(p) {
+      const s = String(p || '').replace(/[\\/]+$/, '')
+      const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\'))
+      return i >= 0 ? s.slice(i + 1) : s
+    }
+
+    /** 拼接路径：沿用工作区自身的分隔符风格（Windows 反斜杠 / 其它正斜杠） */
+    function joinPath(base, seg) {
+      const b = String(base || '').replace(/[\\/]+$/, '')
+      if (!b) return ''
+      const sep = (b.indexOf('\\') >= 0 && b.indexOf('/') < 0) ? '\\' : '/'
+      return b + sep + String(seg || '')
+    }
+
+    /** workspaceSource → 工作区字段下方的来源说明键（none 时提示必须选择） */
+    function wsSourceNoteKey(source) {
+      if (source === 'none') return 'initWsRequired'
+      if (source === 'client') return 'initWsFromClient'
+      if (source === 'config') return 'initWsFromConfig'
+      if (source === 'derived') return 'initWsFromDerived'
+      if (source === 'cwd') return 'initWsFromCwd'
+      if (source === 'default') return 'initWsFromDefault'
+      return 'initWsFromOther'
     }
 
     /**
@@ -2062,7 +2135,8 @@ window.__ModuleLoader__.load({
       const t = props.t
       const state = useState({
         stage: 'form', busy: false, items: [], workspace: '', workspaceSource: '',
-        summary: null, error: '', writeError: '', open: {},
+        summary: null, error: '', writeError: '', pickError: '', open: {},
+        detected: '', libraryName: '', memoryRoot: '~/.dsh/memories', obsidianOff: false,
         form: { workspace: '', domain: '', identityExpert: '', memoryDir: '', obsidianSyncDir: '' },
         batch: null,
       })
@@ -2070,7 +2144,69 @@ window.__ModuleLoader__.load({
       const setSt = state[1]
 
       function setField(key, value) {
-        setSt((prev) => Object.assign({}, prev, { form: Object.assign({}, prev.form, { [key]: value }) }))
+        setSt((prev) => {
+          const patch = { form: Object.assign({}, prev.form, { [key]: value }) }
+          // 手输路径 / 点镜像候选（值为非空）→ 退出 Obsidian「显式关闭」状态
+          if (key === 'obsidianSyncDir' && String(value === undefined || value === null ? '' : value) !== '') {
+            patch.obsidianOff = false
+          }
+          return Object.assign({}, prev, patch)
+        })
+      }
+
+      /** 「不使用镜像」：进入**显式关闭**状态（提交时上报哨兵值 OBSIDIAN_NO_MIRROR） */
+      function chooseNoMirror() {
+        setSt((prev) => Object.assign({}, prev, {
+          obsidianOff: true,
+          form: Object.assign({}, prev.form, { obsidianSyncDir: '' }),
+        }))
+      }
+
+      /**
+       * 原生目录选择（可选能力）：服务缺失时按钮禁用；
+       * 使用者取消（返回 null / 空串）时**保持原值不变**；选择失败给可读提示，不崩。
+       */
+      const pick = (typeof props.pickDirectory === 'function') ? props.pickDirectory : null
+      async function browse(field) {
+        if (!pick) return
+        try {
+          const chosen = await pick()
+          if (typeof chosen === 'string' && chosen.trim() !== '') setField(field, chosen.trim())
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            pickError: t('initPickFailed') + String((err && err.message) || err),
+          }))
+        }
+      }
+
+      /** 快捷候选按钮：点一下就填；不可用时禁用并说明原因 */
+      function candidate(field, key, text, value, enabled, active, onPick) {
+        const on = enabled === true
+        return h('button', {
+          key: key, type: 'button',
+          disabled: !on,
+          title: on ? undefined : t('initCandNeedWorkspace'),
+          style: Object.assign({}, S.candBtn, on ? null : S.btnDisabled, active === true ? S.candBtnOn : null),
+          onClick: typeof onPick === 'function' ? onPick : (() => setField(field, value)),
+        }, text)
+      }
+
+      /** 目录输入行：输入框 + 「浏览…」（本机服务不可用时禁用 + tooltip） */
+      function dirRow(field, value, placeholder) {
+        const available = Boolean(pick)
+        return h('div', { key: 'row', style: S.inputRow }, [
+          h('input', {
+            key: 'i', type: 'text', style: S.input, value: value, placeholder: placeholder,
+            onChange: (e) => setField(field, e && e.target ? e.target.value : ''),
+          }),
+          h('button', {
+            key: 'b', type: 'button',
+            disabled: !available,
+            title: available ? t('initBrowseTip') : t('initBrowseUnavailable'),
+            style: Object.assign({}, S.btn, available ? null : S.btnDisabled),
+            onClick: () => browse(field),
+          }, t('initBrowse')),
+        ])
       }
 
       function toggleOpen(id) {
@@ -2100,13 +2236,23 @@ window.__ModuleLoader__.load({
           if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
           if (body.ok === false) throw new Error(String(body.error || 'basedeck 返回 ok:false'))
           const ws = typeof body.workspace === 'string' ? body.workspace.trim() : ''
+          const src = typeof body.workspaceSource === 'string' ? body.workspaceSource.trim() : ''
+          // 只有 none 才留空（此时必须由使用者选择）；client/config/derived/cwd/default 一律预填
+          const isNone = src === 'none'
+          const lib = firstText(body.libraryName, body.memoryLibrary) || baseName(ws)
+          const memRoot = firstText(body.memoryRoot, body.defaultMemoryRoot) || '~/.dsh/memories'
           setSt((prev) => Object.assign({}, prev, {
             stage: 'form', busy: false, error: '',
             items: Array.isArray(body.items) ? body.items : [],
             workspace: ws,
-            workspaceSource: typeof body.workspaceSource === 'string' ? body.workspaceSource.trim() : '',
+            workspaceSource: src,
+            detected: ws,
+            libraryName: lib,
+            memoryRoot: memRoot,
             summary: (body.summary && typeof body.summary === 'object') ? body.summary : null,
-            form: Object.assign({}, prev.form, { workspace: prev.form.workspace || ws }),
+            form: Object.assign({}, prev.form, {
+              workspace: isNone ? '' : (prev.form.workspace || ws),
+            }),
           }))
         } catch (err) {
           setSt((prev) => Object.assign({}, prev, { stage: 'form', busy: false, error: String((err && err.message) || err) }))
@@ -2154,7 +2300,7 @@ window.__ModuleLoader__.load({
           defaultDomain: String(st.form.domain || ''),
           identityExpert: String(st.form.identityExpert || '').trim(),
           memoryDir: String(st.form.memoryDir || '').trim(),
-          obsidianSyncDir: String(st.form.obsidianSyncDir || '').trim(),
+          obsidianSyncDir: st.obsidianOff ? OBSIDIAN_NO_MIRROR : String(st.form.obsidianSyncDir || '').trim(),
         }
         const initState = {}
         for (const id of ids) initState[id] = 'wait'
@@ -2306,13 +2452,18 @@ window.__ModuleLoader__.load({
               }, t('retry')),
             ]) : null,
             wsNone ? h('div', { key: 'ws', style: S.warnLine }, t('workspaceNoneHint')) : null,
+            st.pickError ? h('div', { key: 'pe', style: S.warnLine }, st.pickError) : null,
             h('div', { key: 'f1', style: S.field }, [
               h('label', { key: 'l', style: S.label }, [t('initFieldWorkspace'), h('span', { key: 'r', style: S.reqMark }, ' *')]),
-              h('input', {
-                key: 'i', type: 'text', style: S.input, value: form.workspace,
-                onChange: (e) => setField('workspace', e && e.target ? e.target.value : ''),
-              }),
+              dirRow('workspace', form.workspace, 'C:/work/space'),
               h('div', { key: 'h', style: S.labelHint }, t('initFieldWorkspaceHint')),
+              st.workspaceSource
+                ? h('div', { key: 'src', style: wsNone ? S.warnLine : S.labelHint },
+                    t(wsSourceNoteKey(st.workspaceSource)))
+                : null,
+              h('div', { key: 'cand', style: S.candRow }, [
+                candidate('workspace', 'det', t('initCandDetectedWorkspace'), st.detected, Boolean(st.detected)),
+              ]),
             ]),
             h('div', { key: 'f2', style: S.field }, [
               h('label', { key: 'l', style: S.label }, [t('initFieldDomain'), h('span', { key: 'r', style: S.reqMark }, ' *')]),
@@ -2327,19 +2478,28 @@ window.__ModuleLoader__.load({
             h('div', { key: 'f3', style: S.fieldRow }, [
               h('div', { key: 'a', style: S.fieldCol }, h('div', { style: Object.assign({}, S.field, { marginBottom: 0 }) }, [
                 h('label', { key: 'l', style: S.label }, [t('initFieldMemoryDir'), h('span', { key: 'o', style: S.labelHint }, ' (' + t('initOptional') + ')')]),
-                h('input', {
-                  key: 'i', type: 'text', style: S.input, value: form.memoryDir,
-                  onChange: (e) => setField('memoryDir', e && e.target ? e.target.value : ''),
-                }),
+                dirRow('memoryDir', form.memoryDir, ''),
                 h('div', { key: 'h', style: S.labelHint }, t('initFieldMemoryDirHint')),
+                h('div', { key: 'cand', style: S.candRow }, [
+                  candidate('memoryDir', 'def',
+                    fill(t('initCandDefaultMemory'), st.libraryName || '…'),
+                    (st.libraryName && st.memoryRoot) ? joinPath(st.memoryRoot, st.libraryName) : '',
+                    Boolean(st.libraryName)),
+                ]),
               ])),
               h('div', { key: 'b', style: S.fieldCol }, h('div', { style: Object.assign({}, S.field, { marginBottom: 0 }) }, [
                 h('label', { key: 'l', style: S.label }, [t('initFieldObsidianDir'), h('span', { key: 'o', style: S.labelHint }, ' (' + t('initOptional') + ')')]),
-                h('input', {
-                  key: 'i', type: 'text', style: S.input, value: form.obsidianSyncDir,
-                  onChange: (e) => setField('obsidianSyncDir', e && e.target ? e.target.value : ''),
-                }),
-                h('div', { key: 'h', style: S.labelHint }, t('initFieldObsidianDirHint')),
+                dirRow('obsidianSyncDir', form.obsidianSyncDir, ''),
+                st.obsidianOff
+                  ? h('div', { key: 'h', style: S.labelHintOn }, t('initObsidianOffNote'))
+                  : h('div', { key: 'h', style: S.labelHint }, t('initFieldObsidianDirHint')),
+                h('div', { key: 'cand', style: S.candRow }, [
+                  candidate('obsidianSyncDir', 'off', t('initCandNoMirror'), '', true, st.obsidianOff, chooseNoMirror),
+                  candidate('obsidianSyncDir', 'all', t('initCandMirrorAll'),
+                    st.workspace ? joinPath(st.workspace, '00_全局记忆') : '', Boolean(st.workspace), false),
+                  candidate('obsidianSyncDir', 'work', t('initCandMirrorWork'),
+                    st.workspace ? joinPath(st.workspace, 'work-memory') : '', Boolean(st.workspace), false),
+                ]),
               ])),
             ]),
             h('div', { key: 'f4', style: S.field }, [
@@ -2543,6 +2703,7 @@ window.__ModuleLoader__.load({
       else if (tab === 'plugins') page = h(PluginsPage, { key: 'g', t: t })
       else if (tab === 'init') page = h(InitPage, {
         key: 'n', t: t,
+        pickDirectory: props.pickDirectory,
         onConfigured: () => setSetup({ needed: false, count: 0 }),
       })
       else if (tab === 'config') page = h(Placeholder, { key: 'p', t: t })
@@ -2584,6 +2745,20 @@ window.__ModuleLoader__.load({
         console.warn('work-personal-secretary client: locale 注册失败（回退内置中文）', err)
       }
 
+      // 原生目录选择（ctx.uiWorkspace.pickDirectory）：
+      // 服务或方法不可用时为 null —— 页面把「浏览…」按钮禁用并给 tooltip，绝不抛错。
+      const uiPick = (() => {
+        try {
+          const svc = ctx && ctx.uiWorkspace
+          if (svc && typeof svc.pickDirectory === 'function') {
+            return function pickDirectory() { return svc.pickDirectory() }
+          }
+        } catch (err) {
+          console.warn('work-personal-secretary client: uiWorkspace 不可用（目录选择降级）', err)
+        }
+        return null
+      })()
+
       // render 透传宿主给的 props（当前只认 initialTab），保证默认页签不变
       ctx.slots.inject('settings.section', () => ctx.slots.register({
         name: 'settings.section',
@@ -2592,9 +2767,15 @@ window.__ModuleLoader__.load({
         label: () => t('nav'),
         locale: NS,
         inject: () => ({ t }),
-      }, (props) => h(Section, { t: t, initialTab: props && props.initialTab })))
+      }, (props) => h(Section, {
+        t: t,
+        initialTab: props && props.initialTab,
+        pickDirectory: uiPick,
+      })))
     }
 
-    return { apply, inject: ['slots'] }
+    // uiWorkspace 是硬依赖（DSH：未声明就访问会被 Guard 拒绝；服务缺失时插件进入 waiting）。
+    // 可用性一律由上面的 uiPick 运行时判定，UI 侧做降级，不依赖该声明来探测。
+    return { apply, inject: ['slots', 'uiWorkspace'] }
   },
 })

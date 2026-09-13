@@ -478,7 +478,8 @@ export function installApi(ctx, deps = {}) {
         }
         const repo = currentRepoRoot()
         const plan = planBaseDeck({
-          workspace: workspaceOverride,
+          // query 里的 workspace 是**客户端显式传值** → 走 overrides（source=client）
+          overrides: workspaceOverride ? { workspace: workspaceOverride } : {},
           dshHome: basedeckDshHome,
           configWorkspace: basedeckWorkspaceConfig,
           repoRoot: repo.repoRoot,
@@ -530,8 +531,8 @@ export function installApi(ctx, deps = {}) {
         const repo = currentRepoRoot()
         const opts = {
           dryRun: dryRun,
+          // overrides.workspace 是**客户端表单值** → source=client；设置项走 configWorkspace
           overrides: overrides,
-          workspace: overrides.workspace || '',
           dshHome: basedeckDshHome,
           configWorkspace: basedeckWorkspaceConfig,
           repoRoot: repo.repoRoot,
@@ -546,6 +547,10 @@ export function installApi(ctx, deps = {}) {
           dryRun: applied.dryRun,
           workspace: applied.workspace,
           workspaceSource: applied.workspaceSource,
+          workspaceNote: applied.workspaceNote || '',
+          libraryName: applied.libraryName || '',
+          memoryRoot: applied.memoryRoot || '',
+          memoryDir: applied.memoryDir || '',
           results: applied.results,
           rejected: applied.rejected,
           wroteAny: applied.wroteAny === true,
