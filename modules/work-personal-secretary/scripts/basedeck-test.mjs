@@ -776,6 +776,23 @@ const realPlan = planBaseDeck(opts({ workspace: WS_CLEAN, templateFile: realTpl,
 ok(realPlan.items.filter((i) => i.id === 'agentsMd')[0].preview.contentHash.indexOf('sha256:') === 0, '真实模板可产出 content-hash')
 ok(inspectSimpleYaml('a:' + NL + '  b: 1' + NL).ok === true, '最小 YAML 扫描器可用')
 
+section('[15.5] memoryDir 同源：种子写进哪个目录，settings 就声明哪个目录')
+const wsMem = makeWorkspace('memdir')
+const memExplicit = join(FAKE_DSH, 'memories', 'custom-lib')
+mkdirSync(memExplicit, { recursive: true })
+const memSettings = join(FAKE_DSH, 'settings-memdir.yaml')
+writeFileSync(memSettings, 'work-memory:' + NL + '  obsidianSyncDir: ""' + NL, 'utf8')
+const memPlan = planBaseDeck(opts({ workspace: wsMem, settingsFile: memSettings, memoryDir: memExplicit }))
+const memSeedItem = memPlan.items.filter((i) => i.id === 'memorySeed')[0]
+const memSetItem = memPlan.items.filter((i) => i.id === 'settings')[0]
+const memSetVal = ((memSetItem.settingsKeys || []).filter((k) => k.key === 'memoryDir')[0] || {}).value || ''
+ok(memSeedItem.target.indexOf('/custom-lib/') > 0, '显式 options.memoryDir → 种子条目写入该目录')
+ok(memSetVal.indexOf('/custom-lib') > 0, '显式 options.memoryDir → settings 同样声明该目录（不再回落工作区目录名推导）')
+ok(memSetVal === memSeedItem.target.replace(/\/MEMORY\.md$/, ''), 'settings 声明目录 = 种子路径去掉 /MEMORY.md（两者严格同源）')
+const memPlanDefault = planBaseDeck(opts({ workspace: wsMem, settingsFile: join(FAKE_DSH, 'settings-memdir2.yaml'), memoryDir: undefined }))
+const memSetDefault = ((memPlanDefault.items.filter((i) => i.id === 'settings')[0].settingsKeys || []).filter((k) => k.key === 'memoryDir')[0] || {}).value || ''
+ok(memSetDefault.endsWith('/memdir'), '不传 memoryDir → 回落「工作区目录名」推导（真机即 memories/lina）')
+
 section('[15] 真实环境只读快照首尾比对')
 let realDrift = 0
 for (const b of REAL_BEFORE) {

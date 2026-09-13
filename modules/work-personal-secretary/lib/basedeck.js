@@ -1284,8 +1284,14 @@ function planSettings(ctx) {
 
   // 路径类值统一写正斜杠（Windows 路径在 YAML 里更安全，也与既有 settings.yaml 风格一致）
   const asPath = (v) => (v ? posix(v) : '')
+  // memoryDir 与 ctx.memoryDir **同源**：显式传入的记忆库目录优先于「工作区目录名」推导。
+  // 否则种子条目会写进 A 目录（ctx.memoryDir），settings 却声明 B 目录（工作区目录名推导），
+  // 插件按 settings 去 B 处读取 → 首装即「记忆库为空」。优先级链见 resolveDeckContext。
+  const suggestedMemoryDir = ctx.memoryDir
+    ? posix(ctx.memoryDir)
+    : (ctx.workspace ? posix(join(ctx.dshHome, 'memories', basename(ctx.workspace))) : '')
   const suggested = {
-    'work-memory.memoryDir': ctx.workspace ? posix(join(ctx.dshHome, 'memories', basename(ctx.workspace))) : '',
+    'work-memory.memoryDir': suggestedMemoryDir,
     'work-memory.obsidianSyncDir': ctx.workspace ? posix(join(ctx.workspace, 'work-memory')) : '',
   }
   // 「不使用镜像」哨兵：写成空值（显式关闭），与「空串 = 用现状/默认」严格区分
