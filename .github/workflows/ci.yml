@@ -43,12 +43,23 @@ jobs:
 
       # 集成体本体自测：探针 probe 134 / 安装引擎 install 169 / 底座契约 basedeck 179 / 设置 API settings-api 109
       # 四套均自带夹具，全部建在 os.tmpdir() 下并自清理，不触碰真实 profile 与设置文件
+      # 失败时逐套收集输出：写 ::error:: annotation 与 step summary（无日志权限也能定位）
       - name: 集成体本体自测
         run: |
+          fail=0
           for t in $(git ls-files '*/scripts/*-test.mjs'); do
             echo "== $t =="
-            node "$t"
+            if out=$(node "$t" 2>&1); then
+              echo "$out" | tail -n 3
+            else
+              fail=1
+              echo "$out" | tail -n 60
+              detail=$(echo "$out" | grep -nE '✗|FAIL|失败|Error|error|Assertion|expected|actual' | head -n 15 | tr '\n' '|' | sed 's/%/%25/g' | cut -c1-1200)
+              echo "::error title=本体自测失败：$t::$detail"
+              { echo "### ❌ $t"; echo; echo '```'; echo "$out" | tail -n 40; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+            fi
           done
+          if [ "$fail" -ne 0 ]; then exit 1; fi
 
       # dsh-doc-suite 是 Python 实现（Word/Excel/PPT/PDF），CI 只做语法自检；
       # 运行时就绪性（PyMuPDF/WPS COM 等）由使用者本机 doctor.py 判定（Linux runner 装不了 WPS）。
