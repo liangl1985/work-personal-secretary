@@ -33,7 +33,17 @@
 
 ### 安装
 
-前置：**DSH Desktop 2.0.9**（host 运行时 `dsh 0.1.5-rc.1`）。四个子模块可单独安装，命令形态一致：
+前置：**DSH Desktop 2.0.9**（host 运行时 `dsh 0.1.5-rc.1`）。
+
+**整体安装（推荐：先装入口，再由它引导安装子模块）**
+
+```bash
+git clone https://github.com/liangl1985/work-personal-secretary.git
+dsh plugin --profile <profile> add file:<克隆目录>/modules/work-personal-secretary
+# 重启 DSH → 设置 → 工作秘书 → 「安装与检查」→ 按需安装各子模块（页面内可指定仓库目录）
+```
+
+**只装某一个子模块**（命令形态与上面一致）：
 
 ```bash
 dsh plugin --profile <profile> add <模块目录或包名>
