@@ -1,0 +1,30 @@
+NOTICE — dsh-token-pet 定制层
+================================
+
+本目录是三方 DSH 插件 dsh-token-pet 的【本地定制层】，不是上游发行物。
+
+上游
+----
+  项目   : dsh-token-pet —— A bilingual floating pet for DeepSeek Harness
+  仓库   : https://github.com/Jimmy0123-ux/dsh-token-pet
+  基线   : commit cc49233f8d951dff7d979ee500ae74918497978e（v0.2.0）
+  许可   : MIT License, Copyright (c) DSH Token Pet contributors
+  全文   : 见本目录 LICENSE
+
+本定制层
+--------
+  形式   : 补丁 patches/0001-lina-customizations.patch（相对上述基线，12 个文件）
+  内容   : ① 多形象套装运行时化（宿主扫描 + 客户端解析 + 设置面板）
+           ② 条带切帧修复（rows 字段透传）
+           ③ UI 装饰清理（aura / meter）
+           ④ 默认形象与「设为默认形象」按钮
+  许可   : MIT（与上游一致）
+  边界   : 补丁只修改上游源码；上游的 LICENSE、版权声明与归属一律原样保留。
+
+不包含的内容
+------------
+  · 上游 assets/ 素材与构建产物（client/client.js）不入库，按需由上游与构建生成；
+  · 小秘书形象素材（纯欲乖巧 / 慵懒性感，各 12 动作）为【私有资产】，
+    仅存在于本机 ~/.dsh/data/dsh-token-pet/skins/，不随本目录分发。
+
+*小秘书 · 2026-09-13*
