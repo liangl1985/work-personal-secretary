@@ -31,9 +31,10 @@
     "README.md"
   ],
   "scripts": {
-    "check": "node --check lib/index.js && node --check lib/probe.js && node --check lib/api.js && node --check client/index.js",
+    "check": "node --check lib/index.js && node --check lib/probe.js && node --check lib/api.js && node --check lib/install.js && node --check client/index.js",
     "smoke": "node scripts/smoke-load.mjs",
-    "probe": "node scripts/probe-test.mjs"
+    "probe": "node scripts/probe-test.mjs",
+    "install": "node scripts/install-test.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

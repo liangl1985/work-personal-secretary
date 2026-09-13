@@ -3,9 +3,10 @@
  *
  * 定位：本集成体的**第一大功能是安装器**（环境检查 → 依赖补齐 → 子插件安装 → 配置底座），
  * 第二大功能是把 DSH 底层配置（指令层 / 记忆种子 / 技能 / 设置）落地。
- * 本文件是宿主半：P1 接入安装器前两步的宿主侧——只读环境探针（lib/probe.js）
- * 与 Web API（lib/api.js：GET /check、POST /fix、POST /fix-all）；
- * 子插件安装与配置底座在后续版本接入（见模块 CHANGELOG）。
+ * 本文件是宿主半：P1/P2 已接入安装器前三步的宿主侧——只读环境探针（lib/probe.js）、
+ * 子插件安装引擎（lib/install.js）与 Web API
+ * （lib/api.js：GET /check、POST /fix、POST /fix-all、GET /plugins、POST /install、POST /install-all）；
+ * 配置底座在后续版本接入（见模块 CHANGELOG）。
  *
  * 设计约束（沿用集成体纪律）：
  * - **零运行时依赖**（只用 node 内置模块），宿主 peer 缺失时不影响加载；
@@ -55,11 +56,15 @@ export function apply(ctx, config = {}) {
   const version = readVersion()
   ctx.logger?.debug?.('work-personal-secretary: 集成体本体已挂载 v' + version + '（客户端提供设置分区「工作秘书」）')
 
-  // ---- 安装器宿主半：环境检查（只读）与自动补齐（服务端白名单） ----
+  // ---- 安装器宿主半：环境检查（只读）、自动补齐（服务端白名单）与子插件安装 ----
   // 服务缺失（无 webServer）时降级：只装设置分区，路由不可用并在日志里说明。
+  // 配置项 repoRoot（可选）：集成体仓库目录；留空则服务端做相对探测 / 常见位置探测。
+  // 属于「部署默认层」的自定义入口，个性化可在该 profile 的 cordis.patch.yml 或设置页用户层里覆盖。
   let disposeApi = null
   try {
-    disposeApi = installApi(ctx, {})
+    disposeApi = installApi(ctx, {
+      repoRoot: config && typeof config.repoRoot === 'string' ? config.repoRoot : '',
+    })
   } catch (err) {
     ctx.logger?.warn?.('work-personal-secretary: Web API 安装失败，环境检查 / 补齐路由不可用（降级为仅设置分区）：'
       + (err && err.message ? err.message : err))

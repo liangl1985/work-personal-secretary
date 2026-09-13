@@ -46,7 +46,7 @@ import {
   pipInstallArgv,
 } from '../lib/probe.js'
 
-import { API_ROOT, resolveFixCommand, resolveFixAllPlan, installApi } from '../lib/api.js'
+import { API_ROOT, API_PATHS, resolveFixCommand, resolveFixAllPlan, installApi } from '../lib/api.js'
 
 import { SUB_PLUGINS, readVersion, apply as applyHost, inject as hostInject } from '../lib/index.js'
 
@@ -370,8 +370,8 @@ installApi(ctx, {
 const handler = prefixHandler(ctx)
 ok(typeof handler === 'function', 'prefix 路由已注册：' + API_ROOT)
 const exacts = ctx.routes.filter((r) => r.kind === 'exact').map((r) => r.path).sort()
-ok(exacts.join(',') === [API_ROOT + '/check', API_ROOT + '/fix', API_ROOT + '/fix-all'].sort().join(','),
-  'exact 路由三条齐全：' + exacts.join(', '))
+ok(exacts.join(',') === API_PATHS.map((p) => API_ROOT + p).sort().join(','),
+  'exact 路由与 API_PATHS 一一对应：' + exacts.join(', '))
 
 const resCheck = makeRes()
 await handler(makeReq({ method: 'GET', url: API_ROOT + '/check' }), resCheck)
@@ -494,7 +494,8 @@ section('[6b] 宿主半 apply（有 / 无 webServer）')
 ok(hostInject.indexOf('settings') >= 0 && hostInject.indexOf('webServer') >= 0, 'inject 含 settings + webServer：' + hostInject.join(', '))
 const ctxHost = makeMockCtx()
 const disposeHost = applyHost(ctxHost, {})
-ok(ctxHost.routes.length === 4 && typeof disposeHost === 'function', 'apply 注册 prefix + 3 exact 并返回 disposer（' + ctxHost.routes.length + ' 条）')
+ok(ctxHost.routes.length === API_PATHS.length + 1 && typeof disposeHost === 'function',
+  'apply 注册 prefix + ' + API_PATHS.length + ' exact 并返回 disposer（' + ctxHost.routes.length + ' 条）')
 let disposeErr = null
 try { disposeHost() } catch (e) { disposeErr = e }
 ok(disposeErr === null, 'disposer 可安全调用')

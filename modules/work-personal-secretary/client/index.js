@@ -80,11 +80,14 @@ window.__ModuleLoader__.load({
      * 耗时数分钟，逐项进度比整批转圈对新手友好。
      */
     const FIX_ORDER = ['python', 'pythonDeps', 'wps', 'obsidian']
-    /** 四步安装流程：env 是本页可完成项，后两步留待后续版本 */
+    /**
+     * 四步安装流程。当前步由页面用 props.current 指定：
+     * 「安装与检查」页 = env，「安装子插件」页 = plugins；「初始化」固定标「后续版本」。
+     */
     const STEPS = [
-      ['env', 'stepEnv', 'current'],
-      ['deps', 'stepDeps', 'next'],
-      ['plugins', 'stepPlugins', 'later'],
+      ['env', 'stepEnv', ''],
+      ['deps', 'stepDeps', ''],
+      ['plugins', 'stepPlugins', ''],
       ['init', 'stepInit', 'later'],
     ]
     /** 状态 → 文案键（ok | warn | missing | skip） */
@@ -94,10 +97,34 @@ window.__ModuleLoader__.load({
     /** 转圈动画：内联样式表（无构建步骤；按钮里的 ⟳ 用 .wps-spin） */
     const KEYFRAMES = '@keyframes wpsSpin{to{transform:rotate(360deg)}}.wps-spin{display:inline-block;animation:wpsSpin .9s linear infinite}'
 
+    /**
+     * P2「安装子插件」：五项的**固定顺序**（客户端写死，与接口是否可达无关，
+     * 保证加载中/出错时也能渲染骨架）。nameKey = 接口未给 name 时的中英文名兜底；
+     * nature = 性质兜底（self=自研 / third=第三方）。
+     */
+    const INSTALL_ORDER = ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'dsh-token-pet']
+    const PLUGIN_META = {
+      'dsh-work-memory': { nameKey: 'plugMemory', nature: 'self' },
+      'dsh-doc-suite': { nameKey: 'plugDocs', nature: 'self' },
+      'dsh-experts': { nameKey: 'plugExperts', nature: 'self' },
+      'dsh-mermaid': { nameKey: 'plugCharts', nature: 'third' },
+      'dsh-token-pet': { nameKey: 'plugPet', nature: 'third' },
+    }
+    /** 子插件状态 → 文案键 / 徽标样式 */
+    const PLUG_STATUS_KEYS = {
+      upToDate: 'plugStatusUpToDate',
+      installable: 'plugStatusInstallable',
+      updatable: 'plugStatusUpdatable',
+    }
+    /** 安装方式 → 文案键（file / link 保留原样，copy 显示「复制」） */
+    const MODE_KEYS = { file: 'modeFile', link: 'modeLink', copy: 'modeCopy' }
+    /** 逐项安装状态 → 文案键（run 用「安装中」，与逐项进度同一口径） */
+    const INSTALL_STATE_KEYS = { wait: 'runWait', run: 'installRunning', ok: 'runOk', fail: 'runFail' }
+
     const ZH = {
       nav: '工作秘书',
       title: '工作秘书',
-      lead: '一个集成体统一五套能力。环境检查与依赖补齐已可用；安装子插件、初始化与能力配置在后续版本提供。',
+      lead: '一个集成体统一五套能力。环境检查、依赖补齐与子插件安装已可用；初始化与能力配置在后续版本提供。',
       tabInstall: '安装与检查',
       tabConfig: '能力配置',
       tabAbout: '关于与致谢',
@@ -183,12 +210,62 @@ window.__ModuleLoader__.load({
       fixFailed: '未能执行',
       footNote:
         '默认只读检测；只有你点补齐才会执行安装。命令来自内置白名单（Python 解释器 / Python 依赖 / WPS / Obsidian 四项），不接受外部输入。',
+
+      // ── 安装子插件（P2） ──────────────────────────────────────────
+      tabPlugins: '安装子插件',
+      pluginsTitle: '子插件清单',
+      pluginsLoading: '读取中…',
+      pluginsLoadFailed: '子插件清单读取失败',
+      pluginsLoadFailedHint:
+        '未能从本机服务取到数据：可能集成体尚未在宿主侧启用，或该路由还没注册。确认后点「重试」。',
+      pluginsEmpty: '接口未返回子插件清单。',
+      repoRootLabel: '仓库目录',
+      repoMissing: '未找到集成体仓库目录，请在设置里指定。',
+      repoMissingTip: '未找到集成体仓库目录，安装已禁用：请先在设置里指定集成体仓库目录。',
+      colBuiltin: '内置版本',
+      colInstalled: '已装版本',
+      colMode: '安装方式',
+      notInstalled: '未安装',
+      natureSelf: '自研',
+      natureThird: '第三方',
+      plugStatusUpToDate: '已是最新',
+      plugStatusInstallable: '可安装',
+      plugStatusUpdatable: '可更新',
+      plugMemory: '记忆库',
+      plugDocs: '文档能力',
+      plugExperts: '专家库',
+      plugCharts: '思维链与图表',
+      plugPet: '桌面形象',
+      modeFile: 'file',
+      modeLink: 'link',
+      modeCopy: '复制',
+      installOne: '安装',
+      installing: '安装中…',
+      installRunning: '安装中',
+      installingStep: '安装中 {n}',
+      installSelected: '安装选中项（{n}）',
+      installPickHint: '勾选要安装的子插件（可安装 / 可更新的项默认已勾选）',
+      installBatchHint: '逐项依次安装，完成一项立即回显',
+      installReportTitle: '安装结果',
+      installReportRunning: '执行中…',
+      installReportDone: '已完成',
+      installFrom: '来源',
+      installTo: '目标',
+      installFiles: '文件',
+      installVerified: '校验',
+      installVerifiedOk: '通过',
+      installVerifiedFail: '未通过',
+      installDuration: '耗时',
+      installFailed: '未能安装',
+      installFilesCount: '{n} 个文件',
+      installFootNote:
+        '从集成体仓库内置副本安装（离线可用）；安装会更新当前 profile 的插件清单，需重启 DSH 生效。',
     }
 
     const EN = {
       nav: 'Work Secretary',
       title: 'Work Secretary',
-      lead: 'One integrator for five capabilities. Environment check and dependency completion are ready; sub-plugin installation, initialization and capability config arrive in later versions.',
+      lead: 'One integrator for five capabilities. Environment check, dependency completion and sub-plugin installation are ready; initialization and capability config arrive in later versions.',
       tabInstall: 'Install & Check',
       tabConfig: 'Capabilities',
       tabAbout: 'About & Credits',
@@ -274,6 +351,56 @@ window.__ModuleLoader__.load({
       fixFailed: 'Not executed',
       footNote:
         'Read-only by default: this page only inspects the machine. Nothing is installed until you press an install button, and every command comes from a built-in allow-list (Python interpreter / Python packages / WPS / Obsidian) — no external input is accepted.',
+
+      // ── Install sub-plugins (P2) ──────────────────────────────────
+      tabPlugins: 'Install sub-plugins',
+      pluginsTitle: 'Sub-plugin list',
+      pluginsLoading: 'Loading…',
+      pluginsLoadFailed: 'Sub-plugin list failed to load',
+      pluginsLoadFailedHint:
+        'No data from the local service: the integrator may be disabled on the host side, or the route is not registered yet. Confirm, then press Retry.',
+      pluginsEmpty: 'The service returned no sub-plugin list.',
+      repoRootLabel: 'Repository',
+      repoMissing: 'No integrator repository directory found — please specify it in settings.',
+      repoMissingTip: 'Repository directory not set, so installation is disabled. Specify the integrator repository directory in settings first.',
+      colBuiltin: 'Built-in version',
+      colInstalled: 'Installed version',
+      colMode: 'Install mode',
+      notInstalled: 'Not installed',
+      natureSelf: 'First-party',
+      natureThird: 'Third-party',
+      plugStatusUpToDate: 'Up to date',
+      plugStatusInstallable: 'Installable',
+      plugStatusUpdatable: 'Updatable',
+      plugMemory: 'Memory',
+      plugDocs: 'Documents',
+      plugExperts: 'Experts',
+      plugCharts: 'Charts',
+      plugPet: 'Desktop pet',
+      modeFile: 'file',
+      modeLink: 'link',
+      modeCopy: 'copy',
+      installOne: 'Install',
+      installing: 'Installing…',
+      installRunning: 'Installing',
+      installingStep: 'Installing {n}',
+      installSelected: 'Install selected ({n})',
+      installPickHint: 'Tick the sub-plugins to install (installable / updatable items are pre-selected).',
+      installBatchHint: 'Runs one item at a time; each result appears as it finishes',
+      installReportTitle: 'Install result',
+      installReportRunning: 'Running…',
+      installReportDone: 'Done',
+      installFrom: 'From',
+      installTo: 'To',
+      installFiles: 'Files',
+      installVerified: 'Verified',
+      installVerifiedOk: 'passed',
+      installVerifiedFail: 'not passed',
+      installDuration: 'Duration',
+      installFailed: 'Install failed',
+      installFilesCount: '{n} file(s)',
+      installFootNote:
+        'Installs from the bundled copy inside the integrator repository (works offline); installation updates the current profile plugin list and requires a DSH restart to take effect.',
     }
 
     /** 包含的五个子插件（不写版本号：版本随使用者安装情况而变，由后续安装器探测） */
@@ -492,6 +619,143 @@ window.__ModuleLoader__.load({
       return null
     }
 
+    // ── P2「安装子插件」：/plugins 与 /install 响应归一化（字段一律容错） ──
+
+    /** 取第一个「非空」候选（null / undefined / false / 空串都算缺失） */
+    function firstText(...candidates) {
+      for (const v of candidates) {
+        if (typeof v === 'string' && v.trim() !== '') return v.trim()
+        if (typeof v === 'number' && isFinite(v)) return String(v)
+      }
+      return ''
+    }
+
+    /** 性质归一：self = 自研 / third = 第三方 / '' = 未知 */
+    function natureKey(value) {
+      const s = String(value === undefined || value === null ? '' : value).trim().toLowerCase()
+      if (s === '') return ''
+      if (s.indexOf('自研') >= 0 || s.indexOf('self') >= 0 || s.indexOf('first') >= 0
+        || s.indexOf('bundled') >= 0 || s.indexOf('builtin') >= 0) return 'self'
+      return 'third'
+    }
+
+    /** 安装方式归一：file / link / copy */
+    function modeKey(value) {
+      const s = String(value === undefined || value === null ? '' : value).trim().toLowerCase()
+      if (s === '') return ''
+      if (s.indexOf('link') >= 0 || s.indexOf('链接') >= 0 || s.indexOf('符号') >= 0) return 'link'
+      if (s.indexOf('copy') >= 0 || s.indexOf('复制') >= 0) return 'copy'
+      if (s.indexOf('file') >= 0 || s.indexOf('文件') >= 0) return 'file'
+      return ''
+    }
+
+    /**
+     * 状态归一：upToDate / installable / updatable。
+     * 接口给了 status 就认它（中英别名一并认）；没给就按「已装版本 vs 内置版本」推导。
+     */
+    function pluginStatus(raw, hasInstalled, installedVersion, builtin) {
+      const s = String((raw && (raw.status || raw.state || raw.installState)) || '').trim().toLowerCase()
+      let hit = ''
+      if (s.indexOf('可更新') >= 0 || s.indexOf('updat') >= 0 || s.indexOf('outdated') >= 0) hit = 'updatable'
+      else if (s.indexOf('已是最新') >= 0 || s.indexOf('最新') >= 0 || s.indexOf('up to date') >= 0
+        || s.indexOf('latest') >= 0 || s.indexOf('uptodate') >= 0) hit = 'upToDate'
+      else if (s.indexOf('可安装') >= 0 || s.indexOf('install') >= 0
+        || s.indexOf('missing') >= 0 || s.indexOf('absent') >= 0) hit = 'installable'
+      if (hit) return hit
+      if (raw && raw.upToDate === true) return 'upToDate'
+      if (!hasInstalled) return 'installable'
+      if (builtin && installedVersion && installedVersion !== builtin) return 'updatable'
+      return 'upToDate'
+    }
+
+    /** 归一化一项子插件；raw 为 null 表示接口没返回该项（只渲染骨架） */
+    function normalizePlugin(raw, id, t) {
+      const meta = PLUGIN_META[id] || {}
+      const r = (raw && typeof raw === 'object') ? raw : null
+      const fallback = meta.nameKey ? t(meta.nameKey) : ''
+      const name = (r && firstText(r.name, r.title, r.label))
+        || ((fallback && fallback !== meta.nameKey) ? fallback : id)
+      const nature = natureKey(r && (r.nature || r.kind || r.source)) || meta.nature || ''
+      const builtin = r ? firstText(r.builtinVersion, r.bundledVersion, r.repoVersion, r.version) : ''
+      // 契约里 installed 是布尔、installedVersion 是版本（可 null）；两者取并集判断「装没装」，
+      // 避免「已安装但版本读不到」被误判成可安装。
+      const installedFlag = Boolean(r && (r.installed === true
+        || (typeof r.installed === 'string' && r.installed.trim() !== '')))
+      const installedVersion = r
+        ? firstText(r.installedVersion, typeof r.installed === 'string' ? r.installed : '')
+        : ''
+      const hasInstalled = installedFlag || installedVersion !== ''
+      const installed = installedVersion || (hasInstalled ? '—' : '')
+      const mode = modeKey(r && (r.mode || r.installMode || r.installKind))
+      const status = r ? pluginStatus(r, hasInstalled, installedVersion, builtin) : ''
+      return {
+        id: id, name: name, nature: nature, builtin: builtin, installed: installed,
+        mode: mode, status: status,
+        pickable: status === 'installable' || status === 'updatable',
+      }
+    }
+
+    /** /plugins 的清单字段容错：plugins / items / list，或响应本身就是数组 */
+    function pluginList(body) {
+      if (Array.isArray(body)) return body
+      if (body && typeof body === 'object') {
+        if (Array.isArray(body.plugins)) return body.plugins
+        if (Array.isArray(body.items)) return body.items
+        if (Array.isArray(body.list)) return body.list
+      }
+      return []
+    }
+
+    /** 归一化单项安装结果（/install 与 /install-all 的元素同构） */
+    function normalizeInstall(body, id, fallbackMsg) {
+      const b = (body && typeof body === 'object') ? body : {}
+      let files = b.files
+      if (files === undefined) files = b.fileCount
+      return {
+        id: typeof b.id === 'string' ? b.id : id,
+        ok: b.ok !== false,
+        from: firstText(b.from, b.fromVersion),
+        to: firstText(b.to, b.toVersion),
+        files: files === undefined ? null : files,
+        verified: b.verified === true ? true : (b.verified === false ? false : null),
+        durationMs: b.durationMs === undefined ? null : b.durationMs,
+        output: typeof b.output === 'string' ? b.output : '',
+        message: b.ok === false ? String(b.error || b.message || fallbackMsg) : firstText(b.message),
+      }
+    }
+
+    /** 安装失败的归一化结果（与 normalizeInstall 的面板同构） */
+    function failedInstall(id, msg) {
+      return {
+        id: id, ok: false, from: '', to: '', files: null,
+        verified: null, durationMs: null, output: '', message: String(msg),
+      }
+    }
+
+    /** 安装文件数 / 文件列表 → 可读文本（列表只展示前 5 项） */
+    function filesText(files, t) {
+      if (typeof files === 'number' && isFinite(files)) return fill(t('installFilesCount'), Math.max(0, Math.round(files)))
+      if (Array.isArray(files)) {
+        if (files.length === 0) return fill(t('installFilesCount'), 0)
+        const head = files.slice(0, 5).map((x) => String(x)).join(t('listSep'))
+        return files.length > 5 ? head + ' …' : head
+      }
+      if (typeof files === 'string') return files
+      return ''
+    }
+
+    function plugStatusLabel(t, status) {
+      const key = PLUG_STATUS_KEYS[status]
+      return key ? t(key) : t('statusUnknown')
+    }
+
+    function plugStatusStyle(status) {
+      if (status === 'upToDate') return S.badgeOk
+      if (status === 'updatable') return S.badgeWarn
+      if (status === 'installable') return S.badgeBrand
+      return S.badgeSkip
+    }
+
     /**
      * 宿主请求（按载体分档，见 HOST_FALLBACK）：
      * - Web 载体：先按**市场同款**（根相对路径），失败再按**一方 file-upload 同款**
@@ -551,7 +815,12 @@ window.__ModuleLoader__.load({
 
     function Tabs(props) {
       const t = props.t
-      const items = [['install', t('tabInstall')], ['config', t('tabConfig')], ['about', t('tabAbout')]]
+      const items = [
+        ['install', t('tabInstall')],
+        ['plugins', t('tabPlugins')],
+        ['config', t('tabConfig')],
+        ['about', t('tabAbout')],
+      ]
       return h('div', { style: S.tabs }, items.map((it) =>
         h('button', {
           key: it[0], type: 'button', style: S.tab(props.tab === it[0]),
@@ -559,20 +828,21 @@ window.__ModuleLoader__.load({
         }, it[1])))
     }
 
-    /** 四步进度条：本版高亮「环境检查」，后两步标注「后续版本」 */
+    /** 四步进度条：current 指定当前步（默认 env），kind=later 的项标注「后续版本」 */
     function Steps(props) {
       const t = props.t
+      const current = props.current || 'env'
       return h('div', { style: S.steps }, STEPS.map((s, i) => {
-        const state = s[2]
-        const on = state === 'current'
+        const later = s[2] === 'later'
+        const on = !later && s[0] === current
         return h('div', {
           key: s[0],
-          style: Object.assign({}, S.step, on ? S.stepOn : null, state === 'later' ? S.stepLater : null),
+          style: Object.assign({}, S.step, on ? S.stepOn : null, later ? S.stepLater : null),
         }, [
           h('div', { key: 'n', style: Object.assign({}, S.stepNo, on ? S.stepNoOn : null) }, String(i + 1)),
           h('div', { key: 'b', style: { minWidth: 0 } }, [
             h('div', { key: 'nm', style: Object.assign({}, S.stepName, on ? S.stepNameOn : null) }, t(s[1])),
-            h('div', { key: 'st', style: S.stepState }, state === 'later' ? t('stepLater') : (on ? t('stepNow') : '')),
+            h('div', { key: 'st', style: S.stepState }, later ? t('stepLater') : (on ? t('stepNow') : '')),
           ]),
         ])
       }))
@@ -954,6 +1224,364 @@ window.__ModuleLoader__.load({
       ])
     }
 
+    /** 子插件清单一行：复选框 · 中文名 · 性质 · 状态 · 内置版本 · 已装版本 · 安装方式 · 单项安装 */
+    function PluginRow(props) {
+      const t = props.t
+      const item = props.item
+      const busy = Boolean(props.busy)
+      const locked = props.canInstall !== true
+      // 单项安装中（installingId）或批量轮到了这一项（running）→ 行内显示「安装中…」
+      const installing = props.installingId === item.id || props.running === true
+      const disabled = busy || locked || item.pickable !== true
+      const natureText = item.nature === 'self'
+        ? t('natureSelf')
+        : (item.nature === 'third' ? t('natureThird') : t('statusUnknown'))
+      const natureStyle = item.nature === 'self'
+        ? S.badgeOk
+        : (item.nature === 'third' ? S.badgeWarn : S.badgeSkip)
+      const nodes = [
+        h('div', { key: 'head', style: S.rowHead }, [
+          h('input', {
+            key: 'pick', type: 'checkbox',
+            checked: props.picked === true,
+            disabled: busy || locked,
+            style: S.check,
+            title: locked ? t('repoMissingTip') : undefined,
+            onChange: () => props.onToggle(item.id),
+          }),
+          h('span', { key: 'nm', style: S.itemName }, item.name),
+          h('span', { key: 'nat', style: Object.assign({}, S.badge, natureStyle) }, natureText),
+          h('span', { key: 'st', style: Object.assign({}, S.badge, plugStatusStyle(item.status)) }, plugStatusLabel(t, item.status)),
+        ]),
+      ]
+      nodes.push(h('div', { key: 'meta', style: S.itemDetail }, [
+        t('colBuiltin') + ' ' + (item.builtin || '—'),
+        ' · ' + t('colInstalled') + ' ' + (item.installed || t('notInstalled')),
+        ' · ' + t('colMode') + ' ' + (MODE_KEYS[item.mode] ? t(MODE_KEYS[item.mode]) : (item.mode || '—')),
+      ].join('')))
+      nodes.push(h('div', { key: 'act', style: S.actions }, [
+        h('button', {
+          key: 'go', type: 'button',
+          disabled: disabled,
+          title: locked ? t('repoMissingTip') : undefined,
+          style: Object.assign({}, S.btn, disabled ? S.btnDisabled : null),
+          onClick: () => props.onInstall(item),
+        }, installing
+          ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), t('installing')]
+          : t('installOne')),
+      ]))
+      return h('div', { style: S.row }, nodes)
+    }
+
+    /** 安装报告里的一条：名称 · 状态 · 来源 / 目标 / 文件 / 校验 / 耗时 */
+    function InstallEntry(props) {
+      const t = props.t
+      const e = props.entry
+      const panel = e.panel
+      const nodes = [
+        h('div', { key: 'head', style: S.runHead }, [
+          h('span', { key: 'nm', style: S.itemName }, e.name),
+          h('span', { key: 'st', style: Object.assign({}, S.badge, runStateStyle(e.state)) }, t(INSTALL_STATE_KEYS[e.state] || 'runWait')),
+        ]),
+      ]
+      if (panel) {
+        // 来源 / 目标 = 服务端拼接的绝对路径（长路径按 P1 的命令行样式换行）
+        if (panel.from) {
+          nodes.push(h('div', { key: 'from', style: S.cmdLine }, h('code', { style: S.fixCmd }, t('installFrom') + ' ' + panel.from)))
+        }
+        if (panel.to) {
+          nodes.push(h('div', { key: 'to', style: S.cmdLine }, h('code', { style: S.fixCmd }, t('installTo') + ' ' + panel.to)))
+        }
+        const kv = []
+        const ft = filesText(panel.files, t)
+        if (ft) kv.push(['fs', t('installFiles'), ft])
+        if (panel.verified !== null && panel.verified !== undefined) {
+          kv.push(['vf', t('installVerified'), panel.verified ? t('installVerifiedOk') : t('installVerifiedFail')])
+        }
+        if (panel.durationMs !== undefined && panel.durationMs !== null) {
+          kv.push(['tm', t('installDuration'), formatDuration(panel.durationMs)])
+        }
+        if (kv.length) {
+          nodes.push(h('div', { key: 'kv', style: S.kv }, kv.map((r) => h('div', { key: r[0], style: S.kvRow }, [
+            h('span', { key: 'k', style: S.kvKey }, r[1]),
+            h('span', { key: 'v', style: S.kvVal }, r[2]),
+          ]))))
+        }
+        if (panel.message) nodes.push(h('div', { key: 'msg', style: S.note }, panel.message))
+        const tail = tailLines(panel.output, 10)
+        if (tail.text) {
+          nodes.push(h('div', { key: 'out' }, [
+            h('div', { key: 'l', style: S.outLabel }, t('fixOutput')),
+            h('div', { key: 'x', style: S.out }, (tail.overflow ? t('fixOutputMore') + '\n' : '') + tail.text),
+          ]))
+        }
+      }
+      return h('div', { style: S.runEntry }, nodes)
+    }
+
+    /** 安装报告卡片（单项与批量共用） */
+    function InstallReport(props) {
+      const t = props.t
+      const batch = props.batch
+      const entries = batch.order.map((id) => {
+        const row = props.rows.filter((r) => r.id === id)[0] || { id: id, name: id }
+        return { id: id, name: row.name, state: batch.state[id] || 'wait', panel: batch.results[id] || null }
+      })
+      return h('div', { style: S.card }, [
+        h('div', { key: 'head', style: S.cardHead }, h('h3', { key: 't', style: S.cardTitle }, [
+          t('installReportTitle'),
+          badge(batch.running ? t('installReportRunning') : t('installReportDone'), batch.running ? S.badgeWarn : S.badgeOk),
+        ])),
+        h('div', { key: 'body', style: S.cardBody }, entries.map((e) => h(InstallEntry, { key: e.id, t: t, entry: e }))),
+      ])
+    }
+
+    /**
+     * 「安装子插件」页（P2）。
+     * 生命周期：首次进入自动 GET /plugins（loading → ready / error）；
+     * 单项「安装」→ POST /install { id }；底部主按钮 → 按固定顺序**逐个** POST /install { id }，
+     * 每步完成立刻刷新该项状态（等待 / 安装中 / 成功 / 失败）与结果，完成后自动重新拉取 /plugins。
+     * /install-all 仅作兜底（逐项请求层失败且本次尚无成功响应时回退）。
+     */
+    function PluginsPage(props) {
+      const t = props.t
+      const state = useState({
+        phase: 'loading', items: [], repoRoot: '', hint: '', error: '',
+        picked: {}, installingId: '', batch: null,
+      })
+      const st = state[0]
+      const setSt = state[1]
+
+      async function detect() {
+        setSt((prev) => Object.assign({}, prev, { phase: 'loading', error: '' }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/plugins', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'plugins 返回 ok:false'))
+          setSt((prev) => Object.assign({}, prev, {
+            phase: 'ready', error: '',
+            items: pluginList(body),
+            repoRoot: typeof body.repoRoot === 'string' ? body.repoRoot.trim() : '',
+            // 接口的 message（例如「未找到当前 profile 目录」）原样回显，不吞掉可读原因
+            hint: typeof body.message === 'string' ? body.message.trim() : '',
+            picked: {}, // 重新检测后回到默认勾选（可安装 / 可更新的项）
+          }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            phase: 'error', error: String((err && err.message) || err), items: [],
+          }))
+        }
+      }
+
+      function setBatchState(id, value) {
+        setSt((prev) => {
+          const batch = prev.batch
+          if (!batch) return prev
+          const nextState = Object.assign({}, batch.state)
+          nextState[id] = value
+          return Object.assign({}, prev, { batch: Object.assign({}, batch, { state: nextState }) })
+        })
+      }
+
+      /** 单项安装：POST /install { id } */
+      async function runInstall(item) {
+        if (st.installingId || (st.batch && st.batch.running)) return
+        setSt((prev) => Object.assign({}, prev, {
+          installingId: item.id,
+          batch: { running: true, order: [item.id], state: { [item.id]: 'run' }, results: {} },
+        }))
+        let panel = null
+        try {
+          const body = await postJson('/install', { id: item.id })
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          panel = normalizeInstall(body, item.id, t('installFailed'))
+        } catch (err) {
+          panel = failedInstall(item.id, String((err && err.message) || err))
+        }
+        setSt((prev) => Object.assign({}, prev, {
+          installingId: '',
+          batch: { running: false, order: [item.id], state: { [item.id]: panel.ok ? 'ok' : 'fail' }, results: { [item.id]: panel } },
+        }))
+        await detect()
+      }
+
+      /**
+       * 批量安装（UI 主路径）：按客户端写死的五项目录顺序过滤选中项，**逐个**
+       * POST /install { id }，每步完成立刻刷新该项状态与结果 —— 这就是实时逐项进度。
+       * 兜底：若逐个 /install 在「请求层」失败、且本次任务尚无任何成功响应（典型情形是
+       * 宿主半还没注册该路由），整体回退到 POST /install-all { ids }。/install-all 不是主路径。
+       */
+      async function runBatch(ids) {
+        if (!ids.length || st.installingId || (st.batch && st.batch.running)) return
+        // 固定顺序：先按 INSTALL_ORDER 过滤选中项，未知 id 保序追加（防御后续扩展）
+        const order = INSTALL_ORDER.filter((id) => ids.indexOf(id) >= 0)
+          .concat(ids.filter((id) => INSTALL_ORDER.indexOf(id) < 0))
+        const initState = {}
+        for (const id of order) initState[id] = 'wait'
+        setSt((prev) => Object.assign({}, prev, {
+          installingId: '',
+          batch: { running: true, order: order, state: initState, results: {} },
+        }))
+        const results = {}
+        const states = {}
+        let servedAny = false
+        let fallback = false
+        for (const id of order) {
+          setBatchState(id, 'run')
+          let panel = null
+          let transportFailed = false
+          try {
+            const body = await postJson('/install', { id: id })
+            if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+            panel = normalizeInstall(body, id, t('installFailed'))
+            servedAny = true
+          } catch (err) {
+            transportFailed = true
+            panel = failedInstall(id, String((err && err.message) || err))
+          }
+          results[id] = panel
+          states[id] = panel.ok ? 'ok' : 'fail'
+          setSt((prev) => {
+            const batch = prev.batch || { order: order, state: {}, results: {} }
+            return Object.assign({}, prev, {
+              batch: Object.assign({}, batch, {
+                state: Object.assign({}, batch.state, { [id]: states[id] }),
+                results: Object.assign({}, batch.results, { [id]: results[id] }),
+              }),
+            })
+          })
+          if (transportFailed && !servedAny) { fallback = true; break }
+        }
+        if (fallback) {
+          // 宿主未提供 /install：整批交给 /install-all，响应里的 results 逐项回填
+          try {
+            const body = await postJson('/install-all', { ids: order })
+            const list = fixAllList(body)
+            if (!list) throw new Error('install-all 响应不含逐项结果')
+            list.forEach((x, i) => {
+              const id = (x && typeof x.id === 'string') ? x.id : order[i]
+              if (!id) return
+              const panel = normalizeInstall(x, id, t('installFailed'))
+              results[id] = panel
+              states[id] = panel.ok ? 'ok' : 'fail'
+            })
+            if (!Object.keys(results).length) throw new Error('install-all 响应为空')
+          } catch (err) {
+            const msg = String((err && err.message) || err)
+            for (const id of order) {
+              if (!states[id] || states[id] === 'wait') {
+                results[id] = results[id] || failedInstall(id, msg)
+                states[id] = 'fail'
+              }
+            }
+          }
+        }
+        setSt((prev) => {
+          const batch = prev.batch || { order: order, state: {}, results: {} }
+          const nextState = Object.assign({}, batch.state)
+          for (const id of order) if (states[id]) nextState[id] = states[id]
+          return Object.assign({}, prev, {
+            batch: { running: false, order: order, state: nextState, results: results },
+          })
+        })
+        await detect()
+      }
+
+      function togglePick(id) {
+        setSt((prev) => {
+          const found = (Array.isArray(prev.items) ? prev.items : []).filter((x) => x && x.id === id)[0] || null
+          const norm = normalizePlugin(found, id, t)
+          const cur = prev.picked[id] !== undefined ? prev.picked[id] : norm.pickable
+          const next = Object.assign({}, prev.picked)
+          next[id] = !cur
+          return Object.assign({}, prev, { picked: next })
+        })
+      }
+
+      useEffect(() => { detect() }, [])
+
+      const canInstall = st.phase === 'ready' && String(st.repoRoot || '').length > 0
+      const byId = {}
+      for (const raw of (Array.isArray(st.items) ? st.items : [])) { if (raw && raw.id) byId[raw.id] = raw }
+      const rows = INSTALL_ORDER.map((id) => normalizePlugin(byId[id] || null, id, t))
+      const loading = st.phase === 'loading'
+      const batchRunning = Boolean(st.batch && st.batch.running)
+      const busy = batchRunning || st.installingId !== ''
+      const pickableIds = rows.filter((r) => r.pickable).map((r) => r.id)
+      const pickedIds = pickableIds.filter((id) => (st.picked[id] !== undefined ? st.picked[id] : true))
+      const installIds = canInstall ? pickedIds : []
+      const emptyList = st.phase === 'ready' && (!st.items || st.items.length === 0)
+      const repoBlocked = !loading && st.phase !== 'error' && !canInstall
+      const batchOrder = st.batch ? st.batch.order : []
+      const doneCount = st.batch
+        ? batchOrder.filter((id) => st.batch.state[id] === 'ok' || st.batch.state[id] === 'fail').length
+        : 0
+      const progressText = fill(t('installingStep'), Math.min(doneCount + 1, batchOrder.length || 1) + '/' + (batchOrder.length || 1))
+
+      return h('div', null, [
+        h('style', { key: 'kf' }, KEYFRAMES),
+        h(Steps, { key: 'steps', t: t, current: 'plugins' }),
+        h('div', { key: 'card', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, [
+              t('pluginsTitle'),
+              loading ? badge(t('pluginsLoading'), S.badgeWarn) : null,
+              canInstall ? badge(t('repoRootLabel') + ' ' + st.repoRoot, S.badgeSkip) : null,
+            ]),
+            h('div', { key: 'tools', style: S.toolbar }, [
+              h('button', {
+                key: 'recheck', type: 'button',
+                disabled: loading,
+                style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
+                onClick: () => { setSt((prev) => Object.assign({}, prev, { batch: null })); detect() },
+              }, loading
+                ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), t('recheck')]
+                : t('recheck')),
+            ]),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            st.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
+              h('div', { key: 't', style: S.errorTitle }, t('pluginsLoadFailed')),
+              h('div', { key: 'm', style: S.errorMsg }, st.error),
+              h('div', { key: 'h', style: S.errorHint }, t('pluginsLoadFailedHint')),
+              h('button', {
+                key: 'b', type: 'button',
+                style: Object.assign({}, S.btn, S.btnPrimary),
+                onClick: () => detect(),
+              }, t('retry')),
+            ]) : null,
+            repoBlocked ? h('div', { key: 'repo', style: S.warnLine }, t('repoMissing')) : null,
+            // repoRoot 在、但接口另有提示（典型：profileDir 缺失）时原样显示
+            (!repoBlocked && canInstall && st.hint) ? h('div', { key: 'hint', style: S.warnLine }, st.hint) : null,
+            h('div', { key: 'list' }, rows.map((item) => h(PluginRow, {
+              key: item.id, t: t, item: item,
+              picked: st.picked[item.id] !== undefined ? st.picked[item.id] : item.pickable,
+              installingId: st.installingId, busy: busy, canInstall: canInstall,
+              running: batchRunning && Boolean(st.batch && st.batch.state[item.id] === 'run'),
+              onInstall: runInstall, onToggle: togglePick,
+            }))),
+            emptyList ? h('div', { key: 'empty', style: S.note }, t('pluginsEmpty')) : null,
+          ]),
+        ]),
+        h('div', { key: 'action', style: S.actionBar }, [
+          h('button', {
+            key: 'batch', type: 'button',
+            disabled: busy || !canInstall || pickedIds.length === 0,
+            title: canInstall ? undefined : t('repoMissingTip'),
+            style: Object.assign({}, S.btn, S.btnPrimary, (busy || !canInstall || pickedIds.length === 0) ? S.btnDisabled : null),
+            onClick: () => runBatch(installIds),
+          }, busy
+            ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), progressText]
+            : fill(t('installSelected'), pickedIds.length)),
+          h('span', { key: 'note', style: S.actionNote },
+            !canInstall ? t('repoMissingTip') : (pickedIds.length ? t('installBatchHint') : t('installPickHint'))),
+        ]),
+        st.batch ? h(InstallReport, { key: 'rep', t: t, batch: st.batch, rows: rows }) : null,
+        h('div', { key: 'foot', style: S.note }, t('installFootNote')),
+      ])
+    }
+
     function Placeholder(props) {
       const t = props.t
       return h('div', { style: S.placeholder }, [
@@ -1021,11 +1649,13 @@ window.__ModuleLoader__.load({
     function Section(props) {
       const t = props.t
       // 默认仍是「关于与致谢」；initialTab 供冒烟测试与深链指定页签
-      const state = useState(props.initialTab === 'install' ? 'install' : 'about')
+      const first = ['install', 'plugins', 'config', 'about'].indexOf(props.initialTab) >= 0 ? props.initialTab : 'about'
+      const state = useState(first)
       const tab = state[0]
       const setTab = state[1]
       let page = null
       if (tab === 'install') page = h(InstallPage, { key: 'i', t: t })
+      else if (tab === 'plugins') page = h(PluginsPage, { key: 'g', t: t })
       else if (tab === 'config') page = h(Placeholder, { key: 'p', t: t })
       else page = h(AboutPage, { key: 'a', t: t })
       return h('div', { style: S.wrap }, [

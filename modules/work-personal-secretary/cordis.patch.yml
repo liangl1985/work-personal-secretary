@@ -11,3 +11,6 @@
       config:
         # 集成体自检：打开后启动时做一次只读环境探测并在日志里给出结论
         selfCheckOnStartup: false
+        # 集成体仓库目录（子插件安装的来源）：
+        #   留空 = 自动探测集成体仓库目录；也可在该 profile 的 cordis.patch.yml 或设置页用户层覆盖。
+        repoRoot: ''

@@ -2,9 +2,12 @@
  * work-personal-secretary —— Web GUI API（环境检查 / 自动补齐）
  *
  * 路由前缀 /work-personal-secretary/api：
- *   GET  /check    —— 七项只读环境探针报告
- *   POST /fix      —— 按 id 执行**白名单固定命令**（同源保护）
- *   POST /fix-all  —— 批量补齐：服务端按固定依赖顺序串行执行（同源保护）
+ *   GET  /check       —— 七项只读环境探针报告
+ *   POST /fix         —— 按 id 执行**白名单固定命令**（同源保护）
+ *   POST /fix-all     —— 批量补齐：服务端按固定依赖顺序串行执行（同源保护）
+ *   GET  /plugins     —— 五个子插件的版本 / 安装模式清单（**只读**）
+ *   POST /install     —— 安装单个子插件（同源保护；来源路径由服务端拼接）
+ *   POST /install-all —— 批量安装：服务端按固定顺序串行（同源保护）
  *
  * 安全红线（本文件是唯一会执行安装动作的地方）：
  * 1. id 必须命中服务端白名单表 → 映射到**固定命令 + 固定参数数组**；
@@ -32,13 +35,23 @@ import {
   probePython,
   probeWinget,
   resolvePythonExecutable,
+  resolveProfileDir,
   PYTHON_MISSING_HINT,
 } from './probe.js'
+
+import {
+  MODULE_DIR,
+  SUB_PLUGIN_ID_LIST,
+  listSubPlugins,
+  installSubPlugin,
+  resolveRepoRoot,
+  resolveInstallAllPlan,
+} from './install.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
 /** 精确路由（桌面载体的 fetch 桥只认精确路由） */
-export const API_PATHS = ['/check', '/fix', '/fix-all']
+export const API_PATHS = ['/check', '/fix', '/fix-all', '/plugins', '/install', '/install-all']
 
 /** 安装类命令的超时上限（15 分钟：winget / pip 都可能较慢） */
 export const FIX_TIMEOUT_MS = 900000
@@ -185,6 +198,12 @@ export function runFixCommand(cmd, args, options = {}) {
  * @param {Function} [deps.resolvePython] Python 解释器解析（测试注入 mock）
  * @param {Function} [deps.probeWinget] winget 探测（测试注入 mock）
  * @param {object} [deps.probeOptions] /check 的探针选项（仅供测试）
+ * @param {string} [deps.repoRoot] 设置项里的集成体仓库根（可空；空则走相对 / 常见位置探测）
+ * @param {string} [deps.profileDir] 当前 profile 目录（测试注入；默认由 DSH_HOME / DSH_PROFILE_DIR 解析）
+ * @param {object} [deps.env] 环境变量来源（测试注入）
+ * @param {Function|Date} [deps.now] 时间来源（测试注入；影响备份时间戳）
+ * @param {string} [deps.moduleDir] 本体模块目录（测试注入；相对探测起点）
+ * @param {string[]} [deps.commonCandidates] 常见位置候选（测试注入）
  * @returns {Function} disposer
  */
 export function installApi(ctx, deps = {}) {
@@ -194,6 +213,22 @@ export function installApi(ctx, deps = {}) {
   const doProbeWinget = typeof deps.probeWinget === 'function' ? deps.probeWinget : probeWinget
   const probeOptions = deps.probeOptions || {}
   const platform = deps.platform || process.platform
+
+  // ---- 子插件安装（安装器第三步）：仓库根与 profile 只由服务端解析 ----
+  // repoRoot 来自设置项（可为空）；来源路径一律由服务端从 repoRoot 拼接，**绝不接受客户端传入路径**。
+  const repoRootConfig = typeof deps.repoRoot === 'string' ? deps.repoRoot : ''
+  const profileDirOverride = typeof deps.profileDir === 'string' ? deps.profileDir : ''
+  const installEnv = deps.env || process.env
+  const installNow = deps.now
+  const installModuleDir = deps.moduleDir || MODULE_DIR
+
+  const currentRepoRoot = () => resolveRepoRoot({
+    configRoot: repoRootConfig,
+    moduleDir: installModuleDir,
+    env: installEnv,
+    commonCandidates: deps.commonCandidates,
+  })
+  const currentProfileDir = () => profileDirOverride || resolveProfileDir(installEnv)
 
   /** 执行单个白名单步骤：前置条件现场判定，命令只来自白名单 */
   const runStep = async (id) => {
@@ -271,8 +306,34 @@ export function installApi(ctx, deps = {}) {
         return sendJson(res, 200, report)
       }
 
+      // GET /plugins —— 五个子插件的版本 / 安装模式清单（**只读**，不触发任何安装）
+      if (req.method === 'GET' && (sub === '/plugins' || sub === '/plugins/')) {
+        const repo = currentRepoRoot()
+        const listing = listSubPlugins({ repoRoot: repo.repoRoot, profileDir: currentProfileDir() })
+        const payload = {
+          ok: true,
+          repoRoot: listing.repoRoot,
+          repoRootSource: repo.source,
+          repoRootSourceDetail: repo.sourceDetail,
+          profileDir: listing.profileDir,
+          items: listing.items,
+          summary: listing.summary,
+        }
+        const hints = []
+        if (!listing.repoRoot) hints.push('未找到集成体仓库目录，请在设置里指定集成体仓库目录')
+        if (!listing.profileDir) hints.push('未找到当前 profile 目录（可用 DSH_PROFILE_DIR / DSH_PROFILE 指定，默认 ~/.dsh/profiles/desktop）')
+        if (hints.length > 0) payload.message = hints.join('；')
+        return sendJson(res, 200, payload)
+      }
+
       // ---- 以下为写操作（同源保护） ----
       if (req.method === 'POST' && (sub === '/fix' || sub === '/fix/' || sub === '/fix-all' || sub === '/fix-all/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+      }
+
+      // POST /install、POST /install-all 同样走同源保护（只新增，不改动 /fix 的判定）
+      if (req.method === 'POST' && (sub === '/install' || sub === '/install/' || sub === '/install-all' || sub === '/install-all/')) {
         const guard = sameOriginGuard(req)
         if (guard) return sendError(res, 403, guard)
       }
@@ -318,6 +379,47 @@ export function installApi(ctx, deps = {}) {
           results: results,
           rejected: plan.rejected,
           durationMs: totalMs,
+        }
+        if (plan.rejected.length > 0) payload.message = '已忽略不在白名单的 id：' + plan.rejected.join(' / ')
+        return sendJson(res, 200, payload)
+      }
+
+      // POST /install { id } —— 安装单个子插件（id 只用于查表 → <repoRoot>/modules/<id>）
+      if (req.method === 'POST' && (sub === '/install' || sub === '/install/')) {
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const id = typeof body.id === 'string' ? body.id.trim().slice(0, 64) : ''
+        const repo = currentRepoRoot()
+        const result = installSubPlugin(id, { repoRoot: repo.repoRoot, profileDir: currentProfileDir(), now: installNow })
+        return sendJson(res, 200, result)
+      }
+
+      // POST /install-all { ids: [] } —— 按固定顺序串行安装；未知 id 计入 rejected 且不执行
+      if (req.method === 'POST' && (sub === '/install-all' || sub === '/install-all/')) {
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        if (!Array.isArray(body.ids)) {
+          return sendJson(res, 200, { ok: false, results: [], rejected: [], durationMs: 0, message: 'ids 必须是非空字符串数组' })
+        }
+        const plan = resolveInstallAllPlan(body.ids)
+        if (plan.order.length === 0) {
+          return sendJson(res, 200, {
+            ok: false, results: [], rejected: plan.rejected, durationMs: 0,
+            message: '没有可安装的 id（可安装的 id：' + SUB_PLUGIN_ID_LIST.join(' / ') + '）',
+          })
+        }
+        const startedAll = Date.now()
+        const repo = currentRepoRoot()
+        const profileDir = currentProfileDir()
+        const results = []
+        for (const id of plan.order) {
+          results.push(installSubPlugin(id, { repoRoot: repo.repoRoot, profileDir: profileDir, now: installNow }))
+        }
+        const payload = {
+          ok: results.every((r) => r.ok),
+          results: results,
+          rejected: plan.rejected,
+          durationMs: Date.now() - startedAll,
         }
         if (plan.rejected.length > 0) payload.message = '已忽略不在白名单的 id：' + plan.rejected.join(' / ')
         return sendJson(res, 200, payload)
