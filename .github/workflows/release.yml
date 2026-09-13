@@ -36,18 +36,23 @@ jobs:
           awk -v tag="$TAG" '$0 ~ "^## " tag "( —| |$)" { on=1; next } on && /^## / { exit } on { print }' CHANGELOG.md > /tmp/notes.md
           cat >> /tmp/notes.md <<'EOF'
 
----
+          ---
 
-### 安装
+          ### 安装
 
-```bash
-git clone https://github.com/liangl1985/work-personal-secretary.git
-dsh plugin --profile <profile> add file:<克隆目录>/modules/work-personal-secretary
-```
+          ```bash
+          git clone https://github.com/liangl1985/work-personal-secretary.git
+          dsh plugin --profile <profile> add file:<克隆目录>/modules/work-personal-secretary
+          ```
 
-重启 DSH 后，在「设置 → 工作秘书 → 安装与检查」按需安装各子模块。
-硬前置：DSH Desktop 2.0.9；`dsh-doc-suite` 另需 **Python ≥ 3.10 + WPS Office**（不自动安装，由 `/doc-doctor` 检测）。
-EOF
+          重启 DSH 后，在「设置 → 工作秘书 → 安装与检查」按需安装各子模块。
+          硬前置：DSH Desktop 2.0.9；`dsh-doc-suite` 另需 **Python ≥ 3.10 + WPS Office**（不自动安装，由 `/doc-doctor` 检测）。
+          EOF
           echo "--- Release 正文预览 ---"
           cat /tmp/notes.md
-          gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md --verify-tag
+          if ! out=$(gh release create "$TAG" --title "$TAG" --notes-file /tmp/notes.md --verify-tag 2>&1); then
+            msg=$(echo "$out" | tr '\n' '|' | sed 's/%/%25/g' | cut -c1-800)
+            echo "::error title=Release 创建失败::$msg"
+            exit 1
+          fi
+          echo "Release $TAG 已创建"
