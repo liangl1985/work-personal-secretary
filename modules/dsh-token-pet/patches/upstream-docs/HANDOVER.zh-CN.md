@@ -141,7 +141,7 @@ https://awesome-dsh-plugin.com/p/Jimmy0123-ux/dsh-token-pet/
 - `npm pack --dry-run --json`：通过，**29 文件**，包含英文说明；仍仅一个内嵌客户端，无重复素材/sourcemap，未覆盖既有 tgz。
 - `node scripts/verify-ui-local.mjs`：真实 Chrome、临时 `file://` fixture、假宿主数据与 FakeAudioContext。500/360/180px × 中英 × 三标签 **18 组合均无横向溢出**；正文单滚动，textarea 自身正常滚动。
 - 实际调用客户端 `apply` 注册外壳后，宠物打开/标题栏关闭、语言热切、提示抽屉保持原标签通过；360/180px 外壳标题栏及正文无溢出。完成提示音 **11 项浏览器调度检查全部通过**，含默认静音、仅解锁、试听、成功完成、去重、工具/取消/历史切换不响、关闭后不响。
-- 最后一轮浏览器报告及 24 张截图在本机临时目录 `C:\Users\Administrator.CHINAMI-LGIVRJF\AppData\Local\Temp\token-pet-ui-hLLtdK`；脚本可复现，临时浏览器/profile 已清理。
+- 最后一轮浏览器报告及 24 张截图在本机临时目录 `C:\Users\<user>\AppData\Local\Temp\token-pet-ui-hLLtdK`；脚本可复现，临时浏览器/profile 已清理。
 - `git diff --check` 通过。SSR 仍报告既有 client-only useLayoutEffect 警告，新增 SVG fallback 覆盖暴露旧 eyesFor 子元素缺 key 警告；均非测试失败。
 
 ### 验证边界
@@ -153,7 +153,7 @@ https://awesome-dsh-plugin.com/p/Jimmy0123-ux/dsh-token-pet/
 - 已执行 `dsh plugin --profile desktop add "link:H:\ds\dsh-token-pet"`，退出码 0；desktop profile 的依赖由 `^0.1.1` 改为 `link:H:/ds/dsh-token-pet`，原 bundle 列表保持不变。
 - `node_modules/dsh-token-pet` 已核验为指向工作区的 SymbolicLink，宿主 `lib/index.js` 与客户端 `client/client.js` 的安装路径/源码路径 SHA256 分别一致；从 desktop profile 直接 import 插件成功，`apply` 为函数。
 - 发现用户层 patch 原本禁用了 `token-pet`，已仅将该条 `disabled` 改为 `false`，未改 `infinite-gen-3` 等其他插件开关。
-- 操作前备份 5 个 profile 配置/锁文件和 4 个用量快照文件到 `C:\Users\Administrator.CHINAMI-LGIVRJF\.dsh\backups\token-pet-local-20260908-151948`。不清空、不重建、不迁移实际账本。
+- 操作前备份 5 个 profile 配置/锁文件和 4 个用量快照文件到 `C:\Users\<user>\.dsh\backups\token-pet-local-20260908-151948`。不清空、不重建、不迁移实际账本。
 - 安装时 pnpm 报 peer 提示；专项 `peers check` 返回 1，列出其他已装插件对宿主依赖的缺失/冲突，没有 token-pet 条目。本次不顺手改动其他插件或宿主依赖。
 - 未重启 DSH。对现有 `http://127.0.0.1:43120/` 的无认证命令行请求返回 HTTP 403，因此不声称已经验收当前登录页面的新 UI。用户完整退出并重开 DSH Desktop 后试用，若页面仍旧再刷新。
 - 后续本地构建会更新该 link 指向的文件；不要删除或移动 `H:\ds\dsh-token-pet`。需要退回线上版时可安装 `dsh-token-pet@0.1.1` 并重启，不应直接覆盖备份账本来回滚代码。

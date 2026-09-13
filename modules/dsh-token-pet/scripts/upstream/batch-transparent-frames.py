@@ -17,12 +17,12 @@ import sys
 
 ROOT = Path(r"H:\ds\dsh-token-pet")
 ACTION_ROOT = ROOT / "Review/h3-actions"
-SKILL_PY = Path(r"C:\Users\Administrator.CHINAMI-LGIVRJF\.agents\skills\sprite-gen\.venv\Scripts\python.exe")
-SPRITE_GEN = Path(r"C:\Users\Administrator.CHINAMI-LGIVRJF\.agents\skills\sprite-gen\.venv\Scripts\sprite-gen.exe")
+SKILL_PY = Path(r"C:\Users\<user>\.agents\skills\sprite-gen\.venv\Scripts\python.exe")
+SPRITE_GEN = Path(r"C:\Users\<user>\.agents\skills\sprite-gen\.venv\Scripts\sprite-gen.exe")
 CLEANUP = ROOT / "scripts/cleanup-white-matte.py"
 SHADOW = ROOT / "scripts/remove-floor-shadow.py"
 GLOW_KEY = ROOT / "scripts/glow-key-frames.py"
-TEMP = Path(r"C:\Users\Administrator.CHINAMI-LGIVRJF\AppData\Local\Temp\dsh-matted-batch")
+TEMP = Path(r"C:\Users\<user>\AppData\Local\Temp\dsh-matted-batch")
 # Frames whose background is a big white glow instead of flat white need the
 # border-relaxed luminance key; the flat-white matte would leave the glow.
 GLOW_ACTIONS = {"evolve", "tool-success", "tool-failure"}

@@ -2,8 +2,8 @@ import { n as DesktopInstallRecoveryStore } from 'file:///H:/Program%20Files/DSH
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 
-const STATE = 'C:/Users/Administrator.CHINAMI-LGIVRJF/AppData/Roaming/DSH Desktop/plugin-install-recovery/state.json'
-const PROFILE_DIR = 'C:/Users/Administrator.CHINAMI-LGIVRJF/.dsh/profiles/desktop'
+const STATE = 'C:/Users/<user>/AppData/Roaming/DSH Desktop/plugin-install-recovery/state.json'
+const PROFILE_DIR = 'C:/Users/<user>/.dsh/profiles/desktop'
 const PROFILE_NAME = 'desktop'
 
 const statePath = STATE

@@ -13,7 +13,7 @@ import sys
 import numpy as np
 from PIL import Image
 
-SKILL_PY = Path(r"C:\Users\Administrator.CHINAMI-LGIVRJF\.agents\skills\sprite-gen\.venv\Scripts\python.exe")
+SKILL_PY = Path(r"C:\Users\<user>\.agents\skills\sprite-gen\.venv\Scripts\python.exe")
 CLEANUP = Path(r"H:\ds\dsh-token-pet\scripts\cleanup-white-matte.py")
 SHADOW = Path(r"H:\ds\dsh-token-pet\scripts\remove-floor-shadow.py")
 
