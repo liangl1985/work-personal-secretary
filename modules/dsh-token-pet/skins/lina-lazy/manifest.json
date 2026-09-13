@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "lina-lazy",
+  "name": "莉娜·慵懒性感版",
+  "nameLocalized": {
+    "zh-CN": "莉娜·慵懒性感版",
+    "en-US": "Lina - Lazy & Alluring"
+  },
+  "version": "1.0.0",
+  "author": "lina",
+  "license": "private",
+  "canvas": {
+    "width": 360,
+    "height": 540
+  },
+  "bodyHeight": 480,
+  "feetY": 520,
+  "preview": "preview.webp",
+  "animations": {
+    "idle": {
+      "file": "idle.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540,
+      "loop": true
+    },
+    "working": {
+      "file": "working.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540,
+      "loop": true
+    },
+    "eating": {
+      "file": "eating.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "digesting": {
+      "file": "digesting.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "warning": {
+      "file": "warning.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540,
+      "loop": true
+    },
+    "evolve": {
+      "file": "evolve.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "click": {
+      "file": "click.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "archive": {
+      "file": "archive.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "tool-success": {
+      "file": "tool-success.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "tool-failure": {
+      "file": "tool-failure.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "prompt-enhancing": {
+      "file": "prompt-enhancing.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540,
+      "loop": true,
+      "pingPong": true
+    },
+    "prompt-ready": {
+      "file": "prompt-ready.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    }
+  },
+  "description": {
+    "zh-CN": "慵懒性感形象：黑色吊带短裙配细金链腰带、黑色蕾丝 V 领、光腿、红色细跟高跟鞋、红色唇膏。"
+  }
+}

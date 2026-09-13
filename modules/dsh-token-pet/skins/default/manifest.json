@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "default",
+  "name": "内置默认形象",
+  "nameLocalized": {
+    "zh-CN": "内置默认形象",
+    "en-US": "Built-in default"
+  },
+  "version": "1.0.0",
+  "author": "dsh-token-pet contributors",
+  "license": "MIT",
+  "canvas": {
+    "width": 360,
+    "height": 540
+  },
+  "bodyHeight": 480,
+  "feetY": 520,
+  "preview": "preview.webp",
+  "animations": {
+    "archive": {
+      "file": "archive.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 475,
+      "frameH": 540
+    },
+    "click": {
+      "file": "click.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "digesting": {
+      "file": "digesting.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "eating": {
+      "file": "eating.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 2,
+      "frameW": 660,
+      "frameH": 540
+    },
+    "evolve": {
+      "file": "evolve.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 397,
+      "frameH": 540
+    },
+    "idle": {
+      "file": "idle.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540,
+      "loop": true
+    },
+    "prompt-enhancing": {
+      "file": "prompt-enhancing.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 466,
+      "frameH": 540,
+      "loop": true,
+      "pingPong": true
+    },
+    "prompt-ready": {
+      "file": "prompt-ready.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "tool-failure": {
+      "file": "tool-failure.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "tool-success": {
+      "file": "tool-success.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540
+    },
+    "warning": {
+      "file": "warning.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 364,
+      "frameH": 540,
+      "loop": true
+    },
+    "working": {
+      "file": "working.webp",
+      "frames": 32,
+      "fps": 10,
+      "rows": 1,
+      "frameW": 360,
+      "frameH": 540,
+      "loop": true
+    }
+  },
+  "description": {
+    "zh-CN": "插件上游自带的默认形象（从上游素材提取为标准套装，便于与自定义套装统一部署）。"
+  }
+}
