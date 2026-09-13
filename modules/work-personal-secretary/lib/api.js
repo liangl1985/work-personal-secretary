@@ -460,7 +460,9 @@ export function installApi(ctx, deps = {}) {
         try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
         const id = typeof body.id === 'string' ? body.id.trim().slice(0, 64) : ''
         const repo = currentRepoRoot()
-        const result = installSubPlugin(id, { repoRoot: repo.repoRoot, profileDir: currentProfileDir(), now: installNow })
+        const result = installSubPlugin(id, {
+          repoRoot: repo.repoRoot, profileDir: currentProfileDir(), now: installNow, dshHome: basedeckDshHome,
+        })
         return sendJson(res, 200, result)
       }
 
@@ -483,7 +485,9 @@ export function installApi(ctx, deps = {}) {
         const profileDir = currentProfileDir()
         const results = []
         for (const id of plan.order) {
-          results.push(installSubPlugin(id, { repoRoot: repo.repoRoot, profileDir: profileDir, now: installNow }))
+          results.push(installSubPlugin(id, {
+            repoRoot: repo.repoRoot, profileDir: profileDir, now: installNow, dshHome: basedeckDshHome,
+          }))
         }
         const payload = {
           ok: results.every((r) => r.ok),

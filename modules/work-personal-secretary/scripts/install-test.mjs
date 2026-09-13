@@ -15,6 +15,7 @@
  *       SHA256 完好、.wps-new 清理、profile/package.json 未被改动；以及前置失败不触碰目标
  *       G 备份轮转：package.json.bak-* 只保留最近 BACKUP_KEEP（10）份，prunedBackups 如实回报
  *   [8] 隔离与中立性：全部写入都在 os.tmpdir() 下；真实 profile 仅做 **只读 mtime/size 快照**
+ *   [9] 桌宠素材部署（dsh-token-pet 专属）：缺失才补 / 已存在绝不覆盖 / 源无 skins 时 skipped 且不影响安装
  *
  * 红线：本测试**绝不触碰真实的 ~/.dsh/profiles**——所有 repoRoot / profileDir 都在 os.tmpdir() 下自建，
  * 且每次调用前都用 assertInsideTmp() 复核；测试首尾只**读取**真实 profile 的 stat 快照用于证明未被写入。
@@ -49,6 +50,10 @@ import {
   sha256File,
   detectBom,
   BACKUP_SUFFIX,
+  PET_SKINS_PLUGIN_ID,
+  resolveDshHome,
+  deployPetSkins,
+  describePetSkins,
 } from '../lib/install.js'
 
 import { API_ROOT, API_PATHS, installApi } from '../lib/api.js'
@@ -585,6 +590,81 @@ try {
   ok(false, 'apply(ctx, { repoRoot }) 抛出异常：' + (err && err.message ? err.message : err))
 }
 try { if (hostDisposer) hostDisposer() } catch (e) { /* best-effort */ }
+
+// ───────────────────── [9] 桌宠素材部署（dsh-token-pet 专属） ─────────────────────
+
+section('[9] 桌宠素材部署（只补缺失 / 绝不覆盖 / 不影响安装结果）')
+const SKIN_REPO = join(TMP_ROOT, 'repo-skins')
+const SKIN_PROFILE = join(TMP_ROOT, 'profile-skins')
+const SKIN_PROFILE2 = join(TMP_ROOT, 'profile-skins2')
+const SKIN_HOME = join(TMP_ROOT, 'dshhome')
+const SKIN_HOME2 = join(TMP_ROOT, 'dshhome2')
+
+function makeEmptyProfile(dir) {
+  mkdirSync(join(dir, 'node_modules'), { recursive: true })
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({
+    name: 'desktop', private: true, dependencies: {}, dsh: { profile: { bundles: [] } },
+  }, null, 2) + '\n')
+}
+
+// 专用假仓库：token-pet 带两套套装（各 manifest.json + 两条条带）
+{
+  const dir = join(SKIN_REPO, 'modules', 'dsh-token-pet')
+  mkdirSync(join(dir, 'lib'), { recursive: true })
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'dsh-token-pet', version: '5.5.5', main: 'lib/index.js' }, null, 2) + '\n')
+  writeFileSync(join(dir, 'lib', 'index.js'), 'export const name = "dsh-token-pet"\n')
+  for (const pack of ['lina-pure', 'lina-lazy']) {
+    const p = join(dir, 'skins', pack)
+    mkdirSync(p, { recursive: true })
+    writeFileSync(join(p, 'manifest.json'), JSON.stringify({ schemaVersion: 1, id: pack, name: pack, animations: { idle: { file: 'idle.webp', frames: 4 } } }, null, 2) + '\n')
+    writeFileSync(join(p, 'idle.webp'), 'fake-webp-' + pack + '\n')
+    writeFileSync(join(p, 'preview.webp'), 'preview-' + pack + '\n')
+  }
+  makeEmptyProfile(SKIN_PROFILE)
+  makeEmptyProfile(SKIN_PROFILE2)
+}
+const skinTarget = join(SKIN_HOME, 'data', 'dsh-token-pet', 'skins')
+assertInsideTmp(SKIN_REPO, 'skinRepo')
+assertInsideTmp(SKIN_HOME, 'skinHome')
+
+const resSkin = installSubPlugin(PET_SKINS_PLUGIN_ID, { repoRoot: SKIN_REPO, profileDir: SKIN_PROFILE, dshHome: SKIN_HOME, now: fixedNow })
+ok(resSkin.ok === true, '装 token-pet 成功（素材部署不改变安装结果）')
+ok(Boolean(resSkin.skins) && resSkin.skins.ok === true, 'skins.ok=true')
+ok(resSkin.skins.deployed.join(',') === 'lina-lazy,lina-pure', '两套套装都部署（按名排序）：' + resSkin.skins.deployed.join(','))
+ok(resSkin.skins.files === 6, '部署文件数 = 6（每套 manifest+idle+preview）：' + resSkin.skins.files)
+ok(resSkin.skins.kept.length === 0, '首次部署无跳过项')
+ok(existsSync(join(skinTarget, 'lina-pure', 'manifest.json')) && existsSync(join(skinTarget, 'lina-lazy', 'idle.webp')), '运行时素材目录出现两套套装')
+assertInsideTmp(skinTarget, 'skinTarget')
+ok(readFileSync(join(skinTarget, 'lina-pure', 'idle.webp'), 'utf8') === 'fake-webp-lina-pure\n', '套装文件逐字节复制')
+ok(resSkin.output.indexOf('桌宠素材：已部署 2 套') >= 0, '安装回显含素材部署结果')
+
+// 使用者改过的素材：重装绝不覆盖（只补新增套装）
+writeFileSync(join(skinTarget, 'lina-pure', 'idle.webp'), '使用者自己改过的内容\n')
+const resSkin2 = installSubPlugin(PET_SKINS_PLUGIN_ID, { repoRoot: SKIN_REPO, profileDir: SKIN_PROFILE, dshHome: SKIN_HOME, now: fixedNow })
+ok(resSkin2.ok === true, '重复安装仍成功')
+ok(resSkin2.skins.deployed.length === 0 && resSkin2.skins.kept.join(',') === 'lina-lazy,lina-pure', '目标已存在 → 两套全部跳过：' + resSkin2.skins.kept.join(','))
+ok(readFileSync(join(skinTarget, 'lina-pure', 'idle.webp'), 'utf8') === '使用者自己改过的内容\n', '使用者改过的素材**未被覆盖**')
+
+// 源模块没有 skins（纯补丁形态）→ skipped，且不影响安装
+const resSkin3 = installSubPlugin(PET_SKINS_PLUGIN_ID, { repoRoot: FAKE_REPO, profileDir: SKIN_PROFILE2, dshHome: SKIN_HOME2, now: fixedNow })
+ok(resSkin3.ok === true, '源无 skins 时安装仍成功')
+ok(Boolean(resSkin3.skins) && resSkin3.skins.skipped === true, '素材部署标记 skipped：' + (resSkin3.skins ? resSkin3.skins.reason : '(无 skins 字段)'))
+ok(!existsSync(join(SKIN_HOME2, 'data', 'dsh-token-pet', 'skins', 'lina-pure')), '未凭空造出套装内容')
+
+// 非 token-pet 子插件：不做素材部署
+const resOther = installSubPlugin('dsh-experts', { repoRoot: FAKE_REPO, profileDir: SKIN_PROFILE2, dshHome: SKIN_HOME2, now: fixedNow })
+ok(resOther.ok === true && resOther.skins === null, '非 token-pet 结果 skins=null（形状稳定）')
+ok(installSubPlugin('dsh-evil', { repoRoot: FAKE_REPO, profileDir: SKIN_PROFILE2 }).skins === null, '失败分支同样带 skins=null（形状稳定）')
+ok(typeof resSkin.skins.target === 'string' && resSkin.skins.target.indexOf('dsh-token-pet') >= 0, 'skins.target 指向运行时素材目录')
+
+// resolveDshHome：显式 → 环境变量 → 默认 ~/.dsh（与 basedeck 同源）
+ok(resolveDshHome({ dshHome: SKIN_HOME }) === SKIN_HOME, 'resolveDshHome 优先显式 dshHome')
+ok(resolveDshHome({ env: { DSH_HOME: SKIN_HOME } }) === SKIN_HOME, 'resolveDshHome 次选环境变量 DSH_HOME')
+ok(resolveDshHome({ env: {} }) === join(homedir(), '.dsh'), 'resolveDshHome 兜底 ~/.dsh')
+
+// deployPetSkins 直接调用：坏源目录不抛异常
+ok(deployPetSkins('', '', {}).skipped === true, 'deployPetSkins 空源 → skipped 不抛错')
+ok(describePetSkins(null) === '不适用', 'describePetSkins(null) 回显「不适用」')
 
 // ───────────────────── 收尾 ─────────────────────
 rmSync(TMP_ROOT, { recursive: true, force: true })

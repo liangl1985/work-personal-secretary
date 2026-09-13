@@ -15,12 +15,17 @@
 - **错误与空态**：接口不可达或返回 `ok:false` 时给出可读失败提示与「重试」，不白屏、不抛异常穿透；加载中显示「检测中…」。
 - **按载体分档的宿主基址**：沿用一方 file-upload 的合成 origin 写法 —— Web 载体（origin 正常）走根相对路径，失败再退合成基址；桌面外壳下 `location.origin` 为字符串 "null"，**直接**走合成 origin `http://dsh.internal`，不再尝试必然失败的根相对路径（每个请求只发 1 次，避免拖慢与控制台红字噪音）。两档行为均有冒烟断言覆盖。
 
+### 修复（2026-09-13 · 灰度测试驱动）
+
+- **桌宠套装素材现在随安装自动部署**（`lib/install.js`）：桌宠运行时只读 `<dsh home>/data/dsh-token-pet/skins/`，模块内的 `skins/` **从不被读取**；此前安装器只复制模块、配置底座只建空目录，导致**灰度环境装完只剩客户端内置的 default 形象、两套自研套装不出现**（2026-09-13 灰度测试实锤，即待办里的「素材部署遗漏」）。新增 `deployPetSkins()`：安装 `dsh-token-pet` 成功后，把 `<repoRoot>/modules/dsh-token-pet/skins/<套装>` 按**只补缺失、绝不覆盖**部署到运行时目录。单套失败只清理该套半成品、**不影响插件安装结果**；源目录缺失（纯补丁形态）记为 `skipped` 不算错误。`lib/api.js` 的单项 / 批量安装路由把服务端解析的 DSH_HOME 传下去（`dshHome`），**不新增任何客户端入参**（源与目标路径仍全部由服务端拼接）。安装结果新增 `skins` 字段（非 token-pet 与失败分支恒为 `null`，形状稳定），安装回显多一行「桌宠素材：…」。
+
 ### 说明
 
 - 宿主半（`lib/`）的 `check` / `fix` / `fix-all` 路由与命令白名单由并行工作线实现。客户端主路径只用 `POST /fix { id }`；`/fix-all` 仅作兜底，请求契约 `{ ok, results: [{ id, ok, command, exitCode, durationMs, output }], rejected, durationMs }`。路由缺失时页面给出可读错误，不会白屏。客户端文案键设计为 id 无关：接口把某项降级为 manual（`autoFixable:false`）时，该行自动由「补齐」切换为「复制命令」。
 
 ### 验证
 
+- （2026-09-13 素材部署修复）`scripts/install-test.mjs` **191 通过 / 0 失败**（新增 22 项：[9] 节 —— 空 dsh home 部署 3 套 / 逐字节一致 / 重复安装全部跳过且**使用者改过的素材未被覆盖** / 源无 skins 时 skipped 且安装仍成功 / 非 token-pet 与失败分支 `skins=null` / `resolveDshHome` 三级解析）；另有**真实素材演练**：空 dsh home 部署 3 套 42 个文件、逐文件 SHA256 与源一致，二次部署全部跳过、使用者改动保留。同轮门禁：probe 136 · basedeck 179 · settings-api 109 · smoke 337 · experts 25/18/7 · work-memory 83，全绿。
 - `node --check modules/work-personal-secretary/client/index.js` 通过；
 - `node modules/work-personal-secretary/scripts/smoke-load.mjs`：原 20 项断言全绿；新增「安装与检查」页断言 48 条（七项骨架 / 四步进度 / 复选框默认勾选与只发选中项 / 固定顺序逐项 `POST /fix` / 逐项实时进度「补齐中 x/N + 执行中」/ `/fix-all` 仅兜底且容错解析 / 无 fetch 载体不抛错）与「载体分档」断言 4 条（桌面外壳 GET/POST 首次即合成基址且无相对路径尝试；Web 载体 GET/POST 走根相对路径），共 **72 项通过、0 失败**。
 
