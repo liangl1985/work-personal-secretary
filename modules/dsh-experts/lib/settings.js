@@ -6,7 +6,7 @@
  * 插件侧只读解析后的深冻结快照，并可 watch 已提交变更。
  *
  * 四项口径（产品口径 2026-09-12 定）：
- *   ① 默认注入 1 位，可调 2/3，>1 时设置页明确提示「占用较多 TOKEN」；
+ *   ① 默认注入 2 位，可调 1 或 3，>1 时设置页明确提示「占用较多 TOKEN」；
  *   ② 岗位关联（defaultDomain）安装引导问一次 —— 决定任务从哪个专业角度拆解；
  *   ③ 全局激活集合（enabledDomains / enabledExperts）决定谁参与自动匹配；
  *   ④ 未激活/未注入的专家走临时注入（/expert use、expert_recall），不常驻上下文。
@@ -44,7 +44,7 @@ export const DEFAULTS = {
   identityExpert: '',
   enabledDomains: '',
   enabledExperts: '',
-  expertInjectMax: 1,
+  expertInjectMax: 2,
   expertSecondThreshold: 0.8,
   expertMinScore: 0.35,
   expertShowBanner: true,
@@ -68,8 +68,8 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
   enabledExperts: z.string().default('')
     .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 presales-bid-proposal,finance-accountant）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 /expert use <id> 临时注入'),
 
-  expertInjectMax: z.natural().default(1)
-    .description('每轮最多注入几位专家：1（默认）/ 2 / 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB），且只在分数接近且跨域时才补第 2/3 位'),
+  expertInjectMax: z.natural().default(2)
+    .description('每轮最多注入几位专家：1 / 2（默认）/ 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB），且只在分数接近且跨域时才补第 2/3 位'),
 
   expertSecondThreshold: z.number().default(0.8)
     .description('第 2/3 位专家的门槛：其分数 ≥ 第 1 位 × 该值时才注入（默认 0.8；仅 expertInjectMax ≥ 2 时生效）'),
