@@ -1,5 +1,29 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.0 — 未发布（P1 · 安装与检查页）
+
+设置分区「工作秘书」下的「安装与检查」由占位替换为真实页面。本次**不发版**：`package.json` 与客户端 BUILD 仍为 1.0.0，随集成体统一升版。
+
+### 新增
+
+- **环境清单（只读检测）**：进入页面自动 `GET /work-personal-secretary/api/check`，按固定顺序渲染七项 —— DSH 宿主 / Node.js / Python / Python 依赖 / WPS Office / Obsidian / 子插件；每项显示状态徽标（ok / warn / missing / skip）、证据值与补充说明，`detail` 中的官网链接渲染为可点击链接。
+- **四步进度条**：环境检查（当前）→ 补齐依赖 → 安装子插件 → 初始化；后两步标注「后续版本」。
+- **受控补齐（主路径＝逐项）**：可代执行项（Python 解释器 / Python 依赖 / WPS Office / Obsidian）带复选框且默认勾选；批量入口按客户端写死的固定顺序 python → pythonDeps → wps → obsidian **逐个** `POST /fix { id }`（只对选中项过滤，不改变相对顺序），每步完成立刻刷新该项「等待 / 执行中 / 成功 / 失败」并回显 command / exitCode / durationMs 与输出末尾 10 行，随后自动重新检测；清单行内另保留单项「补齐」按钮。
+- **兜底路径**：`/fix-all` 不再是 UI 主路径，仅当逐个 `/fix` 在请求层失败且本次任务尚无任何成功响应（典型情形是宿主未注册该路由）时，整体回退 `POST /fix-all { ids }`，并按响应里的 `results` 数组逐项回填；`/fix-all` 也失败时整批标记失败并给出原因。
+- **结论条与确认文案**：环境未就绪时顶部给出「一键补齐全部（N 项）」入口（语义＝依次补齐这 N 项，按钮旁标注「逐项依次执行」）；底部主按钮为「补齐选中项（N）」，执行中显示「补齐中 x/N」，并如实列出将安装的内容（Python 解释器 3.12 / Python 包 8 个 / WPS Office / Obsidian）。
+- **安全边界**：客户端只上报 id，不拼接、不传递任何命令字符串；WPS Office 项显示第三方商业软件许可提示；不可代执行项提供「复制命令」；底部说明默认只读、命令来自内置白名单、不接受外部输入。
+- **错误与空态**：接口不可达或返回 `ok:false` 时给出可读失败提示与「重试」，不白屏、不抛异常穿透；加载中显示「检测中…」。
+- **按载体分档的宿主基址**：沿用一方 file-upload 的合成 origin 写法 —— Web 载体（origin 正常）走根相对路径，失败再退合成基址；桌面外壳下 `location.origin` 为字符串 "null"，**直接**走合成 origin `http://dsh.internal`，不再尝试必然失败的根相对路径（每个请求只发 1 次，避免拖慢与控制台红字噪音）。两档行为均有冒烟断言覆盖。
+
+### 说明
+
+- 宿主半（`lib/`）的 `check` / `fix` / `fix-all` 路由与命令白名单由并行工作线实现。客户端主路径只用 `POST /fix { id }`；`/fix-all` 仅作兜底，请求契约 `{ ok, results: [{ id, ok, command, exitCode, durationMs, output }], rejected, durationMs }`。路由缺失时页面给出可读错误，不会白屏。客户端文案键设计为 id 无关：接口把某项降级为 manual（`autoFixable:false`）时，该行自动由「补齐」切换为「复制命令」。
+
+### 验证
+
+- `node --check modules/work-personal-secretary/client/index.js` 通过；
+- `node modules/work-personal-secretary/scripts/smoke-load.mjs`：原 20 项断言全绿；新增「安装与检查」页断言 48 条（七项骨架 / 四步进度 / 复选框默认勾选与只发选中项 / 固定顺序逐项 `POST /fix` / 逐项实时进度「补齐中 x/N + 执行中」/ `/fix-all` 仅兜底且容错解析 / 无 fetch 载体不抛错）与「载体分档」断言 4 条（桌面外壳 GET/POST 首次即合成基址且无相对路径尝试；Web 载体 GET/POST 走根相对路径），共 **72 项通过、0 失败**。
+
 ## 1.0.0 — 2026-09-13（正式版第一版 · P0 骨架）
 
 集成体首次以**独立插件本体**的形态落地。此前仓库只有五个子插件与文档，没有本体代码。

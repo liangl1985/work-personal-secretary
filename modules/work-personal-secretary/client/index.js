@@ -1,14 +1,20 @@
 /**
  * work-personal-secretary —— 集成体本体 · Web 客户端半（DSH 0.1.5-rc.1 原生架构）
  *
- * 注册方式：原生 `settings.section` 槽位 → 设置左侧出现独立分区「工作秘书」。
+ * 注册方式：原生 "settings.section" 槽位 → 设置左侧出现独立分区「工作秘书」。
  * 为什么不用宿主「插件配置」页：那一页只列**宿主平面插件**（终端 / Agent 循环 /
- * Subagent / 网页搜索），用户插件要出现在其中需自行贡献 `settings.plugin.item`；
+ * Subagent / 网页搜索），用户插件要出现在其中需自行贡献 "settings.plugin.item"；
  * 本集成体选择独立分区，既不与宿主插件混淆，也好找。
  *
  * 写法沿用集成体现有模块的**手写 loader bundle**：不引入构建步骤，
- * 只依赖宿主注入的 react（`window.__ModuleLoader__` 模块表）。
+ * 只依赖宿主注入的 react（"window.__ModuleLoader__" 模块表）。
  * 版本号与 package.json 同步维护（见 BUILD）。
+ *
+ * 「安装与检查」页（P1）：只读检测 + 受控补齐。
+ * - GET  /work-personal-secretary/api/check   → 七项环境清单（只读）
+ * - POST /work-personal-secretary/api/fix     → 单项补齐 body { id }
+ * - POST /work-personal-secretary/api/fix-all → 批量补齐 body { ids: [...] }（串行）
+ * 客户端只上报 id：命令与白名单全在宿主侧，不接受任何外部命令字符串。
  */
 window.__ModuleLoader__.load({
   id: 'work-personal-secretary',
@@ -16,15 +22,82 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
     const useState = React.useState
+    /**
+     * 部分渲染替身（冒烟测试 / 纯元素树）只提供 createElement 与 useState。
+     * 没有 useEffect 时退化为空实现：页面照样渲染骨架，只是不自动发起检测。
+     */
+    const useEffect = typeof React.useEffect === 'function' ? React.useEffect : function noopEffect() {}
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
     const BUILD = 'v1.0.0'
 
+    /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
+    const API = '/work-personal-secretary/api'
+    /**
+     * 宿主路由的基址与载体分档。
+     * - Web 载体：页面 origin 是真的 http origin，走**根相对路径**（同源，最自然）；
+     * - 桌面外壳：用 file:// 加载 dist，"location.origin" 返回字符串 "null"，此时
+     *   根相对路径必然失败（还会在控制台刷红字），所以**直接**走合成 origin
+     *   "http://dsh.internal"（外壳的 fetch 桥会把它转发给宿主）——这是一方
+     *   dsh-client-file-upload 的既有做法。每个请求只发一次，不产生失败噪音。
+     */
+    const HOST_ORIGIN = (() => {
+      try {
+        const origin = typeof window !== 'undefined' && window.location ? window.location.origin : undefined
+        if (origin === undefined || origin === '' || origin === 'null') return ''
+        return String(origin)
+      } catch {
+        return ''
+      }
+    })()
+    const HOST_BASE = HOST_ORIGIN || 'http://dsh.internal'
+    /** true = 桌面外壳（无可用 origin）：只走合成基址，不再尝试根相对路径 */
+    const HOST_FALLBACK = HOST_ORIGIN === ''
+
+    /** 环境清单七项：固定顺序即展示顺序（id 与宿主契约一致） */
+    const ITEM_IDS = ['host', 'node', 'python', 'pythonDeps', 'wps', 'obsidian', 'subPlugins']
+    /** 七项的中英名（接口的 label 只作未知 id 的兜底） */
+    const ITEM_LABEL_KEYS = {
+      host: 'itemHost',
+      node: 'itemNode',
+      python: 'itemPython',
+      pythonDeps: 'itemPythonDeps',
+      wps: 'itemWps',
+      obsidian: 'itemObsidian',
+      subPlugins: 'itemSubPlugins',
+    }
+    /** 可代执行项在「将安装」摘要里的说法 */
+    const INSTALL_DESC_KEYS = {
+      python: 'descPython',
+      pythonDeps: 'descPythonDeps',
+      wps: 'descWps',
+      obsidian: 'descObsidian',
+    }
+    /**
+     * 批量补齐的**固定执行顺序**（客户端写死）：只对选中项过滤，不改变相对顺序。
+     * 逐个调用 POST /fix，每步完成立刻回显 —— 装 Python / WPS / Obsidian 可能
+     * 耗时数分钟，逐项进度比整批转圈对新手友好。
+     */
+    const FIX_ORDER = ['python', 'pythonDeps', 'wps', 'obsidian']
+    /** 四步安装流程：env 是本页可完成项，后两步留待后续版本 */
+    const STEPS = [
+      ['env', 'stepEnv', 'current'],
+      ['deps', 'stepDeps', 'next'],
+      ['plugins', 'stepPlugins', 'later'],
+      ['init', 'stepInit', 'later'],
+    ]
+    /** 状态 → 文案键（ok | warn | missing | skip） */
+    const STATUS_KEYS = { ok: 'statusOk', warn: 'statusWarn', missing: 'statusMissing', skip: 'statusSkip' }
+    /** 批量执行状态 → 文案键 / 徽标样式 */
+    const RUN_STATE_KEYS = { wait: 'runWait', run: 'runRunning', ok: 'runOk', fail: 'runFail' }
+    /** 转圈动画：内联样式表（无构建步骤；按钮里的 ⟳ 用 .wps-spin） */
+    const KEYFRAMES = '@keyframes wpsSpin{to{transform:rotate(360deg)}}.wps-spin{display:inline-block;animation:wpsSpin .9s linear infinite}'
+
     const ZH = {
       nav: '工作秘书',
       title: '工作秘书',
-      lead: '一个集成体统一五套能力。安装与检查、能力配置在后续版本提供；本版先交付「关于与致谢」。',
+      lead: '一个集成体统一五套能力。环境检查与依赖补齐已可用；安装子插件、初始化与能力配置在后续版本提供。',
       tabInstall: '安装与检查',
       tabConfig: '能力配置',
       tabAbout: '关于与致谢',
@@ -44,17 +117,78 @@ window.__ModuleLoader__.load({
       noteFullList: '完整第三方清单与许可文本随包提供，见各模块 NOTICE 与 experts/index.json。',
       localOnly: '本地运行 · 明文存储 · 不联网 · 无遥测',
       devTitle: '该能力正在开发中',
-      devInstall:
-        '安装与检查将按四步引导：环境检查 → 依赖补齐 → 安装子插件 → 配置底座。它会先确保宿主、解释器与系统组件就绪，再交付能力；商用软件（如 WPS）只给命令与指引，不代装。',
       devConfig:
         '能力配置将把五个子插件的设置集中到这一个分区里读写：记忆库、专家库、文档能力、桌面形象各自分组。子插件的配置命名空间保持独立，单独安装时仍可各自配置。',
       back: '返回',
+
+      // ── 安装与检查 ────────────────────────────────────────────────
+      stepEnv: '环境检查',
+      stepDeps: '补齐依赖',
+      stepPlugins: '安装子插件',
+      stepInit: '初始化',
+      stepLater: '后续版本',
+      stepNow: '当前',
+      envTitle: '环境清单',
+      checking: '检测中…',
+      recheck: '重新检测',
+      checkedAt: '检测时间',
+      retry: '重试',
+      loadFailed: '环境检测失败',
+      loadFailedHint: '未能从本机服务取到数据：可能集成体尚未在宿主侧启用，或该路由还没注册。确认后点「重试」。',
+      emptyList: '接口未返回环境项。',
+      statusUnknown: '未知',
+      statusOk: '正常',
+      statusWarn: '警告',
+      statusMissing: '缺失',
+      statusSkip: '跳过',
+      itemHost: 'DSH 宿主',
+      itemNode: 'Node.js',
+      itemPython: 'Python',
+      itemPythonDeps: 'Python 依赖',
+      itemWps: 'WPS Office',
+      itemObsidian: 'Obsidian',
+      itemSubPlugins: '子插件',
+      conclusionStale: '检测到 {n} 项环境未就绪。',
+      fixAllTop: '一键补齐全部（{n} 项）',
+      fixSelected: '补齐选中项（{n}）',
+      fixOne: '补齐',
+      fixing: '补齐中…',
+      fixingStep: '补齐中 {n}',
+      batchHint: '逐项依次执行，完成一项立即回显',
+      copyCommand: '复制命令',
+      copied: '已复制',
+      copyFailed: '复制失败，请手动选中命令复制',
+      autoFixHint: '可由本集成体代执行',
+      manualFixHint: '需手动安装，本页只给命令',
+      willInstall: '将安装：',
+      listSep: '、',
+      descPython: 'Python 解释器（3.12）',
+      descPythonDeps: 'Python 包（8 个）',
+      descWps: 'WPS Office',
+      descObsidian: 'Obsidian（可选组件）',
+      pickHint: '勾选要补齐的项（可代执行的项默认已勾选）',
+      wpsLicense: 'WPS Office 为第三方商业软件，安装即表示接受其许可协议。',
+      reportTitle: '补齐结果',
+      reportRunning: '执行中…',
+      reportDone: '已完成',
+      runWait: '等待',
+      runRunning: '执行中',
+      runOk: '成功',
+      runFail: '失败',
+      fixCommandLabel: '命令',
+      fixExit: '退出码',
+      fixDuration: '耗时',
+      fixOutput: '输出（末尾 10 行）',
+      fixOutputMore: '…（前文已省略）',
+      fixFailed: '未能执行',
+      footNote:
+        '默认只读检测；只有你点补齐才会执行安装。命令来自内置白名单（Python 解释器 / Python 依赖 / WPS / Obsidian 四项），不接受外部输入。',
     }
 
     const EN = {
       nav: 'Work Secretary',
       title: 'Work Secretary',
-      lead: 'One integrator for five capabilities. Install & Check and Capability Config arrive in later versions; this build ships About & Credits.',
+      lead: 'One integrator for five capabilities. Environment check and dependency completion are ready; sub-plugin installation, initialization and capability config arrive in later versions.',
       tabInstall: 'Install & Check',
       tabConfig: 'Capabilities',
       tabAbout: 'About & Credits',
@@ -74,11 +208,72 @@ window.__ModuleLoader__.load({
       noteFullList: 'The full third-party list and license texts ship with the package (see each module NOTICE and experts/index.json).',
       localOnly: 'Local · plain text · offline · no telemetry',
       devTitle: 'In development',
-      devInstall:
-        'Install & Check will guide four steps: environment check, dependency completion, sub-plugin installation, and configuration groundwork. It ensures host, interpreter and system components are ready before delivering capabilities; commercial software (e.g. WPS) is never auto-installed.',
       devConfig:
         'Capabilities will gather the five sub-plugins settings into this one section, grouped per module. Each sub-plugin keeps its own settings namespace so it still works standalone.',
       back: 'Back',
+
+      // ── Install & Check ───────────────────────────────────────────
+      stepEnv: 'Environment check',
+      stepDeps: 'Complete dependencies',
+      stepPlugins: 'Install sub-plugins',
+      stepInit: 'Initialize',
+      stepLater: 'Later version',
+      stepNow: 'Current',
+      envTitle: 'Environment list',
+      checking: 'Checking…',
+      recheck: 'Re-check',
+      checkedAt: 'Checked at',
+      retry: 'Retry',
+      loadFailed: 'Environment check failed',
+      loadFailedHint: 'No data from the local service: the integrator may be disabled on the host side, or the route is not registered yet. Confirm, then press Retry.',
+      emptyList: 'The service returned no environment items.',
+      statusUnknown: 'unknown',
+      statusOk: 'ok',
+      statusWarn: 'warn',
+      statusMissing: 'missing',
+      statusSkip: 'skip',
+      itemHost: 'DSH host',
+      itemNode: 'Node.js',
+      itemPython: 'Python',
+      itemPythonDeps: 'Python packages',
+      itemWps: 'WPS Office',
+      itemObsidian: 'Obsidian',
+      itemSubPlugins: 'Sub-plugins',
+      conclusionStale: '{n} environment item(s) need attention.',
+      fixAllTop: 'Install everything ({n})',
+      fixSelected: 'Install selected ({n})',
+      fixOne: 'Install',
+      fixing: 'Installing…',
+      fixingStep: 'Installing {n}',
+      batchHint: 'Runs one item at a time; each result appears as it finishes',
+      copyCommand: 'Copy command',
+      copied: 'Copied',
+      copyFailed: 'Copy failed — select the command and copy it manually',
+      autoFixHint: 'This integrator can run it',
+      manualFixHint: 'Manual install; this page only shows the command',
+      willInstall: 'Will install: ',
+      listSep: ', ',
+      descPython: 'Python interpreter (3.12)',
+      descPythonDeps: 'Python packages (8)',
+      descWps: 'WPS Office',
+      descObsidian: 'Obsidian (optional)',
+      pickHint: 'Tick the items to install (auto-fixable items are pre-selected).',
+      wpsLicense: 'WPS Office is third-party commercial software; installing it means accepting its license agreement.',
+      reportTitle: 'Install result',
+      reportRunning: 'Running…',
+      reportDone: 'Done',
+      runWait: 'Waiting',
+      runRunning: 'Running',
+      runOk: 'Success',
+      runFail: 'Failed',
+      fixCommandLabel: 'Command',
+      fixExit: 'Exit code',
+      fixDuration: 'Duration',
+      fixOutput: 'Output (last 10 lines)',
+      fixOutputMore: '… (earlier output omitted)',
+      fixFailed: 'Not executed',
+      footNote:
+        'Read-only by default: this page only inspects the machine. Nothing is installed until you press an install button, and every command comes from a built-in allow-list (Python interpreter / Python packages / WPS / Obsidian) — no external input is accepted.',
     }
 
     /** 包含的五个子插件（不写版本号：版本随使用者安装情况而变，由后续安装器探测） */
@@ -121,6 +316,8 @@ window.__ModuleLoader__.load({
       badgeBrand: { background: '#e8eefc', color: '#2b4c9b' },
       badgeOk: { background: '#e7f7ee', color: '#16794a' },
       badgeWarn: { background: '#fff4e5', color: '#a15c00' },
+      badgeMissing: { background: '#fdecec', color: '#b42318' },
+      badgeSkip: { background: '#eef0f2', color: '#6b7280' },
       tabs: { display: 'flex', gap: '2px', borderBottom: '1px solid #eceef1', marginBottom: '16px' },
       tab: (on) => ({
         appearance: 'none', border: 0, background: 'transparent', cursor: 'pointer',
@@ -146,10 +343,202 @@ window.__ModuleLoader__.load({
       },
       mono: { fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px', background: '#f4f5f7', borderRadius: '4px', padding: '0 4px' },
       placeholder: { border: '1px dashed #dfe1e5', borderRadius: '12px', padding: '22px 18px', background: '#fcfcfd', color: '#5b6068', fontSize: '13px' },
+
+      // ── 安装与检查（新增键） ──────────────────────────────────────
+      steps: { display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' },
+      step: {
+        flex: '1 1 150px', minWidth: '132px', display: 'flex', gap: '9px', alignItems: 'flex-start',
+        border: '1px solid #eef0f2', background: '#fbfbfc', borderRadius: '10px', padding: '9px 11px',
+      },
+      stepOn: { borderColor: '#c7d2fe', background: '#f3f6ff' },
+      stepLater: { opacity: 0.72 },
+      stepNo: {
+        flex: '0 0 auto', width: '20px', height: '20px', borderRadius: '50%', background: '#e8eaf0',
+        color: '#4b5563', fontSize: '11.5px', fontWeight: 650, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      },
+      stepNoOn: { background: '#1d4ed8', color: '#fff' },
+      stepName: { fontSize: '13px', fontWeight: 600, color: '#1f2328' },
+      stepNameOn: { color: '#1d4ed8' },
+      stepState: { fontSize: '11.5px', color: '#8a8f98', marginTop: '1px', minHeight: '14px' },
+      conclusion: {
+        display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
+        background: '#fff9ef', border: '1px solid #f6e3c4', borderRadius: '12px', padding: '10px 12px', marginBottom: '12px',
+      },
+      conclusionText: { fontSize: '13px', color: '#8a5300', fontWeight: 550 },
+      conclusionActions: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' },
+      toolbar: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' },
+      row: { padding: '10px 0', borderBottom: '1px solid #f6f7f9' },
+      rowHead: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
+      check: { width: '14px', height: '14px', margin: 0, cursor: 'pointer', accentColor: '#1d4ed8', flex: '0 0 auto' },
+      itemName: { fontSize: '13px', fontWeight: 600, minWidth: '96px' },
+      itemValue: { fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px', color: '#4b5563', wordBreak: 'break-all' },
+      itemDetail: { fontSize: '12.5px', color: '#6b7280', marginTop: '4px' },
+      link: { color: '#1d4ed8', textDecoration: 'underline', wordBreak: 'break-all' },
+      warnLine: {
+        fontSize: '12px', color: '#8a5300', background: '#fff9ef', border: '1px solid #f6e3c4',
+        borderRadius: '8px', padding: '6px 8px', marginTop: '6px',
+      },
+      cmdLine: { marginTop: '6px' },
+      fixCmd: {
+        display: 'block', fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px',
+        background: '#f4f5f7', border: '1px solid #eceef1', borderRadius: '6px', padding: '6px 8px',
+        color: '#334155', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+      },
+      actions: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '7px' },
+      actionHint: { fontSize: '11.5px', color: '#8a8f98' },
+      actionBar: { display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', margin: '2px 0 4px' },
+      actionNote: { fontSize: '12px', color: '#8a8f98' },
+      btn: {
+        appearance: 'none', border: '1px solid #dfe1e5', background: '#fff', borderRadius: '8px',
+        padding: '5px 11px', fontSize: '12.5px', fontFamily: 'inherit', cursor: 'pointer',
+        color: '#1f2328', lineHeight: 1.4,
+      },
+      btnPrimary: { background: '#1f2328', borderColor: '#1f2328', color: '#fff', fontWeight: 600 },
+      btnOk: { borderColor: '#16794a', color: '#16794a' },
+      btnDisabled: { opacity: 0.55, cursor: 'default' },
+      spinner: { marginRight: '5px' },
+      error: { border: '1px solid #f3c9c9', background: '#fdf5f5', borderRadius: '10px', padding: '12px 14px', marginBottom: '10px' },
+      errorTitle: { fontSize: '13.5px', fontWeight: 650, color: '#b42318' },
+      errorMsg: { fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px', color: '#7a271a', margin: '5px 0', wordBreak: 'break-all' },
+      errorHint: { fontSize: '12.5px', color: '#6b7280', marginBottom: '9px' },
+      kv: { margin: '6px 0 0' },
+      kvRow: { display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '4px' },
+      kvKey: { flex: '0 0 84px', color: '#8a8f98', fontSize: '12px' },
+      kvVal: { fontSize: '12.5px', color: '#1f2328' },
+      outLabel: { fontSize: '11.5px', color: '#8a8f98', margin: '8px 0 4px' },
+      out: {
+        fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px', background: '#f7f8f9',
+        border: '1px solid #eef0f2', borderRadius: '8px', padding: '8px 10px', color: '#334155',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: '180px', overflow: 'auto',
+      },
+      runEntry: { padding: '9px 0', borderBottom: '1px solid #f6f7f9' },
+      runHead: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
     }
 
     function badge(text, extra) {
       return h('span', { style: Object.assign({}, S.badge, extra || {}) }, text)
+    }
+
+    function statusLabel(t, status) {
+      const key = STATUS_KEYS[status]
+      return key ? t(key) : t('statusUnknown')
+    }
+
+    function statusStyle(status) {
+      if (status === 'ok') return S.badgeOk
+      if (status === 'warn') return S.badgeWarn
+      if (status === 'missing') return S.badgeMissing
+      return S.badgeSkip
+    }
+
+    function runStateStyle(state) {
+      if (state === 'ok') return S.badgeOk
+      if (state === 'run') return S.badgeWarn
+      if (state === 'fail') return S.badgeMissing
+      return S.badgeSkip
+    }
+
+    /** 把 {n} 替换成数量（中英语序不同，所以占位而不是拼接） */
+    function fill(text, n) {
+      return String(text).replace('{n}', String(n))
+    }
+
+    /** 毫秒 → 可读耗时（同时保留原始毫秒数，便于对照日志） */
+    function formatDuration(ms) {
+      const n = Number(ms)
+      if (!isFinite(n) || n < 0) return String(ms === undefined || ms === null ? '—' : ms)
+      if (n < 1000) return String(Math.round(n)) + ' ms'
+      const sec = n < 10000 ? (n / 1000).toFixed(1) : String(Math.round(n / 1000))
+      return sec + ' s (' + String(Math.round(n)) + ' ms)'
+    }
+
+    /** 只保留末尾 max 行（接口 output 已由宿主截断到 8000 字符） */
+    function tailLines(text, max) {
+      const lines = String(text === undefined || text === null ? '' : text).split(/\r?\n/)
+      const overflow = lines.length > max
+      return { text: lines.slice(overflow ? lines.length - max : 0).join('\n'), overflow: overflow }
+    }
+
+    /** detail 里的 http(s) 链接渲染成可点击链接，其余文本原样保留 */
+    function renderDetail(text) {
+      const parts = String(text === undefined || text === null ? '' : text).split(/(https?:\/\/[^\s，。；、（）()]+)/g)
+      return parts.map((p, i) => (/^https?:\/\//.test(p)
+        ? h('a', { key: 'u' + i, href: p, target: '_blank', rel: 'noreferrer noopener', style: S.link }, p)
+        : p))
+    }
+
+    /** 归一化单项补齐结果（/fix 与 /fix-all 的元素同构） */
+    function normalizeFix(body, id, fallbackMsg) {
+      const b = body || {}
+      return {
+        id: typeof b.id === 'string' ? b.id : id,
+        ok: b.ok !== false,
+        command: typeof b.command === 'string' ? b.command : '',
+        exitCode: b.exitCode === undefined ? null : b.exitCode,
+        durationMs: b.durationMs === undefined ? null : b.durationMs,
+        output: typeof b.output === 'string' ? b.output : '',
+        message: b.ok === false ? String(b.error || b.message || fallbackMsg) : '',
+      }
+    }
+
+    /** /fix-all 的响应可能是数组，也可能包在 results / items / entries 里 */
+    function fixAllList(body) {
+      if (Array.isArray(body)) return body
+      if (body && typeof body === 'object') {
+        if (Array.isArray(body.results)) return body.results
+        if (Array.isArray(body.items)) return body.items
+        if (Array.isArray(body.entries)) return body.entries
+      }
+      return null
+    }
+
+    /**
+     * 宿主请求（按载体分档，见 HOST_FALLBACK）：
+     * - Web 载体：先按**市场同款**（根相对路径），失败再按**一方 file-upload 同款**
+     *   （合成宿主 http://dsh.internal 的绝对 URL）；
+     * - 桌面外壳：只用合成基址 —— 相对路径在这类载体下必然失败，先试一次只会拖慢
+     *   并刷出控制台红字。
+     * 全部尝试都失败就抛出合并原因，页面显示成可读错误 —— 绝不无声挂起。
+     */
+    async function requestJson(pathWithQuery, init, timeoutMs) {
+      const rel = API + pathWithQuery
+      const abs = new URL(rel, HOST_BASE).toString()
+      // 桌面外壳只走合成基址；Web 载体先根相对路径、失败再合成基址
+      const attempts = HOST_FALLBACK ? [abs] : [rel, abs]
+      let lastErr = null
+      for (const url of attempts) {
+        let timer = null
+        let ctl = null
+        try {
+          const opts = Object.assign({}, init || {})
+          if (typeof AbortController === 'function') {
+            ctl = new AbortController()
+            opts.signal = ctl.signal
+            if (timeoutMs) timer = setTimeout(() => { try { ctl.abort() } catch (e) { /* 忽略：仅用于取消 */ } }, timeoutMs)
+          }
+          const res = await fetch(url, opts)
+          if (!res || res.ok === false) throw new Error('HTTP ' + String(res && res.status))
+          return await res.json()
+        } catch (err) {
+          lastErr = String((err && err.message) || err) + ' @' + url
+        } finally {
+          if (timer) clearTimeout(timer)
+        }
+      }
+      throw new Error(lastErr || 'request failed')
+    }
+
+    function getJson(sub, timeoutMs) {
+      return requestJson(sub, { headers: { accept: 'application/json' } }, timeoutMs)
+    }
+
+    /** 补齐用长超时：pip / winget 安装可能耗时数分钟，但也不能无限挂起 */
+    function postJson(sub, body) {
+      return requestJson(sub, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(body || {}),
+      }, 15 * 60 * 1000)
     }
 
     function StatusBar(props) {
@@ -170,12 +559,406 @@ window.__ModuleLoader__.load({
         }, it[1])))
     }
 
+    /** 四步进度条：本版高亮「环境检查」，后两步标注「后续版本」 */
+    function Steps(props) {
+      const t = props.t
+      return h('div', { style: S.steps }, STEPS.map((s, i) => {
+        const state = s[2]
+        const on = state === 'current'
+        return h('div', {
+          key: s[0],
+          style: Object.assign({}, S.step, on ? S.stepOn : null, state === 'later' ? S.stepLater : null),
+        }, [
+          h('div', { key: 'n', style: Object.assign({}, S.stepNo, on ? S.stepNoOn : null) }, String(i + 1)),
+          h('div', { key: 'b', style: { minWidth: 0 } }, [
+            h('div', { key: 'nm', style: Object.assign({}, S.stepName, on ? S.stepNameOn : null) }, t(s[1])),
+            h('div', { key: 'st', style: S.stepState }, state === 'later' ? t('stepLater') : (on ? t('stepNow') : '')),
+          ]),
+        ])
+      }))
+    }
+
+    /** 环境清单一行：复选框（可代执行项）· 中文名 · 状态徽标 · 证据值 · 说明 · 命令与操作 */
+    function EnvRow(props) {
+      const t = props.t
+      const item = props.item
+      const busy = Boolean(props.busy)
+      const fixing = props.fixingId === item.id
+      const hasCommand = item.fixKind !== 'none' && String(item.fixCommand || '').length > 0
+      const showFix = item.autoFixable === true
+      const showCopy = !showFix && hasCommand
+      const copied = Boolean(props.copyState && props.copyState.id === item.id && props.copyState.ok)
+      const copyBad = Boolean(props.copyState && props.copyState.id === item.id && !props.copyState.ok)
+      const nodes = [
+        h('div', { key: 'head', style: S.rowHead }, [
+          showFix ? h('input', {
+            key: 'pick', type: 'checkbox', checked: props.picked === true, disabled: busy,
+            style: S.check, onChange: () => props.onToggle(item.id),
+          }) : null,
+          h('span', { key: 'nm', style: S.itemName }, item.name),
+          h('span', { key: 'st', style: Object.assign({}, S.badge, statusStyle(item.status)) }, statusLabel(t, item.status)),
+          h('span', { key: 'vl', style: S.itemValue }, String(item.value || '—')),
+        ]),
+      ]
+      if (item.detail) nodes.push(h('div', { key: 'dt', style: S.itemDetail }, renderDetail(item.detail)))
+      if (item.id === 'wps') nodes.push(h('div', { key: 'lic', style: S.warnLine }, t('wpsLicense')))
+      if (hasCommand) nodes.push(h('div', { key: 'cmd', style: S.cmdLine }, h('code', { style: S.fixCmd }, item.fixCommand)))
+      if (showFix || showCopy) {
+        nodes.push(h('div', { key: 'act', style: S.actions }, [
+          showFix ? h('button', {
+            key: 'go', type: 'button',
+            disabled: busy || fixing,
+            style: Object.assign({}, S.btn, (busy || fixing) ? S.btnDisabled : null),
+            onClick: () => props.onFix(item),
+          }, fixing
+            ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), t('fixing')]
+            : t('fixOne')) : null,
+          showCopy ? h('button', {
+            key: 'cp', type: 'button', disabled: busy,
+            style: Object.assign({}, S.btn, copied ? S.btnOk : null, busy ? S.btnDisabled : null),
+            onClick: () => props.onCopy(item),
+          }, copied ? t('copied') : t('copyCommand')) : null,
+          h('span', { key: 'hint', style: S.actionHint },
+            showFix ? t('autoFixHint') : (copyBad ? t('copyFailed') : t('manualFixHint'))),
+        ]))
+      }
+      return h('div', { style: S.row }, nodes)
+    }
+
+    /** 批量/单项补齐报告里的一条：名称 · 状态 · 命令 · 退出码 · 耗时 · 输出尾部 */
+    function FixEntry(props) {
+      const t = props.t
+      const e = props.entry
+      const panel = e.panel
+      const tail = panel ? tailLines(panel.output, 10) : { text: '', overflow: false }
+      const nodes = [
+        h('div', { key: 'head', style: S.runHead }, [
+          h('span', { key: 'nm', style: S.itemName }, e.name),
+          h('span', { key: 'st', style: Object.assign({}, S.badge, runStateStyle(e.state)) }, t(RUN_STATE_KEYS[e.state] || 'runWait')),
+        ]),
+      ]
+      if (panel && panel.command) nodes.push(h('div', { key: 'cmd', style: S.cmdLine }, h('code', { style: S.fixCmd }, panel.command)))
+      if (panel) {
+        const kv = []
+        if (panel.exitCode !== undefined && panel.exitCode !== null) kv.push(['exit', t('fixExit'), String(panel.exitCode)])
+        if (panel.durationMs !== undefined && panel.durationMs !== null) kv.push(['time', t('fixDuration'), formatDuration(panel.durationMs)])
+        if (kv.length) nodes.push(h('div', { key: 'kv', style: S.kv }, kv.map((r) => h('div', { key: r[0], style: S.kvRow }, [
+          h('span', { key: 'k', style: S.kvKey }, r[1]),
+          h('span', { key: 'v', style: S.kvVal }, r[2]),
+        ]))))
+        if (panel.message) nodes.push(h('div', { key: 'msg', style: S.note }, panel.message))
+        if (tail.text) nodes.push(h('div', { key: 'out' }, [
+          h('div', { key: 'l', style: S.outLabel }, t('fixOutput')),
+          h('div', { key: 'x', style: S.out }, (tail.overflow ? t('fixOutputMore') + '\n' : '') + tail.text),
+        ]))
+      }
+      return h('div', { style: S.runEntry }, nodes)
+    }
+
+    /** 补齐报告卡片（单项与批量共用） */
+    function FixReport(props) {
+      const t = props.t
+      const batch = props.batch
+      const entries = batch.order.map((id) => {
+        const row = props.rows.filter((r) => r.id === id)[0] || { id: id, name: id }
+        return { id: id, name: row.name, state: batch.state[id] || 'wait', panel: batch.results[id] || null }
+      })
+      return h('div', { style: S.card }, [
+        h('div', { key: 'head', style: S.cardHead }, h('h3', { key: 't', style: S.cardTitle }, [
+          t('reportTitle'),
+          badge(batch.running ? t('reportRunning') : t('reportDone'), batch.running ? S.badgeWarn : S.badgeOk),
+        ])),
+        h('div', { key: 'body', style: S.cardBody }, entries.map((e) => h(FixEntry, { key: e.id, t: t, entry: e }))),
+      ])
+    }
+
+    /**
+     * 「安装与检查」页。
+     * 生命周期：首次进入自动 GET /check（loading → ready / error）；
+     * 单项「补齐」→ POST /fix { id }；底部主按钮 → POST /fix-all { ids }（串行），
+     * 完成后自动重新检测。客户端从不发送命令字符串。
+     */
+    function InstallPage(props) {
+      const t = props.t
+      const state = useState({
+        phase: 'loading', items: [], checkedAt: '', error: '',
+        picked: {}, fixingId: '', batch: null, copyState: null,
+      })
+      const st = state[0]
+      const setSt = state[1]
+
+      async function detect() {
+        setSt((prev) => Object.assign({}, prev, { phase: 'loading', error: '' }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/check', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'check 返回 ok:false'))
+          setSt((prev) => Object.assign({}, prev, {
+            phase: 'ready', error: '',
+            items: Array.isArray(body.items) ? body.items : [],
+            checkedAt: typeof body.checkedAt === 'string' ? body.checkedAt : '',
+            picked: {}, // 重新检测后回到默认勾选（可代执行项）
+          }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, { phase: 'error', error: String((err && err.message) || err) }))
+        }
+      }
+
+      function setBatchState(id, value) {
+        setSt((prev) => {
+          const batch = prev.batch
+          if (!batch) return prev
+          const nextState = Object.assign({}, batch.state)
+          nextState[id] = value
+          return Object.assign({}, prev, { batch: Object.assign({}, batch, { state: nextState }) })
+        })
+      }
+
+      /** 单项补齐：POST /fix { id } */
+      async function runFix(item) {
+        if (st.fixingId || (st.batch && st.batch.running)) return
+        setSt((prev) => Object.assign({}, prev, {
+          fixingId: item.id,
+          batch: { running: true, order: [item.id], state: { [item.id]: 'run' }, results: {} },
+        }))
+        let panel = null
+        try {
+          const body = await postJson('/fix', { id: item.id })
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          panel = normalizeFix(body, item.id, t('fixFailed'))
+        } catch (err) {
+          panel = { id: item.id, ok: false, command: '', exitCode: null, durationMs: null, output: '', message: String((err && err.message) || err) }
+        }
+        setSt((prev) => Object.assign({}, prev, {
+          fixingId: '',
+          batch: { running: false, order: [item.id], state: { [item.id]: panel.ok ? 'ok' : 'fail' }, results: { [item.id]: panel } },
+        }))
+        await detect()
+      }
+
+      /**
+       * 批量补齐（UI 主路径）：按客户端写死的顺序 python → pythonDeps → wps → obsidian
+       * **逐个** POST /fix { id }（只对选中项过滤，不改变相对顺序）。每步完成立刻刷新
+       * 该项状态与结果，这就是实时逐项进度。
+       * 兜底：若逐个 /fix 在「请求层」失败、且本次任务尚无任何成功响应（典型情形是
+       * 宿主半还没注册该路由），整体回退到 POST /fix-all { ids }。/fix-all 不再是主路径。
+       */
+      async function runBatch(ids) {
+        if (!ids.length || st.fixingId || (st.batch && st.batch.running)) return
+        // 固定顺序：先按 FIX_ORDER 过滤选中项，未知 id 保序追加（防御后续扩展）
+        const order = FIX_ORDER.filter((id) => ids.indexOf(id) >= 0)
+          .concat(ids.filter((id) => FIX_ORDER.indexOf(id) < 0))
+        const initState = {}
+        for (const id of order) initState[id] = 'wait'
+        setSt((prev) => Object.assign({}, prev, {
+          fixingId: '',
+          batch: { running: true, order: order, state: initState, results: {} },
+        }))
+        const results = {}
+        const states = {}
+        let servedAny = false
+        let fallback = false
+        for (const id of order) {
+          setBatchState(id, 'run')
+          let panel = null
+          let transportFailed = false
+          try {
+            const body = await postJson('/fix', { id: id })
+            if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+            panel = normalizeFix(body, id, t('fixFailed'))
+            servedAny = true
+          } catch (err) {
+            transportFailed = true
+            panel = { id: id, ok: false, command: '', exitCode: null, durationMs: null, output: '', message: String((err && err.message) || err) }
+          }
+          results[id] = panel
+          states[id] = panel.ok ? 'ok' : 'fail'
+          setSt((prev) => {
+            const batch = prev.batch || { order: order, state: {}, results: {} }
+            return Object.assign({}, prev, {
+              batch: Object.assign({}, batch, {
+                state: Object.assign({}, batch.state, { [id]: states[id] }),
+                results: Object.assign({}, batch.results, { [id]: results[id] }),
+              }),
+            })
+          })
+          if (transportFailed && !servedAny) { fallback = true; break }
+        }
+        if (fallback) {
+          // 宿主未提供 /fix：整批交给 /fix-all，响应里的 results 逐项回填
+          try {
+            const body = await postJson('/fix-all', { ids: order })
+            const list = fixAllList(body)
+            if (!list) throw new Error('fix-all 响应不含逐项结果')
+            list.forEach((x, i) => {
+              const id = (x && typeof x.id === 'string') ? x.id : order[i]
+              if (!id) return
+              const panel = normalizeFix(x, id, t('fixFailed'))
+              results[id] = panel
+              states[id] = panel.ok ? 'ok' : 'fail'
+            })
+            if (!Object.keys(results).length) throw new Error('fix-all 响应为空')
+          } catch (err) {
+            const msg = String((err && err.message) || err)
+            for (const id of order) {
+              if (!states[id] || states[id] === 'wait') {
+                results[id] = results[id] || { id: id, ok: false, command: '', exitCode: null, durationMs: null, output: '', message: msg }
+                states[id] = 'fail'
+              }
+            }
+          }
+        }
+        setSt((prev) => {
+          const batch = prev.batch || { order: order, state: {}, results: {} }
+          const nextState = Object.assign({}, batch.state)
+          for (const id of order) if (states[id]) nextState[id] = states[id]
+          return Object.assign({}, prev, {
+            batch: { running: false, order: order, state: nextState, results: results },
+          })
+        })
+        await detect()
+      }
+
+      async function copyCommand(item) {
+        const text = String(item.fixCommand || '')
+        let ok = false
+        try {
+          const nav = typeof navigator !== 'undefined' ? navigator : null
+          if (nav && nav.clipboard && typeof nav.clipboard.writeText === 'function') {
+            await nav.clipboard.writeText(text)
+            ok = true
+          }
+        } catch (err) {
+          ok = false
+        }
+        setSt((prev) => Object.assign({}, prev, { copyState: { id: item.id, ok: ok } }))
+      }
+
+      function togglePick(id) {
+        setSt((prev) => {
+          const found = (prev.items || []).filter((x) => x && x.id === id)[0]
+          const def = Boolean(found && found.autoFixable === true)
+          const cur = prev.picked[id] !== undefined ? prev.picked[id] : def
+          const next = Object.assign({}, prev.picked)
+          next[id] = !cur
+          return Object.assign({}, prev, { picked: next })
+        })
+      }
+
+      useEffect(() => { detect() }, [])
+
+      const byId = {}
+      for (const it of (st.items || [])) { if (it && it.id) byId[it.id] = it }
+      const rows = ITEM_IDS.map((id) => {
+        const it = byId[id] || {}
+        const labelKey = ITEM_LABEL_KEYS[id]
+        const translated = labelKey ? t(labelKey) : ''
+        return {
+          id: id,
+          name: (translated && translated !== labelKey) ? translated : (it.label || id),
+          status: typeof it.status === 'string' ? it.status : '',
+          value: typeof it.value === 'string' ? it.value : '',
+          detail: typeof it.detail === 'string' ? it.detail : '',
+          fixKind: typeof it.fixKind === 'string' ? it.fixKind : 'none',
+          fixCommand: typeof it.fixCommand === 'string' ? it.fixCommand : '',
+          autoFixable: it.autoFixable === true,
+        }
+      })
+      const loading = st.phase === 'loading'
+      const emptyList = st.phase === 'ready' && (!st.items || st.items.length === 0)
+      const batchRunning = Boolean(st.batch && st.batch.running)
+      const busy = batchRunning || st.fixingId !== ''
+      const fixableIds = rows.filter((r) => r.autoFixable).map((r) => r.id)
+      const pickedIds = fixableIds.filter((id) => (st.picked[id] !== undefined ? st.picked[id] : true))
+      const pendingCount = rows.filter((r) => r.status === 'missing' || r.status === 'warn').length
+      const needsWork = st.phase === 'ready' && pendingCount > 0 && fixableIds.length > 0
+      const willInstall = t('willInstall') + pickedIds
+        .filter((id) => INSTALL_DESC_KEYS[id])
+        .map((id) => t(INSTALL_DESC_KEYS[id]))
+        .join(t('listSep'))
+      const batchOrder = st.batch ? st.batch.order : []
+      const doneCount = st.batch
+        ? batchOrder.filter((id) => st.batch.state[id] === 'ok' || st.batch.state[id] === 'fail').length
+        : 0
+      const progressText = fill(t('fixingStep'), Math.min(doneCount + 1, batchOrder.length || 1) + '/' + (batchOrder.length || 1))
+
+      return h('div', null, [
+        h('style', { key: 'kf' }, KEYFRAMES),
+        h(Steps, { key: 'steps', t: t }),
+        needsWork ? h('div', { key: 'concl', style: S.conclusion }, [
+          h('span', { key: 'x', style: S.conclusionText }, fill(t('conclusionStale'), pendingCount)),
+          h('div', { key: 'act', style: S.conclusionActions }, [
+            h('span', { key: 'h', style: S.actionHint }, t('batchHint')),
+            h('button', {
+              key: 'b', type: 'button',
+              disabled: busy,
+              style: Object.assign({}, S.btn, S.btnPrimary, busy ? S.btnDisabled : null),
+              onClick: () => runBatch(fixableIds),
+            }, busy
+              ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), progressText]
+              : fill(t('fixAllTop'), fixableIds.length)),
+          ]),
+        ]) : null,
+        h('div', { key: 'card', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, [
+              t('envTitle'),
+              loading ? badge(t('checking'), S.badgeWarn) : null,
+              st.checkedAt ? badge(t('checkedAt') + ' ' + st.checkedAt) : null,
+            ]),
+            h('div', { key: 'tools', style: S.toolbar }, [
+              h('button', {
+                key: 'recheck', type: 'button',
+                disabled: loading,
+                style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
+                onClick: () => { setSt((prev) => Object.assign({}, prev, { batch: null, copyState: null })); detect() },
+              }, loading
+                ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), t('recheck')]
+                : t('recheck')),
+            ]),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            st.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
+              h('div', { key: 't', style: S.errorTitle }, t('loadFailed')),
+              h('div', { key: 'm', style: S.errorMsg }, st.error),
+              h('div', { key: 'h', style: S.errorHint }, t('loadFailedHint')),
+              h('button', {
+                key: 'b', type: 'button',
+                style: Object.assign({}, S.btn, S.btnPrimary),
+                onClick: () => detect(),
+              }, t('retry')),
+            ]) : null,
+            h('div', { key: 'list' }, rows.map((item) => h(EnvRow, {
+              key: item.id, t: t, item: item,
+              picked: st.picked[item.id] !== undefined ? st.picked[item.id] : item.autoFixable,
+              fixingId: st.fixingId, copyState: st.copyState, busy: busy,
+              onFix: runFix, onCopy: copyCommand, onToggle: togglePick,
+            }))),
+            emptyList ? h('div', { key: 'empty', style: S.note }, t('emptyList')) : null,
+          ]),
+        ]),
+        h('div', { key: 'action', style: S.actionBar }, [
+          h('button', {
+            key: 'batch', type: 'button',
+            disabled: busy || pickedIds.length === 0,
+            style: Object.assign({}, S.btn, S.btnPrimary, (busy || pickedIds.length === 0) ? S.btnDisabled : null),
+            onClick: () => runBatch(pickedIds),
+          }, busy
+            ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), progressText]
+            : fill(t('fixSelected'), pickedIds.length)),
+          h('span', { key: 'note', style: S.actionNote }, pickedIds.length ? (willInstall + ' · ' + t('batchHint')) : t('pickHint')),
+        ]),
+        st.batch ? h(FixReport, { key: 'fix', t: t, batch: st.batch, rows: rows }) : null,
+        h('div', { key: 'foot', style: S.note }, t('footNote')),
+      ])
+    }
+
     function Placeholder(props) {
       const t = props.t
-      const body = props.which === 'install' ? t('devInstall') : t('devConfig')
       return h('div', { style: S.placeholder }, [
         h('div', { key: 'h', style: { fontWeight: 650, color: '#1f2328', marginBottom: '6px' } }, t('devTitle')),
-        h('div', { key: 'b' }, body),
+        h('div', { key: 'b' }, t('devConfig')),
       ])
     }
 
@@ -237,15 +1020,20 @@ window.__ModuleLoader__.load({
 
     function Section(props) {
       const t = props.t
-      const state = useState('about')
+      // 默认仍是「关于与致谢」；initialTab 供冒烟测试与深链指定页签
+      const state = useState(props.initialTab === 'install' ? 'install' : 'about')
       const tab = state[0]
       const setTab = state[1]
+      let page = null
+      if (tab === 'install') page = h(InstallPage, { key: 'i', t: t })
+      else if (tab === 'config') page = h(Placeholder, { key: 'p', t: t })
+      else page = h(AboutPage, { key: 'a', t: t })
       return h('div', { style: S.wrap }, [
         h('h1', { key: 'h', style: S.h1 }, t('title')),
         h('p', { key: 'l', style: S.lead }, t('lead')),
-        h(StatusBar, { key: 'b', t }),
-        h(Tabs, { key: 't', t, tab, setTab }),
-        tab === 'about' ? h(AboutPage, { key: 'a', t }) : h(Placeholder, { key: 'p', t, which: tab }),
+        h(StatusBar, { key: 'b', t: t }),
+        h(Tabs, { key: 't', t: t, tab: tab, setTab: setTab }),
+        page,
       ])
     }
 
@@ -269,6 +1057,7 @@ window.__ModuleLoader__.load({
         console.warn('work-personal-secretary client: locale 注册失败（回退内置中文）', err)
       }
 
+      // render 透传宿主给的 props（当前只认 initialTab），保证默认页签不变
       ctx.slots.inject('settings.section', () => ctx.slots.register({
         name: 'settings.section',
         id: 'work-personal-secretary',
@@ -276,7 +1065,7 @@ window.__ModuleLoader__.load({
         label: () => t('nav'),
         locale: NS,
         inject: () => ({ t }),
-      }, () => h(Section, { t })))
+      }, (props) => h(Section, { t: t, initialTab: props && props.initialTab })))
     }
 
     return { apply, inject: ['slots'] }

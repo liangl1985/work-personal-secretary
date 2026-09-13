@@ -3,8 +3,9 @@
  *
  * 定位：本集成体的**第一大功能是安装器**（环境检查 → 依赖补齐 → 子插件安装 → 配置底座），
  * 第二大功能是把 DSH 底层配置（指令层 / 记忆种子 / 技能 / 设置）落地。
- * 本文件是宿主半骨架：P0 只做最小可用——模块可加载、可被组合树识别；
- * 安装器与配置代理在后续版本接入（见模块 CHANGELOG）。
+ * 本文件是宿主半：P1 接入安装器前两步的宿主侧——只读环境探针（lib/probe.js）
+ * 与 Web API（lib/api.js：GET /check、POST /fix、POST /fix-all）；
+ * 子插件安装与配置底座在后续版本接入（见模块 CHANGELOG）。
  *
  * 设计约束（沿用集成体纪律）：
  * - **零运行时依赖**（只用 node 内置模块），宿主 peer 缺失时不影响加载；
@@ -17,11 +18,13 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { installApi } from './api.js'
+import { runProbes } from './probe.js'
 
 export const name = 'work-personal-secretary'
 
-/** 需要的宿主服务：设置服务用于注册命名空间；无它时降级为只读展示 */
-export const inject = ['settings']
+/** 需要的宿主服务：settings 注册命名空间；webServer 提供环境检查 / 自动补齐路由 */
+export const inject = ['settings', 'webServer']
 
 /** 本模块目录（读自身 package.json 用） */
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -48,7 +51,31 @@ export const SUB_PLUGINS = [
   { name: 'dsh-token-pet', zh: '桌面形象', purpose: '桌面宠物外观与动作（第三方定制层，MIT）' },
 ]
 
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
   const version = readVersion()
   ctx.logger?.debug?.('work-personal-secretary: 集成体本体已挂载 v' + version + '（客户端提供设置分区「工作秘书」）')
+
+  // ---- 安装器宿主半：环境检查（只读）与自动补齐（服务端白名单） ----
+  // 服务缺失（无 webServer）时降级：只装设置分区，路由不可用并在日志里说明。
+  let disposeApi = null
+  try {
+    disposeApi = installApi(ctx, {})
+  } catch (err) {
+    ctx.logger?.warn?.('work-personal-secretary: Web API 安装失败，环境检查 / 补齐路由不可用（降级为仅设置分区）：'
+      + (err && err.message ? err.message : err))
+  }
+
+  // 可选：启动时做一次只读环境探测并写日志（cordis.patch.yml 的 selfCheckOnStartup，默认关闭）
+  if (config && config.selfCheckOnStartup) {
+    void runProbes().then((report) => {
+      const line = report.items.map((it) => it.id + '=' + it.status).join(' ')
+      ctx.logger?.info?.('work-personal-secretary 环境自检：' + line + '（' + JSON.stringify(report.summary) + '）')
+    }).catch((err) => {
+      ctx.logger?.warn?.('work-personal-secretary 环境自检失败：' + (err && err.message ? err.message : err))
+    })
+  }
+
+  return () => {
+    try { if (disposeApi) disposeApi() } catch (e) { /* best-effort */ }
+  }
 }
