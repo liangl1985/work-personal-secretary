@@ -10,6 +10,11 @@
 *.yaml text eol=lf
 *.py text eol=lf
 
+# 补丁文件绝不做行尾转换：将来 `git apply` 时要逐字节匹配上下文，
+# 被 CRLF 化会让补丁在某些检出场干净应用失败（2026-09-13 发现 0002 有此风险）。
+*.patch -text
+*.diff -text
+
 *.png binary
 *.jpg binary
 *.jpeg binary
