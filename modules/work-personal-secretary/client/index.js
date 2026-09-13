@@ -2203,7 +2203,9 @@ window.__ModuleLoader__.load({
             key: 'b', type: 'button',
             disabled: !available,
             title: available ? t('initBrowseTip') : t('initBrowseUnavailable'),
-            style: Object.assign({}, S.btn, available ? null : S.btnDisabled),
+            // 「浏览…」必须整词显示：不加 nowrap + flexShrink:0 时会被输入框挤到换行，
+            // 在窄栏里显示成「浏」/「览…」两行（2026-09-13 真机截图发现）。
+            style: Object.assign({}, S.btn, { whiteSpace: 'nowrap', flexShrink: 0 }, available ? null : S.btnDisabled),
             onClick: () => browse(field),
           }, t('initBrowse')),
         ])
@@ -2280,10 +2282,14 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** 「重新检查」：已填工作区 → 重新预览；否则重新探测默认工作区 */
+      /**
+       * 「重新检查」：**只刷新当前所在步骤**的数据，绝不代替使用者跳步。
+       * 第 1 步（填写配置）重新探测工作区与必配项，停在 form；
+       * 第 2 步及之后（检查与预览 / 结果）重新预览，停在 preview。
+       */
       function recheck() {
-        if (String(st.form.workspace || '').trim()) return checkPreview()
-        return boot()
+        if (st.stage === 'form') return boot()
+        return checkPreview()
       }
 
       /**
@@ -2745,19 +2751,48 @@ window.__ModuleLoader__.load({
         console.warn('work-personal-secretary client: locale 注册失败（回退内置中文）', err)
       }
 
-      // 原生目录选择（ctx.uiWorkspace.pickDirectory）：
-      // 服务或方法不可用时为 null —— 页面把「浏览…」按钮禁用并给 tooltip，绝不抛错。
-      const uiPick = (() => {
+      // 目录选择入口（按环境择优，入口在**每次点击时**重新解析）：
+      // ① 桌面壳（Windows）把原生选择器发布在 window.__DSH_DESKTOP_PICK_DIRECTORY__ 上：
+      //    () => Promise<string|null>（取消为 null）；出处 dsh-plugin-desktop 的
+      //    installDesktopDirectoryPickerBridge —— 注释原文「Publish the Windows-only
+      //    picker bridge for the browse panel's icon action」，且官方 directory-browser
+      //    插件的 pickNativeDirectory 也只认这个入口。
+      // ② 其他载体回退 ctx.uiWorkspace.pickDirectory()（host-native picker）。
+      // **② 在桌面壳里必然失败**：host 的 directoryPicker 提供的是 browse 能力，而
+      // pickDirectory() → directoryPicker.pick() 要求 native → 抛
+      // 「directoryPicker.pick needs the native capability; the composed picker serves "browse"」。
+      // 故桌面环境必须优先走 ①。入口每次点击重新解析：bridge 可能晚于本插件加载完成。
+      const hostPickSvc = (() => {
         try {
           const svc = ctx && ctx.uiWorkspace
-          if (svc && typeof svc.pickDirectory === 'function') {
-            return function pickDirectory() { return svc.pickDirectory() }
-          }
+          if (svc && typeof svc.pickDirectory === 'function') return svc
         } catch (err) {
           console.warn('work-personal-secretary client: uiWorkspace 不可用（目录选择降级）', err)
         }
         return null
       })()
+      function desktopPickFn() {
+        try {
+          const fn = (typeof window !== 'undefined') ? window.__DSH_DESKTOP_PICK_DIRECTORY__ : null
+          return (typeof fn === 'function') ? fn : null
+        } catch (err) {
+          return null
+        }
+      }
+      // 两个入口都不可用时为 null —— 页面把「浏览…」按钮禁用并给 tooltip，绝不抛错。
+      const uiPick = (desktopPickFn() || hostPickSvc)
+        ? function pickDirectory() {
+          const desktop = desktopPickFn()
+          if (desktop) return desktop()
+          return Promise.resolve().then(() => hostPickSvc.pickDirectory()).catch((err) => {
+            const msg = String((err && err.message) || err)
+            if (msg.indexOf('native capability') >= 0) {
+              throw new Error('当前环境没有系统目录选择器，请手动填写路径（或点下方常用位置）')
+            }
+            throw err
+          })
+        }
+        : null
 
       // render 透传宿主给的 props（当前只认 initialTab），保证默认页签不变
       ctx.slots.inject('settings.section', () => ctx.slots.register({

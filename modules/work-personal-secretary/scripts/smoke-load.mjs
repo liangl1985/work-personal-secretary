@@ -1293,6 +1293,125 @@ const offPosts = calls.filter((c) => c.method === 'POST')
 ok(offPosts.length === 5, '显式关闭状态下仍逐个 POST /basedeck（实测 ' + offPosts.length + '）')
 ok(offPosts.length > 0 && offPosts.every((c) => JSON.parse(String(c.body)).overrides.obsidianSyncDir === '__none__'), '显式关闭 → overrides.obsidianSyncDir = "__none__"')
 
+// ── 桌面壳原生选择器优先（window.__DSH_DESKTOP_PICK_DIRECTORY__）──
+// 桌面壳的 host directoryPicker 只有 browse 能力，host pickDirectory() 必然抛；
+// 官方（dsh-plugin-desktop + directory-browser）在桌面环境只认 window 上的 bridge。
+const NATIVE_ERR = 'directory picker failed: directoryPicker.pick needs the native capability; the composed picker serves "browse"'
+let hostPickCalls = 0
+const deskSeq = ['E:/picked-by-desktop', null]
+const deskShell = (() => {
+  const reg = {}
+  const ctx = {
+    effect(fn) { return fn() },
+    logger: { debug() {}, warn() {}, info() {} },
+    locale: { register() { return () => {} }, bind() { return (k) => k } },
+    uiWorkspace: { pickDirectory: async () => { hostPickCalls += 1; throw new Error(NATIVE_ERR) } },
+    slots: {
+      inject(slot, cb) { cb() },
+      register(meta, render) { reg[meta.name] = { meta, render }; return () => {} },
+    },
+  }
+  return { registered: reg, ctx }
+})()
+const deskCaptured = (() => {
+  let cap = null
+  const w = {
+    __ModuleLoader__: { load(mod) { cap = mod } },
+    __DSH_DESKTOP_PICK_DIRECTORY__: async () => (deskSeq.length ? deskSeq.shift() : null),
+  }
+  new Function('window', src)(w) // eslint-disable-line no-new-func
+  return cap
+})()
+deskCaptured.factory((id) => {
+  if (id === 'react') return ReactStub
+  throw new Error('未预期的客户端依赖: ' + id)
+}).apply(deskShell.ctx)
+const deskReg = deskShell.registered['settings.section']
+globalThis.fetch = bdFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(deskReg.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+let deskTree = expand(deskReg.render({ initialTab: 'init' }))
+const deskBrowse = findButtons(deskTree).filter((b) => label(b) === '浏览…')
+ok(deskBrowse.length === 3 && deskBrowse.every((b) => b.props.disabled !== true), '桌面壳：有原生选择器 bridge 时三个「浏览…」仍可用（不再因 host 不可用而禁用）')
+deskBrowse[0].props.onClick()
+await tick(30)
+hookCursor = 0
+effectQueue = []
+deskTree = expand(deskReg.render({ initialTab: 'init' }))
+ok(findInputs(deskTree)[0].props.value === 'E:/picked-by-desktop', '桌面壳：优先走 window.__DSH_DESKTOP_PICK_DIRECTORY__ 并填入结果')
+ok(hostPickCalls === 0, '桌面壳：完全不再调用会失败的 host uiWorkspace.pickDirectory')
+findButtons(deskTree).filter((b) => label(b) === '浏览…')[0].props.onClick()
+await tick(30)
+hookCursor = 0
+effectQueue = []
+deskTree = expand(deskReg.render({ initialTab: 'init' }))
+ok(findInputs(deskTree)[0].props.value === 'E:/picked-by-desktop', '桌面壳：bridge 返回 null（取消）→ 原值不变')
+
+// ── 无 bridge 且 host 报 native capability → 换可读中文提示，不暴露英文原文 ──
+const nativeShell = (() => {
+  const reg = {}
+  const ctx = {
+    effect(fn) { return fn() },
+    logger: { debug() {}, warn() {}, info() {} },
+    locale: { register() { return () => {} }, bind() { return (k) => k } },
+    uiWorkspace: { pickDirectory: async () => { throw new Error(NATIVE_ERR) } },
+    slots: {
+      inject(slot, cb) { cb() },
+      register(meta, render) { reg[meta.name] = { meta, render }; return () => {} },
+    },
+  }
+  return { registered: reg, ctx }
+})()
+const nativeCaptured = (() => {
+  let cap = null
+  const w = { __ModuleLoader__: { load(mod) { cap = mod } } }
+  new Function('window', src)(w) // eslint-disable-line no-new-func
+  return cap
+})()
+nativeCaptured.factory((id) => {
+  if (id === 'react') return ReactStub
+  throw new Error('未预期的客户端依赖: ' + id)
+}).apply(nativeShell.ctx)
+const nativeReg = nativeShell.registered['settings.section']
+globalThis.fetch = bdFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(nativeReg.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+let ntTree = expand(nativeReg.render({ initialTab: 'init' }))
+findButtons(ntTree).filter((b) => label(b) === '浏览…')[0].props.onClick()
+await tick(30)
+hookCursor = 0
+effectQueue = []
+ntTree = expand(nativeReg.render({ initialTab: 'init' }))
+const ntText = collect(ntTree, []).join('')
+ok(ntText.indexOf('当前环境没有系统目录选择器') >= 0, 'host 报 native capability → 换成可读中文提示')
+ok(ntText.indexOf('native capability') < 0, '英文原始错误不再直接暴露给使用者')
+
+// ── 「重新检查」只刷新当前步骤，绝不代替使用者跳步 ──
+hookCursor = 0
+effectQueue = []
+let rcTree = expand(nativeReg.render({ initialTab: 'init' }))
+ok(collect(rcTree, []).join('').indexOf('首用必配项') >= 0, '第 1 步：标题为「首用必配项」')
+findButtons(rcTree).filter((b) => label(b) === '重新检查')[0].props.onClick()
+await tick(50)
+hookCursor = 0
+effectQueue = []
+rcTree = expand(nativeReg.render({ initialTab: 'init' }))
+const rcText = collect(rcTree, []).join('')
+ok(rcText.indexOf('首用必配项') >= 0, '第 1 步点「重新检查」→ 停在第 1 步（不再自动跳到预览）')
+ok(rcText.indexOf('写入计划') < 0, '第 1 步点「重新检查」→ 不出现第 2 步的「写入计划」')
+
 // ── pickDirectory 抛错：可读提示 + 原值不变 + 不崩 ──────────────
 const failReg = {}
 const failShell = {
