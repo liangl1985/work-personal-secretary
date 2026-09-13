@@ -2,7 +2,7 @@
 
 > 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
 >
-> 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.3、`dsh-token-pet` v0.2.1-lina.1（**三方插件定制层**）；三者已实装本机 desktop，桌宠为 `link:` 装机。
+> 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.3、`dsh-token-pet` v0.2.1-lina.1（**三方插件定制层**）；四者已实装本机 desktop，桌宠为 `link:` 装机。
 
 ## 一、默认约定必须随包生效（2026-09-11 定）
 
@@ -38,6 +38,9 @@
 - [x] **仓库根 `CHANGELOG.md` 存在**，且记录本次发布的变更（集成体版本与子模块版本解耦）
 - [x] 打包白名单（`files`）覆盖 lib / client / scripts / skills / experts / cordis.patch.yml / CHANGELOG / LICENSE / NOTICE / README
 - [x] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
+- [x] **仓库根 `NOTICE` 存在**（聚合索引：随包内容与各模块版本 / 20 位 persona 来源与许可 / `review: pending` 免责 / 未随包分发清单）
+- [x] **CI 覆盖范围核对（2026-09-13 P5）**：语法自检已覆盖全量 `*.js` / `*.mjs`（含本体 `lib/settings-api.js`）；回归 / 装载冒烟 / 共存契约分别由 `*/scripts/regression.mjs`、`*/scripts/smoke-load.mjs`、`*/scripts/coexist.mjs` 覆盖；
+      **本体四套自测**（`probe-test.mjs` 134 · `install-test.mjs` 169 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
 
 ## 三点五、文档模块硬前置与路径（2026-09-12 增）
 
@@ -118,6 +121,42 @@
 - [x] 集成体 CI 不因本模块失败（本模块不含 `scripts/regression.mjs` / `smoke-load.mjs` / `coexist.mjs`）
 - [x] 上游升级后**重新应用补丁并复跑测试**，冲突按补丁意图手工合并，同时更新 `UPSTREAM-BASE.txt` 与 `CHANGELOG`
 
+## 三点八、P4 能力配置页与 UI 验收（2026-09-13 增）
+
+> 契约：`01_需求与设计/17_P4 能力配置页（读写子插件设置）接口契约与安全边界`。两路实现：宿主半 `lib/settings-api.js`（并由 `lib/api.js` 接线）+ 客户端「能力配置」页。
+
+### 宿主半（读写子插件设置）
+
+- [x] `GET /settings` 白名单枚举：只暴露 work-memory（**24 键**）与 experts（**10 键**）两个 ns；非白名单 ns（如 token-pet）不出现在响应里
+- [x] `POST /settings/write` 双重白名单（ns + 顶层键，**按 ns 隔离**：work-memory 的键不能写进 experts）+ revision 冲突栅栏（旧 revision → **409** `error:"conflict"`，且原值不被破坏）
+- [x] 默认 **dry-run**：不传 `dryRun` 一律只回填当前值、不写盘；`dryRun:false` 才走官方 `mutate`
+- [x] 同源守卫：跨站 Origin / 缺 `application/json` / 缺 Origin → **403**，且被拦下的请求零写入
+- [x] 复杂类型键降级只读（写入被拒）；嵌套路径被拒（只允许顶层键）；单次条数上限
+- [x] 四类降级一律 **200 + `ok:false`**、不抛异常：`settings` 缺失 / `describe` 抛错 / 子插件未装 / 空 body
+- [x] 错误信息**脱敏**：本机路径抹成 `<path>`；`source` 只给枚举、不外发路径
+- [x] `GET /experts/preview` 动态载入子插件打分引擎：`max=2` 时身份专家 + 等保测评（`aftersales-djbh` **0.7**）都进名单；`max=1` 时 0.7 分的对口专家被挤掉（甲案因果归因）
+- [x] 自测 `scripts/settings-api-test.mjs` **109 通过 / 0 失败**，含对真实 `settings.yaml` / 记忆库 / 工作区 / 子插件源码的**只读首尾快照比对**（证明零写入）
+- [x] 路由注册口径不变：prefix 路由仍 1 条、`installApi` exact 仍 8 条（既有 probe / basedeck 断言不破）
+
+### 客户端半（能力配置页）
+
+- [x] 记忆库 24 键五小节 / 专家库 10 键 + 三滑块 + **实时预览** / 文档能力自检面板 / 桌面形象状态跳转
+- [x] 已覆盖标记、`unset`（清除覆盖回默认）、**409 冲突自动重读且不丢输入**；`ConfigFieldRow` 对不在 settings schema 的字段（如 `experts.injectOrder`）**早退不渲染**（否则用户一改必被宿主 400 拒绝）
+- [x] 装载冒烟 `scripts/smoke-load.mjs` **330 通过 / 0 失败**（256 → 330）
+
+### 甲案（`expertInjectMax` 默认值 1 → 2）三处一致
+
+- [x] `lib/settings.js` 的 `DEFAULTS`、schema 默认值、**`cordis.patch.yml` 部署层 base config** 三处齐改 —— 只改前两处会被部署层 base **盖过**（实施时抓出的真缺陷；契约原文只写两处，已补正）
+- [x] 模块版本 `0.1.2 → 0.1.3` 并补 `modules/dsh-experts/CHANGELOG.md`
+
+### 真机验收（2026-09-13）
+
+- [x] **能力配置页**：`expertInjectMax` 显示 **2** 且无「已覆盖」徽章（甲案生效）；24+10 键可读可写；写入两次 revision 实测递增（R1→R2）；`settings.yaml` 落盘新值且**原有键与注释逐字保留**、无 `.bak-`（官方原子写路径如此）；**免重启热生效**
+- [x] **UI 打磨**（真机反馈驱动）：「重新读取」加读取中态 + 「最近读取 HH:MM:SS」（首次加载也算）；能力配置页改**插件级标签**（一次只渲染当前插件）；设置页跳转修正 —— 宿主左侧导航项实际叫 **「用量小宠物」且不本地化**，候选名收敛为 `["用量小宠物","token-pet"]`，并修掉「硬依赖 `<nav>`」（真机面板非 nav 元素）→ **跳转真机验证成功**
+- [x] **桌宠热区收敛**（`287000e`）：外层容器改 `pointerEvents:none` / `cursor:default`，新增精确热区层只覆盖形象渲染框（等高等宽），`stageChip` 移出热区；**主人刷新后实测**：左右空白不再响应点击/拖动、点形象仍能开合、拖动正常
+- [x] **配置引导页两缺陷**（`28e398d`）：桌面版「浏览…」改走 `window.__DSH_DESKTOP_PICK_DIRECTORY__`（原走 host `pickDirectory` 必抛 native 能力错）；第 1 步「重新检查」按阶段刷新、不再自动跳步；「浏览…」按钮 `nowrap` 修竖排。**重启后主人复验通过**
+- [x] 提交推送：`e388985`(P4) · `4a3afe7` · `287000e` · `24c16d0` · `219e11a`(experts 升版) · `d20a648`(NOTICE)
+
 ## 四、宿主兼容性
 
 - [x] 仅使用当前 host 的**原生扩展点**（tools / commands / settings / resources / sidebarRightTabs / locale / skills），不用已弃用槽位
@@ -126,7 +165,7 @@
 - [ ] **真机重启后的专家库验收**（`dump-config` 退出码 0 只是前置，以下逐条实测）——2026-09-13 15:37 重启后已复验 4/5 项（见下方 ✅ 标注），仅 `expertInjectMax=2` 跨域补位待测：
   - [x] `/expert status`：**身份专家**显示正确 —— ✅ 重启后复验：`settings.yaml` 的 `identityExpert: presales-ics-security` 与注入区【身份视角·工控安全售前】一致（= 设置 `identityExpert`；留空时应取岗位域第一位）
   - [x] 注入区含 **【处理路径】+【身份视角】** 两段 —— ✅ 重启后会话注入区即为该两段（身份视角即常驻的唯一一位）
-  - [ ] `expertInjectMax=2` 时，**跨域命中能补上第 2 位**专家（补位受 `expertSecondThreshold` 门槛约束）——⏳ 本机未设该项（默认 1），需临时调到 2 后发一句跨域任务观察；补位阈值逻辑由 `regression.mjs` 的「跨域 Top-2 门槛」用例覆盖
+  - [ ] `expertInjectMax=2` 时，**跨域命中能补上第 2 位**专家（补位受 `expertSecondThreshold` 门槛约束）——⏳ 2026-09-13 P5 复核：**配置层已验**（该项解析值 = 2、无「已覆盖」徽章）；**引擎级已验**（`experts/CHANGELOG` 0.1.3 的三档对照 + `settings-api-test` §9 真实打分：`max=1` 挤掉 0.7 分对口专家、`max=2` 补入）；**真机注入区**待使用者发一句跨域任务确认出现【本轮命中·…】第 2 位
   - [x] `/expert list` 列出 **20 位**专家、6 域齐全（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）——✅ 工具等价复验：返回 20 位，域分布 5/4/5/2/3/1 完全一致
   - [x] `/expert why <文本>` 的打分理由与实际命中一致（人工抽查 1–2 条）——✅ 复验：「客户要做三级等保测评，定级备案怎么走」→ `aftersales-djbh`（等保测评）score 0.7，理由「关键词·等保/测评/定级/备案/三级 + 标签·等保/测评」，与实际命中一致
 
@@ -150,3 +189,13 @@
   - **假绿比失败更危险**：同一窗口下「快照：过滤活动日志行」「备份：当日防抖 skipped」曾因文件名错位而**假通过**——测试没报错不等于在被检验。
   - 自检手法：同一套回归**换 TZ 复跑**（`TZ=UTC node scripts/regression.mjs`）结果应不变；涉及日期/防抖/TTL 的用例尤其要跑。
 - [x] 上述 SHA256 比对与 BOM 自检的结果记入本次发布/升级记录（出问题可回溯到具体文件）。
+
+## 七、P5 发布收尾（2026-09-13）
+
+- [x] 仓库根 `NOTICE` 已写（4398B：随包内容 / 第三方来源与许可 / 免责 / 未随包清单）
+- [x] `dsh-experts` 升版 **0.1.3** + 模块 `CHANGELOG.md`（默认注入上限 1 → 2）
+- [x] **CI 覆盖补全**：本体四套自测（probe / install / basedeck / settings-api）纳入 `*/scripts/*-test.mjs` 步骤
+- [x] 本清单更新（勾掉已验项 + 补 P4 / 桌宠热区 / 配置引导页 / 设置页跳转验收）
+- [ ] **打 tag `v1.0.0` + GitHub Release** —— 对外动作，**等使用者确认**；Release 正文取根 `CHANGELOG.md` 的 v1.0.0 段
+- [ ] **干净 profile 重启验证** —— 需另建 profile + 重启（本机 desktop profile 已多次验证）
+- [ ] **`expertInjectMax=2` 真机跨域补位观察** —— 配置层与引擎级已验，需使用者在真机发一句跨域任务确认注入区出现【本轮命中·…】第 2 位
