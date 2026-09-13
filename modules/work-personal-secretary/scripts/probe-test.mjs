@@ -303,7 +303,8 @@ const cands = findPythonCandidates('win32', envPy)
 ok(cands.length === 2, '候选只列真实存在的解释器：' + cands.length)
 ok(/Python312/.test(cands[0].cmd) && /%LOCALAPPDATA%/.test(cands[0].masked), 'LOCALAPPDATA 候选优先且版本从高到低：' + cands[0].masked)
 ok(cands[1].masked === '%ProgramFiles%\\Python310\\python.exe', 'ProgramFiles 作为次选：' + cands[1].masked)
-ok(maskUserPath(cands[0].cmd, envPy) === cands[0].masked, 'maskUserPath 与候选 masked 一致')
+// 分隔符归一化后比较：候选 cmd 用宿主平台分隔符 join，masked 用 Windows 反斜杠字面量拼（真实运行中 platform === 宿主平台，两者天然一致）
+ok(maskUserPath(cands[0].cmd, envPy).replace(/\\/g, '/') === cands[0].masked.replace(/\\/g, '/'), 'maskUserPath 与候选 masked 一致')
 ok(maskUserPath(cands[0].cmd, envPy).indexOf(envPy.LOCALAPPDATA) < 0, '脱敏后不含真实 LOCALAPPDATA 路径')
 const fakeExec = { cmd: 'D:\\somewhere\\Python312\\python.exe', args: [], command: 'D:\\somewhere\\Python312\\python.exe' }
 const normExec = normalizePythonExec(fakeExec)
