@@ -8,6 +8,8 @@
  *   GET  /plugins     —— 五个子插件的版本 / 安装模式清单（**只读**）
  *   POST /install     —— 安装单个子插件（同源保护；来源路径由服务端拼接）
  *   POST /install-all —— 批量安装：服务端按固定顺序串行（同源保护）
+ *   GET  /basedeck    —— 配置底座的**只读计划**（dry-run；五项：指令层 / 记忆种子 / 技能 / 设置 / 目录）
+ *   POST /basedeck    —— 配置引导一次性写入（同源保护；**dryRun 默认 true**，只有显式 false 才落盘）
  *
  * 安全红线（本文件是唯一会执行安装动作的地方）：
  * 1. id 必须命中服务端白名单表 → 映射到**固定命令 + 固定参数数组**；
@@ -48,10 +50,19 @@ import {
   resolveInstallAllPlan,
 } from './install.js'
 
+import {
+  BASEDECK_ID_LIST,
+  BASEDECK_OUTPUT_LIMIT,
+  applyBaseDeck,
+  planBaseDeck,
+  publicPlan,
+  safeWorkspaceParam,
+} from './basedeck.js'
+
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
 /** 精确路由（桌面载体的 fetch 桥只认精确路由） */
-export const API_PATHS = ['/check', '/fix', '/fix-all', '/plugins', '/install', '/install-all']
+export const API_PATHS = ['/check', '/fix', '/fix-all', '/plugins', '/install', '/install-all', '/basedeck']
 
 /** 安装类命令的超时上限（15 分钟：winget / pip 都可能较慢） */
 export const FIX_TIMEOUT_MS = 900000
@@ -84,6 +95,27 @@ async function readBody(req, maxBytes = 64 * 1024) {
   } catch (e) {
     throw new Error('invalid JSON body')
   }
+}
+
+/** 预览字符串按行截断（preview.sampleLines 契约是字符串） */
+function trimSample(s, n) {
+  return String(s == null ? '' : s).split('\n').slice(0, n).join('\n')
+}
+
+/** 配置底座计划的输出裁剪：超限时逐级缩减预览行，保证响应体不超过上限 */
+function trimPlanPayload(payload, limit = BASEDECK_OUTPUT_LIMIT) {
+  if (JSON.stringify(payload).length <= limit) return payload
+  for (const it of payload.items || []) {
+    if (it.preview) it.preview.sampleLines = trimSample(it.preview.sampleLines, 6)
+  }
+  if (JSON.stringify(payload).length <= limit) return payload
+  for (const it of payload.items || []) {
+    if (it.preview) it.preview.sampleLines = trimSample(it.preview.sampleLines, 2)
+    if (Array.isArray(it.files)) it.files = it.files.map((f) => ({ name: f.name, state: f.state }))
+    if (Array.isArray(it.dirs)) it.dirs = it.dirs.map((d) => ({ key: d.key, state: d.state, dir: d.dir }))
+  }
+  payload.truncated = true
+  return payload
 }
 
 /** 同源保护：写操作必须由本机 Web UI 发起（沿用 work-memory 的做法） */
@@ -204,6 +236,8 @@ export function runFixCommand(cmd, args, options = {}) {
  * @param {Function|Date} [deps.now] 时间来源（测试注入；影响备份时间戳）
  * @param {string} [deps.moduleDir] 本体模块目录（测试注入；相对探测起点）
  * @param {string[]} [deps.commonCandidates] 常见位置候选（测试注入）
+ * @param {string} [deps.workspace] 设置项里的默认工作区（可空；空则 /basedeck 显式返回 workspaceSource=none 或做默认探测）
+ * @param {string} [deps.dshHome] DSH_HOME（测试注入；默认取环境变量 DSH_HOME，再退到 ~/.dsh）
  * @returns {Function} disposer
  */
 export function installApi(ctx, deps = {}) {
@@ -221,6 +255,12 @@ export function installApi(ctx, deps = {}) {
   const installEnv = deps.env || process.env
   const installNow = deps.now
   const installModuleDir = deps.moduleDir || MODULE_DIR
+  // 配置底座的默认工作区（设置项 workspace，可空；空则由 basedeck 显式返回 none 或做默认探测）
+  const basedeckWorkspaceConfig = typeof deps.workspace === 'string' ? deps.workspace : ''
+  // 配置底座的 DSH_HOME 只由服务端解析（deps.dshHome → 环境变量 DSH_HOME）；**绝不接受客户端传入**
+  const basedeckDshHome = typeof deps.dshHome === 'string' && deps.dshHome
+    ? deps.dshHome
+    : (String(installEnv.DSH_HOME || '').trim() || '')
 
   const currentRepoRoot = () => resolveRepoRoot({
     configRoot: repoRootConfig,
@@ -422,6 +462,97 @@ export function installApi(ctx, deps = {}) {
           durationMs: Date.now() - startedAll,
         }
         if (plan.rejected.length > 0) payload.message = '已忽略不在白名单的 id：' + plan.rejected.join(' / ')
+        return sendJson(res, 200, payload)
+      }
+
+      // GET /basedeck —— 配置底座的**只读计划**（dry-run；绝不写盘）
+      // ?workspace=<绝对路径> 可显式指定工作区；无效时回退服务端解析并在 message 里说明。
+      if (req.method === 'GET' && (sub === '/basedeck' || sub === '/basedeck/')) {
+        const wsParam = url.searchParams.get('workspace') || ''
+        let workspaceOverride = ''
+        let message = ''
+        if (wsParam) {
+          const check = safeWorkspaceParam(wsParam)
+          if (check.ok) workspaceOverride = check.workspace
+          else message = 'workspace 参数无效，已回退服务端解析：' + check.error
+        }
+        const repo = currentRepoRoot()
+        const plan = planBaseDeck({
+          workspace: workspaceOverride,
+          dshHome: basedeckDshHome,
+          configWorkspace: basedeckWorkspaceConfig,
+          repoRoot: repo.repoRoot,
+          env: installEnv,
+          now: installNow,
+          moduleDir: installModuleDir,
+          commonCandidates: deps.commonCandidates,
+        })
+        const payload = publicPlan(plan)
+        if (message) payload.message = message
+        return sendJson(res, 200, trimPlanPayload(payload))
+      }
+
+      // POST /basedeck { ids, dryRun, overrides } —— 配置引导一次性写入（同源保护）
+      // **dryRun 默认 true**：不带 dryRun:false 时绝不写盘；overrides 携带引导填值：
+      //   { workspace, defaultDomain, identityExpert, memoryDir, obsidianSyncDir }
+      if (req.method === 'POST' && (sub === '/basedeck' || sub === '/basedeck/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const dryRun = body.dryRun !== false
+        const ids = body.ids === undefined || body.ids === null ? BASEDECK_ID_LIST : body.ids
+        if (!Array.isArray(ids)) {
+          return sendJson(res, 200, {
+            ok: false, dryRun: dryRun, results: [], rejected: [], durationMs: 0,
+            message: 'ids 必须是字符串数组（缺省 = 五项全部）',
+          })
+        }
+        const rawOverrides = (body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)) ? body.overrides : {}
+        const clean = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max || 512) : '')
+        const overrides = {
+          defaultDomain: clean(rawOverrides.defaultDomain, 64),
+          identityExpert: clean(rawOverrides.identityExpert, 64),
+          memoryDir: clean(rawOverrides.memoryDir, 1024),
+          obsidianSyncDir: clean(rawOverrides.obsidianSyncDir, 1024),
+        }
+        const wsRaw = clean(rawOverrides.workspace, 1024)
+        if (wsRaw) {
+          const check = safeWorkspaceParam(wsRaw)
+          if (!check.ok) {
+            return sendJson(res, 200, {
+              ok: false, dryRun: dryRun, results: [], rejected: [], durationMs: 0,
+              message: 'overrides.workspace 无效：' + check.error,
+            })
+          }
+          overrides.workspace = check.workspace
+        }
+        const repo = currentRepoRoot()
+        const opts = {
+          dryRun: dryRun,
+          overrides: overrides,
+          workspace: overrides.workspace || '',
+          dshHome: basedeckDshHome,
+          configWorkspace: basedeckWorkspaceConfig,
+          repoRoot: repo.repoRoot,
+          env: installEnv,
+          now: installNow,
+          moduleDir: installModuleDir,
+          commonCandidates: deps.commonCandidates,
+        }
+        const applied = applyBaseDeck(ids, opts)
+        const payload = {
+          ok: applied.ok,
+          dryRun: applied.dryRun,
+          workspace: applied.workspace,
+          workspaceSource: applied.workspaceSource,
+          results: applied.results,
+          rejected: applied.rejected,
+          wroteAny: applied.wroteAny === true,
+          durationMs: applied.durationMs,
+          setupNeeded: planBaseDeck(opts).setupNeeded,
+        }
+        if (applied.rejected.length > 0) payload.message = '已忽略不在白名单的 id：' + applied.rejected.join(' / ')
         return sendJson(res, 200, payload)
       }
 

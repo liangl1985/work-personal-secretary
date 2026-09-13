@@ -317,7 +317,7 @@ installApi(ctx, {
   now: fixedNow,
 })
 ok(ctx.routes.filter((r) => r.kind === 'prefix').length === 1, 'prefix 路由已注册')
-ok(API_PATHS.join(',') === '/check,/fix,/fix-all,/plugins,/install,/install-all', 'API_PATHS 含三条新路由')
+ok(API_PATHS.join(',') === '/check,/fix,/fix-all,/plugins,/install,/install-all,/basedeck', 'API_PATHS 含三条新路由与配置底座路由')
 ok(ctx.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length, 'exact 路由逐条注册（含新路由）')
 const handler = prefixHandler(ctx)
 

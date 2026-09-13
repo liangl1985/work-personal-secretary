@@ -15,6 +15,11 @@
  * - POST /work-personal-secretary/api/fix     → 单项补齐 body { id }
  * - POST /work-personal-secretary/api/fix-all → 批量补齐 body { ids: [...] }（串行）
  * 客户端只上报 id：命令与白名单全在宿主侧，不接受任何外部命令字符串。
+ *
+ * 「初始化」页（P3：配置引导 / setup wizard）：
+ * - GET  /work-personal-secretary/api/basedeck[?workspace=…] → 五项底座计划（只读预览）
+ * - POST /work-personal-secretary/api/basedeck { ids, dryRun:false, overrides } → 逐项写入
+ * - 首用必配项一次填完并写入；写前自动备份；完成后需重启 DSH 生效。
  */
 window.__ModuleLoader__.load({
   id: 'work-personal-secretary',
@@ -82,7 +87,8 @@ window.__ModuleLoader__.load({
     const FIX_ORDER = ['python', 'pythonDeps', 'wps', 'obsidian']
     /**
      * 四步安装流程。当前步由页面用 props.current 指定：
-     * 「安装与检查」页 = env，「安装子插件」页 = plugins；「初始化」固定标「后续版本」。
+     * 「安装与检查」页 = env，「安装子插件」页 = plugins，「初始化」页 = init；
+     * 未被当前页选中的后续步骤标注「后续版本」。
      */
     const STEPS = [
       ['env', 'stepEnv', ''],
@@ -121,10 +127,56 @@ window.__ModuleLoader__.load({
     /** 逐项安装状态 → 文案键（run 用「安装中」，与逐项进度同一口径） */
     const INSTALL_STATE_KEYS = { wait: 'runWait', run: 'installRunning', ok: 'runOk', fail: 'runFail' }
 
+    /**
+     * P3「初始化」：五项**固定顺序**（客户端写死，与接口是否可达无关，
+     * 保证加载中/出错时也能渲染骨架）。labelKey = 接口未给 label 时的中英文名兜底。
+     */
+    const INIT_ORDER = ['agentsMd', 'memorySeed', 'skills', 'settings', 'dirs']
+    const INIT_LABEL_KEYS = {
+      agentsMd: 'initItemAgentsMd',
+      memorySeed: 'initItemMemorySeed',
+      skills: 'initItemSkills',
+      settings: 'initItemSettings',
+      dirs: 'initItemDirs',
+    }
+    /** 计划状态 → 文案键（append | update | up_to_date | user_modified | ahead | broken | multiple | none） */
+    const INIT_STATUS_KEYS = {
+      append: 'initStatusAppend',
+      update: 'initStatusUpdate',
+      up_to_date: 'initStatusUpToDate',
+      user_modified: 'initStatusUserModified',
+      ahead: 'initStatusAhead',
+      broken: 'initStatusBroken',
+      multiple: 'initStatusMultiple',
+      none: 'initStatusNone',
+    }
+    /** 预览最多展示的行数（原样展示，不折行不截断） */
+    const INIT_PREVIEW_MAX = 20
+    /** 逐项写入状态 → 文案键（写入语境：run = 写入中…） */
+    const WRITE_STATE_KEYS = { wait: 'runWait', run: 'initWriting', ok: 'runOk', fail: 'runFail' }
+    /** 写入执行顺序（客户端写死；展示顺序仍是 INIT_ORDER） */
+    const WRITE_ORDER = ['dirs', 'memorySeed', 'skills', 'settings', 'agentsMd']
+    /** 四段式向导：填写配置 → 检查与预览 → 执行 → 结果（阶段键与 stage 对应） */
+    const WIZ_STEPS = [
+      ['form', 'initStepForm'],
+      ['preview', 'initStepPreview'],
+      ['run', 'initStepRun'],
+      ['done', 'initStepDone'],
+    ]
+    /** 工作岗位域下拉（值作为 overrides.defaultDomain 上报；文案随 locale 走） */
+    const DOMAIN_OPTIONS = [
+      ['presales', 'initDomainPresales'],
+      ['aftersales', 'initDomainAftersales'],
+      ['finance', 'initDomainFinance'],
+      ['legal', 'initDomainLegal'],
+      ['doc', 'initDomainDoc'],
+      ['general', 'initDomainGeneral'],
+    ]
+
     const ZH = {
       nav: '工作秘书',
       title: '工作秘书',
-      lead: '一个集成体统一五套能力。环境检查、依赖补齐与子插件安装已可用；初始化与能力配置在后续版本提供。',
+      lead: '一个集成体统一五套能力。环境检查、依赖补齐、子插件安装与配置引导已可用；能力配置在后续版本提供。',
       tabInstall: '安装与检查',
       tabConfig: '能力配置',
       tabAbout: '关于与致谢',
@@ -260,12 +312,100 @@ window.__ModuleLoader__.load({
       installFilesCount: '{n} 个文件',
       installFootNote:
         '从集成体仓库内置副本安装（离线可用）；安装会更新当前 profile 的插件清单，需重启 DSH 生效。',
+
+      // ── 初始化 / 配置引导（P3） ────────────────────────────────────
+      tabInit: '初始化',
+      initTitle: '配置引导',
+      initLead: '填好首用必配项，检查无误后一次性把配置底座写入。',
+      initLoading: '检测中…',
+      initLoadFailed: '初始化信息读取失败',
+      initLoadFailedHint:
+        '未能从本机服务取到数据：可能集成体尚未在宿主侧启用，或该路由还没注册。确认后点「重试」。',
+      initEmpty: '接口未返回配置项。',
+      initStepForm: '填写配置',
+      initStepPreview: '检查与预览',
+      initStepRun: '执行',
+      initStepDone: '结果',
+      initFormTitle: '首用必配项',
+      initFormHint: '带 * 的为必填；其余留空即取默认值。',
+      initOptional: '可选',
+      initFieldWorkspace: '工作区目录',
+      initFieldWorkspaceHint: '必填；AGENTS.md 与技能落盘到这里',
+      initFieldDomain: '工作岗位域',
+      initFieldDomainHint: '决定常驻的身份专家与默认视角',
+      initFieldExpert: '身份专家',
+      initFieldExpertHint: '留空 = 自动取岗位域第一位',
+      initFieldMemoryDir: '记忆库目录',
+      initFieldMemoryDirHint: '留空 = 默认',
+      initFieldObsidianDir: 'Obsidian 库目录',
+      initFieldObsidianDirHint: '留空将把记忆镜像到 <工作区>/work-memory（可在设置页随时改）',
+      initDomainPresales: '售前',
+      initDomainAftersales: '售后·技术支持',
+      initDomainFinance: '会计财务',
+      initDomainLegal: '法务',
+      initDomainDoc: '文档',
+      initDomainGeneral: '核查·通用',
+      initDomainPlaceholder: '请选择…',
+      initDomainRequired: '请先选择你的工作方向',
+      initCheckPreview: '检查并预览',
+      initChecking: '检查中…',
+      initRecheck: '重新检查',
+      initPlanTitle: '写入计划',
+      initPlanHint: '这是写入前的预览，尚未改动任何文件。',
+      initBackToForm: '返回修改',
+      initFinish: '完成配置',
+      initFinishing: '写入中',
+      initWriting: '写入中…',
+      initRunProgress: '写入中 {done}/{total}',
+      initWriteFailTitle: '写入失败',
+      initWriteFailHint:
+        '本机服务可能尚未支持写入（dryRun:false），或工作区不可写。可先用「检查并预览」确认计划，再重试。',
+      initWriteDryRun: '本机服务仍按试运行处理（dryRun:true），未真正写入。',
+      initWriteResult: '写入结果',
+      initDoneTitle: '配置完成',
+      initDonePartial: '部分失败',
+      initDoneRestart: '配置已写入，需重启 DSH 生效。',
+      initDoneHint: '重启后「工作秘书」即可开始使用；未成功的项可按上面的原因处理后再重跑。',
+      initColTarget: '目标',
+      initColBackup: '备份',
+      initColBytes: '写入字节',
+      initNoBackup: '无需备份',
+      setupNeeded: '还差 {n} 项才能开始使用，点这里完成配置',
+      setupGo: '去完成配置',
+      workspaceLabel: '工作区',
+      workspaceNoneHint: '未确定工作区路径，提交已禁用：请先填写工作区目录。',
+      wsSourceConfig: '已配置',
+      wsSourceDefault: '默认',
+      wsSourceNone: '未确定',
+      initStatusAppend: '将追加',
+      initStatusUpdate: '将更新',
+      initStatusUpToDate: '已是最新',
+      initStatusUserModified: '被手工改过',
+      initStatusAhead: '领先',
+      initStatusBroken: '损坏',
+      initStatusMultiple: '多份冲突',
+      initStatusNone: '未检测到',
+      initItemAgentsMd: '指令层 AGENTS.md',
+      initItemMemorySeed: '记忆种子',
+      initItemSkills: '技能',
+      initItemSettings: '设置',
+      initItemDirs: '目录结构',
+      initPlanAction: '计划动作',
+      initPreview: '预览',
+      initPreviewHide: '收起预览',
+      initPreviewEmpty: '（无可预览内容）',
+      initPreviewMore: '…（仅显示前 {n} 行）',
+      initBlockVersion: '标记块版本',
+      initContentHash: '内容指纹',
+      initSummary: '共 {total} 项 · 计划写入 {toWrite} 项 · 已是最新 {upToDate} 项 · 被阻塞 {blocked} 项',
+      initSafety: '写入前会自动备份；AGENTS.md 只更新「工作秘书」标记块内的内容，你自己的段落不会被改动。',
+      initListSep: '、',
     }
 
     const EN = {
       nav: 'Work Secretary',
       title: 'Work Secretary',
-      lead: 'One integrator for five capabilities. Environment check, dependency completion and sub-plugin installation are ready; initialization and capability config arrive in later versions.',
+      lead: 'One integrator for five capabilities. Environment check, dependency completion, sub-plugin installation and the setup wizard are ready; capability config arrives in a later version.',
       tabInstall: 'Install & Check',
       tabConfig: 'Capabilities',
       tabAbout: 'About & Credits',
@@ -401,6 +541,94 @@ window.__ModuleLoader__.load({
       installFilesCount: '{n} file(s)',
       installFootNote:
         'Installs from the bundled copy inside the integrator repository (works offline); installation updates the current profile plugin list and requires a DSH restart to take effect.',
+
+      // ── Initialize / setup wizard (P3) ────────────────────────────
+      tabInit: 'Initialize',
+      initTitle: 'Setup wizard',
+      initLead: 'Fill in the required first-run fields, review the plan, then write the configuration base in one go.',
+      initLoading: 'Checking…',
+      initLoadFailed: 'Setup information failed to load',
+      initLoadFailedHint:
+        'No data from the local service: the integrator may be disabled on the host side, or the route is not registered yet. Confirm, then press Retry.',
+      initEmpty: 'The service returned no configuration items.',
+      initStepForm: 'Fill in',
+      initStepPreview: 'Check & preview',
+      initStepRun: 'Apply',
+      initStepDone: 'Result',
+      initFormTitle: 'Required first-run fields',
+      initFormHint: 'Fields marked * are required; leave the rest empty to use defaults.',
+      initOptional: 'optional',
+      initFieldWorkspace: 'Workspace directory',
+      initFieldWorkspaceHint: 'Required; AGENTS.md and skills are written here',
+      initFieldDomain: 'Job domain',
+      initFieldDomainHint: 'Chooses the resident identity expert and default perspective',
+      initFieldExpert: 'Identity expert',
+      initFieldExpertHint: 'Empty = first expert of the job domain',
+      initFieldMemoryDir: 'Memory directory',
+      initFieldMemoryDirHint: 'Empty = default',
+      initFieldObsidianDir: 'Obsidian vault directory',
+      initFieldObsidianDirHint: 'If empty, memory is mirrored to <workspace>/work-memory (changeable later in settings).',
+      initDomainPresales: 'Presales',
+      initDomainAftersales: 'After-sales & support',
+      initDomainFinance: 'Accounting & finance',
+      initDomainLegal: 'Legal',
+      initDomainDoc: 'Documents',
+      initDomainGeneral: 'Verification & general',
+      initDomainPlaceholder: 'Select…',
+      initDomainRequired: 'Choose your job domain first',
+      initCheckPreview: 'Check & preview',
+      initChecking: 'Checking…',
+      initRecheck: 'Re-check',
+      initPlanTitle: 'Write plan',
+      initPlanHint: 'This is a preview; no file has been changed yet.',
+      initBackToForm: 'Back to edit',
+      initFinish: 'Finish setup',
+      initFinishing: 'Writing',
+      initWriting: 'Writing…',
+      initRunProgress: 'Writing {done}/{total}',
+      initWriteFailTitle: 'Write failed',
+      initWriteFailHint:
+        'The local service may not support writing yet (dryRun:false), or the workspace is not writable. Run "Check & preview" to confirm the plan, then retry.',
+      initWriteDryRun: 'The local service still treated this as a dry run (dryRun:true); nothing was written.',
+      initWriteResult: 'Write result',
+      initDoneTitle: 'Setup complete',
+      initDonePartial: 'partly failed',
+      initDoneRestart: 'Configuration written; restart DSH to take effect.',
+      initDoneHint: 'After the restart the Work Secretary is ready to use. Fix any failed item and run setup again.',
+      initColTarget: 'Target',
+      initColBackup: 'Backup',
+      initColBytes: 'Bytes written',
+      initNoBackup: 'no backup needed',
+      setupNeeded: '{n} item(s) still need setup before you can start. Click to finish setup.',
+      setupGo: 'Finish setup',
+      workspaceLabel: 'Workspace',
+      workspaceNoneHint: 'Workspace path is not resolved, so submit is disabled. Fill in the workspace directory first.',
+      wsSourceConfig: 'configured',
+      wsSourceDefault: 'default',
+      wsSourceNone: 'unset',
+      initStatusAppend: 'will append',
+      initStatusUpdate: 'will update',
+      initStatusUpToDate: 'up to date',
+      initStatusUserModified: 'edited by hand',
+      initStatusAhead: 'ahead',
+      initStatusBroken: 'broken',
+      initStatusMultiple: 'multiple copies',
+      initStatusNone: 'not found',
+      initItemAgentsMd: 'AGENTS.md instructions',
+      initItemMemorySeed: 'Memory seed',
+      initItemSkills: 'Skills',
+      initItemSettings: 'Settings',
+      initItemDirs: 'Directories',
+      initPlanAction: 'Planned action',
+      initPreview: 'Preview',
+      initPreviewHide: 'Hide preview',
+      initPreviewEmpty: '(nothing to preview)',
+      initPreviewMore: '… (first {n} lines only)',
+      initBlockVersion: 'Block version',
+      initContentHash: 'Content hash',
+      initSummary: '{total} items · {toWrite} to write · {upToDate} up to date · {blocked} blocked',
+      initSafety: 'Files are backed up before writing; AGENTS.md only updates the content inside the "Work Secretary" marker block — your own sections are left untouched.',
+      initListSep: ', ',
     }
 
     /** 包含的五个子插件（不写版本号：版本随使用者安装情况而变，由后续安装器探测） */
@@ -540,6 +768,42 @@ window.__ModuleLoader__.load({
       },
       runEntry: { padding: '9px 0', borderBottom: '1px solid #f6f7f9' },
       runHead: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
+
+      // ── 配置引导（P3：四段式向导 + 表单） ─────────────────────────
+      wizSteps: { display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' },
+      wizStep: {
+        display: 'flex', gap: '6px', alignItems: 'center', border: '1px solid #eef0f2',
+        background: '#fbfbfc', borderRadius: '8px', padding: '5px 9px',
+      },
+      wizStepOn: { borderColor: '#c7d2fe', background: '#f3f6ff' },
+      wizStepDone: { background: '#f4fbf7', borderColor: '#d6efe1' },
+      wizNo: {
+        width: '18px', height: '18px', borderRadius: '50%', background: '#e8eaf0', color: '#4b5563',
+        fontSize: '11px', fontWeight: 650, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      },
+      wizNoOn: { background: '#1d4ed8', color: '#fff' },
+      wizNoDone: { background: '#16794a', color: '#fff' },
+      wizName: { fontSize: '12.5px', color: '#6b7280' },
+      wizNameOn: { color: '#1d4ed8', fontWeight: 600 },
+      field: { display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '10px' },
+      fieldRow: { display: 'flex', gap: '10px', flexWrap: 'wrap' },
+      fieldCol: { flex: '1 1 220px', minWidth: '200px' },
+      label: { fontSize: '12.5px', fontWeight: 600, color: '#374151' },
+      labelHint: { fontSize: '11.5px', color: '#8a8f98', fontWeight: 400 },
+      input: {
+        width: '100%', boxSizing: 'border-box', border: '1px solid #dfe1e5', borderRadius: '8px',
+        padding: '6px 9px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1f2328', background: '#fff',
+      },
+      select: {
+        width: '100%', boxSizing: 'border-box', border: '1px solid #dfe1e5', borderRadius: '8px',
+        padding: '6px 9px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1f2328', background: '#fff',
+      },
+      reqMark: { color: '#b42318', marginLeft: '2px' },
+      setupBar: {
+        display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
+        background: '#f3f6ff', border: '1px solid #c7d2fe', borderRadius: '12px', padding: '10px 12px', marginBottom: '12px',
+      },
+      setupText: { fontSize: '13px', color: '#2b4c9b', fontWeight: 550 },
     }
 
     function badge(text, extra) {
@@ -568,6 +832,12 @@ window.__ModuleLoader__.load({
     /** 把 {n} 替换成数量（中英语序不同，所以占位而不是拼接） */
     function fill(text, n) {
       return String(text).replace('{n}', String(n))
+    }
+
+    /** 一次替换所有 {key} 占位（汇总行有多个计数，中英语序不同） */
+    function fillAll(text, map) {
+      return String(text).replace(/\{(\w+)\}/g, (all, key) =>
+        (map && map[key] !== undefined && map[key] !== null) ? String(map[key]) : all)
     }
 
     /** 毫秒 → 可读耗时（同时保留原始毫秒数，便于对照日志） */
@@ -756,6 +1026,112 @@ window.__ModuleLoader__.load({
       return S.badgeSkip
     }
 
+    // ── P3「初始化」：/basedeck（dry-run 计划）响应归一化（字段一律容错） ──
+
+    function initStatusLabel(t, status) {
+      const key = INIT_STATUS_KEYS[status]
+      return key ? t(key) : t('statusUnknown')
+    }
+
+    /** 状态 → 徽标样式：up_to_date 绿 / append·update 蓝 / user_modified·ahead 橙 / broken·multiple 红 / 其余灰 */
+    function initStatusStyle(status) {
+      if (status === 'up_to_date') return S.badgeOk
+      if (status === 'append' || status === 'update') return S.badgeBrand
+      if (status === 'user_modified' || status === 'ahead') return S.badgeWarn
+      if (status === 'broken' || status === 'multiple') return S.badgeMissing
+      return S.badgeSkip
+    }
+
+    /** target 可能是单个路径，也可能是路径列表；列表连成一行（接口原样回显，不臆造） */
+    function targetText(target, t) {
+      if (Array.isArray(target)) return target.map((x) => String(x)).join(t('initListSep'))
+      if (typeof target === 'string') return target
+      if (target === undefined || target === null) return ''
+      return String(target)
+    }
+
+    /** preview.sampleLines 可能是数组或含换行的字符串；最多保留 INIT_PREVIEW_MAX 行 */
+    function sampleLines(preview) {
+      const raw = preview ? preview.sampleLines : null
+      let lines = []
+      if (Array.isArray(raw)) lines = raw.map((x) => String(x))
+      else if (typeof raw === 'string') lines = raw.split(/\r?\n/)
+      const overflow = lines.length > INIT_PREVIEW_MAX
+      return { lines: lines.slice(0, INIT_PREVIEW_MAX), overflow: overflow, empty: lines.length === 0 }
+    }
+
+    /** 归一化一项初始化计划；raw 为 null 表示接口没返回该项（只渲染骨架） */
+    function normalizeInitItem(raw, id, t) {
+      const r = (raw && typeof raw === 'object') ? raw : null
+      const labelKey = INIT_LABEL_KEYS[id] || ''
+      const fallback = labelKey ? t(labelKey) : ''
+      const name = (r && firstText(r.label, r.name, r.title))
+        || ((fallback && fallback !== labelKey) ? fallback : id)
+      const preview = (r && r.preview && typeof r.preview === 'object') ? r.preview : null
+      return {
+        id: id,
+        name: name,
+        status: (r && typeof r.status === 'string') ? r.status : '',
+        target: targetText(r && r.target, t),
+        detail: (r && typeof r.detail === 'string') ? r.detail : '',
+        preview: preview,
+        action: (preview && typeof preview.action === 'string') ? preview.action : '',
+        blockVersion: preview ? firstText(preview.blockVersion) : '',
+        contentHash: preview ? firstText(preview.contentHash) : '',
+        autoApplyable: Boolean(r && r.autoApplyable === true),
+      }
+    }
+
+    /** 归一化单项写入结果（POST /basedeck 逐项元素；字段容错） */
+    function normalizeWrite(body, id, t, fallbackMsg) {
+      const b = (body && typeof body === 'object') ? body : {}
+      const bytes = (typeof b.bytesWritten === 'number' && isFinite(b.bytesWritten))
+        ? b.bytesWritten
+        : ((typeof b.writtenBytes === 'number' && isFinite(b.writtenBytes)) ? b.writtenBytes : null)
+      const detail = firstText(b.detail)
+      const errText = firstText(b.error, b.message)
+      // 服务端明确回 dryRun:true —— 说明本次并没有真正写盘，不能算成功
+      const stillDry = b.dryRun === true
+      const ok = b.ok !== false && !stillDry
+      const message = !ok
+        ? (errText || detail || (stillDry ? t('initWriteDryRun') : fallbackMsg))
+        : ''
+      return {
+        id: typeof b.id === 'string' ? b.id : id,
+        ok: ok,
+        dryRun: b.dryRun === false ? false : (stillDry ? true : null),
+        action: firstText(b.action),
+        target: targetText(b.target, t),
+        backup: targetText(b.backup, t),
+        bytesWritten: bytes,
+        detail: detail,
+        message: message,
+      }
+    }
+
+    /** 写入失败 / 网络异常的归一化结果（与结果行同构） */
+    function failedWrite(id, msg) {
+      return {
+        id: id, ok: false, dryRun: null, action: '', target: '',
+        backup: '', bytesWritten: null, detail: '', message: String(msg),
+      }
+    }
+
+    /** setupNeeded 为 true 时，「还差几项」的计数（缺字段时按 summary 兜底） */
+    function setupCount(body) {
+      const items = (body && Array.isArray(body.items)) ? body.items : []
+      let n = 0
+      for (const it of items) {
+        if (!it || typeof it !== 'object') continue
+        if (typeof it.status === 'string' && it.status !== '' && it.status !== 'up_to_date') n++
+      }
+      if (n > 0) return n
+      const s = (body && body.summary && typeof body.summary === 'object') ? body.summary : {}
+      const w = (typeof s.toWrite === 'number' && isFinite(s.toWrite)) ? s.toWrite : 0
+      const b = (typeof s.blocked === 'number' && isFinite(s.blocked)) ? s.blocked : 0
+      return w + b
+    }
+
     /**
      * 宿主请求（按载体分档，见 HOST_FALLBACK）：
      * - Web 载体：先按**市场同款**（根相对路径），失败再按**一方 file-upload 同款**
@@ -818,6 +1194,7 @@ window.__ModuleLoader__.load({
       const items = [
         ['install', t('tabInstall')],
         ['plugins', t('tabPlugins')],
+        ['init', t('tabInit')],
         ['config', t('tabConfig')],
         ['about', t('tabAbout')],
       ]
@@ -833,8 +1210,11 @@ window.__ModuleLoader__.load({
       const t = props.t
       const current = props.current || 'env'
       return h('div', { style: S.steps }, STEPS.map((s, i) => {
-        const later = s[2] === 'later'
-        const on = !later && s[0] === current
+        const isCurrent = s[0] === current
+        // P3：「初始化」是最后一步，也是唯一带 later 标记却可能成为当前步的一步；
+        // 只有它真的成为当前步时才取消「后续版本」标记（P1/P2 的显示不变）。
+        const later = s[2] === 'later' && !isCurrent
+        const on = !later && isCurrent
         return h('div', {
           key: s[0],
           style: Object.assign({}, S.step, on ? S.stepOn : null, later ? S.stepLater : null),
@@ -1582,6 +1962,494 @@ window.__ModuleLoader__.load({
       ])
     }
 
+    /** 初始化清单一行：中文名 · 状态徽标 · 计划动作 · 目标路径 · 说明 · 可展开预览（最多 20 行） */
+    function InitRow(props) {
+      const t = props.t
+      const item = props.item
+      const open = Boolean(props.open)
+      const hasPreview = Boolean(item.preview)
+      const lines = sampleLines(item.preview)
+      const meta = []
+      if (item.blockVersion) meta.push(t('initBlockVersion') + ' ' + item.blockVersion)
+      if (item.contentHash) meta.push(t('initContentHash') + ' ' + item.contentHash)
+      const nodes = [
+        h('div', { key: 'head', style: S.rowHead }, [
+          h('span', { key: 'nm', style: S.itemName }, item.name),
+          h('span', { key: 'st', style: Object.assign({}, S.badge, initStatusStyle(item.status)) },
+            initStatusLabel(t, item.status)),
+          item.action ? h('span', { key: 'ac', style: S.actionHint }, t('initPlanAction') + ': ' + item.action) : null,
+        ]),
+      ]
+      if (item.target) nodes.push(h('div', { key: 'tg', style: S.itemValue }, item.target))
+      if (item.detail) nodes.push(h('div', { key: 'dt', style: S.itemDetail }, renderDetail(item.detail)))
+      if (hasPreview) {
+        nodes.push(h('div', { key: 'act', style: S.actions }, [
+          h('button', {
+            key: 'pv', type: 'button', style: S.btn,
+            onClick: () => props.onToggle(item.id),
+          }, open ? t('initPreviewHide') : t('initPreview')),
+          meta.length ? h('span', { key: 'meta', style: S.actionHint }, meta.join(' · ')) : null,
+        ]))
+      }
+      if (open && hasPreview) {
+        nodes.push(h('div', { key: 'lines', style: S.out }, lines.empty
+          ? t('initPreviewEmpty')
+          : ((lines.overflow ? fill(t('initPreviewMore'), INIT_PREVIEW_MAX) + '\n' : '') + lines.lines.join('\n'))))
+      }
+      return h('div', { style: S.row }, nodes)
+    }
+
+    /** 四段式向导进度条（当前段由页面用 props.stage 指定） */
+    function WizSteps(props) {
+      const t = props.t
+      const order = WIZ_STEPS.map((x) => x[0])
+      const cur = order.indexOf(String(props.stage || 'form'))
+      return h('div', { style: S.wizSteps }, WIZ_STEPS.map((s, i) => {
+        const on = s[0] === props.stage
+        const done = cur >= 0 && i < cur
+        return h('div', {
+          key: s[0],
+          style: Object.assign({}, S.wizStep, on ? S.wizStepOn : null, done ? S.wizStepDone : null),
+        }, [
+          h('span', { key: 'n', style: Object.assign({}, S.wizNo, on ? S.wizNoOn : null, done ? S.wizNoDone : null) }, String(i + 1)),
+          h('span', { key: 'x', style: Object.assign({}, S.wizName, on ? S.wizNameOn : null) }, t(s[1])),
+        ])
+      }))
+    }
+
+    /** 写入结果一行：中文名 · 状态 · 动作 · 目标 · 备份 · 写入字节 · 说明 */
+    function InitResultRow(props) {
+      const t = props.t
+      const item = props.item
+      const panel = props.panel
+      const state = props.state || 'wait'
+      const nodes = [
+        h('div', { key: 'head', style: S.runHead }, [
+          h('span', { key: 'nm', style: S.itemName }, item.name),
+          h('span', { key: 'st', style: Object.assign({}, S.badge, runStateStyle(state)) },
+            t(WRITE_STATE_KEYS[state] || 'runWait')),
+        ]),
+      ]
+      if (panel) {
+        if (panel.action) nodes.push(h('div', { key: 'ac', style: S.itemDetail }, t('initPlanAction') + ': ' + panel.action))
+        if (panel.target) nodes.push(h('div', { key: 'tg', style: S.itemValue }, t('initColTarget') + ': ' + panel.target))
+        const kv = []
+        if (panel.backup) kv.push(['bk', t('initColBackup'), panel.backup])
+        else if (state === 'ok') kv.push(['bk', t('initColBackup'), t('initNoBackup')])
+        if (panel.bytesWritten !== null && panel.bytesWritten !== undefined) {
+          kv.push(['by', t('initColBytes'), String(panel.bytesWritten)])
+        }
+        if (kv.length) nodes.push(h('div', { key: 'kv', style: S.kv }, kv.map((r) => h('div', { key: r[0], style: S.kvRow }, [
+          h('span', { key: 'k', style: S.kvKey }, r[1]),
+          h('span', { key: 'v', style: S.kvVal }, r[2]),
+        ]))))
+        if (panel.detail && panel.detail !== panel.message) nodes.push(h('div', { key: 'dt', style: S.note }, panel.detail))
+        if (panel.message) nodes.push(h('div', { key: 'msg', style: S.warnLine }, panel.message))
+      }
+      return h('div', { style: S.runEntry }, nodes)
+    }
+
+    /**
+     * 「初始化」页（P3）：**配置引导（setup wizard）**。
+     * 四段式：填写配置 → 检查与预览 → 执行 → 结果。
+     * - 进入自动 GET /basedeck（不带 workspace）预填当前工作区；
+     * - 「检查并预览」→ GET /basedeck?workspace=<表单值>（只读，写前先看）；
+     * - 「完成配置」→ 按 WRITE_ORDER **逐个** POST /basedeck { ids:[id], dryRun:false, overrides }
+     *   —— 逐项实时状态；整批 POST 仅在请求层失败且尚无成功响应时兜底；
+     * - 完成后需重启 DSH 生效；接口不支持 dryRun:false 时给可读失败提示，不假装成功。
+     */
+    function InitPage(props) {
+      const t = props.t
+      const state = useState({
+        stage: 'form', busy: false, items: [], workspace: '', workspaceSource: '',
+        summary: null, error: '', writeError: '', open: {},
+        form: { workspace: '', domain: '', identityExpert: '', memoryDir: '', obsidianSyncDir: '' },
+        batch: null,
+      })
+      const st = state[0]
+      const setSt = state[1]
+
+      function setField(key, value) {
+        setSt((prev) => Object.assign({}, prev, { form: Object.assign({}, prev.form, { [key]: value }) }))
+      }
+
+      function toggleOpen(id) {
+        setSt((prev) => {
+          const next = Object.assign({}, prev.open)
+          next[id] = !next[id]
+          return Object.assign({}, prev, { open: next })
+        })
+      }
+
+      function setBatchState(id, value) {
+        setSt((prev) => {
+          const batch = prev.batch
+          if (!batch) return prev
+          const nextState = Object.assign({}, batch.state)
+          nextState[id] = value
+          return Object.assign({}, prev, { batch: Object.assign({}, batch, { state: nextState }) })
+        })
+      }
+
+      /** 首屏：GET /basedeck（不带 workspace）—— 只用于预填当前工作区 */
+      async function boot() {
+        setSt((prev) => Object.assign({}, prev, { stage: 'form', busy: true, error: '', writeError: '' }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/basedeck', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'basedeck 返回 ok:false'))
+          const ws = typeof body.workspace === 'string' ? body.workspace.trim() : ''
+          setSt((prev) => Object.assign({}, prev, {
+            stage: 'form', busy: false, error: '',
+            items: Array.isArray(body.items) ? body.items : [],
+            workspace: ws,
+            workspaceSource: typeof body.workspaceSource === 'string' ? body.workspaceSource.trim() : '',
+            summary: (body.summary && typeof body.summary === 'object') ? body.summary : null,
+            form: Object.assign({}, prev.form, { workspace: prev.form.workspace || ws }),
+          }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, { stage: 'form', busy: false, error: String((err && err.message) || err) }))
+        }
+      }
+
+      /** 「检查并预览」：GET /basedeck?workspace=<表单值>（只读） */
+      async function checkPreview() {
+        const ws = String(st.form.workspace || '').trim()
+        setSt((prev) => Object.assign({}, prev, { stage: 'preview', busy: true, error: '', writeError: '', open: {} }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/basedeck' + (ws ? ('?workspace=' + encodeURIComponent(ws)) : ''), 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'basedeck 返回 ok:false'))
+          setSt((prev) => Object.assign({}, prev, {
+            stage: 'preview', busy: false, error: '',
+            items: Array.isArray(body.items) ? body.items : [],
+            workspace: typeof body.workspace === 'string' ? body.workspace.trim() : ws,
+            workspaceSource: typeof body.workspaceSource === 'string' ? body.workspaceSource.trim() : '',
+            summary: (body.summary && typeof body.summary === 'object') ? body.summary : null,
+          }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, { stage: 'form', busy: false, error: String((err && err.message) || err) }))
+        }
+      }
+
+      /** 「重新检查」：已填工作区 → 重新预览；否则重新探测默认工作区 */
+      function recheck() {
+        if (String(st.form.workspace || '').trim()) return checkPreview()
+        return boot()
+      }
+
+      /**
+       * 「完成配置」：按 WRITE_ORDER 逐个 POST /basedeck { ids:[id], dryRun:false, overrides }。
+       * 每步完成立刻刷新该项状态（等待 / 写入中 / 成功 / 失败）与结果。
+       * 兜底：逐个请求在「请求层」失败、且本次尚无成功响应（典型：路由未注册）时，
+       * 整体回退到一次 POST { ids: 全部 }，按返回的逐项结果回填。
+       */
+      async function finish() {
+        if (st.busy || st.stage === 'running') return
+        const ids = WRITE_ORDER.slice()
+        const overrides = {
+          workspace: String(st.form.workspace || '').trim(),
+          defaultDomain: String(st.form.domain || ''),
+          identityExpert: String(st.form.identityExpert || '').trim(),
+          memoryDir: String(st.form.memoryDir || '').trim(),
+          obsidianSyncDir: String(st.form.obsidianSyncDir || '').trim(),
+        }
+        const initState = {}
+        for (const id of ids) initState[id] = 'wait'
+        setSt((prev) => Object.assign({}, prev, {
+          stage: 'running', busy: true, writeError: '',
+          batch: { running: true, order: ids, state: initState, results: {} },
+        }))
+        const results = {}
+        const states = {}
+        let servedAny = false
+        let fallback = false
+        for (const id of ids) {
+          setBatchState(id, 'run')
+          let panel = null
+          let transportFailed = false
+          try {
+            const body = await postJson('/basedeck', { ids: [id], dryRun: false, overrides: overrides })
+            if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+            panel = normalizeWrite(body, id, t, t('initWriteFailTitle'))
+            servedAny = true
+          } catch (err) {
+            transportFailed = true
+            panel = failedWrite(id, String((err && err.message) || err))
+          }
+          results[id] = panel
+          states[id] = panel.ok ? 'ok' : 'fail'
+          setSt((prev) => {
+            const batch = prev.batch || { order: ids, state: {}, results: {} }
+            return Object.assign({}, prev, {
+              batch: Object.assign({}, batch, {
+                state: Object.assign({}, batch.state, { [id]: states[id] }),
+                results: Object.assign({}, batch.results, { [id]: results[id] }),
+              }),
+            })
+          })
+          if (transportFailed && !servedAny) { fallback = true; break }
+        }
+        if (fallback) {
+          try {
+            const body = await postJson('/basedeck', { ids: ids, dryRun: false, overrides: overrides })
+            const list = fixAllList(body)
+            if (!list) throw new Error('响应不含逐项结果')
+            list.forEach((x, i) => {
+              const id = (x && typeof x.id === 'string') ? x.id : ids[i]
+              if (!id) return
+              const panel = normalizeWrite(x, id, t, t('initWriteFailTitle'))
+              results[id] = panel
+              states[id] = panel.ok ? 'ok' : 'fail'
+            })
+            if (!Object.keys(results).length) throw new Error('响应逐项结果为空')
+          } catch (err) {
+            const msg = String((err && err.message) || err)
+            for (const id of ids) {
+              if (!states[id] || states[id] === 'wait') {
+                results[id] = results[id] || failedWrite(id, msg)
+                states[id] = 'fail'
+              }
+            }
+            setSt((prev) => Object.assign({}, prev, { writeError: msg }))
+          }
+        }
+        const allOk = ids.every((id) => states[id] === 'ok')
+        setSt((prev) => {
+          const batch = prev.batch || { order: ids, state: {}, results: {} }
+          const nextState = Object.assign({}, batch.state)
+          for (const id of ids) if (states[id]) nextState[id] = states[id]
+          return Object.assign({}, prev, {
+            stage: 'done', busy: false,
+            batch: { running: false, order: ids, state: nextState, results: results },
+          })
+        })
+        if (allOk && typeof props.onConfigured === 'function') {
+          try { props.onConfigured() } catch (e) { /* 忽略：仅用于收起引导条 */ }
+        }
+      }
+
+      useEffect(() => { boot() }, [])
+
+      const byId = {}
+      for (const raw of (Array.isArray(st.items) ? st.items : [])) { if (raw && raw.id) byId[raw.id] = raw }
+      const rows = INIT_ORDER.map((id) => normalizeInitItem(byId[id] || null, id, t))
+      const loading = Boolean(st.busy)
+      const wsNone = st.workspaceSource === 'none'
+      const form = st.form
+      const wsFilled = String(form.workspace || '').trim().length > 0
+      // 工作岗位域必填且不预选：它决定专家库的默认视角，缺省会落到产品默认值（对非该岗位的使用者是错的）
+      const domainFilled = String(form.domain || '').length > 0
+      const emptyList = st.stage === 'preview' && (!st.items || st.items.length === 0)
+      const canCheck = !loading && wsFilled
+      const canFinish = !loading && st.stage === 'preview' && !wsNone && domainFilled
+      const batch = st.batch
+      const writeDone = batch
+        ? batch.order.filter((id) => batch.state[id] === 'ok' || batch.state[id] === 'fail').length
+        : 0
+      const writeAllOk = Boolean(batch) && batch.order.every((id) => batch.state[id] === 'ok')
+      const progressText = batch ? fillAll(t('initRunProgress'), {
+        done: Math.min(writeDone + (batch.running ? 1 : 0), batch.order.length || 1),
+        total: batch.order.length || 1,
+      }) : ''
+      const sum = st.summary || {}
+      const num = (v) => (typeof v === 'number' && isFinite(v)) ? String(v) : '—'
+      const summaryText = fillAll(t('initSummary'), {
+        total: num(sum.total === undefined ? rows.length : sum.total),
+        toWrite: num(sum.toWrite === undefined ? 0 : sum.toWrite),
+        upToDate: num(sum.upToDate === undefined ? 0 : sum.upToDate),
+        blocked: num(sum.blocked === undefined ? 0 : sum.blocked),
+      })
+      const wsSourceText = st.workspaceSource === 'config'
+        ? t('wsSourceConfig')
+        : (st.workspaceSource === 'default' ? t('wsSourceDefault') : (wsNone ? t('wsSourceNone') : ''))
+      const spinner = [h('span', {
+        key: 'sp', className: 'wps-spin',
+        style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }),
+      }, '⟳'), t('initRecheck')]
+
+      return h('div', null, [
+        h('style', { key: 'kf' }, KEYFRAMES),
+        h(Steps, { key: 'steps', t: t, current: 'init' }),
+        h(WizSteps, { key: 'wiz', t: t, stage: st.stage }),
+
+        // ── 段 1：填写配置 ──────────────────────────────────────────
+        st.stage === 'form' ? h('div', { key: 'form', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, [
+              t('initFormTitle'),
+              loading ? badge(t('initChecking'), S.badgeWarn) : null,
+              st.workspace ? badge(t('workspaceLabel') + ' ' + st.workspace, S.badgeBrand) : null,
+              wsNone ? badge(t('workspaceLabel') + ' ' + t('wsSourceNone'), S.badgeMissing) : null,
+            ]),
+            h('p', { key: 'sub', style: S.cardSub }, t('initFormHint')),
+            h('div', { key: 'tools', style: S.toolbar }, [
+              h('button', {
+                key: 'recheck', type: 'button',
+                disabled: loading,
+                style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
+                onClick: () => recheck(),
+              }, loading ? spinner : t('initRecheck')),
+            ]),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            st.error ? h('div', { key: 'err', style: S.error }, [
+              h('div', { key: 't', style: S.errorTitle }, t('initLoadFailed')),
+              h('div', { key: 'm', style: S.errorMsg }, st.error),
+              h('div', { key: 'h', style: S.errorHint }, t('initLoadFailedHint')),
+              h('button', {
+                key: 'b', type: 'button',
+                style: Object.assign({}, S.btn, S.btnPrimary),
+                onClick: () => boot(),
+              }, t('retry')),
+            ]) : null,
+            wsNone ? h('div', { key: 'ws', style: S.warnLine }, t('workspaceNoneHint')) : null,
+            h('div', { key: 'f1', style: S.field }, [
+              h('label', { key: 'l', style: S.label }, [t('initFieldWorkspace'), h('span', { key: 'r', style: S.reqMark }, ' *')]),
+              h('input', {
+                key: 'i', type: 'text', style: S.input, value: form.workspace,
+                onChange: (e) => setField('workspace', e && e.target ? e.target.value : ''),
+              }),
+              h('div', { key: 'h', style: S.labelHint }, t('initFieldWorkspaceHint')),
+            ]),
+            h('div', { key: 'f2', style: S.field }, [
+              h('label', { key: 'l', style: S.label }, [t('initFieldDomain'), h('span', { key: 'r', style: S.reqMark }, ' *')]),
+              h('select', {
+                key: 's', style: S.select, value: form.domain,
+                onChange: (e) => setField('domain', e && e.target ? e.target.value : ''),
+              }, [h('option', { key: '__placeholder', value: '' }, t('initDomainPlaceholder'))]
+                .concat(DOMAIN_OPTIONS.map((d) => h('option', { key: d[0], value: d[0] }, t(d[1]))))),
+              h('div', { key: 'h', style: S.labelHint }, t('initFieldDomainHint')),
+              domainFilled ? null : h('div', { key: 'w', style: S.warnLine }, t('initDomainRequired')),
+            ]),
+            h('div', { key: 'f3', style: S.fieldRow }, [
+              h('div', { key: 'a', style: S.fieldCol }, h('div', { style: Object.assign({}, S.field, { marginBottom: 0 }) }, [
+                h('label', { key: 'l', style: S.label }, [t('initFieldMemoryDir'), h('span', { key: 'o', style: S.labelHint }, ' (' + t('initOptional') + ')')]),
+                h('input', {
+                  key: 'i', type: 'text', style: S.input, value: form.memoryDir,
+                  onChange: (e) => setField('memoryDir', e && e.target ? e.target.value : ''),
+                }),
+                h('div', { key: 'h', style: S.labelHint }, t('initFieldMemoryDirHint')),
+              ])),
+              h('div', { key: 'b', style: S.fieldCol }, h('div', { style: Object.assign({}, S.field, { marginBottom: 0 }) }, [
+                h('label', { key: 'l', style: S.label }, [t('initFieldObsidianDir'), h('span', { key: 'o', style: S.labelHint }, ' (' + t('initOptional') + ')')]),
+                h('input', {
+                  key: 'i', type: 'text', style: S.input, value: form.obsidianSyncDir,
+                  onChange: (e) => setField('obsidianSyncDir', e && e.target ? e.target.value : ''),
+                }),
+                h('div', { key: 'h', style: S.labelHint }, t('initFieldObsidianDirHint')),
+              ])),
+            ]),
+            h('div', { key: 'f4', style: S.field }, [
+              h('label', { key: 'l', style: S.label }, [t('initFieldExpert'), h('span', { key: 'o', style: S.labelHint }, ' (' + t('initOptional') + ')')]),
+              h('input', {
+                key: 'i', type: 'text', style: S.input, value: form.identityExpert,
+                onChange: (e) => setField('identityExpert', e && e.target ? e.target.value : ''),
+              }),
+              h('div', { key: 'h', style: S.labelHint }, t('initFieldExpertHint')),
+            ]),
+          ]),
+        ]) : null,
+
+        // ── 段 2：检查与预览（写之前先给使用者看） ──────────────────
+        st.stage === 'preview' ? h('div', { key: 'preview', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, [
+              t('initPlanTitle'),
+              loading ? badge(t('initChecking'), S.badgeWarn) : null,
+              wsNone
+                ? badge(t('workspaceLabel') + ' ' + t('wsSourceNone'), S.badgeMissing)
+                : badge(t('workspaceLabel') + ' ' + (st.workspace || form.workspace || '—'), S.badgeBrand),
+            ]),
+            h('p', { key: 'sub', style: S.cardSub }, t('initPlanHint')),
+            h('div', { key: 'tools', style: S.toolbar }, [
+              h('button', {
+                key: 'recheck', type: 'button', disabled: loading,
+                style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
+                onClick: () => recheck(),
+              }, loading ? spinner : t('initRecheck')),
+            ]),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            wsNone ? h('div', { key: 'ws', style: S.warnLine }, t('workspaceNoneHint')) : null,
+            h('div', { key: 'list' }, rows.map((item) => h(InitRow, {
+              key: item.id, t: t, item: item,
+              open: st.open[item.id] === true, onToggle: toggleOpen,
+            }))),
+            emptyList ? h('div', { key: 'empty', style: S.note }, t('initEmpty')) : null,
+          ]),
+        ]) : null,
+
+        // ── 段 3/4：执行与结果 ──────────────────────────────────────
+        (st.stage === 'running' || st.stage === 'done') && batch ? h('div', { key: 'result', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, h('h3', { key: 'title', style: S.cardTitle }, [
+            (!batch.running && !writeAllOk) ? t('initWriteResult') : t('initDoneTitle'),
+            batch.running
+              ? badge(progressText, S.badgeWarn)
+              : badge(writeAllOk ? t('installReportDone') : t('initDonePartial'), writeAllOk ? S.badgeOk : S.badgeMissing),
+          ])),
+          h('div', { key: 'body', style: S.cardBody }, [
+            st.writeError ? h('div', { key: 'we', style: S.error }, [
+              h('div', { key: 't', style: S.errorTitle }, t('initWriteFailTitle')),
+              h('div', { key: 'm', style: S.errorMsg }, st.writeError),
+              h('div', { key: 'h', style: S.errorHint }, t('initWriteFailHint')),
+            ]) : null,
+            h('div', { key: 'list' }, batch.order.map((id) => {
+              const found = rows.filter((r) => r.id === id)[0]
+              return h(InitResultRow, {
+                key: id, t: t, item: found || { id: id, name: id },
+                state: batch.state[id] || 'wait',
+                panel: batch.results[id] || null,
+              })
+            })),
+            !batch.running ? h('div', { key: 'done', style: S.note }, [
+              h('div', { key: 'r', style: { fontWeight: 600, color: writeAllOk ? '#16794a' : '#b42318' } }, t('initDoneRestart')),
+              h('div', { key: 'h', style: { marginTop: '4px' } }, t('initDoneHint')),
+            ]) : null,
+          ]),
+        ]) : null,
+
+        // ── 动作条与安全说明 ────────────────────────────────────────
+        st.stage === 'form' ? h('div', { key: 'action', style: S.actionBar }, [
+          h('button', {
+            key: 'check', type: 'button',
+            disabled: !canCheck,
+            title: canCheck ? undefined : t('initFieldWorkspaceHint'),
+            style: Object.assign({}, S.btn, S.btnPrimary, canCheck ? null : S.btnDisabled),
+            onClick: () => checkPreview(),
+          }, loading ? spinner : t('initCheckPreview')),
+          h('span', { key: 'note', style: S.actionNote }, t('initLead')),
+        ]) : null,
+        st.stage === 'preview' ? h('div', { key: 'action', style: S.actionBar }, [
+          h('button', {
+            key: 'finish', type: 'button',
+            disabled: !canFinish,
+            title: canFinish ? undefined : (!domainFilled ? t('initDomainRequired') : t('workspaceNoneHint')),
+            style: Object.assign({}, S.btn, S.btnPrimary, canFinish ? null : S.btnDisabled),
+            onClick: () => finish(),
+          }, loading ? spinner : t('initFinish')),
+          h('button', {
+            key: 'back', type: 'button', disabled: loading,
+            style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
+            onClick: () => setSt((prev) => Object.assign({}, prev, { stage: 'form', error: '' })),
+          }, t('initBackToForm')),
+          h('span', { key: 'note', style: S.actionNote }, domainFilled ? summaryText : t('initDomainRequired')),
+        ]) : null,
+        st.stage === 'done' ? h('div', { key: 'action', style: S.actionBar }, [
+          h('button', {
+            key: 'again', type: 'button', disabled: loading,
+            style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
+            onClick: () => recheck(),
+          }, t('initRecheck')),
+          h('span', { key: 'note', style: S.actionNote }, summaryText),
+        ]) : null,
+
+        h('div', { key: 'foot', style: S.note }, t('initSafety')),
+      ])
+    }
+
     function Placeholder(props) {
       const t = props.t
       return h('div', { style: S.placeholder }, [
@@ -1649,19 +2517,48 @@ window.__ModuleLoader__.load({
     function Section(props) {
       const t = props.t
       // 默认仍是「关于与致谢」；initialTab 供冒烟测试与深链指定页签
-      const first = ['install', 'plugins', 'config', 'about'].indexOf(props.initialTab) >= 0 ? props.initialTab : 'about'
+      const first = ['install', 'plugins', 'init', 'config', 'about'].indexOf(props.initialTab) >= 0 ? props.initialTab : 'about'
       const state = useState(first)
       const tab = state[0]
       const setTab = state[1]
+      // P3 首用引导：只在**未显式指定页签**时探测 setupNeeded（显式深链/冒烟不额外发请求）；
+      // setupNeeded 缺失按 false 处理（向后兼容），为 true 时默认落到「初始化」页。
+      const setup = useState({ needed: false, count: 0 })
+      const setupSt = setup[0]
+      const setSetup = setup[1]
+      useEffect(() => {
+        if (props.initialTab) return
+        if (typeof fetch !== 'function') return
+        let alive = true
+        getJson('/basedeck', 15000).then((body) => {
+          if (!alive || !body || typeof body !== 'object' || body.ok === false) return
+          if (body.setupNeeded !== true) return
+          setSetup({ needed: true, count: setupCount(body) })
+          setTab('init')
+        }).catch(() => { /* 探测失败不打扰：默认页保持原样 */ })
+        return () => { alive = false }
+      }, [])
       let page = null
       if (tab === 'install') page = h(InstallPage, { key: 'i', t: t })
       else if (tab === 'plugins') page = h(PluginsPage, { key: 'g', t: t })
+      else if (tab === 'init') page = h(InitPage, {
+        key: 'n', t: t,
+        onConfigured: () => setSetup({ needed: false, count: 0 }),
+      })
       else if (tab === 'config') page = h(Placeholder, { key: 'p', t: t })
       else page = h(AboutPage, { key: 'a', t: t })
       return h('div', { style: S.wrap }, [
         h('h1', { key: 'h', style: S.h1 }, t('title')),
         h('p', { key: 'l', style: S.lead }, t('lead')),
         h(StatusBar, { key: 'b', t: t }),
+        setupSt.needed ? h('div', { key: 'setup', style: S.setupBar }, [
+          h('span', { key: 'x', style: S.setupText }, fill(t('setupNeeded'), setupSt.count)),
+          h('button', {
+            key: 'go', type: 'button',
+            style: Object.assign({}, S.btn, S.btnPrimary),
+            onClick: () => setTab('init'),
+          }, t('setupGo')),
+        ]) : null,
         h(Tabs, { key: 't', t: t, tab: tab, setTab: setTab }),
         page,
       ])

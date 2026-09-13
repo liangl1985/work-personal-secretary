@@ -7,6 +7,9 @@
  * [1]-[6] 是既有断言（注册 / 关于与致谢 / 中立性），不得削弱；
  * [7] 是「安装与检查」页新增断言：在无 location、可控 fetch 的替身环境里，
  * 验证七项骨架、四步进度、复选框与批量补齐请求（含桌面载体基址回退）。
+ * [11] 是「初始化」页（P3：配置引导 setup wizard）新增断言：四段式向导、首用必配表单、
+ * 检查与预览（GET /basedeck?workspace=…）、逐项 POST /basedeck（dryRun:false + overrides）、
+ * 结果回显与「需重启 DSH 生效」、dryRun:false 不支持时的可读失败、setupNeeded 默认落页与引导条。
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -735,6 +738,386 @@ hookCursor = 0
 effectQueue = []
 const hintTexts = collect(expand(reg.render({ initialTab: 'plugins' })), []).join(' | ')
 ok(hintTexts.includes('未找到当前 profile 目录'), '接口 message 作为可读提示回显（profileDir 缺失场景）')
+
+// ══════════════════════════════════════════════════════════════════
+// [11] 初始化页（P3：配置引导 setup wizard —— 表单 → 预览 → 执行 → 结果）
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[11] 初始化页（配置引导）')
+
+const bdHash = (ch) => 'sha256:' + ch.repeat(64)
+const BD_ITEMS = [
+  { id: 'agentsMd', label: '指令层 AGENTS.md', status: 'append', target: 'C:/work/space/AGENTS.md',
+    detail: '目标文件不存在，将新建并写入标记块', autoApplyable: true,
+    preview: { action: '将新建（文件末尾追加标记块）', blockVersion: '1', contentHash: bdHash('a'),
+      sampleLines: ['# 指令', '', '## 语言', '中文回答'] } },
+  { id: 'memorySeed', label: '记忆种子', status: 'update', target: 'C:/work/space/memory/seed.md',
+    detail: '标记块区间为内置版本，可安全更新', autoApplyable: true,
+    preview: { action: '将只更新标记块区间', blockVersion: '2', contentHash: bdHash('b'),
+      sampleLines: Array.from({ length: 25 }, (_, i) => 'seed-line-' + (i + 1)) } },
+  { id: 'skills', label: '技能', status: 'up_to_date', target: 'C:/work/space/skills',
+    detail: '已是最新，无需写入', autoApplyable: true,
+    preview: { action: '已是最新无需写入', blockVersion: '1', contentHash: bdHash('c'), sampleLines: [] } },
+  { id: 'settings', label: '设置', status: 'user_modified', target: ['C:/work/space/.dsh/settings.json'],
+    detail: '块内被手工改过，不自动覆盖', autoApplyable: false,
+    preview: { action: '块内被手工改过不自动覆盖', blockVersion: '1', contentHash: bdHash('d'), sampleLines: ['custom: true'] } },
+  { id: 'dirs', label: '目录结构', status: 'multiple', target: 'C:/work/space/notes',
+    detail: '检测到多份候选目录，需人工确认', autoApplyable: false,
+    preview: { action: '检测到多份同名目录', blockVersion: '1', contentHash: bdHash('e'), sampleLines: [] } },
+]
+const BD_GET = {
+  ok: true, workspace: 'C:/work/space', workspaceSource: 'config', setupNeeded: true,
+  items: BD_ITEMS, summary: { total: 5, toWrite: 2, upToDate: 1, blocked: 2 },
+}
+/** 写前预览（GET）与逐项写入（POST dryRun:false）共用的 mock */
+const bdFetch = async (url, opts) => {
+  const u = String(url)
+  const method = (opts && opts.method) || 'GET'
+  calls.push({ url: u, method: method, body: opts && opts.body })
+  if (!/^https?:/i.test(u)) throw new Error('relative URL unavailable in desktop shell')
+  if (u.indexOf('/basedeck') >= 0 && method === 'POST') {
+    let body = {}
+    try { body = JSON.parse(String((opts && opts.body) || '{}')) } catch (e) { body = {} }
+    const id = Array.isArray(body.ids) ? String(body.ids[0] || '') : ''
+    return jsonRes({
+      ok: true, id: id, dryRun: body.dryRun !== false, action: '已写入',
+      target: 'C:/work/space/' + id, backup: 'C:/work/space/' + id + '.bak',
+      bytesWritten: 100 + id.length, detail: '已写入 ' + id,
+    })
+  }
+  if (u.indexOf('/basedeck') >= 0) return jsonRes(BD_GET)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+const findInputs = (n) => findAll(n, (x) => x.type === 'input', [])
+const findSelects = (n) => findAll(n, (x) => x.type === 'select', [])
+const hasBtn = (n, text) => findButtons(n).filter((b) => label(b).indexOf(text) >= 0)
+
+globalThis.fetch = bdFetch
+
+// ── 段 1 骨架：四段式向导 + 首用必配表单 ────────────────────────
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+let iTree = expand(reg.render({ initialTab: 'init' }))
+let itext = collect(iTree, []).join(' | ')
+ok(itext.includes('配置引导'), '页面标题为「配置引导」（不再是只读计划）')
+ok(itext.includes('填写配置') && itext.includes('检查与预览') && itext.includes('执行') && itext.includes('结果'), '四段式向导齐全（填写配置 / 检查与预览 / 执行 / 结果）')
+ok(itext.includes('环境检查') && itext.includes('安装子插件') && itext.includes('初始化') && itext.includes('当前'), '分区四步进度条含「初始化」且为当前步')
+const bdFields = ['工作区目录', '工作岗位域', '身份专家', '记忆库目录', 'Obsidian 库目录']
+ok(bdFields.every((x) => itext.includes(x)), '首用必配五项字段齐全（' + bdFields.join(' / ') + '）')
+ok(itext.includes('首用必配项') && itext.includes('必填'), '表单标题与必填提示')
+ok(itext.includes('可选'), '可选项标注「可选」')
+ok(itext.includes('写入前会自动备份') && itext.includes('只更新「工作秘书」标记块内的内容') && itext.includes('不会被改动'), '安全文案：自动备份 + 只改标记块 + 不动你自己的段落')
+ok(itext.includes('检查并预览'), '段 1 主按钮为「检查并预览」')
+const domText = findSelects(iTree).length > 0 ? collect(findSelects(iTree)[0], []).join(' | ') : ''
+ok(['售前', '售后·技术支持', '会计财务', '法务', '文档', '核查·通用'].every((x) => domText.includes(x)), '工作岗位域下拉六项齐全')
+ok(findSelects(iTree)[0].props.value === '', '工作岗位域不默认预选（初始 value 为空）')
+ok(domText.indexOf('请选择') >= 0, '工作岗位域下拉首项为占位「请选择…」')
+ok(itext.includes('请先选择你的工作方向'), '未选岗位域时给出提示「请先选择你的工作方向」')
+ok(itext.includes('留空将把记忆镜像到 <工作区>/work-memory'), 'Obsidian 库目录补充留空说明（镜像到 <工作区>/work-memory）')
+ok(itext.indexOf('只做检查') < 0 && itext.indexOf('不会修改任何文件') < 0, '原「本版只做检查不写盘」文案已移除')
+
+const iErrors = []
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { iErrors.push(err) } }
+ok(iErrors.length === 0, '初始化页挂载 effect 不抛错')
+await tick(50)
+ok(calls.length > 0 && calls[0].url === 'http://dsh.internal/work-personal-secretary/api/basedeck', '进入页 GET /basedeck（不带 workspace）命中合成基址')
+
+// ── 段 1：默认取当前工作区 ──────────────────────────────────────
+hookCursor = 0
+effectQueue = []
+iTree = expand(reg.render({ initialTab: 'init' }))
+itext = collect(iTree, []).join(' | ')
+const iInputs = findInputs(iTree)
+ok(iInputs.length === 4 && iInputs[0].props.value === 'C:/work/space', '工作区目录默认预填当前工作区（实测 ' + iInputs.length + ' 个文本框）')
+ok(hasBtn(iTree, '检查并预览').length === 1 && hasBtn(iTree, '检查并预览')[0].props.disabled !== true, '工作区已填 → 「检查并预览」可用')
+
+// ── 段 2：检查与预览（GET 带 workspace，只读） ──────────────────
+const chkBtn = hasBtn(iTree, '检查并预览')[0]
+calls.length = 0
+chkBtn.props.onClick()
+await tick(50)
+const getCalls = calls.filter((c) => c.method === 'GET')
+ok(getCalls.length === 1 && getCalls[0].url.indexOf('?workspace=') >= 0, '「检查并预览」GET /basedeck 带 workspace 查询参数')
+ok(getCalls.length === 1 && getCalls[0].url.indexOf('workspace=C%3A%2Fwork%2Fspace') >= 0, 'workspace 值经 URL 编码（实测 ' + (getCalls[0] && getCalls[0].url) + '）')
+ok(calls.every((c) => c.method === 'GET'), '预览阶段只读：不发 POST')
+
+hookCursor = 0
+effectQueue = []
+iTree = expand(reg.render({ initialTab: 'init' }))
+itext = collect(iTree, []).join(' | ')
+ok(itext.includes('写入计划') && itext.includes('尚未改动任何文件'), '段 2 显示「写入计划」与写前提示')
+ok(itext.includes('将追加') && itext.includes('将更新') && itext.includes('已是最新')
+  && itext.includes('被手工改过') && itext.includes('多份冲突'), '五项状态徽标五态齐全')
+ok(itext.includes('将新建（文件末尾追加标记块）') && itext.includes('C:/work/space/AGENTS.md'), '回显 preview.action 与 target')
+ok(itext.includes('目标文件不存在，将新建并写入标记块'), '回显 detail 说明')
+ok(hasBtn(iTree, '完成配置').length === 1, '段 2 出现主按钮「完成配置」')
+ok(hasBtn(iTree, '完成配置')[0].props.disabled === true, '未选岗位域时「完成配置」禁用（不允许提交）')
+ok(hasBtn(iTree, '完成配置')[0].props.title === '请先选择你的工作方向', '未选岗位域时提交按钮 tooltip 给出可读提示')
+ok(itext.includes('请先选择你的工作方向'), '段 2 提交旁同时给出提示「请先选择你的工作方向」')
+ok(hasBtn(iTree, '返回修改').length === 1, '段 2 提供「返回修改」')
+
+const pvBtns = findButtons(iTree).filter((b) => label(b) === '预览')
+ok(pvBtns.length === 5, '五项各有一个「预览」按钮（实测 ' + pvBtns.length + '）')
+pvBtns[1].props.onClick()
+hookCursor = 0
+effectQueue = []
+iTree = expand(reg.render({ initialTab: 'init' }))
+itext = collect(iTree, []).join(' | ')
+ok(itext.includes('收起预览'), '点击后按钮变为「收起预览」')
+ok(itext.includes('seed-line-1') && itext.includes('seed-line-20') && !itext.includes('seed-line-21'), '展开渲染 sampleLines 且最多 20 行')
+ok(itext.includes('仅显示前 20 行'), '超长预览给出「仅显示前 20 行」提示')
+
+// 段 2 → 段 1：返回修改并主动选择工作岗位域（必填、不预选）
+hasBtn(iTree, '返回修改')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+iTree = expand(reg.render({ initialTab: 'init' }))
+findSelects(iTree)[0].props.onChange({ target: { value: 'presales' } })
+hookCursor = 0
+effectQueue = []
+iTree = expand(reg.render({ initialTab: 'init' }))
+ok(findSelects(iTree)[0].props.value === 'presales', '选择工作岗位域后下拉值生效')
+ok(hasBtn(iTree, '检查并预览').length === 1, '回到段 1 后可重新「检查并预览」')
+hasBtn(iTree, '检查并预览')[0].props.onClick()
+await tick(50)
+hookCursor = 0
+effectQueue = []
+iTree = expand(reg.render({ initialTab: 'init' }))
+ok(hasBtn(iTree, '完成配置').length === 1 && hasBtn(iTree, '完成配置')[0].props.disabled !== true, '选好工作岗位域后「完成配置」可用')
+
+// ── 段 3/4：完成配置（逐个 POST /basedeck，dryRun:false，逐项实时状态） ──
+const finBtn = hasBtn(iTree, '完成配置')[0]
+globalThis.fetch = async (url, opts) => { await tick(20); return bdFetch(url, opts) }
+calls.length = 0
+finBtn.props.onClick()
+await tick(10)
+hookCursor = 0
+effectQueue = []
+const bdMidTree = expand(reg.render({ initialTab: 'init' }))
+const midText = collect(bdMidTree, []).join(' | ')
+ok(midText.includes('写入中 1/5'), '执行中显示逐项进度「写入中 1/5」')
+ok(midText.includes('写入中…') && midText.includes('等待'), '正在写入的项标「写入中…」，未开始的项保持「等待」')
+await tick(400)
+globalThis.fetch = bdFetch
+
+const postCalls = calls.filter((c) => c.method === 'POST')
+ok(postCalls.length === 5, '主路径＝逐个 POST /basedeck（5 项各 1 次；实测 ' + postCalls.length + '）')
+const postIds = postCalls.map((c) => JSON.parse(String(c.body)).ids[0])
+ok(String(postIds) === String(['dirs', 'memorySeed', 'skills', 'settings', 'agentsMd']), '写入顺序固定 dirs → memorySeed → skills → settings → agentsMd')
+ok(postCalls.every((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/basedeck'), '每次写入都命中 /work-personal-secretary/api/basedeck')
+ok(postCalls.every((c) => JSON.parse(String(c.body)).dryRun === false), '每次写入 body 都带 dryRun:false（真写，不是试运行）')
+const ov = JSON.parse(String(postCalls[0].body)).overrides || {}
+ok(ov.workspace === 'C:/work/space' && ov.defaultDomain === 'presales'
+  && ov.identityExpert === '' && ov.memoryDir === '' && ov.obsidianSyncDir === '', 'overrides 携带表单五项（workspace / defaultDomain / identityExpert / memoryDir / obsidianSyncDir）')
+
+hookCursor = 0
+effectQueue = []
+const doneTree = expand(reg.render({ initialTab: 'init' }))
+const doneText = collect(doneTree, []).join(' | ')
+ok(doneText.includes('配置完成'), '完成态标题「配置完成」')
+ok(doneText.includes('需重启 DSH 生效'), '完成态明确提示需重启 DSH 生效')
+ok(doneText.includes('C:/work/space/dirs') && doneText.includes('C:/work/space/agentsMd'), '结果逐项回显 target（含固定写入顺序的首尾项）')
+ok(doneText.includes('C:/work/space/dirs.bak'), '结果逐项回显 backup')
+ok(doneText.includes('104') && doneText.includes('已写入 dirs'), '结果逐项回显 bytesWritten 与 detail')
+ok(hasBtn(doneTree, '重新检查').length === 1, '结果段保留「重新检查」')
+
+// ── 段 3 兜底：POST 路由层失败 → 整批一次 POST；仍失败则给可读提示 ──
+const bdBadFetch = async (url, opts) => {
+  const u = String(url)
+  const method = (opts && opts.method) || 'GET'
+  calls.push({ url: u, method: method, body: opts && opts.body })
+  if (u.indexOf('/basedeck') >= 0 && method === 'POST') throw new Error('basedeck write route not registered')
+  if (u.indexOf('/basedeck') >= 0) return jsonRes(BD_GET)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+globalThis.fetch = bdBadFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+let badTree = expand(reg.render({ initialTab: 'init' }))
+findSelects(badTree)[0].props.onChange({ target: { value: 'presales' } })
+hookCursor = 0
+effectQueue = []
+badTree = expand(reg.render({ initialTab: 'init' }))
+hasBtn(badTree, '检查并预览')[0].props.onClick()
+await tick(50)
+hookCursor = 0
+effectQueue = []
+badTree = expand(reg.render({ initialTab: 'init' }))
+calls.length = 0
+hasBtn(badTree, '完成配置')[0].props.onClick()
+await tick(200)
+const badPosts = calls.filter((c) => c.method === 'POST')
+const badIds = badPosts.map((c) => { try { return JSON.parse(String(c.body)).ids } catch (e) { return [] } })
+ok(badPosts.length === 2, '逐个写入在请求层失败时立刻判定路由缺失（仅试 1 项），随后整批兜底（实测 ' + badPosts.length + '）')
+ok(String(badIds[0] || []) === String(['dirs']) && String(badIds[1] || []) === String(['dirs', 'memorySeed', 'skills', 'settings', 'agentsMd']), '兜底整批 body 携带全部 ids（固定顺序）')
+hookCursor = 0
+effectQueue = []
+const badTree2 = expand(reg.render({ initialTab: 'init' }))
+const badText = collect(badTree2, []).join(' | ')
+ok(badText.includes('写入失败') && badText.includes('dryRun:false'), '写入不支持时给出可读失败提示（不假装成功）')
+ok(badText.includes('部分失败') && badText.indexOf('配置完成') < 0, '失败结果标「部分失败」，不显示「配置完成」')
+
+// ── workspaceSource:none：提示 + 禁用提交 ──────────────────────
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/basedeck') >= 0) {
+    return jsonRes({ ok: true, workspace: 'C:/work/space', workspaceSource: 'none', items: BD_ITEMS, summary: BD_GET.summary })
+  }
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+let noneTree = expand(reg.render({ initialTab: 'init' }))
+findSelects(noneTree)[0].props.onChange({ target: { value: 'presales' } })
+hookCursor = 0
+effectQueue = []
+noneTree = expand(reg.render({ initialTab: 'init' }))
+hasBtn(noneTree, '检查并预览')[0].props.onClick()
+await tick(50)
+hookCursor = 0
+effectQueue = []
+noneTree = expand(reg.render({ initialTab: 'init' }))
+const noneText = collect(noneTree, []).join(' | ')
+ok(noneText.includes('未确定工作区路径') && noneText.indexOf('提交已禁用') >= 0, 'workspaceSource:none 给出可读提示')
+ok(hasBtn(noneTree, '完成配置').length === 1 && hasBtn(noneTree, '完成配置')[0].props.disabled === true, 'workspaceSource:none 时「完成配置」禁用')
+
+// ── 其余状态徽标：领先 / 损坏 / 未检测到 + target 列表 ──────────
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/basedeck') >= 0) {
+    return jsonRes({
+      ok: true, workspace: 'C:/work/space', workspaceSource: 'config', summary: BD_GET.summary,
+      items: [
+        { id: 'agentsMd', status: 'ahead', target: 'C:/work/space/AGENTS.md', detail: '目标块比内置新',
+          preview: { action: '不自动覆盖', sampleLines: ['x'] } },
+        { id: 'memorySeed', status: 'broken', target: 'C:/work/space/memory/seed.md', detail: '标记块不完整',
+          preview: { action: '需人工处理', sampleLines: ['y'] } },
+        { id: 'skills', status: 'none', target: '', detail: '尚未创建',
+          preview: { action: '将新建', sampleLines: [] } },
+        { id: 'settings', status: 'up_to_date', target: 'C:/work/space/settings.json', detail: '已是最新',
+          preview: { action: '无需写入', sampleLines: [] } },
+        { id: 'dirs', status: 'append', target: ['C:/work/space/a', 'C:/work/space/b'], detail: '将新建目录',
+          preview: { action: '将新建', sampleLines: [] } },
+      ],
+    })
+  }
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+let stTree = expand(reg.render({ initialTab: 'init' }))
+findSelects(stTree)[0].props.onChange({ target: { value: 'presales' } })
+hookCursor = 0
+effectQueue = []
+stTree = expand(reg.render({ initialTab: 'init' }))
+hasBtn(stTree, '检查并预览')[0].props.onClick()
+await tick(50)
+hookCursor = 0
+effectQueue = []
+stTree = expand(reg.render({ initialTab: 'init' }))
+const stText = collect(stTree, []).join(' | ')
+ok(stText.includes('领先') && stText.includes('损坏') && stText.includes('未检测到'), '其余状态徽标三态（领先 / 损坏 / 未检测到）')
+ok(stText.includes('C:/work/space/a、C:/work/space/b'), 'target 为路径列表时连成一行回显')
+ok(hasBtn(stTree, '完成配置').length === 1 && hasBtn(stTree, '完成配置')[0].props.disabled !== true, 'workspaceSource=config 时「完成配置」可用')
+
+// ── 无 fetch 载体：骨架安全渲染 + 可读错误 + 重试 ───────────────
+const savedBdFetch = globalThis.fetch
+globalThis.fetch = undefined
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+const nfBdTree = expand(reg.render({ initialTab: 'init' }))
+const nfBdText = collect(nfBdTree, []).join(' | ')
+const nfBdErr = []
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { nfBdErr.push(err) } }
+ok(nfBdErr.length === 0, '无 fetch 载体下初始化页 effect 不抛错')
+await tick(20)
+ok(nfBdText.includes('工作区目录') && nfBdText.includes('检查并预览') && nfBdText.includes('重新检查'), '无 fetch 载体下仍渲染表单骨架与「重新检查」')
+hookCursor = 0
+effectQueue = []
+const nfBdTree2 = expand(reg.render({ initialTab: 'init' }))
+const nfBdText2 = collect(nfBdTree2, []).join(' | ')
+ok(nfBdText2.includes('初始化信息读取失败') && nfBdText2.includes('重试'), '无 fetch 时显示可读错误与「重试」而非白屏')
+globalThis.fetch = savedBdFetch
+
+// ── setupNeeded 引导：为 true → 默认落「初始化」页 + 顶部引导条 ──
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/basedeck') >= 0) return jsonRes(BD_GET)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({}))
+const setupErrors = []
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { setupErrors.push(err) } }
+ok(setupErrors.length === 0, 'setupNeeded 探测 effect 不抛错')
+await tick(50)
+hookCursor = 0
+effectQueue = []
+const gTree = expand(reg.render({}))
+const gText = collect(gTree, []).join(' | ')
+ok(gText.includes('还差 4 项才能开始使用'), 'setupNeeded:true → 顶部引导提示「还差 4 项才能开始使用」')
+ok(gText.includes('去完成配置'), '引导条带「去完成配置」按钮')
+ok(gText.includes('首用必配项'), 'setupNeeded:true → 默认落在「初始化」页')
+
+// setupNeeded 为 false / 缺失 → 默认页仍是「关于与致谢」
+globalThis.fetch = async (url) => {
+  const u = String(url)
+  if (u.indexOf('/basedeck') >= 0) return jsonRes({ ok: true, workspace: 'C:/work/space', items: BD_ITEMS, summary: BD_GET.summary })
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({}))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+const g2Tree = expand(reg.render({}))
+const g2Text = collect(g2Tree, []).join(' | ')
+ok(g2Text.includes('本集成体包含的插件') && g2Text.indexOf('还差') < 0 && g2Text.indexOf('首用必配项') < 0, 'setupNeeded 为 false / 缺失时默认页仍是「关于与致谢」')
+
+// ── Web 载体：GET /basedeck 走根相对路径 ───────────────────────
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/basedeck') >= 0) return jsonRes(BD_GET)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+expand(webReg.render({ initialTab: 'init' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+ok(calls.length > 0 && calls[0].url === '/work-personal-secretary/api/basedeck', 'Web 载体 GET /basedeck 走根相对路径（' + (calls[0] && calls[0].url) + '）')
+ok(calls.every((c) => c.url.indexOf('dsh.internal') < 0), 'Web 载体不发合成基址请求（相对路径成功即止）')
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)

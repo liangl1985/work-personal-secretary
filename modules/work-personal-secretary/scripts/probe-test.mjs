@@ -514,7 +514,7 @@ ok(SUB_PLUGINS.map((p) => p.name).join(',') === ['dsh-work-memory', 'dsh-doc-sui
 const pkgVersion = JSON.parse(readFileSync(join(MODULE_DIR, 'package.json'), 'utf8')).version
 ok(readVersion() === pkgVersion, 'readVersion 与 package.json 一致：v' + pkgVersion)
 const banned = ['莉娜', '主人', '天地和兴', '知识库-天地', 'lina', 'C:\\Users']
-for (const rel of ['lib/probe.js', 'lib/api.js', 'lib/index.js']) {
+for (const rel of ['lib/probe.js', 'lib/api.js', 'lib/index.js', 'lib/install.js', 'lib/basedeck.js']) {
   const src = readFileSync(join(MODULE_DIR, rel), 'utf8')
   const hit = banned.filter((k) => src.indexOf(k) >= 0)
   ok(hit.length === 0, rel + ' 无私有信息' + (hit.length ? '（命中：' + hit.join(', ') + '）' : ''))
