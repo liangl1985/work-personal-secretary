@@ -40,7 +40,8 @@
 - [x] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
 - [x] **仓库根 `NOTICE` 存在**（聚合索引：随包内容与各模块版本 / 20 位 persona 来源与许可 / `review: pending` 免责 / 未随包分发清单）
 - [x] **CI 覆盖范围核对（2026-09-13 P5）**：语法自检已覆盖全量 `*.js` / `*.mjs`（含本体 `lib/settings-api.js`）；回归 / 装载冒烟 / 共存契约分别由 `*/scripts/regression.mjs`、`*/scripts/smoke-load.mjs`、`*/scripts/coexist.mjs` 覆盖；
-      **本体四套自测**（`probe-test.mjs` 134 · `install-test.mjs` 169 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
+      **本体四套自测**（`probe-test.mjs` 136 · `install-test.mjs` 169 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
+- [x] **补入 CI 后首轮即暴露并修掉测试自身的平台缺陷**：`probe-test.mjs` 的 `/fix` 白名单断言未锁定 `platform`，在 Linux runner 上走「非 Windows 平台无 winget」分支（**9 项失败**）→ 锁定 `platform: 'win32'`、`pythonDeps` 真跑断言容忍「解释器在、pip 不可用」的降级形态、`maskUserPath` 断言做分隔符归一化，并**新增 2 条非 Windows 平台分支正向断言**（不再依赖宿主恰好是 Windows）；本机 win32 **136/136** · 伪装 linux **133/133** · CI `e4943c7` Node 22/24 双版本 **success**
 
 ## 三点五、文档模块硬前置与路径（2026-09-12 增）
 
@@ -194,7 +195,7 @@
 
 - [x] 仓库根 `NOTICE` 已写（4398B：随包内容 / 第三方来源与许可 / 免责 / 未随包清单）
 - [x] `dsh-experts` 升版 **0.1.3** + 模块 `CHANGELOG.md`（默认注入上限 1 → 2）
-- [x] **CI 覆盖补全**：本体四套自测（probe / install / basedeck / settings-api）纳入 `*/scripts/*-test.mjs` 步骤
+- [x] **CI 覆盖补全**：本体四套自测（probe / install / basedeck / settings-api）纳入 `*/scripts/*-test.mjs` 步骤；补入当轮即修掉探针测试的 9 项平台断言缺陷，CI `e4943c7` 双版本 success
 - [x] 本清单更新（勾掉已验项 + 补 P4 / 桌宠热区 / 配置引导页 / 设置页跳转验收）
 - [ ] **打 tag `v1.0.0` + GitHub Release** —— 对外动作，**等使用者确认**；Release 正文取根 `CHANGELOG.md` 的 v1.0.0 段
 - [ ] **干净 profile 重启验证** —— 需另建 profile + 重启（本机 desktop profile 已多次验证）
