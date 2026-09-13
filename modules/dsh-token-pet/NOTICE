@@ -21,10 +21,18 @@ NOTICE — dsh-token-pet 定制层
   许可   : MIT（与上游一致）
   边界   : 补丁只修改上游源码；上游的 LICENSE、版权声明与归属一律原样保留。
 
+随本目录分发的内容
+------------------
+  · 定制层构建产物 client/client.js（含上游内置形象）——随模块分发，装完即可用；
+  · 三套形象素材 skins/<套装id>/（manifest.json + <action>.webp 条带）：
+      - default    —— 上游内置形象（MIT）；
+      - lina-pure / lina-lazy —— 使用者自有形象资产（各 12 动作），随本仓库分发，
+                     未经授权不得再分发或商用。
+    安装器会把**缺失**的套装部署到 ~/.dsh/data/dsh-token-pet/skins/（只补缺失、不覆盖使用者改过的套装）。
+
 不包含的内容
 ------------
-  · 上游 assets/ 素材与构建产物（client/client.js）不入库，按需由上游与构建生成；
-  · 小秘书形象素材（纯欲乖巧 / 慵懒性感，各 12 动作）为【私有资产】，
-    仅存在于本机 ~/.dsh/data/dsh-token-pet/skins/，不随本目录分发。
+  · 上游源仓库的 assets/ 原始素材与 sourcemap（只保留构建产物 client/client.js）；
+  · 任何凭证、密钥或 API Key。
 
 *小秘书 · 2026-09-13*

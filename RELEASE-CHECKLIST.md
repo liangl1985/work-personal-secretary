@@ -112,9 +112,9 @@
 
 ### 素材与体积
 
-- [x] **形象素材不入库**：仓库内**不得**出现 `.webp` 条带、上游 `assets/` 素材、或 `src/client/*.generated.ts` 等内嵌素材生成物
-- [x] 模块体积与同级模块相当（当前 ≈ 82 KB；若骤增多为误加了素材/构建产物）
-- [x] README 写明素材位置 `~/.dsh/data/dsh-token-pet/skins/<套装id>/`，并声明**属私有资产、不随包分发**
+- [x] **形象素材随包完整**：`modules/dsh-token-pet/skins/` 含三套（`default` + `lina-pure` + `lina-lazy`），每套 14 个文件（`manifest.json` + 12 条动作 + `preview.webp`），合计 **42 个文件**；**不得**缺少自研套装（2026-09-13 灰度测试暴露过"只复制模块、不部署素材"的遗漏）
+- [x] 模块体积含素材（当前 ≈ **68.8 MB**；若骤减多为素材被误删或被 `.gitignore` 挡住）
+- [x] README / NOTICE 与仓库实际形态一致：素材**随包分发**（`default` 为上游 MIT；两套自有形象未经授权不得再分发），运行时由安装器部署到 `~/.dsh/data/dsh-token-pet/skins/<套装id>/`（**只补缺失、绝不覆盖**）
 
 ### 验证与升级纪律
 

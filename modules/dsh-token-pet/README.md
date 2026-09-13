@@ -76,8 +76,10 @@ dsh plugin --profile desktop add link:<克隆目录绝对路径>
 #   改完 host 侧需重启 DSH Desktop；只改 client 时刷新页面即可
 ```
 
-**形象素材不入库**：套装放在 `~/.dsh/data/dsh-token-pet/skins/<套装id>/`
-（`manifest.json` + `<action>.webp` 条带）。目录为空时宠物回退到插件内置素材，不会报错。
+**形象素材随模块分发**：三套套装就在 `skins/<套装id>/`（`manifest.json` + `<action>.webp` 条带，
+共 42 个文件）；安装 `dsh-token-pet` 时安装器会把**缺失**的套装部署到
+`~/.dsh/data/dsh-token-pet/skins/`（只补缺失、**绝不覆盖**使用者改过的套装）。
+目录为空时宠物回退到插件内置素材，不会报错。
 
 ---
 
@@ -98,7 +100,7 @@ npm install && npm run build
 
 - 上游代码：**MIT**，Copyright (c) DSH Token Pet contributors —— 全文见 `LICENSE`；
 - 本定制层的改动同样以 MIT 提供，归属与边界见 `NOTICE`；
-- **形象素材**（小秘书两套形象）为私有资产，**不随本模块分发**，仅存在于本机 `~/.dsh/data/dsh-token-pet/skins/`。
+- **形象素材**：`default` 为上游内置形象（MIT）；小秘书两套形象（`lina-pure` / `lina-lazy`）为使用者自有资产，**随本模块分发**（见 `skins/`），未经授权不得再分发或商用；运行时由安装器部署到 `~/.dsh/data/dsh-token-pet/skins/`。
 
 ---
 

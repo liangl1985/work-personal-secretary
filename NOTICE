@@ -79,7 +79,8 @@ Copyright (c) 2026 liangl1985 · MIT License（全文见根 LICENSE）
 五、未随本仓库分发
 ------------------------------------------------------------------
 
+> 桌面形象素材**不在此列**：三套套装已随仓库分发（`modules/dsh-token-pet/skins/`，见该模块 `NOTICE`）。
+
 - 使用者的工作区数据：记忆库（`~/.dsh/memories/`）、Obsidian 镜像、日志与个人配置；
-- 桌面形象**素材**（私有资产，位于 `~/.dsh/data/dsh-token-pet/skins/`，不入仓库）；
 - 上游整包与构建产物 sourcemap；
 - 任何凭证、密钥或 API Key。

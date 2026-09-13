@@ -2,8 +2,9 @@
 # 用 dsh.profile.bundles + dsh plugin add 安装；本文件是**部署默认层（base）**，保持**中性**
 # （不含任何个人路径与称呼）；个性化请在设置页用户层或该 profile 的 cordis.patch.yml 里按 id 覆盖。
 #
-# 注意：形象素材**不随包分发**，位于 ~/.dsh/data/dsh-token-pet/skins/<套装id>/
-#       （manifest.json + <action>.webp 条带）；目录为空时宠物回退插件内置素材，不会报错。
+# 注意：形象素材随本模块分发（modules/dsh-token-pet/skins/<套装id>/），安装时会自动
+#       部署到 ~/.dsh/data/dsh-token-pet/skins/（只补缺失、绝不覆盖）；目录为空时
+#       宠物回退插件内置素材，不会报错。
 - insert:
     - id: token-pet
       name: 'dsh-token-pet'
