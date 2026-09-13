@@ -108,8 +108,13 @@ await t('注入回调：身份专家常驻注入（默认 = 岗位域第一位�
   assert.ok(out.includes('【处理路径】'), '缺处理路径提示：' + out.slice(0, 120))
 })
 
-await t('注入回调：默认上限 1 → 只有身份专家，跨域专家不占常驻上下文', () => {
-  const out = captured.contexts[0].text(frame('客户要做三级等保测评，定级备案怎么走'))
+await t('注入回调：把上限调回 1 时，跨域专家不再占常驻上下文', () => {
+  // 默认值自 0.1.3 起是 2（身份专家 + 至多一位按问题归属补位的对口专家）；
+  // 这里显式传 1，专门守住「调小上限即收敛为只有身份专家」这条行为。
+  const ctx1 = makeCtx()
+  apply(ctx1, { defaultDomain: 'presales', expertInjectMax: 1 })
+  const last = captured.contexts[captured.contexts.length - 1]
+  const out = last.text(frame('客户要做三级等保测评，定级备案怎么走'))
   assert.ok(out.includes('【身份视角·'), '缺身份专家')
   assert.ok(!out.includes('【本轮命中·'), '上限 1 时不应再注入跨域专家：' + out.slice(0, 160))
 })

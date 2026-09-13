@@ -2,7 +2,7 @@
 
 > 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
 >
-> 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.2、`dsh-token-pet` v0.2.1-lina.1（**三方插件定制层**）；三者已实装本机 desktop，桌宠为 `link:` 装机。
+> 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.3、`dsh-token-pet` v0.2.1-lina.1（**三方插件定制层**）；三者已实装本机 desktop，桌宠为 `link:` 装机。
 
 ## 一、默认约定必须随包生效（2026-09-11 定）
 

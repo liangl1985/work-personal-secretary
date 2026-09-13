@@ -2,6 +2,20 @@
 
 本插件的版本历史。
 
+## 0.1.3 — 2026-09-13（默认注入上限 1 → 2）
+
+**变更**：`expertInjectMax` 默认值 **1 → 2**。原先 `max=1` 时「身份专家恒选」会先占掉唯一名额，紧接着循环 `break`，导致**排行榜第一的对口专家被挤掉** —— 实测「客户要做三级等保测评，定级备案怎么走」用例里 `aftersales-djbh` 得 **0.7** 分却进不来，实际只注入了 0.35 分的身份专家；改为 2 后补位机制正常工作（`presales-ics-security` + `aftersales-djbh`）。跨域用例同样受益（「这份采购合同的钱怎么算、税怎么处理」→ 补入 `legal-civil`）。
+
+改动**三处，缺一不可** —— 解析顺序是 `schema 默认 ← 部署层 base ← profile patch ← 用户覆盖`：
+- `lib/settings.js` 的 `DEFAULTS`
+- `lib/settings.js` 的 schema（`z.natural().default(2)`）
+- **`cordis.patch.yml` 的部署层 base config** —— 这里原先写死 `expertInjectMax: 1`，会**盖过** schema 默认值；只改前两处等于白改（实施时发现）
+同步 `cordis.patch.yml` 与 `lib/settings.js` 里「默认 1 位」的说明文案。
+
+**代价**：每轮多注入 1 位 persona（约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB TOKEN）。使用者可在设置页把 `expertInjectMax` 调回 1。
+
+**测试**：引擎级三档对照实测（max=1 只注入身份专家 / max=2 补入对口专家 / max=3 再补一位）；集成体侧五套门禁全绿（probe 134 · install 169 · basedeck 179 · settings-api 109 · smoke 337）。
+
 ## 0.1.2 — 2026-09-13（发布前中立性修复）
 
 发布件中立性清理：移除发布件中的**私有称呼、私有路径与私有业务背景**注释，使其不绑定任何具体使用者环境。
