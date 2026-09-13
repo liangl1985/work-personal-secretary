@@ -1,0 +1,13 @@
+# work-personal-secretary bundle patch —— 挂载集成体本体。
+#
+# 本文件是**部署默认层（base）**，保持中性：不含任何个人路径、称呼或凭据。
+# 个性化请在设置页用户层或该 profile 的 cordis.patch.yml 里按 id 覆盖。
+#
+# 本体的定位：统一安装引导（环境检查 / 依赖补齐 / 子插件安装 / 配置底座）
+# 与能力配置入口。子插件各自独立，本模块不替代它们。
+- insert:
+    - id: work-personal-secretary
+      name: 'work-personal-secretary'
+      config:
+        # 集成体自检：打开后启动时做一次只读环境探测并在日志里给出结论
+        selfCheckOnStartup: false

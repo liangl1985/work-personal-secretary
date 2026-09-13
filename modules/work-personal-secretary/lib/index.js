@@ -1,0 +1,54 @@
+/**
+ * work-personal-secretary —— 集成体本体（宿主半）
+ *
+ * 定位：本集成体的**第一大功能是安装器**（环境检查 → 依赖补齐 → 子插件安装 → 配置底座），
+ * 第二大功能是把 DSH 底层配置（指令层 / 记忆种子 / 技能 / 设置）落地。
+ * 本文件是宿主半骨架：P0 只做最小可用——模块可加载、可被组合树识别；
+ * 安装器与配置代理在后续版本接入（见模块 CHANGELOG）。
+ *
+ * 设计约束（沿用集成体纪律）：
+ * - **零运行时依赖**（只用 node 内置模块），宿主 peer 缺失时不影响加载；
+ * - 设置命名空间作为**部署默认层**，个性化只走设置页用户层；
+ * - 不在这里写死任何使用者信息（发布件中立性红线）。
+ *
+ * @module work-personal-secretary
+ */
+
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+export const name = 'work-personal-secretary'
+
+/** 需要的宿主服务：设置服务用于注册命名空间；无它时降级为只读展示 */
+export const inject = ['settings']
+
+/** 本模块目录（读自身 package.json 用） */
+const HERE = dirname(fileURLToPath(import.meta.url))
+
+/** 读取自身包版本（不在代码里写死版本号，避免与 package.json 漂移） */
+export function readVersion() {
+  try {
+    const pkg = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8'))
+    return String(pkg.version || '0.0.0')
+  } catch {
+    return '0.0.0'
+  }
+}
+
+/**
+ * 集成体自带的五个子插件。
+ * 只列**标识与用途**，不写版本号（版本随使用者安装情况而变，由后续的安装器探测）。
+ */
+export const SUB_PLUGINS = [
+  { name: 'dsh-work-memory', zh: '记忆库', purpose: '执行层长期记忆：三级记忆模型 + 转冷预审 + 侧边栏面板' },
+  { name: 'dsh-doc-suite', zh: '文档能力', purpose: 'Word / Excel / PPT / PDF 四格式处理与精确提取' },
+  { name: 'dsh-experts', zh: '专家库', purpose: '按岗位关联的专家 persona：常驻一位身份专家，其余按问题归属补位' },
+  { name: 'dsh-mermaid', zh: '思维链与图表', purpose: '把 Mermaid 代码块渲染成流程图 / 时序图（第三方，MIT）' },
+  { name: 'dsh-token-pet', zh: '桌面形象', purpose: '桌面宠物外观与动作（第三方定制层，MIT）' },
+]
+
+export function apply(ctx) {
+  const version = readVersion()
+  ctx.logger?.debug?.('work-personal-secretary: 集成体本体已挂载 v' + version + '（客户端提供设置分区「工作秘书」）')
+}

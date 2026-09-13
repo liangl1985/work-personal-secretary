@@ -1,0 +1,71 @@
+{
+  "name": "work-personal-secretary",
+  "version": "1.0.0",
+  "description": "工作秘书集成体（本体）：统一安装引导、环境检查、能力配置与致谢声明。Work Personal Secretary — integrator body that installs, configures and documents the five bundled sub-plugins.",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "assistant",
+    "secretary",
+    "installer",
+    "bootstrap"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./client/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "client",
+    "scripts",
+    "cordis.patch.yml",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "node --check lib/index.js && node --check client/index.js",
+    "smoke": "node scripts/smoke-load.mjs"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/liangl1985/work-personal-secretary.git",
+    "directory": "modules/work-personal-secretary"
+  },
+  "homepage": "https://github.com/liangl1985/work-personal-secretary/tree/main/modules/work-personal-secretary#readme",
+  "author": "liangl1985",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT"
+}
