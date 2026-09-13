@@ -66,7 +66,7 @@ function makeCtx() {
 const ctx = makeCtx()
 const dispose = apply(ctx, { defaultDomain: 'presales' })
 
-const session = { header: { id: 'smoke-session', cwd: 'E:\\lina\\知识库-天地' } }
+const session = { header: { id: 'smoke-session', cwd: 'C:\\workspace\\docs' } }
 const frame = (text) => ({ agent: { session }, text })
 
 await t('模块导出 name / inject / apply', () => {

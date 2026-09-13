@@ -52,7 +52,7 @@ const ctx = {
   webServer: { register: () => () => {} },
 }
 
-const session = { header: { id: 'coexist', cwd: 'E:\\lina\\知识库-天地' } }
+const session = { header: { id: 'coexist', cwd: 'C:\\workspace\\docs' } }
 const frame = () => ({ agent: { session } })
 const disposers = []
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-experts",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "DSH 专家库模块（work-personal-secretary 子模块）：按岗位关联的专家 persona 库——默认每轮只注入 1 位（可调 2/3，设置页提示 TOKEN 开销），其余按需临时注入；派子代理时把 persona 内联进 prompt，使任务从对应专业角度被拆解。",
   "keywords": [
     "deepseek",

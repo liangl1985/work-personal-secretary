@@ -18,7 +18,7 @@ import { todayStamp } from './clock.js'
  *
  * 只**返回路径**、不建目录——建目录由真正写备份时做（`backupMemory` 里 mkdirSync）。
  * 早前这里顺手 mkdir 会留下空目录（回归测试用 `backupDir: null` 走默认路径时就会凭空造一个）。
- * 注意：不要硬编码盘符路径——非 Windows 平台会把 `E:\…` 当相对路径，凭空建出怪目录。
+ * 注意：不要把盘符绝对路径写进默认值——非 Windows 平台会把带盘符的路径当相对路径，凭空建出怪目录。
  */
 export function defaultBackupDir() {
   return join(homedir(), '.dsh', 'memories', 'work-memory-backup')

@@ -2,7 +2,7 @@
 
 > 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
 >
-> 集成体含**四个子模块**：`dsh-work-memory` v1.0.3、`dsh-doc-suite` v0.1.1、`dsh-experts` v0.1.1（2026-09-12 新增）、`dsh-token-pet` v0.2.1-lina.1（2026-09-13 新增，**三方插件定制层**）；前三者已实装本机 desktop，桌宠为 `link:` 装机。
+> 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.2、`dsh-token-pet` v0.2.1-lina.1（**三方插件定制层**）；三者已实装本机 desktop，桌宠为 `link:` 装机。
 
 ## 一、默认约定必须随包生效（2026-09-11 定）
 
@@ -17,7 +17,8 @@
 
 - [ ] **不得出现任何个人化身份**：私有助手名（如本机自用名）、"主人/主人级"等私有称呼、个人邮箱/账号
   - 检索方式：`git grep -n -i -e '<私有名>' -e '主人'`，命中项须为通用表述（使用者/助手）
-- [ ] **不得出现私有路径**：`E:\...`、`~/.dsh/memories/<私有名>`、个人 Obsidian 目录等；默认路径必须通用（如 `~/.dsh/memories/work-memory`）
+- [ ] **不得出现私有路径**：`E:\...` / `E:/...`（**正反斜杠两种写法都要扫**）、`~/.dsh/memories/<私有名>`、私有工作区/知识库目录名、第三方克隆目录等；默认路径必须通用（如 `~/.dsh/memories/work-memory`）
+  - 检索方式：`git grep -n -i -E 'E:[\\/]'`、`git grep -n -i -E '\.dsh/memories/'`、`git grep -n -i '<私有名>'`（含注释与测试夹具，不只文档）
 - [ ] `cordis.patch.yml` 及各模块默认配置**中性**：无个人路径、无称呼
 - [ ] 个性化只走**设置页用户层**（不写进包内默认层）
 - [ ] 包内**不含任何记忆数据**（首装记忆为空，人设由首轮对话填充）
@@ -34,6 +35,7 @@
   - [ ] `node modules/dsh-experts/scripts/coexist.mjs` —— **7 项**：与 `dsh-work-memory` 挂同一 ctx 的**共存契约**（注入顺序 480 → 500、两条回调互不覆盖、合并上下文含「专家视角 + 记忆」、工具/命令不重名）；无宿主依赖时走**契约模拟**路径，且**明确打印所走路径**（不假装真加载）
 - [ ] CI 在 Node 22 与 24 双版本通过
 - [ ] 客户端有改动的模块**已升版本号**（DSH 客户端 bundle 按 revision 缓存）
+- [ ] **仓库根 `CHANGELOG.md` 存在**，且记录本次发布的变更（集成体版本与子模块版本解耦）
 - [ ] 打包白名单（`files`）覆盖 lib / client / scripts / skills / experts / cordis.patch.yml / CHANGELOG / LICENSE / NOTICE / README
 - [ ] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
 

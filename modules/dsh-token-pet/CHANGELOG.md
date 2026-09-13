@@ -25,3 +25,4 @@
 - `npm run typecheck` / `npm run build`（host + client）通过
 - 真机实测：清单路由 200、12 条带全 200、路径穿越 404
 - 配套形象素材经官方 `check_sprite.py` **ALL PASS**（两套 × 12 动作）
+- **修复：`scripts/apply-customizations.ps1` 在 Windows PowerShell 5.1 下解析失败** —— 脚本含中文提示却为**无 BOM 的 UTF-8**，5.1 按 ANSI 代码页读取 → `Unexpected token '鉁?棰勬閫氳繃" -ForegroundColor Green`、退出码 1（pwsh 7 下正常）。已用 Node `fs` 为该文件补 **UTF-8 BOM**（`EF BB BF`）：行尾保持原样（纯 LF）、内容除 BOM 外逐字节不变；修复后 5.1 下 `-Target <干净基线克隆> -Check` **退出码 0 并打印「✓ 预检通过」**。补丁 `patches/0001-lina-customizations.patch` 不包含该脚本，故不影响补丁校验；同仓「坑②」的无 BOM 纪律只约束 profile JSON / `settings.yaml`，不适用于需 5.1 解释的 `.ps1`。**本条为集成体正式发布前修订，版本号不变。**

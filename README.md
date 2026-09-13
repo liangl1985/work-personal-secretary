@@ -6,15 +6,15 @@
 
 - 运行环境：**DSH Desktop 2.0.9** / host 运行时 **dsh 0.1.5-rc.1**（cordis bundle 体系）
 - 设计目标：**一个包、一个设置入口、一个面板**；子项目可独立开发/验收，再由根层整合
-- 发布姿态：**暂不发布 npm**；整合完成、验收通过后再议（发布前逐项核对 [`RELEASE-CHECKLIST.md`](RELEASE-CHECKLIST.md)）
+- 版本：集成体 **正式版第一版 `v1.0.0`**（集成体自身的语义化版本，与子模块版本解耦；子模块另打 `dsh-work-memory@1.0.5` 形式的 tag）；变更记录见 [`CHANGELOG.md`](CHANGELOG.md)，发布前逐项核对 [`RELEASE-CHECKLIST.md`](RELEASE-CHECKLIST.md)
 
 ## 能力总览
 
 | # | 能力 | 落点 | 状态 |
 |---|---|---|---|
-| 1 | **强记忆**：三级记忆模型（全局永不遗忘 / 热记忆按 TTL 转冷 / 冷归档被用到即转热）+ 转冷预审 + 会话原生注入 + 右侧边栏面板 + Obsidian 镜像 | `modules/dsh-work-memory` | ✅ v1.0.3 |
-| 2 | **强文档处理**：Word（处理 + 比对/红线修订）/ Excel（处理 + 重算 + 透视）/ PPT（制作 + 排版）/ PDF（只读精确提取） | `modules/dsh-doc-suite`（Python 脚本 + DSH 原生技能；宿主半只提供 `/doc-doctor`） | ✅ v0.1.1 |
-| 3 | **专家库**：20 位专家 / 6 域（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）；**常驻注入只有一位「身份专家」**，其余按**问题归属判断**补位或派子代理激活 | `modules/dsh-experts` | ✅ v0.1.1 |
+| 1 | **强记忆**：三级记忆模型（全局永不遗忘 / 热记忆按 TTL 转冷 / 冷归档被用到即转热）+ 转冷预审 + 会话原生注入 + 右侧边栏面板 + Obsidian 镜像 | `modules/dsh-work-memory` | ✅ v1.0.5 |
+| 2 | **强文档处理**：Word（处理 + 比对/红线修订）/ Excel（处理 + 重算 + 透视）/ PPT（制作 + 排版）/ PDF（只读精确提取） | `modules/dsh-doc-suite`（Python 脚本 + DSH 原生技能；宿主半只提供 `/doc-doctor`） | ✅ v0.1.4 |
+| 3 | **专家库**：20 位专家 / 6 域（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）；**常驻注入只有一位「身份专家」**，其余按**问题归属判断**补位或派子代理激活 | `modules/dsh-experts` | ✅ v0.1.2 |
 | 4 | **桌面宠物形象**：小秘书两套形象（**纯欲乖巧＝默认** / 慵懒性感）各 12 动作；插件支持多套装切换 + 「设为默认形象」；动作做到 pingPong 闭环、抠图无紫边/绿边、无背景底色 | `modules/dsh-token-pet`（**三方插件 `dsh-token-pet` 的定制层**，上游 MIT，以补丁维护） | ✅ v0.2.1-lina.1 |
 | 5 | **强思维链分析**（方法 + 在思维过程中以**流程图等形式展示**） | 候选评估中，见 `00_项目主页/插件关注列表.md` #7–#11（首选 `dsh-flowglass`） | ⏳ 待评估 |
 
@@ -22,23 +22,57 @@
 
 | 子项目 | 包名 | 状态 | 说明 |
 |---|---|---|---|
-| [`modules/dsh-work-memory`](modules/dsh-work-memory) | `dsh-work-memory` | ✅ 可用（**v1.0.3**） | 执行层长期记忆：**三级记忆模型** + **转冷预审**（到期前先判：保留 / 自然转冷 / 待判断）+ 会话原生注入 + `remember`/`recall`/`link` 工具 + 右侧边栏面板 + Obsidian 镜像。运行时 id 为 `work-memory`（包名与 id 均已中性化） |
-| [`modules/dsh-doc-suite`](modules/dsh-doc-suite) | `dsh-doc-suite` | ✅ 可用（**v0.1.1**） | 文档能力：**Word 处理+比对（红线修订）/ Excel 处理+重算+透视 / PPT 制作+排版 / PDF 只读精确提取**。实现是 Python 脚本 + DSH 原生技能，宿主半只提供 `/doc-doctor` 自检入口 |
-| [`modules/dsh-experts`](modules/dsh-experts) | `dsh-experts` | ✅ 可用（**v0.1.1**） | 专家库：**20 位专家 / 6 域**。**常驻注入只有一位「身份专家」**（切合使用者岗位，设置项 `identityExpert`）；其余按**问题归属判断**补位（`expertInjectMax` 1–3，>1 提示占 TOKEN）或派子代理（`expert_recall` 把 persona 内联进 `subagent.prompt`）；未命中则原生处理。来源为成熟开源件压缩/组合改写（**MIT 17 · Apache-2.0+MIT 双许可 2 · Apache-2.0 1 · 自撰 1**，合计 20），逐条记于 `experts/index.json` + `NOTICE` |
+| [`modules/dsh-work-memory`](modules/dsh-work-memory) | `dsh-work-memory` | ✅ 可用（**v1.0.5**） | 执行层长期记忆：**三级记忆模型** + **转冷预审**（到期前先判：保留 / 自然转冷 / 待判断）+ 会话原生注入 + `remember`/`recall`/`link` 工具 + 右侧边栏面板 + Obsidian 镜像。运行时 id 为 `work-memory`（包名与 id 均已中性化） |
+| [`modules/dsh-doc-suite`](modules/dsh-doc-suite) | `dsh-doc-suite` | ✅ 可用（**v0.1.4**） | 文档能力：**Word 处理+比对（红线修订）/ Excel 处理+重算+透视 / PPT 制作+排版 / PDF 只读精确提取**。实现是 Python 脚本 + DSH 原生技能，宿主半只提供 `/doc-doctor` 自检入口 |
+| [`modules/dsh-experts`](modules/dsh-experts) | `dsh-experts` | ✅ 可用（**v0.1.2**） | 专家库：**20 位专家 / 6 域**。**常驻注入只有一位「身份专家」**（切合使用者岗位，设置项 `identityExpert`）；其余按**问题归属判断**补位（`expertInjectMax` 1–3，>1 提示占 TOKEN）或派子代理（`expert_recall` 把 persona 内联进 `subagent.prompt`）；未命中则原生处理。来源为成熟开源件压缩/组合改写（**MIT 17 · Apache-2.0+MIT 双许可 2 · Apache-2.0 1 · 自撰 1**，合计 20），逐条记于 `experts/index.json` + `NOTICE` |
 | [`modules/dsh-token-pet`](modules/dsh-token-pet) | `dsh-token-pet` | ✅ 可用（**v0.2.1-lina.1**） | **三方插件定制层**（上游 MIT，基线 `cc49233` / v0.2.0）：**不 fork 整包、不 vendor 素材**，只以**补丁**保存改造——① **多形象套装**运行时化（宿主扫描 `~/.dsh/data/dsh-token-pet/skins/`，manifest 校验 + 路径穿越防护 + 客户端解析 + blob URL 桥 + 设置面板）；② **条带切帧修复**（宿主透传 `rows`，否则客户端回退内置模板的 2 行 → 宠物显示"两个细长人影"）；③ UI 清理（移除 `aura` 环绕光圈 / `meter` 脚底横条）；④ 默认形象 + 「设为默认形象」按钮。**形象素材为私有资产，不随包分发** |
 
 后续候选（待定，需先确认许可证与必要性）：多代理团队引擎、思维链可视化（见关注列表）。
 
-## 本机安装状态（desktop profile，2026-09-12）
+## 安装 / 首次使用 / 卸载与数据留存
+
+### 安装
+
+前置：**DSH Desktop 2.0.9**（host 运行时 `dsh 0.1.5-rc.1`）。四个子模块可单独安装，命令形态一致：
+
+```bash
+dsh plugin --profile <profile> add <模块目录或包名>
+```
+
+| 子模块 | 额外前置 |
+|---|---|
+| `dsh-work-memory` | 无（零运行时依赖，只用 node 内置模块） |
+| `dsh-experts` | 无（零运行时依赖） |
+| `dsh-doc-suite` | **Python ≥ 3.10**（建议 3.12；Windows 用 `py -3`）+ **WPS Office** —— **两者都不会被自动安装**，由 `/doc-doctor` 检测并给出修复命令 |
+| `dsh-token-pet` | 先克隆上游基线并应用 `modules/dsh-token-pet` 的补丁，再 `add link:<克隆目录>` |
+
+宿主侧代码改动需**重启 DSH** 才加载；仅客户端改动刷新页面即可（客户端 bundle 按 revision 缓存，故每次改动都会升版本号）。
+
+### 首次使用
+
+1. **让默认约定生效**（二选一）：把 `defaults/global-memory.seed.md` 的语言偏好写入全局记忆；或把 `defaults/AGENTS.zh-CN.md` 复制到会话工作区根目录作 `AGENTS.md`（**指令层**，约束力强于记忆层）。
+2. **确认岗位**：装了 `dsh-experts` 时执行 `/expert setup <域>` 写入「身份专家」；`/expert list` 查看全部专家，`/expert why <任务文本>` 看打分理由。
+3. **自检文档环境**：`/doc-doctor`（等价于 `py -3 modules/dsh-doc-suite/doctor.py`）逐项检测 Python 依赖与 WPS COM 通道。
+4. **记忆库首装为空**：人设、偏好与业务记忆由使用者自己写入，**包内不含任何记忆数据**。
+
+### 卸载与数据留存
+
+- 卸载插件：`dsh plugin --profile <profile> remove <包名>`，随后重启 DSH。
+- **记忆数据不随插件卸载而删除**：默认位于 `~/.dsh/memories/work-memory/`（Markdown 正文 + 索引/状态文件），默认备份目录 `~/.dsh/memories/work-memory-backup/`。需要彻底清除时手动删除这两个目录。
+- **外部知识库镜像**（如已配置）是一份可读的 Markdown 副本，卸载后保留，可继续当资料使用。
+- 桌宠**形象素材**位于 `~/.dsh/data/dsh-token-pet/skins/`，属使用者自有资产，卸载插件不受影响（模块内不含素材）。
+- 全部数据**本地存放、明文、不联网、无遥测**；除使用者自己配置的模型服务外，本集成体不向外发送任何内容。
+
+## 已验证的安装形态（desktop profile，2026-09-13）
 
 | 插件 | 版本 | 来源 |
 |---|---|---|
-| `dsh-work-memory` | 1.0.3 | 本地（`file:node_modules/dsh-work-memory`） |
+| `dsh-work-memory` | 1.0.5 | 本地（`file:node_modules/dsh-work-memory`） |
 | `dshmarket` | 1.45.1 | npm（插件市场本体，**市场界面通常不列自己**） |
 | `dsh-mermaid` | 0.4.0 | npm |
-| `dsh-doc-suite` | 0.1.1 | 本地（`file:E:/lina/.../modules/dsh-doc-suite`） |
-| `dsh-experts` | 0.1.1 | 本地（`file:E:/lina/.../modules/dsh-experts`） |
-| `dsh-token-pet` | 0.2.1-lina.1 | 本地 `link:`（`E:/lina/_plugin_analysis/dsh-token-pet`；**定制层补丁在 `modules/dsh-token-pet`**，素材在 `~/.dsh/data/dsh-token-pet/skins/`） |
+| `dsh-doc-suite` | 0.1.4 | 本地（`file:<集成体仓库>/modules/dsh-doc-suite`） |
+| `dsh-experts` | 0.1.2 | 本地（`file:<集成体仓库>/modules/dsh-experts`） |
+| `dsh-token-pet` | 0.2.1-lina.1 | 本地 `link:`（**上游克隆 + 已应用补丁**；定制层补丁在 `modules/dsh-token-pet`，素材在 `~/.dsh/data/dsh-token-pet/skins/`） |
 
 `dsh --profile desktop --dump-config` 退出码 **0**，上述条目均在组合树中且无 `disabled`。
 
@@ -57,6 +91,7 @@ work-personal-secretary/
 │   ├── dsh-experts/             #   专家库（experts/ 专家数据 + lib/ 匹配与注入 + 三套自测）
 │   └── dsh-token-pet/           #   桌宠定制层（三方插件补丁 + 应用脚本 + 回归测试；素材/构建产物不入库）
 ├── defaults/                    # 随包默认：全局记忆种子 + AGENTS 指令模板（中文）
+├── CHANGELOG.md                 # 集成体版本历史（正式版第一版 v1.0.0）
 ├── .github/workflows/ci.yml     # 仓库级 CI：语法自检 + 遍历子项目跑回归 + 冒烟/共存 + 必需文件自检
 ├── RELEASE-CHECKLIST.md         # 发布检查清单（发布前逐项打勾）
 └── README.md

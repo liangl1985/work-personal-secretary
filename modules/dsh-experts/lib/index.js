@@ -8,7 +8,7 @@
  *   2. **现取现用**（`expert_recall` 工具 + `/expert` 命令）：派子代理时把 persona 内联进
  *      `subagent.prompt`，或临时切换视角。
  *
- * 四项口径（主人 2026-09-12 定，细节见 README 与设置页说明）：
+ * 四项口径（产品口径 2026-09-12 定，细节见 README 与设置页说明）：
  *   ① 默认注入 1 位，上限可调 3（>1 会占用较多 TOKEN）；② 岗位关联（defaultDomain）；
  *   ③ 全局激活集合（enabledDomains / enabledExperts）；④ 其余专家按需临时注入。
  *

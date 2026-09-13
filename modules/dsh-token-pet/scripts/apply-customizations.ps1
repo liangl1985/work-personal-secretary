@@ -1,4 +1,4 @@
-# 把本定制层补丁应用到上游克隆上（Windows / PowerShell 7+）
+﻿# 把本定制层补丁应用到上游克隆上（Windows / PowerShell 7+）
 #
 # 用法:
 #   pwsh scripts/apply-customizations.ps1 -Target <上游克隆目录>

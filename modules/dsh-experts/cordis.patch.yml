@@ -6,7 +6,7 @@
 # 个性化（本人岗位 defaultDomain、全局激活哪些专家 enabledDomains/enabledExperts）请在
 # **设置页**改（免重启），或在该 profile 的 cordis.patch.yml 里按 id 覆盖；不要改这里。
 #
-# 主人 2026-09-12 定的四条口径在 config 注释里写明，便于交付时一眼看懂：
+# 需求口径（2026-09-12 定）的四条规则在 config 注释里写明，便于交付时一眼看懂：
 #   ① 默认注入 1 位（expertInjectMax: 1），可调 2/3 —— 调大时设置页会提示"占用较多 TOKEN"；
 #   ② 岗位关联（defaultDomain）是**打分先验**（权重最高的信号），决定任务优先从哪个专业角度拆解；
 #   ③ enabledDomains / enabledExperts 是可选的**收窄**（默认全量参与匹配 —— 若拿岗位当白名单，

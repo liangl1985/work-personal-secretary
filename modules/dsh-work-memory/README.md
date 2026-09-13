@@ -72,7 +72,7 @@ dsh plugin --profile desktop install
    - **使用者画像** → 写入 `scope: user`（称呼、职业、目标、技术偏好、作息与协作习惯）
    - **助手画像** → 写入 `scope: global`（身份、性格、保密红线、协作铁律、长期工作约定）
    可以说：「记住：我是……（scope=user）」「记住：你是我的……助手，性格……（scope=global）」
-3. **建议配合 Obsidian**：把 `obsidianSyncDir` 指向 vault 里的一个目录（如 `<vault>/00_全局记忆`），插件会把 `MEMORY.md / USER.md / PROJECTS/ / DAILY/ / GRAPH.json` 单向镜像过去，便于人工翻阅与灾难恢复。**镜像目录请当只读参考**（手改会在下次同步被覆盖，要改请用工具或面板）。
+3. **建议配合 Obsidian**：把 `obsidianSyncDir` 指向 vault 里的一个目录（如 `<vault>/work-memory`），插件会把 `MEMORY.md / USER.md / PROJECTS/ / DAILY/ / GRAPH.json` 单向镜像过去，便于人工翻阅与灾难恢复。**镜像目录请当只读参考**（手改会在下次同步被覆盖，要改请用工具或面板）。
 4. **分类可增删改**：范围（全局/偏好/项目/日志/归档）固定，但**项目分类**可随时新建与归档（面板「项目」范围里）；条目可增删；`tag` 取 关键/常规/临时/敏感（**敏感条目不自动注入**，只在显式 `memory_recall` 时返回）。
 5. 记忆库位置：默认 `~/.dsh/memories/<命名空间>`，可用 `memoryDir` 改；结构：
    ```
