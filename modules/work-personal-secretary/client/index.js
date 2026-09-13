@@ -20,6 +20,13 @@
  * - GET  /work-personal-secretary/api/basedeck[?workspace=…] → 五项底座计划（只读预览）
  * - POST /work-personal-secretary/api/basedeck { ids, dryRun:false, overrides } → 逐项写入
  * - 首用必配项一次填完并写入；写前自动备份；完成后需重启 DSH 生效。
+ *
+ * 「能力配置」页（P4：读写子插件设置）：
+ * - GET  /work-personal-secretary/api/settings         → 白名单裁剪的设置枚举（只读）
+ * - POST /work-personal-secretary/api/settings/write   → { ns, dryRun:false, revision, ops }
+ * - GET  /work-personal-secretary/api/experts/preview?text=… → 专家打分实时预览（只读）
+ * 四组：记忆库（24 键）/ 专家库（阈值滑块 + 预览）/ 文档能力（自检状态）/ 桌面形象（状态 + 跳转）。
+ * 409 冲突时提示并自动重读，草稿保留（不丢输入）；接口不可用时分组显示可读降级提示。
  */
 window.__ModuleLoader__.load({
   id: 'work-personal-secretary',
@@ -420,6 +427,181 @@ window.__ModuleLoader__.load({
       initSummary: '共 {total} 项 · 计划写入 {toWrite} 项 · 已是最新 {upToDate} 项 · 被阻塞 {blocked} 项',
       initSafety: '写入前会自动备份；AGENTS.md 只更新「工作秘书」标记块内的内容，你自己的段落不会被改动。',
       initListSep: '、',
+
+      // ── 能力配置（P4：读写子插件设置） ─────────────────────────────
+      // 页面：四组（记忆库 / 专家库 / 文档能力 / 桌面形象）。
+      // 数据：GET /settings（白名单裁剪的只读枚举）；写入：POST /settings/write
+      // （dryRun:false + revision 栅栏）；409 = 版本冲突 → 提示 + 自动重读。
+      cfgLead:
+        '四组能力：记忆库、专家库、文档能力、桌面形象。设置走本机服务（白名单命名空间 + 用户层），不会直接改写你手写的配置文件。',
+      cfgReload: '重新读取',
+      cfgLoading: '读取中…',
+      cfgLastRead: '最近读取',
+      cfgReloadFailed: '重新读取失败',
+      cfgLoadFailed: '能力配置读取失败',
+      cfgLoadFailedHint:
+        '未能从本机服务取到设置：可能集成体尚未在宿主侧启用，或设置路由还没注册。可点「重试」；本页不会因此白屏。',
+      cfgRetry: '重试',
+      cfgConflict: '设置已被其他改动更新，已自动重新读取；你未保存的输入仍在。',
+      cfgSaved: '已保存（免重启生效）。',
+      cfgSaveFailed: '保存失败',
+      cfgSaveDryRun: '本机服务仍按试运行处理（dryRun:true），未真正写入；改动仍留在草稿里。',
+      cfgNoChange: '没有需要保存的改动。',
+      cfgSkipped: '{n} 项因数值格式不正确被跳过。',
+      cfgOverride: '已覆盖',
+      cfgOverridePending: '待清除覆盖',
+      cfgUnset: '清除覆盖',
+      cfgRestore: '恢复默认',
+      cfgSaveDraft: '保存改动（{n}）',
+      cfgDirty: '{n} 项待保存',
+      cfgWritableNo: '该命名空间当前不可写（只读）。',
+      cfgNsUnavailable:
+        '本机服务未提供该能力的设置命名空间 —— 子插件可能尚未安装或未启用。装好后这里会自动出现设置项。',
+      cfgGroupOther: '其它设置项',
+      cfgOn: '开',
+      cfgOff: '关',
+      cfgInjectMaxWarn: '注入 2–3 位会占用较多 TOKEN（每位 persona 约 3.3–4.9KB）。',
+      cfgRevision: '版本 r{n}',
+      cfgAppliedLive: '改动免重启生效',
+
+      cfgGroupMemory: '记忆库',
+      cfgMemoryLead: '执行层长期记忆（dsh-work-memory）。改动免重启生效；未覆盖的键取部署默认值。',
+      cfgMemGInject: '注入与快照',
+      cfgMemGInjectHint: '每轮注入记忆的总开关与快照容量',
+      cfgMemGArchive: '冷热与归档',
+      cfgMemGArchiveHint: '热记忆到期转冷（ARCHIVE）的期限；关键条目不转冷',
+      cfgMemGTriage: '转冷预审',
+      cfgMemGTriageHint: '到期不等于立即转冷：先结合近期日志与热记忆自动判断',
+      cfgMemGOps: '备份与运维',
+      cfgMemGOpsHint: '自动备份、告警提醒与自动记录行为',
+      cfgMemGDirs: '目录',
+      cfgMemGDirsHint: '记忆库根目录与 Obsidian 镜像目录；留空取默认',
+
+      cfgGroupExperts: '专家库',
+      cfgExpertsLead: '岗位专家库（dsh-experts）。常驻注入的只有一位身份专家，其余由「问题归属判断」决定是否补位。',
+      cfgExpGCore: '专家与匹配范围',
+      cfgExpGCoreHint: '身份专家、岗位域与参与自动匹配的范围',
+      cfgExpGThreshold: '注入阈值',
+      cfgExpGThresholdHint: '决定每轮注入几位专家、第 2/3 位的门槛与最低分',
+      cfgExpPreview: '实时预览',
+      cfgExpPreviewHint: '输入一段任务文本，按当前阈值试算注入名单与打分理由（只读，不产生写入）',
+      cfgExpPreviewPlaceholder: '例如：这份合同的付款节点与税务怎么处理？',
+      cfgExpPreviewGo: '试算',
+      cfgExpPreviewRunning: '试算中…',
+      cfgExpPreviewEmpty: '输入任务文本后点「试算」。',
+      cfgExpPreviewReason: '判定理由',
+      cfgExpPreviewSelected: '注入名单',
+      cfgExpPreviewNone: '没有专家达到最低分：本轮按通用助手处理（宁缺勿滥）。',
+      cfgExpPreviewConfig: '试算所用阈值',
+      cfgExpPreviewColId: '专家',
+      cfgExpPreviewColDomain: '域',
+      cfgExpPreviewColScore: '分数',
+      cfgExpPreviewColEvidence: '证据分',
+      cfgExpPreviewColWhy: '理由',
+      cfgExpPreviewUnavailable: '专家库未安装或未启用，打分预览暂不可用。',
+      cfgExpPreviewFailed: '试算失败',
+      cfgExpPreviewTruncated: '文本超过 2000 字符，已按前 2000 字符试算。',
+
+      cfgGroupDocs: '文档能力',
+      cfgDocLead: '文档能力（dsh-doc-suite）没有独立设置项，这里展示自检与依赖状态。',
+      cfgDocDeps: '依赖状态',
+      cfgDocDepsHint: '取自「安装与检查」页的环境探测结果（只读）',
+      cfgDocSkills: '四技能落盘',
+      cfgDocSkillHint: '技能落盘状态由文档模块的自检命令给出；本页只列清单，未接入该项结果不代表缺失。',
+      cfgDocDoctor: '自检请在文档模块里运行 /doc-doctor；解释器与 WPS 不会被自动安装。',
+      cfgDocCheckFailed: '未能取到依赖状态',
+      cfgDocCheckHint: '本机服务未提供环境检查接口时，这里只显示静态说明，不影响文档能力本身的使用。',
+      cfgDocSkillWord: 'office-word · Word 文档',
+      cfgDocSkillExcel: 'office-excel · Excel 表格',
+      cfgDocSkillPpt: 'office-ppt · PPT 演示',
+      cfgDocSkillPdf: 'pdf-tools · PDF 工具',
+      cfgDocSkillUnknown: '未检测',
+      cfgColComponent: '组件',
+      cfgColState: '状态',
+      cfgColEvidence: '实测值',
+
+      cfgGroupPet: '桌面形象',
+      cfgPetLead:
+        '桌面形象（dsh-token-pet）的 14 项设置存在它自己的面板里（浏览器 localStorage）；本页只显示安装状态并提供跳转，不读写它的设置。',
+      cfgPetOpen: '打开桌面形象面板',
+      cfgPetOpenFailed: '未能自动定位设置面板 —— 请点左侧设置列表里的「用量小宠物」分区。',
+      cfgPetState: '安装状态',
+      cfgPetCheckFailed: '未能取到安装状态',
+      cfgPetCheckHint: '取不到不代表未安装（可能安装清单路由未注册）。',
+      cfgPetLocalNote: '本页不读写 localStorage，改动请在它自己的面板里做。',
+
+      // 字段标签（cfgF<Key>）与说明（cfgH<Key>）：键名按 key 首字母大写拼接，
+      // 保证 24 + 11 个键在两种语言下都有人话标签（接口 description 只作中文兜底）。
+      cfgFPersonaLabel: '快照标题词',
+      cfgHPersonaLabel: '注入快照的标题词，默认「记忆」',
+      cfgFInjectMemory: '每轮注入记忆',
+      cfgHInjectMemory: '关闭后记忆库仍可用，只是不再自动注入',
+      cfgFSnapshotOrder: '快照顺序',
+      cfgHSnapshotOrder: 'runtime 上下文里的顺序，越小越靠前（改动需重启 DSH 生效）',
+      cfgFSnapshotMaxChars: '快照字符上限',
+      cfgHSnapshotMaxChars: '超出后按优先级截断，并在截断处标注未注入条数',
+      cfgFSnapshotLimitGlobal: '全局记忆条数上限',
+      cfgHSnapshotLimitGlobal: '快照里「全局记忆」最多注入条数（全局永不归档）',
+      cfgFSnapshotLimitUser: '用户偏好条数上限',
+      cfgHSnapshotLimitUser: '快照里「用户偏好」最多注入条数（关键优先、近期优先）',
+      cfgFSnapshotLimitProject: '项目记忆条数上限',
+      cfgHSnapshotLimitProject: '快照里「项目记忆」最多注入条数',
+      cfgFSnapshotLimitDaily: '今日日志条数上限',
+      cfgHSnapshotLimitDaily: '快照里「今日日志」最多注入条数（取最近若干条）',
+      cfgFArchiveEnabled: '冷热分层归档',
+      cfgHArchiveEnabled: '到期热记忆转冷（ARCHIVE）；全局与关键永不归档',
+      cfgFDailyRetentionDays: '日志保留天数',
+      cfgHDailyRetentionDays: '更早的 DAILY 日志按周合并进 ARCHIVE',
+      cfgFProjectTtlDays: '项目记忆 TTL（天）',
+      cfgHProjectTtlDays: '超期转冷；关键永不，被用到过的顺延',
+      cfgFUserTtlDays: '偏好记忆 TTL（天）',
+      cfgHUserTtlDays: '超期转冷；关键永不，被用到过的顺延',
+      cfgFTriageEnabled: '转冷预审',
+      cfgHTriageEnabled: '关掉则到期即转冷（不再结合近期日志判断）',
+      cfgFTriageGraceDays: '待判断宽限天数',
+      cfgHTriageGraceDays: '超过仍未判定则自然转冷（0 = 不宽限）',
+      cfgFTriageAskInSnapshot: '快照提醒待判断',
+      cfgHTriageAskInSnapshot: '有待判断条目时在注入快照里提醒助手去判定',
+      cfgFBackupEnabled: '自动备份',
+      cfgHBackupEnabled: '写库时懒触发，每天至多一次',
+      cfgFBackupDir: '备份目录',
+      cfgHBackupDir: '留空使用默认目录',
+      cfgFBackupKeep: '备份保留份数',
+      cfgHBackupKeep: '保留最近多少份备份，更早的删除',
+      cfgFMaintainWarnDays: '周保养提醒（天）',
+      cfgHMaintainWarnDays: '距上次保养超过多少天时在快照里提醒（0 = 关闭）',
+      cfgFGlobalWarnCount: '全局记忆告警阈值',
+      cfgHGlobalWarnCount: '全局条数超过时在快照里提醒整理（0 = 关闭）',
+      cfgFReviewEnabled: '关键条目先审后落盘',
+      cfgHReviewEnabled: 'tag=关键 的记忆先进待确认队列，批准后才落盘',
+      cfgFDailyAutoLog: '自动追加今日日志',
+      cfgHDailyAutoLog: '每轮对话自动记一条活动日志（10 分钟防抖）',
+      cfgFMemoryDir: '记忆库根目录',
+      cfgHMemoryDir: '留空 = ~/.dsh/memories/<插件命名空间>',
+      cfgFObsidianSyncDir: 'Obsidian 镜像目录',
+      cfgHObsidianSyncDir: '留空 = 不同步；建议指向 vault 下的记忆镜像区',
+      cfgFExpertsEnabled: '专家库总开关',
+      cfgHExpertsEnabled: '关闭后不注入任何 persona；专家工具与命令仍可用',
+      cfgFInjectOrder: '专家注入顺序',
+      cfgHInjectOrder: 'runtime 上下文里的顺序，越小越靠前',
+      cfgFDefaultDomain: '本人岗位域',
+      cfgHDefaultDomain: '决定任务优先从哪个专业角度拆解，也是身份专家的兜底来源',
+      cfgFIdentityExpert: '身份专家',
+      cfgHIdentityExpert: '常驻注入的唯一身份专家 id（如 presales-ics-security）；留空 = 取岗位域第一位',
+      cfgFEnabledDomains: '匹配范围·域',
+      cfgHEnabledDomains: '逗号分隔（如 presales,legal）；留空 = 全部专家参与匹配',
+      cfgFEnabledExperts: '匹配范围·专家',
+      cfgHEnabledExperts: 'id 逗号分隔；留空 = 不收窄。范围外仍可用 /expert use 临时注入',
+      cfgFExpertInjectMax: '每轮最多注入几位',
+      cfgHExpertInjectMax: '1（默认）/ 2 / 3；只在分数接近且跨域时才补第 2/3 位',
+      cfgFExpertSecondThreshold: '第 2/3 位门槛',
+      cfgHExpertSecondThreshold: '其分数 ≥ 第 1 位 × 该值时才注入（仅注入上限 ≥ 2 时生效）',
+      cfgFExpertMinScore: '最低注入分',
+      cfgHExpertMinScore: '低于此分不注入 —— 短任务/无专业信号时保持通用助手行为',
+      cfgFExpertShowBanner: '显示「当前专家视角」',
+      cfgHExpertShowBanner: '注入时显示本轮用的是哪位专家',
+      cfgFExpertSetupDone: '安装引导已完成',
+      cfgHExpertSetupDone: '重置为关可让「你的工作方向是？」下次再问一次',
     }
 
     const EN = {
@@ -667,6 +849,178 @@ window.__ModuleLoader__.load({
       initSummary: '{total} items · {toWrite} to write · {upToDate} up to date · {blocked} blocked',
       initSafety: 'Files are backed up before writing; AGENTS.md only updates the content inside the "Work Secretary" marker block — your own sections are left untouched.',
       initListSep: ', ',
+
+      // ── Capabilities (P4: read/write sub-plugin settings) ─────────
+      cfgLead:
+        'Four groups: Memory, Experts, Documents, Desktop pet. Settings go through the local service (whitelisted namespaces, user layer) and never rewrite the config files you hand-edit.',
+      cfgReload: 'Reload',
+      cfgLoading: 'Loading…',
+      cfgLastRead: 'Last read',
+      cfgReloadFailed: 'Reload failed',
+      cfgLoadFailed: 'Capability settings failed to load',
+      cfgLoadFailedHint:
+        'No settings from the local service: the integrator may be disabled on the host side, or the settings routes are not registered yet. Press Retry; this page never goes blank.',
+      cfgRetry: 'Retry',
+      cfgConflict: 'These settings were updated elsewhere, so they were reloaded. Your unsaved input is kept.',
+      cfgSaved: 'Saved (applies without a restart).',
+      cfgSaveFailed: 'Save failed',
+      cfgSaveDryRun: 'The local service still treated this as a dry run (dryRun:true), so nothing was written; your changes stay in the draft.',
+      cfgNoChange: 'Nothing to save.',
+      cfgSkipped: '{n} value(s) skipped: the number format was invalid.',
+      cfgOverride: 'overridden',
+      cfgOverridePending: 'override pending removal',
+      cfgUnset: 'Clear override',
+      cfgRestore: 'Restore default',
+      cfgSaveDraft: 'Save changes ({n})',
+      cfgDirty: '{n} unsaved',
+      cfgWritableNo: 'This namespace is read-only right now.',
+      cfgNsUnavailable:
+        'The local service does not expose this namespace — the sub-plugin may not be installed or enabled yet. Its settings appear here once it is ready.',
+      cfgGroupOther: 'Other settings',
+      cfgOn: 'on',
+      cfgOff: 'off',
+      cfgInjectMaxWarn: 'Injecting 2–3 experts uses more tokens (about 3.3–4.9KB each).',
+      cfgRevision: 'revision r{n}',
+      cfgAppliedLive: 'applies without a restart',
+
+      cfgGroupMemory: 'Memory',
+      cfgMemoryLead: 'Long-term execution memory (dsh-work-memory). Changes apply without a restart; keys you do not override keep the deployment defaults.',
+      cfgMemGInject: 'Injection & snapshot',
+      cfgMemGInjectHint: 'The per-turn injection switch and snapshot capacity',
+      cfgMemGArchive: 'Hot/cold & archive',
+      cfgMemGArchiveHint: 'When hot entries turn cold (ARCHIVE); key entries never do',
+      cfgMemGTriage: 'Cold-triage pre-check',
+      cfgMemGTriageHint: 'Due does not mean cold: recent logs and hot memory are weighed first',
+      cfgMemGOps: 'Backup & operations',
+      cfgMemGOpsHint: 'Auto backup, warning reminders and auto logging',
+      cfgMemGDirs: 'Directories',
+      cfgMemGDirsHint: 'Memory root and the Obsidian mirror directory; empty uses defaults',
+
+      cfgGroupExperts: 'Experts',
+      cfgExpertsLead: 'Domain expert library (dsh-experts). Only one identity expert is resident; the rest join when the task calls for them.',
+      cfgExpGCore: 'Experts & match scope',
+      cfgExpGCoreHint: 'Identity expert, job domain and the domains/experts that may match automatically',
+      cfgExpGThreshold: 'Injection thresholds',
+      cfgExpGThresholdHint: 'How many experts are injected, the 2nd/3rd cutoff, and the minimum score',
+      cfgExpPreview: 'Live preview',
+      cfgExpPreviewHint: 'Type a task and preview the injected roster with scoring reasons (read-only, nothing is written)',
+      cfgExpPreviewPlaceholder: 'e.g. How should the payment milestones and taxes of this contract be handled?',
+      cfgExpPreviewGo: 'Preview',
+      cfgExpPreviewRunning: 'Scoring…',
+      cfgExpPreviewEmpty: 'Type a task, then press Preview.',
+      cfgExpPreviewReason: 'Decision',
+      cfgExpPreviewSelected: 'Injected roster',
+      cfgExpPreviewNone: 'No expert reached the minimum score: this turn stays with the general assistant.',
+      cfgExpPreviewConfig: 'Thresholds used',
+      cfgExpPreviewColId: 'Expert',
+      cfgExpPreviewColDomain: 'Domain',
+      cfgExpPreviewColScore: 'Score',
+      cfgExpPreviewColEvidence: 'Evidence',
+      cfgExpPreviewColWhy: 'Reasons',
+      cfgExpPreviewUnavailable: 'The expert library is not installed or enabled, so scoring preview is unavailable.',
+      cfgExpPreviewFailed: 'Preview failed',
+      cfgExpPreviewTruncated: 'Longer than 2000 characters: only the first 2000 were scored.',
+
+      cfgGroupDocs: 'Documents',
+      cfgDocLead: 'The document suite (dsh-doc-suite) has no settings of its own, so this shows self-check and dependency status.',
+      cfgDocDeps: 'Dependency status',
+      cfgDocDepsHint: 'Taken from the environment probe on the Install & Check page (read-only)',
+      cfgDocSkills: 'Four skills on disk',
+      cfgDocSkillHint: 'On-disk skill status comes from the document module self-check; this page only lists them, so a missing entry here does not mean a missing skill.',
+      cfgDocDoctor: 'Run /doc-doctor inside the document module for a self-check; interpreters and WPS are never installed automatically.',
+      cfgDocCheckFailed: 'Dependency status unavailable',
+      cfgDocCheckHint: 'When the local service has no environment-check route, only the static notes are shown; document capability itself is unaffected.',
+      cfgDocSkillWord: 'office-word · Word documents',
+      cfgDocSkillExcel: 'office-excel · Excel sheets',
+      cfgDocSkillPpt: 'office-ppt · PPT decks',
+      cfgDocSkillPdf: 'pdf-tools · PDF tools',
+      cfgDocSkillUnknown: 'not checked',
+      cfgColComponent: 'Component',
+      cfgColState: 'Status',
+      cfgColEvidence: 'Observed',
+
+      cfgGroupPet: 'Desktop pet',
+      cfgPetLead:
+        'The 14 desktop pet (dsh-token-pet) settings live in its own panel (browser localStorage). This page only shows install status and offers a jump; it never reads or writes those settings.',
+      cfgPetOpen: 'Open desktop pet panel',
+      // token-pet 的导航标签**不本地化**：中英文界面下都显示「用量小宠物」（2026-09-13 实测），
+      // 所以这里也照实写它，避免提示指向一个界面上不存在的英文名。
+      cfgPetOpenFailed: 'Could not locate the settings panel automatically — pick the "用量小宠物" section in the settings list on the left.',
+      cfgPetState: 'Install status',
+      cfgPetCheckFailed: 'Install status unavailable',
+      cfgPetCheckHint: 'Unavailable does not mean missing (the install-list route may not be registered).',
+      cfgPetLocalNote: 'This page never touches localStorage; make changes in the pet panel itself.',
+
+      cfgFPersonaLabel: 'Snapshot title word',
+      cfgHPersonaLabel: 'Title word of the injected snapshot, defaults to the memory label',
+      cfgFInjectMemory: 'Inject memory each turn',
+      cfgHInjectMemory: 'With this off the memory store still works, it is simply not injected automatically',
+      cfgFSnapshotOrder: 'Snapshot order',
+      cfgHSnapshotOrder: 'Position in the runtime context; smaller comes first (needs a DSH restart)',
+      cfgFSnapshotMaxChars: 'Snapshot character limit',
+      cfgHSnapshotMaxChars: 'Overflow is truncated by priority and the omitted count is noted',
+      cfgFSnapshotLimitGlobal: 'Global entries limit',
+      cfgHSnapshotLimitGlobal: 'Most global entries per snapshot (global memory never archives)',
+      cfgFSnapshotLimitUser: 'User preference limit',
+      cfgHSnapshotLimitUser: 'Most preference entries per snapshot (key and recent first)',
+      cfgFSnapshotLimitProject: 'Project entries limit',
+      cfgHSnapshotLimitProject: 'Most project entries per snapshot',
+      cfgFSnapshotLimitDaily: 'Daily log limit',
+      cfgHSnapshotLimitDaily: 'Most daily-log entries per snapshot (most recent ones)',
+      cfgFArchiveEnabled: 'Hot/cold archiving',
+      cfgHArchiveEnabled: 'Due hot entries turn cold (ARCHIVE); global and key entries never do',
+      cfgFDailyRetentionDays: 'Daily log retention (days)',
+      cfgHDailyRetentionDays: 'Older daily logs are merged weekly into ARCHIVE',
+      cfgFProjectTtlDays: 'Project TTL (days)',
+      cfgHProjectTtlDays: 'Turns cold after the TTL; key entries never, used entries are extended',
+      cfgFUserTtlDays: 'Preference TTL (days)',
+      cfgHUserTtlDays: 'Turns cold after the TTL; key entries never, used entries are extended',
+      cfgFTriageEnabled: 'Cold-triage pre-check',
+      cfgHTriageEnabled: 'Off means entries turn cold as soon as they are due',
+      cfgFTriageGraceDays: 'Pending decision grace (days)',
+      cfgHTriageGraceDays: 'Undecided entries turn cold after the grace period (0 = no grace)',
+      cfgFTriageAskInSnapshot: 'Remind in snapshot',
+      cfgHTriageAskInSnapshot: 'Remind the assistant in the snapshot when entries await a decision',
+      cfgFBackupEnabled: 'Automatic backup',
+      cfgHBackupEnabled: 'Lazily triggered on writes, at most once a day',
+      cfgFBackupDir: 'Backup directory',
+      cfgHBackupDir: 'Empty uses the default directory',
+      cfgFBackupKeep: 'Backups to keep',
+      cfgHBackupKeep: 'Keep the most recent backups and delete older ones',
+      cfgFMaintainWarnDays: 'Maintenance reminder (days)',
+      cfgHMaintainWarnDays: 'Remind in the snapshot after this many days without maintenance (0 = off)',
+      cfgFGlobalWarnCount: 'Global entry warning',
+      cfgHGlobalWarnCount: 'Remind in the snapshot when global entries exceed this count (0 = off)',
+      cfgFReviewEnabled: 'Review key entries first',
+      cfgHReviewEnabled: 'Key-tagged memories wait in a confirmation queue until approved',
+      cfgFDailyAutoLog: 'Append a daily log',
+      cfgHDailyAutoLog: 'Add one activity line per turn (10 minute debounce)',
+      cfgFMemoryDir: 'Memory root directory',
+      cfgHMemoryDir: 'Empty = ~/.dsh/memories/<plugin namespace>',
+      cfgFObsidianSyncDir: 'Obsidian mirror directory',
+      cfgHObsidianSyncDir: 'Empty = no mirror; point it at the memory mirror area of your vault',
+      cfgFExpertsEnabled: 'Expert library master switch',
+      cfgHExpertsEnabled: 'With this off no persona is injected; expert tools and commands still work',
+      cfgFInjectOrder: 'Expert injection order',
+      cfgHInjectOrder: 'Position in the runtime context; smaller comes first',
+      cfgFDefaultDomain: 'Job domain',
+      cfgHDefaultDomain: 'Decides which perspective leads the breakdown; also the fallback source of the identity expert',
+      cfgFIdentityExpert: 'Identity expert',
+      cfgHIdentityExpert: 'Id of the single resident expert (e.g. presales-ics-security); empty = first expert of the job domain',
+      cfgFEnabledDomains: 'Match scope · domains',
+      cfgHEnabledDomains: 'Comma separated (e.g. presales,legal); empty = every expert may match',
+      cfgFEnabledExperts: 'Match scope · experts',
+      cfgHEnabledExperts: 'Comma separated ids; empty = no narrowing. Experts outside the scope can still be injected with /expert use',
+      cfgFExpertInjectMax: 'Experts per turn',
+      cfgHExpertInjectMax: '1 (default) / 2 / 3; the 2nd/3rd join only when scores are close and domains differ',
+      cfgFExpertSecondThreshold: '2nd/3rd cutoff',
+      cfgHExpertSecondThreshold: 'A candidate needs score ≥ top score × this value (only with a limit of 2 or more)',
+      cfgFExpertMinScore: 'Minimum score',
+      cfgHExpertMinScore: 'Below this nothing is injected — short or generic tasks stay with the general assistant',
+      cfgFExpertShowBanner: 'Show the current expert perspective',
+      cfgHExpertShowBanner: 'Shows which expert is in use for this turn',
+      cfgFExpertSetupDone: 'Setup wizard finished',
+      cfgHExpertSetupDone: 'Reset to off to be asked about your job domain again',
     }
 
     /** 包含的五个子插件（不写版本号：版本随使用者安装情况而变，由后续安装器探测） */
@@ -851,6 +1205,54 @@ window.__ModuleLoader__.load({
       },
       candBtnOn: { borderColor: '#c7d2fe', background: '#f3f6ff', color: '#2b4c9b' },
       labelHintOn: { fontSize: '11.5px', color: '#2b4c9b', fontWeight: 550 },
+
+      // ── 能力配置（P4：设置项 / 阈值滑块 / 预览与状态面板） ─────────
+      cfgHead: {
+        display: 'flex', gap: '10px', alignItems: 'flex-start', justifyContent: 'space-between',
+        flexWrap: 'wrap', margin: '2px 0 10px',
+      },
+      cfgLead: { fontSize: '12.5px', color: '#6b7280', maxWidth: '640px' },
+      cfgNoticeOk: {
+        border: '1px solid #d6efe1', background: '#f4fbf7', color: '#16794a',
+        borderRadius: '10px', padding: '8px 11px', fontSize: '12.5px', marginBottom: '10px',
+      },
+      cfgNoticeWarn: {
+        border: '1px solid #f6e3c4', background: '#fff9ef', color: '#8a5300',
+        borderRadius: '10px', padding: '8px 11px', fontSize: '12.5px', marginBottom: '10px',
+      },
+      cfgSection: { marginTop: '12px' },
+      // 插件级标签栏（能力配置页顶部：重新读取那一行下方）
+      cfgGroupTabs: { display: 'flex', gap: '2px', flexWrap: 'wrap', borderBottom: '1px solid #eceef1', margin: '2px 0 12px' },
+      cfgGroupTab: (on) => ({
+        appearance: 'none', border: 0, background: 'transparent', cursor: 'pointer',
+        padding: '7px 12px', fontSize: '13px', fontFamily: 'inherit',
+        color: on ? '#111827' : '#6b7280', fontWeight: on ? 650 : 400,
+        borderBottom: on ? '2px solid #111827' : '2px solid transparent', marginBottom: '-1px',
+      }),
+      cfgSectionTitle: { fontSize: '12.5px', fontWeight: 650, color: '#374151', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
+      cfgSectionHint: { fontSize: '11.5px', color: '#8a8f98', margin: '2px 0 6px' },
+      cfgRow: { display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '7px 0', borderBottom: '1px solid #f6f7f9', flexWrap: 'wrap' },
+      cfgColLabel: { flex: '0 0 210px', minWidth: '160px' },
+      cfgColControl: { flex: '1 1 240px', minWidth: '200px' },
+      cfgLabelText: { fontSize: '12.5px', fontWeight: 600, color: '#374151', display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' },
+      cfgHintText: { fontSize: '11.5px', color: '#8a8f98', marginTop: '2px' },
+      cfgNum: {
+        width: '104px', boxSizing: 'border-box', border: '1px solid #dfe1e5', borderRadius: '8px',
+        padding: '5px 8px', fontSize: '12.5px', fontFamily: 'inherit', color: '#1f2328', background: '#fff',
+      },
+      cfgSlider: { display: 'flex', gap: '8px', alignItems: 'center' },
+      cfgRange: { flex: '1 1 140px', minWidth: '120px', accentColor: '#1d4ed8' },
+      cfgRangeValue: { fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px', color: '#4b5563', minWidth: '48px' },
+      cfgSwitch: { display: 'inline-flex', gap: '6px', alignItems: 'center', fontSize: '12.5px', color: '#4b5563', cursor: 'pointer' },
+      cfgRowActions: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' },
+      cfgDirty: { fontSize: '11.5px', color: '#2b4c9b' },
+      cfgSaveBar: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #e6e7ea' },
+      cfgPreviewBox: { marginTop: '10px', border: '1px solid #eef0f2', borderRadius: '10px', padding: '10px 12px', background: '#fbfbfc' },
+      cfgPreviewHead: { fontSize: '12.5px', fontWeight: 650, color: '#374151', marginBottom: '2px' },
+      cfgPreviewInput: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' },
+      cfgChips: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '6px 0' },
+      cfgTh: { textAlign: 'left', color: '#8a8f98', fontWeight: 600, fontSize: '11.5px', padding: '5px 7px', borderBottom: '1px solid #eceef1' },
+      cfgTd: { padding: '6px 7px', borderBottom: '1px solid #f6f7f9', verticalAlign: 'top', fontSize: '12px' },
     }
 
     function badge(text, extra) {
@@ -1232,6 +1634,45 @@ window.__ModuleLoader__.load({
           const res = await fetch(url, opts)
           if (!res || res.ok === false) throw new Error('HTTP ' + String(res && res.status))
           return await res.json()
+        } catch (err) {
+          lastErr = String((err && err.message) || err) + ' @' + url
+        } finally {
+          if (timer) clearTimeout(timer)
+        }
+      }
+      throw new Error(lastErr || 'request failed')
+    }
+
+    /**
+     * 设置页专用请求：与 requestJson 同源同基址，差别只在**不把 4xx 当异常** ——
+     * 409（revision 冲突）与 404（路由未注册）都要读响应体才能给出可读提示。
+     * 返回 { ok, status, body }；只有「连响应都拿不到」才抛错。
+     * 既有页面继续用 requestJson / getJson / postJson，行为完全不变。
+     */
+    async function requestJsonFull(pathWithQuery, init, timeoutMs) {
+      const rel = API + pathWithQuery
+      const abs = new URL(rel, HOST_BASE).toString()
+      const attempts = HOST_FALLBACK ? [abs] : [rel, abs]
+      let lastErr = null
+      for (const url of attempts) {
+        let timer = null
+        let ctl = null
+        try {
+          const opts = Object.assign({}, init || {})
+          if (typeof AbortController === 'function') {
+            ctl = new AbortController()
+            opts.signal = ctl.signal
+            if (timeoutMs) timer = setTimeout(() => { try { ctl.abort() } catch (e) { /* 忽略：仅用于取消 */ } }, timeoutMs)
+          }
+          const res = await fetch(url, opts)
+          if (!res) throw new Error('无响应')
+          let body = null
+          try { body = await res.json() } catch (e) { body = null }
+          const status = (typeof res.status === 'number' && isFinite(res.status)) ? res.status : (res.ok === false ? 0 : 200)
+          if (res.ok !== false && status < 400) return { ok: true, status: status, body: body }
+          if (body && typeof body === 'object') return { ok: false, status: status, body: body }
+          // 服务端已应答（只是没有 JSON 体）→ 不再换基址重试，直接把状态码交给页面
+          return { ok: false, status: status, body: null }
         } catch (err) {
           lastErr = String((err && err.message) || err) + ' @' + url
         } finally {
@@ -2616,11 +3057,1080 @@ window.__ModuleLoader__.load({
       ])
     }
 
-    function Placeholder(props) {
+    // ══════════════════════════════════════════════════════════════
+    // P4「能力配置」（tab id = config）：四组 —— 记忆库 / 专家库 /
+    // 文档能力（自检状态）/ 桌面形象（状态 + 跳转）。
+    //
+    // 契约（17 号文档）：GET /settings 只读枚举（宿主按白名单裁剪到
+    // work-memory + experts，fields 为 schema 归一化结果）；
+    // POST /settings/write { ns, dryRun:false, revision, ops }，默认 dry-run，
+    // revision 落后返回 409。ns 与 path 的白名单全在**宿主侧**硬编码，
+    // 客户端只发键名与值 —— 不直写 settings.yaml，也不读写 token-pet 的 localStorage。
+    //
+    // 降级纪律：服务不可用 / 子插件未安装 → 分组内给可读提示，页面照常渲染。
+    // 冲突纪律：409 → 提示「设置已被其他改动更新」+ 自动重读，**草稿保留**（不丢输入）。
+    // ══════════════════════════════════════════════════════════════
+
+    /** 设置命名空间白名单（与宿主侧同一口径；客户端只用来决定渲染哪张卡片） */
+    const CFG_NS_MEMORY = 'work-memory'
+    const CFG_NS_EXPERTS = 'experts'
+    const CFG_NS_LIST = [CFG_NS_MEMORY, CFG_NS_EXPERTS]
+    /**
+     * 草稿哨兵：该键「待清除用户层覆盖」。NUL 前缀保证与任何真实输入都不冲突；
+     * 只活在客户端草稿里，上报时转成 ops 的 { op:'unset', path:[key] }。
+     */
+    const CFG_UNSET = '\u0000unset'
+    /** 桌面形象（token-pet）自己的设置分区 id —— 只作为跳转目标 */
+    const CFG_PET_SECTION = 'token-pet'
+    /** 预览文本上限（与契约一致） */
+    const CFG_PREVIEW_MAX = 2000
+    /** 数值输入兜底上限（schema 只保证 natural，给 UI 一个防误触的边界） */
+    const CFG_NUM_MAX = 1000000
+
+    /**
+     * 字段元数据：type 决定控件 —— bool 开关 / num 数字框 / slider 滑块 /
+     * select 下拉 / str 文本框 / complex 只读。标签与说明走 locale 字典
+     * （cfgF<Key> / cfgH<Key>，键名按 key 首字母大写拼接），接口给的
+     * description 只作中文兜底；接口 fields[].type 只在本地没有元数据时才采信。
+     */
+    const CFG_FIELD_META = {
+      // 记忆库 24 键
+      personaLabel: { type: 'str' },
+      injectMemory: { type: 'bool' },
+      snapshotOrder: { type: 'num' },
+      snapshotMaxChars: { type: 'num' },
+      snapshotLimitGlobal: { type: 'num' },
+      snapshotLimitUser: { type: 'num' },
+      snapshotLimitProject: { type: 'num' },
+      snapshotLimitDaily: { type: 'num' },
+      archiveEnabled: { type: 'bool' },
+      dailyRetentionDays: { type: 'num' },
+      projectTtlDays: { type: 'num' },
+      userTtlDays: { type: 'num' },
+      triageEnabled: { type: 'bool' },
+      triageGraceDays: { type: 'num' },
+      triageAskInSnapshot: { type: 'bool' },
+      backupEnabled: { type: 'bool' },
+      backupDir: { type: 'str' },
+      backupKeep: { type: 'num' },
+      maintainWarnDays: { type: 'num' },
+      globalWarnCount: { type: 'num' },
+      reviewEnabled: { type: 'bool' },
+      dailyAutoLog: { type: 'bool' },
+      memoryDir: { type: 'str' },
+      obsidianSyncDir: { type: 'str' },
+      // 专家库（schema 全量；阈值三项带滑块）
+      expertsEnabled: { type: 'bool' },
+      injectOrder: { type: 'num' },
+      defaultDomain: { type: 'select' },
+      identityExpert: { type: 'str' },
+      enabledDomains: { type: 'str' },
+      enabledExperts: { type: 'str' },
+      expertInjectMax: { type: 'slider', min: 1, max: 3, step: 1 },
+      expertSecondThreshold: { type: 'slider', min: 0, max: 1, step: 0.05 },
+      expertMinScore: { type: 'slider', min: 0, max: 1, step: 0.05 },
+      expertShowBanner: { type: 'bool' },
+      expertSetupDone: { type: 'bool' },
+    }
+
+    /** 记忆库 24 键的语义分组（顺序即展示顺序，与契约第三节一致） */
+    const CFG_MEMORY_GROUPS = [
+      {
+        id: 'inject', titleKey: 'cfgMemGInject', hintKey: 'cfgMemGInjectHint',
+        keys: ['personaLabel', 'injectMemory', 'snapshotOrder', 'snapshotMaxChars',
+          'snapshotLimitGlobal', 'snapshotLimitUser', 'snapshotLimitProject', 'snapshotLimitDaily'],
+      },
+      {
+        id: 'archive', titleKey: 'cfgMemGArchive', hintKey: 'cfgMemGArchiveHint',
+        keys: ['archiveEnabled', 'dailyRetentionDays', 'projectTtlDays', 'userTtlDays'],
+      },
+      {
+        id: 'triage', titleKey: 'cfgMemGTriage', hintKey: 'cfgMemGTriageHint',
+        keys: ['triageEnabled', 'triageGraceDays', 'triageAskInSnapshot'],
+      },
+      {
+        id: 'ops', titleKey: 'cfgMemGOps', hintKey: 'cfgMemGOpsHint',
+        keys: ['backupEnabled', 'backupDir', 'backupKeep', 'maintainWarnDays', 'globalWarnCount',
+          'reviewEnabled', 'dailyAutoLog'],
+      },
+      {
+        id: 'dirs', titleKey: 'cfgMemGDirs', hintKey: 'cfgMemGDirsHint',
+        keys: ['memoryDir', 'obsidianSyncDir'],
+      },
+    ]
+
+    /** 专家库：范围与阈值两小节（阈值三项渲染成滑块） */
+    const CFG_EXPERT_GROUPS = [
+      {
+        id: 'core', titleKey: 'cfgExpGCore', hintKey: 'cfgExpGCoreHint',
+        keys: ['expertsEnabled', 'defaultDomain', 'identityExpert', 'enabledDomains',
+          'enabledExperts', 'injectOrder', 'expertShowBanner', 'expertSetupDone'],
+      },
+      {
+        id: 'threshold', titleKey: 'cfgExpGThreshold', hintKey: 'cfgExpGThresholdHint', slider: true,
+        keys: ['expertInjectMax', 'expertSecondThreshold', 'expertMinScore'],
+      },
+    ]
+
+    /** ns → 分组定义 / 卡片标题 / 卡片引言 */
+    const CFG_GROUPS = { 'work-memory': CFG_MEMORY_GROUPS, experts: CFG_EXPERT_GROUPS }
+    const CFG_NS_TITLE_KEY = { 'work-memory': 'cfgGroupMemory', experts: 'cfgGroupExperts' }
+
+    /**
+     * 能力配置页的**插件级标签**：一次只渲染当前插件的配置。
+     * 原先四组从头到尾铺开（24 + 10 键），找某一项要滚很长（2026-09-13 使用者反馈）。
+     * 标签文案复用各组既有标题 key，不新增文案。
+     */
+    const CFG_GROUP_TABS = [
+      { id: 'work-memory', labelKey: 'cfgGroupMemory' },
+      { id: 'experts', labelKey: 'cfgGroupExperts' },
+      { id: 'docs', labelKey: 'cfgGroupDocs' },
+      { id: 'pet', labelKey: 'cfgGroupPet' },
+    ]
+    const CFG_NS_LEAD_KEY = { 'work-memory': 'cfgMemoryLead', experts: 'cfgExpertsLead' }
+
+    /** 文档模块的四个技能（静态清单：落盘状态由文档模块自检给出，本页不臆断） */
+    const CFG_DOC_SKILLS = [
+      ['office-word', 'cfgDocSkillWord'],
+      ['office-excel', 'cfgDocSkillExcel'],
+      ['office-ppt', 'cfgDocSkillPpt'],
+      ['pdf-tools', 'cfgDocSkillPdf'],
+    ]
+    /** 文档依赖面板展示的三项（复用 /check 的 id 与既有 label 字典） */
+    const CFG_DOC_DEPS = ['python', 'pythonDeps', 'wps']
+    const CFG_DOC_DEP_LABEL_KEYS = { python: 'itemPython', pythonDeps: 'itemPythonDeps', wps: 'itemWps' }
+
+    /** key → 字典键尾（cfgF / cfgH 后接首字母大写形式） */
+    function cfgKeyTail(key) {
+      const s = String(key === undefined || key === null ? '' : key)
+      return s ? s.charAt(0).toUpperCase() + s.slice(1) : s
+    }
+
+    /** 字段中文/英文标签（字典缺失时退回键名，绝不显示空白） */
+    function cfgLabel(t, key) {
+      const k = 'cfgF' + cfgKeyTail(key)
+      const v = t(k)
+      return v === k ? String(key) : v
+    }
+
+    /** 字段说明：字典优先；没有就回落到接口 description（可能是中文），再没有就不渲染 */
+    function cfgHint(t, key, nsState) {
+      const k = 'cfgH' + cfgKeyTail(key)
+      const v = t(k)
+      if (v !== k) return v
+      const f = nsState && nsState.fields ? nsState.fields[key] : null
+      const d = f && typeof f.description === 'string' ? f.description.trim() : ''
+      return d
+    }
+
+    /** 把时间戳渲染成 HH:MM:SS（「最近读取」提示用；异常时留空，绝不因格式化崩页） */
+    function cfgClock(ts) {
+      try { return new Date(ts).toLocaleTimeString() } catch (err) { return '' }
+    }
+
+    /** 归一化一个命名空间（字段一律容错：接口给什么用什么，缺什么退什么） */
+    function cfgNormalizeNs(raw) {
+      const r = (raw && typeof raw === 'object') ? raw : {}
+      const fields = Array.isArray(r.fields) ? r.fields : []
+      const byKey = {}
+      for (const f of fields) {
+        if (f && typeof f.key === 'string' && f.key) byKey[f.key] = f
+      }
+      return {
+        ns: String(r.ns || ''),
+        title: typeof r.title === 'string' ? r.title : '',
+        revision: (typeof r.revision === 'number' && isFinite(r.revision)) ? r.revision : null,
+        writable: r.writable !== false,
+        applies: typeof r.applies === 'string' ? r.applies : '',
+        // 子插件未安装时宿主**不省略该 ns**，而是给占位条目（installed:false、fields 空）
+        installed: r.installed !== false,
+        value: (r.value && typeof r.value === 'object') ? r.value : {},
+        user: (r.user && typeof r.user === 'object') ? r.user : {},
+        fields: byKey,
+      }
+    }
+
+    /**
+     * 解析 GET /settings 响应：白名单内的 ns → map；顺带识别服务端降级。
+     * 宿主在 ctx.settings 不可用 / describe 失败时返回**HTTP 200 + ok:false + namespaces**，
+     * 这种「结构完整但已降级」不再整页报错，而是给顶部提示 + 各分组本身的降级文案。
+     */
+    function cfgParseView(body) {
+      const list = Array.isArray(body && body.namespaces) ? body.namespaces : []
+      const map = {}
+      for (const item of list) {
+        if (!item || CFG_NS_LIST.indexOf(String(item.ns)) < 0) continue
+        map[item.ns] = cfgNormalizeNs(item)
+      }
+      const degraded = Boolean(body && body.ok === false)
+      return {
+        map: map,
+        degraded: degraded,
+        warn: degraded ? String(body.message || body.error || '') : '',
+      }
+    }
+
+    /** 控件类型：本地元数据优先，其次接口 fields.type，最后按值猜 */
+    function cfgFieldType(nsState, key, value) {
+      const meta = CFG_FIELD_META[key]
+      if (meta && meta.type) return meta.type
+      const f = nsState && nsState.fields ? nsState.fields[key] : null
+      const ft = f && typeof f.type === 'string' ? f.type.toLowerCase() : ''
+      if (ft === 'boolean' || ft === 'bool') return 'bool'
+      if (ft === 'number' || ft === 'natural' || ft === 'int' || ft === 'integer') return 'num'
+      if (ft === 'complex' || ft === 'object' || ft === 'array') return 'complex'
+      if (typeof value === 'boolean') return 'bool'
+      if (typeof value === 'number') return 'num'
+      return 'str'
+    }
+
+    /** 该字段的 schema 默认值（没有就返回 undefined） */
+    function cfgFieldDefault(nsState, key) {
+      const f = nsState && nsState.fields ? nsState.fields[key] : null
+      if (f && f.default !== undefined) return f.default
+      return undefined
+    }
+
+    /** 当前应显示的值：草稿 > 接口解析值 > 默认值 */
+    function cfgDisplayValue(nsState, drafts, key) {
+      if (drafts && drafts[key] !== undefined && drafts[key] !== CFG_UNSET) return drafts[key]
+      const v = nsState && nsState.value ? nsState.value[key] : undefined
+      if (v !== undefined) return v
+      const d = cfgFieldDefault(nsState, key)
+      return d === undefined ? '' : d
+    }
+
+    /** 宽松相等（数字与其字符串等价；布尔按字符串比）—— 只用于判断「有没有改动」 */
+    function cfgSameValue(a, b) {
+      if (a === b) return true
+      if (a === undefined || a === null || b === undefined || b === null) return false
+      return String(a) === String(b)
+    }
+
+    /** 该键是否有「待保存」的改动（unset 只对真的存在于用户层的键才算改动） */
+    function cfgIsDirty(nsState, drafts, key) {
+      if (!drafts || drafts[key] === undefined) return false
+      const dv = drafts[key]
+      if (dv === CFG_UNSET) return Boolean(nsState && nsState.user && nsState.user[key] !== undefined)
+      const cur = nsState && nsState.value ? nsState.value[key] : undefined
+      return !cfgSameValue(cur, dv)
+    }
+
+    /** 草稿 → ops（只发有变化的键；数值格式非法的键跳过并计数） */
+    function cfgBuildOps(nsState, drafts) {
+      const ops = []
+      let skipped = 0
+      const keys = Object.keys(drafts || {})
+      for (const key of keys) {
+        const dv = drafts[key]
+        if (dv === CFG_UNSET) {
+          if (nsState && nsState.user && nsState.user[key] !== undefined) ops.push({ op: 'unset', path: [key] })
+          continue
+        }
+        const fieldInfo = nsState && nsState.fields ? nsState.fields[key] : null
+        // 宿主标为不可写的键（复杂类型等）不下发，避免必然被拒的请求
+        if (fieldInfo && fieldInfo.writable === false) continue
+        const type = cfgFieldType(nsState, key, dv)
+        if ((type === 'num' || type === 'slider') && (dv === '' || !isFinite(Number(dv)))) { skipped++; continue }
+        const cur = nsState && nsState.value ? nsState.value[key] : undefined
+        if (cfgSameValue(cur, dv)) continue
+        ops.push({ op: 'set', path: [key], value: (type === 'num' || type === 'slider') ? Number(dv) : dv })
+      }
+      return { ops: ops, skipped: skipped }
+    }
+
+    /** 滑块/数字显示：小数步长保留两位，整数原样 */
+    function cfgFormatValue(value, meta) {
+      const step = meta && typeof meta.step === 'number' ? meta.step : 0
+      const n = Number(value)
+      if (value === '' || value === undefined || value === null || !isFinite(n)) {
+        return value === undefined || value === null ? '' : String(value)
+      }
+      return step > 0 && step < 1 ? n.toFixed(2) : String(n)
+    }
+
+    /** 滑块值收敛到 [min, max]（避免外部脏值把 range 弄到非法区间） */
+    function cfgClampNumber(value, meta) {
+      const n = Number(value)
+      const min = meta && typeof meta.min === 'number' ? meta.min : 0
+      const max = meta && typeof meta.max === 'number' ? meta.max : CFG_NUM_MAX
+      if (!isFinite(n)) return min
+      if (n < min) return min
+      if (n > max) return max
+      return n
+    }
+
+    /**
+     * 尽力打开宿主设置面板的指定分区。
+     * 宿主没给编程入口（设置面板的 activeId 是外壳组件内部 state，只投影
+     * settings.section 账本），所以按 DOM 约定尝试：
+     *   ① 宿主将来若暴露 window.__DSH_OPEN_SETTINGS_SECTION__ 就直接用；
+     *   ② 否则先点开设置触发器（button[aria-haspopup="dialog"]），
+     *      再在 [role="dialog"] nav 里按分区名找到导航按钮并点它。
+     * 返回 true = 已发出点击；false = 当前载体/宿主结构不支持（页面显示可读提示，不抛错）。
+     */
+    function openSettingsSection(id, names) {
+      try {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return false
+        const w = window
+        if (typeof w.__DSH_OPEN_SETTINGS_SECTION__ === 'function') {
+          w.__DSH_OPEN_SETTINGS_SECTION__(id)
+          return true
+        }
+        const doc = document
+        // 面板可能已经开着（使用者就是从设置里进来的）；没开就先点外壳的设置触发器。
+        let dialog = doc.querySelector('[role="dialog"]')
+        if (!dialog) {
+          const trigger = doc.querySelector('button[aria-haspopup="dialog"]')
+          if (!trigger || typeof trigger.click !== 'function') return false
+          trigger.click()
+          dialog = doc.querySelector('[role="dialog"]')
+        }
+        if (!dialog || typeof dialog.querySelectorAll !== 'function') return false
+        const targets = (names && names.length ? names : [id]).map((x) => String(x).toLowerCase())
+        // 左侧导航的容器**不一定是 <nav>**（真机上不是，原先只查 nav → 永远匹配不上），
+        // 所以按「nav 优先 → 整个面板兜底」两轮找，并放宽可点元素种类。
+        const scopes = []
+        const nav = dialog.querySelector('nav')
+        if (nav) scopes.push(nav)
+        scopes.push(dialog)
+        for (const scope of scopes) {
+          const nodes = scope.querySelectorAll('button, [role="tab"], [role="button"], a')
+          for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i]
+            const txt = String(node.textContent || '').trim().toLowerCase()
+            // 只认短标签：避免命中大段正文里恰好含关键词的节点
+            if (!txt || txt.length > 40) continue
+            for (const tgt of targets) {
+              if (tgt && txt.indexOf(tgt) >= 0 && typeof node.click === 'function') {
+                node.click()
+                return true
+              }
+            }
+          }
+        }
+        return false
+      } catch (err) {
+        return false
+      }
+    }
+
+    /** 单个设置项：标签 + 已覆盖标记 + 控件 + 清除覆盖 / 恢复默认（无 hooks，纯 props） */
+    function ConfigFieldRow(props) {
       const t = props.t
-      return h('div', { style: S.placeholder }, [
-        h('div', { key: 'h', style: { fontWeight: 650, color: '#1f2328', marginBottom: '6px' } }, t('devTitle')),
-        h('div', { key: 'b' }, t('devConfig')),
+      const nsKey = props.nsKey
+      const nsState = props.nsState
+      const key = props.key
+      const drafts = props.drafts
+      const handlers = props.handlers
+      const meta = CFG_FIELD_META[key] || {}
+      const draft = drafts ? drafts[key] : undefined
+      const rawValue = cfgDisplayValue(nsState, drafts, key)
+      const type = cfgFieldType(nsState, key, rawValue)
+      const overridden = Boolean(nsState.user && nsState.user[key] !== undefined)
+      const pendingUnset = draft === CFG_UNSET
+      const dirty = cfgIsDirty(nsState, drafts, key)
+      const fieldInfo = nsState.fields ? nsState.fields[key] : null
+      // 契约 §4.1：fields 是唯一真源，只渲染宿主实际返回的字段。
+      // 键表里可能有宿主 schema 未声明的键（例：experts.injectOrder 只存在于部署层 base，
+      // 不在 settings schema）——这类键渲染出来也是死字段，用户一改必被宿主 path 白名单 400 拒绝。
+      if (!fieldInfo) return null
+      // 复杂类型 / 宿主标为不可写的键：控件只读，且不给「清除覆盖 / 恢复默认」
+      //（宿主对这类键会直接 400 拒绝，不如从 UI 上就不发）
+      const fieldWritable = !(fieldInfo && fieldInfo.writable === false)
+      const busy = handlers.busy === true || nsState.writable === false || !fieldWritable
+      const def = cfgFieldDefault(nsState, key)
+      const canRestore = def !== undefined && !cfgSameValue(rawValue, def)
+      const hint = cfgHint(t, key, nsState)
+
+      const common = { 'data-cfg-ns': nsKey, 'data-cfg-key': key }
+      function inputProps(action) {
+        return Object.assign({
+          disabled: busy,
+          'data-cfg-action': action,
+          onChange: (e) => {
+            const v = e && e.target ? e.target.value : ''
+            // 数字框允许中间态（空串 / 半截数字）：非法值先原样留在草稿里，
+            // 保存时由 cfgBuildOps 跳过并提示，不写坏设置。
+            if (type === 'num') {
+              if (v === '') return handlers.setDraft(nsKey, key, '')
+              const n = Number(v)
+              return handlers.setDraft(nsKey, key, isFinite(n) ? n : v)
+            }
+            return handlers.setDraft(nsKey, key, v)
+          },
+        }, common)
+      }
+
+      let control = null
+      if (type === 'bool') {
+        control = h('label', { key: 'w', style: S.cfgSwitch }, [
+          h('input', Object.assign({
+            key: 'i', type: 'checkbox', checked: rawValue === true, style: S.check,
+            'data-cfg-action': 'toggle',
+            onChange: (e) => handlers.setDraft(nsKey, key, Boolean(e && e.target && e.target.checked)),
+          }, common)),
+          h('span', { key: 'x' }, rawValue === true ? t('cfgOn') : t('cfgOff')),
+        ])
+      } else if (type === 'slider') {
+        const min = typeof meta.min === 'number' ? meta.min : 0
+        const max = typeof meta.max === 'number' ? meta.max : 1
+        const step = typeof meta.step === 'number' ? meta.step : 0.05
+        control = h('div', { key: 's', style: S.cfgSlider }, [
+          h('input', Object.assign({
+            key: 'i', type: 'range', min: min, max: max, step: step,
+            value: cfgClampNumber(rawValue, meta), style: S.cfgRange,
+            'data-cfg-action': 'slide',
+            onChange: (e) => {
+              const v = e && e.target ? e.target.value : min
+              handlers.setDraft(nsKey, key, cfgClampNumber(v, meta))
+            },
+          }, common)),
+          h('span', { key: 'v', style: S.cfgRangeValue }, cfgFormatValue(rawValue, meta)),
+        ])
+      } else if (type === 'select') {
+        const value = rawValue === undefined || rawValue === null ? '' : String(rawValue)
+        const known = DOMAIN_OPTIONS.some((o) => o[0] === value)
+        control = h('select', Object.assign({
+          key: 's', style: S.select, value: value,
+          'data-cfg-action': 'select',
+          onChange: (e) => handlers.setDraft(nsKey, key, e && e.target ? e.target.value : ''),
+        }, common), DOMAIN_OPTIONS.map((o) => h('option', { key: o[0], value: o[0] }, t(o[1])))
+          .concat(!known && value ? [h('option', { key: '__other', value: value }, value)] : []))
+      } else if (type === 'complex') {
+        // 复杂类型（契约：标记 type:"complex" 并降级只读）
+        control = h('div', { key: 'c', style: S.itemValue }, String(JSON.stringify(rawValue === undefined ? null : rawValue)).slice(0, 200))
+      } else {
+        control = h('input', Object.assign({
+          key: 'i', type: 'text', style: S.input,
+          value: rawValue === undefined || rawValue === null ? '' : String(rawValue),
+        }, inputProps('set')))
+      }
+
+      const actions = []
+      actions.push(h('button', Object.assign({
+        key: 'u', type: 'button', disabled: busy || !overridden,
+        title: overridden ? t('cfgUnset') : t('cfgOverride'),
+        style: Object.assign({}, S.btn, (busy || !overridden) ? S.btnDisabled : null),
+        onClick: () => handlers.unsetKey(nsKey, key),
+      }, common, { 'data-cfg-action': 'unset' }), t('cfgUnset')))
+      actions.push(h('button', Object.assign({
+        key: 'r', type: 'button', disabled: busy || !canRestore,
+        style: Object.assign({}, S.btn, (busy || !canRestore) ? S.btnDisabled : null),
+        onClick: () => handlers.restoreKey(nsKey, key),
+      }, common, { 'data-cfg-action': 'restore' }), t('cfgRestore')))
+
+      return h('div', Object.assign({ key: 'r-' + key, style: S.cfgRow }, common), [
+        h('div', { key: 'l', style: S.cfgColLabel }, [
+          h('div', { key: 'n', style: S.cfgLabelText }, [
+            cfgLabel(t, key),
+            overridden ? badge(t('cfgOverride'), S.badgeBrand) : null,
+            pendingUnset ? badge(t('cfgOverridePending'), S.badgeWarn) : null,
+            dirty && !pendingUnset ? h('span', { key: 'd', style: S.cfgDirty }, fill(t('cfgDirty'), 1)) : null,
+          ]),
+          hint ? h('div', { key: 'h', style: S.cfgHintText }, hint) : null,
+        ]),
+        h('div', { key: 'c', style: S.cfgColControl }, [control, h('div', { key: 'a', style: S.cfgRowActions }, actions)]),
+      ])
+    }
+
+    /** 一个小节（标题 + 说明 + 若干设置项）；无可用行时返回 null（不产生空小节） */
+    function cfgRenderSection(t, nsKey, nsState, drafts, def, handlers) {
+      const rows = def.keys
+        .map((key) => ConfigFieldRow({ t: t, nsKey: nsKey, nsState: nsState, drafts: drafts, key: key, handlers: handlers }))
+        .filter(Boolean)
+      if (!rows.length) return null
+      // 注入 2–3 位专家会明显多占 TOKEN（契约第六节拍板时的已知代价）→ 就地在阈值组提示
+      if (def.slider && Number(cfgDisplayValue(nsState, drafts, 'expertInjectMax')) > 1) {
+        rows.push(h('div', { key: 'warn', style: S.warnLine }, t('cfgInjectMaxWarn')))
+      }
+      return h('div', { key: 'sec-' + def.id, style: S.cfgSection }, [
+        h('div', { key: 't', style: S.cfgSectionTitle }, [
+          t(def.titleKey),
+          def.slider ? badge(t('cfgAppliedLive'), S.badgeOk) : null,
+        ]),
+        def.hintKey ? h('div', { key: 'h', style: S.cfgSectionHint }, t(def.hintKey)) : null,
+        h('div', { key: 'b' }, rows),
+      ])
+    }
+
+    /** 专家打分实时预览（只读；host 未装专家库时降级为可读提示） */
+    function cfgRenderPreview(t, st, handlers) {
+      const pv = st.preview || { phase: 'idle' }
+      const data = pv.data || null
+      const loading = pv.phase === 'loading'
+      const text = String(st.previewText || '')
+      const nodes = [
+        h('div', { key: 'h', style: S.cfgPreviewHead }, t('cfgExpPreview')),
+        h('div', { key: 'n', style: S.cfgSectionHint }, t('cfgExpPreviewHint')),
+        h('div', { key: 'in', style: S.cfgPreviewInput }, [
+          h('input', {
+            key: 'i', type: 'text', style: S.input, value: text,
+            placeholder: t('cfgExpPreviewPlaceholder'),
+            'data-cfg-action': 'preview-text',
+            onChange: (e) => handlers.setPreviewText(e && e.target ? e.target.value : ''),
+          }),
+          h('button', {
+            key: 'b', type: 'button',
+            disabled: loading || text.trim() === '',
+            'data-cfg-action': 'preview',
+            style: Object.assign({}, S.btn, S.btnPrimary, (loading || text.trim() === '') ? S.btnDisabled : null),
+            onClick: () => handlers.preview(),
+          }, loading
+            ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), t('cfgExpPreviewRunning')]
+            : t('cfgExpPreviewGo')),
+        ]),
+      ]
+      if (text.length > CFG_PREVIEW_MAX) nodes.push(h('div', { key: 'tr', style: S.actionNote }, t('cfgExpPreviewTruncated')))
+      if (pv.phase === 'idle') nodes.push(h('div', { key: 'e', style: S.actionNote }, t('cfgExpPreviewEmpty')))
+      if (pv.phase === 'error') {
+        nodes.push(h('div', { key: 'err', style: S.error }, [
+          h('div', { key: 't', style: S.errorTitle }, t('cfgExpPreviewFailed')),
+          h('div', { key: 'm', style: S.errorMsg }, String(pv.error || '')),
+        ]))
+      }
+      if (data && (data.unavailable === true || data.ok === false)) {
+        nodes.push(h('div', { key: 'na', style: S.note }, [
+          h('div', { key: 'a' }, t('cfgExpPreviewUnavailable')),
+          (data.message || data.error) ? h('div', { key: 'b', style: S.itemDetail }, String(data.message || data.error)) : null,
+        ]))
+      } else if (data) {
+        const ranked = Array.isArray(data.ranked) ? data.ranked : []
+        const selected = Array.isArray(data.selected) ? data.selected : []
+        const conf = (data.config && typeof data.config === 'object') ? data.config : null
+        nodes.push(h('div', { key: 'res' }, [
+          h('div', { key: 'why', style: S.itemDetail }, t('cfgExpPreviewReason') + '：' + String(data.reason === undefined || data.reason === null ? '—' : data.reason)),
+          h('div', { key: 'sel' }, [
+            h('div', { key: 'l', style: S.outLabel }, t('cfgExpPreviewSelected')),
+            selected.length
+              ? h('div', { key: 'c', style: S.cfgChips }, selected.map((id, i) => badge(String(id), S.badgeOk)))
+              : h('div', { key: 'n', style: S.itemDetail }, t('cfgExpPreviewNone')),
+          ]),
+          ranked.length ? h('div', { key: 'tb' }, h('table', { style: S.table }, [
+            h('thead', { key: 'h' }, h('tr', null, [
+              h('th', { key: '1', style: S.cfgTh }, t('cfgExpPreviewColId')),
+              h('th', { key: '2', style: S.cfgTh }, t('cfgExpPreviewColDomain')),
+              h('th', { key: '3', style: S.cfgTh }, t('cfgExpPreviewColScore')),
+              h('th', { key: '4', style: S.cfgTh }, t('cfgExpPreviewColEvidence')),
+              h('th', { key: '5', style: S.cfgTh }, t('cfgExpPreviewColWhy')),
+            ])),
+            h('tbody', { key: 'b' }, ranked.map((row, i) => {
+              const r = row && typeof row === 'object' ? row : {}
+              const reasons = Array.isArray(r.reasons) ? r.reasons.join(t('listSep')) : String(r.reasons === undefined ? '' : r.reasons)
+              return h('tr', { key: String(r.id || i) }, [
+                h('td', { key: 'a', style: S.cfgTd }, h('code', { style: S.mono }, String(r.id === undefined ? '—' : r.id))),
+                h('td', { key: 'b', style: S.cfgTd }, String(r.domain === undefined ? '—' : r.domain)),
+                h('td', { key: 'c', style: S.cfgTd }, String(r.score === undefined ? '—' : r.score)),
+                h('td', { key: 'd', style: S.cfgTd }, String(r.evidence === undefined ? '—' : r.evidence)),
+                h('td', { key: 'e', style: S.cfgTd }, reasons || '—'),
+              ])
+            })),
+          ])) : null,
+          conf ? h('div', { key: 'cf', style: S.actionNote }, t('cfgExpPreviewConfig') + '：'
+            + 'expertInjectMax=' + String(conf.expertInjectMax) + ' · '
+            + 'expertSecondThreshold=' + String(conf.expertSecondThreshold) + ' · '
+            + 'expertMinScore=' + String(conf.expertMinScore)) : null,
+        ]))
+      }
+      return h('div', { key: 'pv', style: S.cfgPreviewBox }, nodes)
+    }
+
+    /**
+     * 「文档能力」状态面板（契约决定：dsh-doc-suite 零设置项 → 不做设置分组）。
+     * 依赖状态复用「安装与检查」页的 GET /check（Python / Python 依赖 / WPS，只读）；
+     * 四技能落盘状态由文档模块的自检命令给出，本页只列清单 —— 拿不到数据时
+     * 也照样渲染静态说明，绝不出现空分组。
+     */
+    function DocPanel(props) {
+      const t = props.t
+      const state = useState({ phase: 'loading', error: '', items: null })
+      const st = state[0]
+      const setSt = state[1]
+      useEffect(() => {
+        let alive = true
+        async function probe() {
+          try {
+            if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+            const body = await getJson('/check', 15000)
+            if (!alive) return
+            if (!body || typeof body !== 'object' || body.ok === false) throw new Error(String((body && body.error) || 'check 返回 ok:false'))
+            setSt({ phase: 'ready', error: '', items: Array.isArray(body.items) ? body.items : [] })
+          } catch (err) {
+            if (!alive) return
+            setSt({ phase: 'error', error: String((err && err.message) || err), items: null })
+          }
+        }
+        probe()
+        return () => { alive = false }
+      }, [])
+      const byId = {}
+      if (Array.isArray(st.items)) for (const it of st.items) if (it && typeof it.id === 'string') byId[it.id] = it
+      return h('div', { key: 'docs', style: S.card }, [
+        h('div', { key: 'h', style: S.cardHead }, [
+          h('h3', { key: 't', style: S.cardTitle }, [
+            t('cfgGroupDocs'),
+            badge('dsh-doc-suite'),
+            st.phase === 'loading' ? badge(t('checking'), S.badgeWarn) : null,
+          ]),
+          h('p', { key: 's', style: S.cardSub }, t('cfgDocLead')),
+        ]),
+        h('div', { key: 'b', style: S.cardBody }, [
+          st.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
+            h('div', { key: 't', style: S.errorTitle }, t('cfgDocCheckFailed')),
+            h('div', { key: 'm', style: S.errorMsg }, st.error),
+            h('div', { key: 'h', style: S.errorHint }, t('cfgDocCheckHint')),
+          ]) : null,
+          h('div', { key: 'dep', style: S.cfgSection }, [
+            h('div', { key: 't', style: S.cfgSectionTitle }, [
+              t('cfgDocDeps'),
+              st.phase === 'ready' ? badge(t('cfgAppliedLive'), S.badgeOk) : null,
+            ]),
+            h('div', { key: 'h', style: S.cfgSectionHint }, t('cfgDocDepsHint')),
+            st.phase === 'ready' ? h('table', { key: 'tb', style: S.table }, [
+              h('thead', { key: 'h' }, h('tr', null, [
+                h('th', { key: '1', style: S.cfgTh }, t('cfgColComponent')),
+                h('th', { key: '2', style: S.cfgTh }, t('cfgColState')),
+                h('th', { key: '3', style: S.cfgTh }, t('cfgColEvidence')),
+              ])),
+              h('tbody', { key: 'b' }, CFG_DOC_DEPS.map((id) => {
+                const it = byId[id] || null
+                const status = it && typeof it.status === 'string' ? it.status : 'unknown'
+                return h('tr', { key: id }, [
+                  h('td', { key: 'a', style: S.cfgTd }, t(CFG_DOC_DEP_LABEL_KEYS[id] || id)),
+                  h('td', { key: 'b', style: S.cfgTd }, h('span', { style: Object.assign({}, S.badge, statusStyle(status)) }, statusLabel(t, status))),
+                  h('td', { key: 'c', style: S.cfgTd }, String((it && it.value) || '—')),
+                ])
+              })),
+            ]) : null,
+          ]),
+          h('div', { key: 'sk', style: S.cfgSection }, [
+            h('div', { key: 't', style: S.cfgSectionTitle }, t('cfgDocSkills')),
+            h('div', { key: 'h', style: S.cfgSectionHint }, t('cfgDocSkillHint')),
+            h('div', { key: 'l', style: S.cfgChips }, CFG_DOC_SKILLS.map((s) =>
+              h('span', { key: s[0], style: Object.assign({}, S.badge, S.badgeSkip) }, t(s[1]) + ' · ' + t('cfgDocSkillUnknown')))),
+          ]),
+          h('div', { key: 'note', style: S.note }, t('cfgDocDoctor')),
+        ]),
+      ])
+    }
+
+    /**
+     * 「桌面形象」状态 + 跳转面板。契约决定：不实现 localStorage 读写桥，
+     * 只显示安装状态（复用 GET /plugins）并把使用者送到 token-pet 自己的面板。
+     */
+    function PetPanel(props) {
+      const t = props.t
+      const state = useState({ phase: 'loading', error: '', item: null, jumpFailed: false })
+      const st = state[0]
+      const setSt = state[1]
+      useEffect(() => {
+        let alive = true
+        async function probe() {
+          try {
+            if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+            const body = await getJson('/plugins', 15000)
+            if (!alive) return
+            if (!body || typeof body !== 'object' || body.ok === false) throw new Error(String((body && body.error) || 'plugins 返回 ok:false'))
+            const list = Array.isArray(body.plugins) ? body.plugins : (Array.isArray(body.items) ? body.items : [])
+            let found = null
+            for (const it of list) {
+              if (it && String(it.id || it.name || '') === 'dsh-token-pet') { found = it; break }
+            }
+            setSt({ phase: 'ready', error: '', item: found, jumpFailed: false })
+          } catch (err) {
+            if (!alive) return
+            setSt({ phase: 'error', error: String((err && err.message) || err), item: null, jumpFailed: false })
+          }
+        }
+        probe()
+        return () => { alive = false }
+      }, [])
+
+      const installed = st.phase === 'ready' && Boolean(st.item) && st.item.installed !== false
+      const version = st.item ? firstText(st.item.installedVersion, st.item.version) : ''
+      const statusText = st.phase === 'loading'
+        ? t('pluginsLoading')
+        : (st.phase === 'error' ? t('cfgPetCheckFailed') : (installed ? t('plugStatusUpToDate') : t('notInstalled')))
+
+      return h('div', { key: 'pet', style: S.card }, [
+        h('div', { key: 'h', style: S.cardHead }, [
+          h('h3', { key: 't', style: S.cardTitle }, [
+            t('cfgGroupPet'),
+            badge('dsh-token-pet'),
+            h('span', { style: Object.assign({}, S.badge, installed ? S.badgeOk : S.badgeSkip) }, statusText),
+            version ? badge(version, S.badgeBrand) : null,
+          ]),
+          h('p', { key: 's', style: S.cardSub }, t('cfgPetLead')),
+        ]),
+        h('div', { key: 'b', style: S.cardBody }, [
+          h('div', { key: 'row', style: S.toolbar }, [
+            h('button', {
+              key: 'go', type: 'button',
+              'data-cfg-action': 'open-pet',
+              style: Object.assign({}, S.btn, S.btnPrimary),
+              onClick: () => {
+                // 左侧导航里 token-pet 那一项由它自己渲染，且**不本地化**：
+          // 中英文界面下实测都显示「用量小宠物」（2026-09-13 两次验证）。
+          // 我们这边叫「桌面形象」只是集成体自己的组名，不是宿主 UI 里的分区名，切勿再拿来匹配。
+          // 候选只保留实测名 + ns id（后者是万一将来外壳改用 id 渲染导航的兜底）。
+          const names = ['用量小宠物', CFG_PET_SECTION]
+                let ok = false
+                try {
+                  ok = typeof props.openSection === 'function' ? props.openSection(CFG_PET_SECTION, names) === true : false
+                } catch (err) {
+                  ok = false
+                }
+                setSt((prev) => Object.assign({}, prev, { jumpFailed: !ok }))
+              },
+            }, t('cfgPetOpen')),
+            h('span', { key: 'n', style: S.actionNote }, t('cfgPetLocalNote')),
+          ]),
+          st.jumpFailed ? h('div', { key: 'na', style: S.warnLine }, t('cfgPetOpenFailed')) : null,
+          st.phase === 'error' ? h('div', { key: 'err', style: S.note }, [
+            h('div', { key: 'a' }, t('cfgPetCheckFailed')),
+            h('div', { key: 'b', style: S.itemDetail }, t('cfgPetCheckHint')),
+          ]) : null,
+        ]),
+      ])
+    }
+
+    /**
+     * 能力配置页（P4）。
+     * - 数据：GET /settings（只读枚举，白名单裁剪）
+     * - 写入：POST /settings/write（**恒带 dryRun:false** + revision 栅栏）
+     * - 编辑模型：输入先进本地草稿（draft），点「保存改动」提交；
+     *   「清除覆盖」（unset）与「恢复默认」（set 默认值）是单键即时提交。
+     * - 409：提示「设置已被其他改动更新」+ 自动重读，草稿原样保留（不丢输入）。
+     * - 降级：接口不可用 / ns 缺失 → 卡片内可读提示；文档/桌面各有独立数据源。
+     */
+    function ConfigPage(props) {
+      const t = props.t
+      const state = useState({
+        phase: 'loading', error: '', namespaces: {}, drafts: {},
+        busyNs: '', notice: '', noticeKind: '',
+        // 当前显示的插件标签（默认记忆库）：切换只改渲染，不影响任何已加载数据。
+        activeGroup: 'work-memory',
+        // 最近一次成功读取的时刻：重读若数据没变，界面本来毫无动静，
+        // 使用者会以为按钮坏了（2026-09-13 真机反馈）→ 用时间戳给出可见反馈。
+        lastLoadedAt: 0,
+        previewText: '', preview: { phase: 'idle', error: '', data: null },
+      })
+      const st = state[0]
+      const setSt = state[1]
+
+      useEffect(() => {
+        let alive = true
+        async function boot() {
+          try {
+            if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+            const res = await requestJsonFull('/settings', { headers: { accept: 'application/json' } }, 15000)
+            if (!alive) return
+            const body = res.body
+            if (res.ok !== true || !body || typeof body !== 'object') {
+              throw new Error(String((body && (body.error || body.message)) || ('HTTP ' + res.status)))
+            }
+            // ok:false 且连 namespaces 都没有（路由未注册 / 参数错误）才当整页失败
+            if (body.ok === false && !Array.isArray(body.namespaces)) {
+              throw new Error(String(body.message || body.error || 'settings 返回 ok:false'))
+            }
+            const view = cfgParseView(body)
+            setSt((prev) => Object.assign({}, prev, {
+              phase: 'ready', error: '', namespaces: view.map,
+              notice: view.warn || prev.notice,
+              noticeKind: view.warn ? 'warn' : prev.noticeKind,
+              // 首次加载也算一次「读取」：进页面就能看到数据新鲜度（与手动重读一致）。
+              lastLoadedAt: Date.now(),
+            }))
+          } catch (err) {
+            if (!alive) return
+            setSt((prev) => Object.assign({}, prev, { phase: 'error', error: String((err && err.message) || err) }))
+          }
+        }
+        boot()
+        return () => { alive = false }
+      }, [])
+
+      /**
+       * 重读设置。keepDrafts=true 时**保留本地草稿**（409 冲突、手动刷新都走这条），
+       * 这样自动重读不会冲掉使用者正在输入的值。
+       */
+      async function load(keepDrafts) {
+        // 进入 loading：按钮显示「读取中…」+ 转圈，让重读**看得见**。
+        setSt((prev) => Object.assign({}, prev, { phase: 'loading', busyNs: '', error: '' }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const res = await requestJsonFull('/settings', { headers: { accept: 'application/json' } }, 15000)
+          const body = res.body
+          if (res.ok !== true || !body || typeof body !== 'object') {
+            throw new Error(String((body && (body.error || body.message)) || ('HTTP ' + res.status)))
+          }
+          if (body.ok === false && !Array.isArray(body.namespaces)) {
+            throw new Error(String(body.message || body.error || 'settings 返回 ok:false'))
+          }
+          const view = cfgParseView(body)
+          setSt((prev) => Object.assign({}, prev, {
+            phase: 'ready', error: '', namespaces: view.map,
+            notice: view.warn || prev.notice,
+            noticeKind: view.warn ? 'warn' : prev.noticeKind,
+            lastLoadedAt: Date.now(),
+            drafts: keepDrafts ? prev.drafts : {},
+          }))
+          return true
+        } catch (err) {
+          // 重读失败**不该**把整页打成错误态：已加载的数据仍可用，用提示条告知即可。
+          setSt((prev) => Object.assign({}, prev, {
+            phase: Object.keys(prev.namespaces || {}).length ? 'ready' : 'error',
+            notice: t('cfgReloadFailed') + '：' + String((err && err.message) || err),
+            noticeKind: 'warn',
+          }))
+          return false
+        }
+      }
+
+      /** 写入草稿：收集该 ns 有变化的 ops，一次 POST /settings/write */
+      function setDraft(ns, key, value) {
+        setSt((prev) => {
+          const drafts = Object.assign({}, prev.drafts)
+          const nsDrafts = Object.assign({}, drafts[ns] || {})
+          nsDrafts[key] = value
+          drafts[ns] = nsDrafts
+          return Object.assign({}, prev, { drafts: drafts, notice: '', noticeKind: '' })
+        })
+      }
+
+      /**
+       * 真写：POST /settings/write，body 恒带 dryRun:false（契约第四节：不带就只试运行）。
+       * 409 = 别人先改了 → 提示 + 自动重读（草稿保留）。
+       * 成功 → 用响应回填 value/user/revision，并**只清掉本次提交的键**（其它草稿不动）。
+       */
+      async function write(ns, ops, skipped) {
+        const nsState = st.namespaces[ns]
+        if (!nsState) return
+        if (nsState.writable === false) {
+          setSt((prev) => Object.assign({}, prev, { notice: t('cfgWritableNo'), noticeKind: 'warn' }))
+          return
+        }
+        setSt((prev) => Object.assign({}, prev, { busyNs: ns, notice: '', noticeKind: '' }))
+        let res = null
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const payload = { ns: ns, dryRun: false, ops: ops }
+          // revision 只在确实是整数时下发（宿主对非整数按「不带栅栏」处理）
+          if (typeof nsState.revision === 'number' && isFinite(nsState.revision)) payload.revision = nsState.revision
+          res = await requestJsonFull('/settings/write', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify(payload),
+          }, 30000)
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            busyNs: '', notice: t('cfgSaveFailed') + '：' + String((err && err.message) || err), noticeKind: 'warn',
+          }))
+          return
+        }
+        if (res.status === 409) {
+          setSt((prev) => Object.assign({}, prev, { busyNs: '', notice: t('cfgConflict'), noticeKind: 'warn' }))
+          await load(true)
+          return
+        }
+        const body = res.body || {}
+        if (res.ok !== true || body.ok === false) {
+          setSt((prev) => Object.assign({}, prev, {
+            busyNs: '',
+            notice: t('cfgSaveFailed') + '：' + String(body.error || body.message || ('HTTP ' + res.status)),
+            noticeKind: 'warn',
+          }))
+          return
+        }
+        // 防御：宿主忽略 dryRun:false 时绝不能显示「已保存」（草稿保留，让使用者重试）
+        if (body.dryRun === true) {
+          setSt((prev) => Object.assign({}, prev, { busyNs: '', notice: t('cfgSaveDryRun'), noticeKind: 'warn' }))
+          return
+        }
+        setSt((prev) => {
+          const namespaces = Object.assign({}, prev.namespaces)
+          const cur = namespaces[ns] || {}
+          const next = Object.assign({}, cur)
+          if (body.value && typeof body.value === 'object') next.value = body.value
+          if (body.user && typeof body.user === 'object') next.user = body.user
+          if (typeof body.revision === 'number' && isFinite(body.revision)) next.revision = body.revision
+          namespaces[ns] = next
+          const drafts = Object.assign({}, prev.drafts)
+          const nsDrafts = Object.assign({}, drafts[ns] || {})
+          for (const op of (ops || [])) {
+            const path = op && Array.isArray(op.path) ? op.path : []
+            if (path.length) delete nsDrafts[path[0]]
+          }
+          drafts[ns] = nsDrafts
+          const extra = skipped ? (' · ' + fill(t('cfgSkipped'), skipped)) : ''
+          return Object.assign({}, prev, {
+            busyNs: '', namespaces: namespaces, drafts: drafts,
+            notice: t('cfgSaved') + extra, noticeKind: 'ok',
+          })
+        })
+      }
+
+      /** 「保存改动」：把该 ns 草稿里所有有变化的键合成一次写入 */
+      function saveNs(ns) {
+        const nsState = st.namespaces[ns]
+        if (!nsState) return
+        const built = cfgBuildOps(nsState, st.drafts[ns] || {})
+        if (!built.ops.length) {
+          setSt((prev) => Object.assign({}, prev, {
+            notice: built.skipped ? fill(t('cfgSkipped'), built.skipped) : t('cfgNoChange'),
+            noticeKind: 'warn',
+          }))
+          return
+        }
+        write(ns, built.ops, built.skipped)
+      }
+
+      /** 「清除覆盖」：单键 unset（回到 base / 默认），即时提交 */
+      function unsetKey(ns, key) {
+        write(ns, [{ op: 'unset', path: [key] }], 0)
+      }
+
+      /** 「恢复默认」：把该键写回 schema 默认值，即时提交 */
+      function restoreKey(ns, key) {
+        const def = cfgFieldDefault(st.namespaces[ns], key)
+        if (def === undefined) return
+        write(ns, [{ op: 'set', path: [key], value: def }], 0)
+      }
+
+      /** 专家打分预览：GET /experts/preview?text=…（只读；文本截到 2000 字符） */
+      async function runPreview() {
+        const raw = String(st.previewText || '')
+        const text = raw.slice(0, CFG_PREVIEW_MAX)
+        if (!text.trim()) return
+        setSt((prev) => Object.assign({}, prev, { preview: { phase: 'loading', error: '', data: null } }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const res = await requestJsonFull('/experts/preview?text=' + encodeURIComponent(text), { headers: { accept: 'application/json' } }, 15000)
+          const body = res.body
+          if (res.ok !== true || !body || typeof body !== 'object') {
+            throw new Error(String((body && (body.error || body.message)) || ('HTTP ' + res.status)))
+          }
+          setSt((prev) => Object.assign({}, prev, { preview: { phase: 'ready', error: '', data: body } }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            preview: { phase: 'error', error: String((err && err.message) || err), data: null },
+          }))
+        }
+      }
+
+      const handlers = {
+        busy: Boolean(st.busyNs),
+        setDraft: setDraft,
+        unsetKey: unsetKey,
+        restoreKey: restoreKey,
+        saveNs: saveNs,
+        preview: runPreview,
+        setPreviewText: (v) => setSt((prev) => Object.assign({}, prev, { previewText: String(v === undefined || v === null ? '' : v) })),
+      }
+      const loading = st.phase === 'loading'
+
+      /** 一个命名空间卡片：标题 + 引言 + 语义小节（+ 专家库的预览区） */
+      function renderNsCard(nsKey, extraNodes) {
+        const nsState = st.namespaces[nsKey] || null
+        const drafts = st.drafts[nsKey] || {}
+        const groups = CFG_GROUPS[nsKey] || []
+        const known = {}
+        for (const def of groups) for (const k of def.keys) known[k] = true
+        const nodes = []
+        // 不可用有两种形态：① 响应里根本没有该 ns；② 宿主给的占位条目 installed:false
+        // （子插件未安装时宿主不省略 ns，而是给 fields/value 全空的占位）。
+        const unavailable = !nsState || nsState.installed === false
+          || (Object.keys(nsState.fields).length === 0 && Object.keys(nsState.value).length === 0)
+        if (unavailable) {
+          // 可读降级提示，不是空白分组
+          nodes.push(h('div', { key: 'na', style: S.note }, t('cfgNsUnavailable')))
+        } else {
+          const dirtyCount = Object.keys(drafts).filter((k) => cfgIsDirty(nsState, drafts, k)).length
+          for (const def of groups) {
+            const sec = cfgRenderSection(t, nsKey, nsState, drafts, def, handlers)
+            if (sec) nodes.push(sec)
+          }
+          // 接口多出来的键（后续版本新增）单独成组，保证「看得见」而不是被静默吞掉
+          const extra = []
+          const seen = {}
+          const candidates = Object.keys(nsState.fields).concat(Object.keys(nsState.value))
+          for (const k of candidates) {
+            if (!k || known[k] || seen[k]) continue
+            seen[k] = true
+            if (CFG_FIELD_META[k]) continue
+            extra.push(k)
+          }
+          if (extra.length) {
+            nodes.push(cfgRenderSection(t, nsKey, nsState, drafts, { id: 'other', titleKey: 'cfgGroupOther', keys: extra }, handlers))
+          }
+          nodes.push(h('div', { key: 'save', style: S.cfgSaveBar }, [
+            h('button', {
+              key: 'b', type: 'button', disabled: st.busyNs === nsKey || dirtyCount === 0,
+              'data-cfg-action': 'save', 'data-cfg-ns': nsKey,
+              style: Object.assign({}, S.btn, S.btnPrimary, (st.busyNs === nsKey || dirtyCount === 0) ? S.btnDisabled : null),
+              onClick: () => saveNs(nsKey),
+            }, fill(t('cfgSaveDraft'), dirtyCount)),
+            h('span', { key: 'n', style: S.actionNote }, st.busyNs === nsKey ? t('cfgLoading') : (dirtyCount ? fill(t('cfgDirty'), dirtyCount) : t('cfgAppliedLive'))),
+            nsState.revision !== null ? h('span', { key: 'r', style: S.actionNote }, fill(t('cfgRevision'), nsState.revision)) : null,
+          ]))
+        }
+        return h('div', { key: 'ns-' + nsKey, style: S.card }, [
+          h('div', { key: 'h', style: S.cardHead }, [
+            h('h3', { key: 't', style: S.cardTitle }, [
+              t(CFG_NS_TITLE_KEY[nsKey] || nsKey),
+              badge(nsKey, S.badgeBrand),
+              nsState && nsState.writable === false ? badge(t('cfgWritableNo'), S.badgeWarn) : null,
+              nsState && nsState.applies ? badge(nsState.applies) : null,
+            ]),
+            h('p', { key: 's', style: S.cardSub }, t(CFG_NS_LEAD_KEY[nsKey] || '')),
+          ]),
+          h('div', { key: 'b', style: S.cardBody }, nodes.concat(extraNodes || [])),
+        ])
+      }
+
+      return h('div', { key: 'config' }, [
+        h('style', { key: 'kf' }, KEYFRAMES),
+        h('div', { key: 'head', style: S.cfgHead }, [
+          h('div', { key: 'tx', style: S.cfgLead }, t('cfgLead')),
+          h('div', { key: 'act', style: S.toolbar }, [
+            h('button', {
+              key: 'r', type: 'button', disabled: loading,
+              'data-cfg-action': 'reload',
+              style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
+              onClick: () => load(true),
+            }, loading
+              ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), t('cfgLoading')]
+              : t('cfgReload')),
+            st.lastLoadedAt ? h('span', { key: 'at', style: S.actionNote }, t('cfgLastRead') + ' ' + cfgClock(st.lastLoadedAt)) : null,
+          ]),
+        ]),
+        st.notice ? h('div', {
+          key: 'notice',
+          style: st.noticeKind === 'ok' ? S.cfgNoticeOk : S.cfgNoticeWarn,
+        }, st.notice) : null,
+        st.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
+          h('div', { key: 't', style: S.errorTitle }, t('cfgLoadFailed')),
+          h('div', { key: 'm', style: S.errorMsg }, st.error),
+          h('div', { key: 'h', style: S.errorHint }, t('cfgLoadFailedHint')),
+          h('button', {
+            key: 'b', type: 'button',
+            style: Object.assign({}, S.btn, S.btnPrimary),
+            onClick: () => load(true),
+          }, t('cfgRetry')),
+        ]) : null,
+        h('div', { key: 'gtabs', style: S.cfgGroupTabs }, CFG_GROUP_TABS.map((tb) =>
+          h('button', {
+            key: tb.id, type: 'button',
+            'data-cfg-action': 'switch-group',
+            'data-cfg-group': tb.id,
+            'aria-selected': st.activeGroup === tb.id,
+            style: S.cfgGroupTab(st.activeGroup === tb.id),
+            onClick: () => setSt((prev) => Object.assign({}, prev, { activeGroup: tb.id })),
+          }, t(tb.labelKey)))),
+        st.activeGroup === 'work-memory' ? renderNsCard(CFG_NS_MEMORY, null) : null,
+        st.activeGroup === 'experts' ? renderNsCard(CFG_NS_EXPERTS, [cfgRenderPreview(t, st, handlers)]) : null,
+        st.activeGroup === 'docs' ? h(DocPanel, { key: 'docs', t: t }) : null,
+        st.activeGroup === 'pet' ? h(PetPanel, { key: 'pet', t: t, openSection: props.openSection }) : null,
       ])
     }
 
@@ -2712,7 +4222,7 @@ window.__ModuleLoader__.load({
         pickDirectory: props.pickDirectory,
         onConfigured: () => setSetup({ needed: false, count: 0 }),
       })
-      else if (tab === 'config') page = h(Placeholder, { key: 'p', t: t })
+      else if (tab === 'config') page = h(ConfigPage, { key: 'c', t: t, openSection: props.openSection })
       else page = h(AboutPage, { key: 'a', t: t })
       return h('div', { style: S.wrap }, [
         h('h1', { key: 'h', style: S.h1 }, t('title')),
@@ -2806,6 +4316,8 @@ window.__ModuleLoader__.load({
         t: t,
         initialTab: props && props.initialTab,
         pickDirectory: uiPick,
+        // 「桌面形象」分组的跳转入口（宿主没有编程式设置导航，见 openSettingsSection）
+        openSection: openSettingsSection,
       })))
     }
 

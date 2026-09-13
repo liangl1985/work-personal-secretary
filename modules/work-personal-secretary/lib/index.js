@@ -9,6 +9,13 @@
  * GET /basedeck、POST /basedeck）。配置底座的形态是**配置引导**：GET 只给计划，POST 默认 dry-run，
  * 只有 dryRun:false 才落盘（见 lib/basedeck.js 的红线说明）。
  *
+ * P4 起另接**能力配置页**宿主侧（lib/settings-api.js：GET /settings、POST /settings/write、
+ * GET /experts/preview）——把子插件设置收进集成体设置分区的「能力配置」页：只读枚举走
+ * 官方 settings 服务的 describe（白名单裁剪），写入走 mutate（ns/path 白名单 + revision 栅栏，
+ * dryRun 默认 true），专家阈值预览动态加载子插件 match.js。
+ * 三条路由经 installApi 的 **prefix** 路由分发（浏览器载体 / Web GUI 已覆盖）；
+ * 桌面载体的精确路由实现（installSettingsExactRoutes）**当前未接线** —— 原因见 lib/api.js 里该函数的说明。
+ *
  * 设计约束（沿用集成体纪律）：
  * - **零运行时依赖**（只用 node 内置模块），宿主 peer 缺失时不影响加载；
  * - 设置命名空间作为**部署默认层**，个性化只走设置页用户层；

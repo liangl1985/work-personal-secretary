@@ -10,6 +10,16 @@
  *   POST /install-all —— 批量安装：服务端按固定顺序串行（同源保护）
  *   GET  /basedeck    —— 配置底座的**只读计划**（dry-run；五项：指令层 / 记忆种子 / 技能 / 设置 / 目录）
  *   POST /basedeck    —— 配置引导一次性写入（同源保护；**dryRun 默认 true**，只有显式 false 才落盘）
+ *   GET  /settings        —— 能力配置页：白名单 ns（work-memory / experts）设置**只读枚举**（P4）
+ *   POST /settings/write  —— 能力配置页：写子插件设置**用户层**（同源保护；dryRun 默认 true + revision 栅栏）
+ *   GET  /experts/preview —— 能力配置页：专家打分实时预览（动态加载子插件 match.js；只读）
+ *
+ * 路由注册口径（P4 起）：
+ *   - 上述三条走本文件的 **prefix** handler（浏览器载体 / Web GUI 的根相对 fetch 命中它），
+ *     **不并入 API_PATHS** —— 既有 7 条精确路由的集合与顺序一字不动；
+ *   - 桌面载体需要的**精确路由**已有实现（见文件末尾 installSettingsExactRoutes），但**默认不接线**：
+ *     probe-test 断言「installApi 的 exact 集合 === API_PATHS」且「apply 的路由总数 === API_PATHS.length + 1」，
+ *     一接线这两条就会红。启用前须先确认并同步放宽该断言（详见该函数文档）。
  *
  * 安全红线（本文件是唯一会执行安装动作的地方）：
  * 1. id 必须命中服务端白名单表 → 映射到**固定命令 + 固定参数数组**；
@@ -58,6 +68,8 @@ import {
   publicPlan,
   safeWorkspaceParam,
 } from './basedeck.js'
+
+import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
@@ -270,6 +282,20 @@ export function installApi(ctx, deps = {}) {
   })
   const currentProfileDir = () => profileDirOverride || resolveProfileDir(installEnv)
 
+  // ---- P4 能力配置页（契约《17_P4 能力配置页接口契约与安全边界》§4）：三条路由 ----
+  // 走本文件的 prefix handler（浏览器载体）；HTTP 小工具与路径解析器直接复用本文件的，
+  // 保证同源守卫与错误响应格式与既有 8 条**完全一致**（契约 §5.5）。
+  // 桌面载体的精确路由见文件末尾的 installSettingsExactRoutes。
+  const settingsApi = createSettingsApi(ctx, {
+    sendJson: sendJson,
+    sendError: sendError,
+    readBody: readBody,
+    sameOriginGuard: sameOriginGuard,
+    resolveProfileDir: currentProfileDir,
+    resolveRepoRoot: currentRepoRoot,
+    moduleDir: installModuleDir,
+  })
+
   /** 执行单个白名单步骤：前置条件现场判定，命令只来自白名单 */
   const runStep = async (id) => {
     const started = Date.now()
@@ -339,6 +365,10 @@ export function installApi(ctx, deps = {}) {
         return
       }
       const sub = path.slice(API_ROOT.length)
+
+      // ---- P4 能力配置页三条路由：GET /settings、POST /settings/write、GET /experts/preview ----
+      // 不匹配时返回 false，交回下面的既有路由（8 条行为一字不变）。
+      if (await settingsApi.handle(req, res, url, sub)) return
 
       // GET /check —— 七项只读环境检查
       if (req.method === 'GET' && (sub === '/check' || sub === '/check/')) {
@@ -574,6 +604,71 @@ export function installApi(ctx, deps = {}) {
       disposers.push(ctx.webServer.register({ kind: 'exact', path: API_ROOT + p, handler: handler }))
     } catch (err) {
       ctx.logger?.warn?.('work-personal-secretary: 精确路由注册失败 ' + p + '：' + (err && err.message ? err.message : err))
+    }
+  }
+  return () => {
+    for (const d of disposers) {
+      try { d() } catch (e) { /* best-effort */ }
+    }
+  }
+}
+
+/**
+ * P4 能力配置页的**精确路由**（桌面载体的 fetch 桥只认精确路由）。
+ *
+ * ⚠️ **当前未被 index.js 调用（默认不接线）** —— 这是刻意的取舍，不是遗漏：
+ *   既有测试把路由集合锁死了两条口径：
+ *     ① `scripts/probe-test.mjs:372-374` —— `installApi` 的 exact 集合必须 === API_PATHS（7 条）；
+ *     ② `scripts/probe-test.mjs:497` —— `apply()` 注册的路由**总数**必须 === API_PATHS.length + 1（1 prefix + 7 exact）。
+ *   ② 是「总数」断言：无论把 P4 的三条 exact 加在 installApi 还是 index.js 的 apply 里，都会让它变红。
+ *   两条都属于本次任务「既有测试零回归」的硬约束，故三条路由一律经 **prefix** 分发
+ *   （浏览器载体 / Web GUI 的根相对 fetch 已命中；见 client/index.js 的 requestJsonFull）。
+ *
+ *   若确认桌面外壳（http://dsh.internal 合成 origin）必须走精确路由，启用步骤为：
+ *     1) 在 lib/index.js 的 apply 里调用本函数；
+ *     2) 同步把 probe-test 第 497 行断言改为 `API_PATHS.length + 1 + SETTINGS_API_PATHS.length`。
+ *   本函数已由 scripts/settings-api-test.mjs 的 [11] 段单测覆盖，接线即可用。
+ *
+ * @param {object} ctx cordis context（需 webServer）
+ * @param {object} [deps] 与 installApi 同名参数：repoRoot / profileDir / env / moduleDir / commonCandidates
+ * @returns {Function} disposer
+ */
+export function installSettingsExactRoutes(ctx, deps = {}) {
+  const env = deps.env || process.env
+  const repoRootConfig = typeof deps.repoRoot === 'string' ? deps.repoRoot : ''
+  const profileDirOverride = typeof deps.profileDir === 'string' ? deps.profileDir : ''
+  const moduleDir = deps.moduleDir || MODULE_DIR
+  const currentRepoRoot = () => resolveRepoRoot({
+    configRoot: repoRootConfig,
+    moduleDir: moduleDir,
+    env: env,
+    commonCandidates: deps.commonCandidates,
+  })
+  const currentProfileDir = () => profileDirOverride || resolveProfileDir(env)
+
+  const settingsApi = createSettingsApi(ctx, {
+    sendJson: sendJson,
+    sendError: sendError,
+    readBody: readBody,
+    sameOriginGuard: sameOriginGuard,
+    resolveProfileDir: currentProfileDir,
+    resolveRepoRoot: currentRepoRoot,
+    moduleDir: moduleDir,
+  })
+
+  const exactHandler = async (req, res) => {
+    const url = new URL(req.url || '/', 'http://dsh.internal')
+    const sub = url.pathname.indexOf(API_ROOT) === 0 ? url.pathname.slice(API_ROOT.length) : ''
+    await settingsApi.handle(req, res, url, sub)
+  }
+
+  const disposers = []
+  for (const p of SETTINGS_API_PATHS) {
+    try {
+      disposers.push(ctx.webServer.register({ kind: 'exact', path: API_ROOT + p, handler: exactHandler }))
+    } catch (err) {
+      ctx.logger?.warn?.('work-personal-secretary: 能力配置页精确路由注册失败 ' + p + '：'
+        + (err && err.message ? err.message : err))
     }
   }
   return () => {

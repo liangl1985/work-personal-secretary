@@ -10,6 +10,10 @@
  * [11] 是「初始化」页（P3：配置引导 setup wizard）新增断言：四段式向导、首用必配表单、
  * 检查与预览（GET /basedeck?workspace=…）、逐项 POST /basedeck（dryRun:false + overrides）、
  * 结果回显与「需重启 DSH 生效」、dryRun:false 不支持时的可读失败、setupNeeded 默认落页与引导条。
+ * [12] 是「能力配置」页（P4：读写子插件设置）新增断言：四组渲染、记忆库五个语义小节、
+ * 「已覆盖」标记、清除覆盖（unset）/ 恢复默认（set 默认值）、编辑草稿后 POST /settings/write
+ * （恒带 dryRun:false + revision）、409 冲突提示与自动重读且不丢输入、专家打分实时预览、
+ * 子插件未安装与服务完全不可用两种降级（页面不崩、不出空分组）、桌面形象跳转。
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -1457,6 +1461,472 @@ const failText = collect(failTree, []).join(' | ')
 ok(failText.includes('目录选择失败：picker-boom'), 'pickDirectory 抛错 → 显示「目录选择失败：<原因>」')
 ok(findInputs(failTree)[0].props.value === failBefore, '选择失败时原值不变')
 ok(failText.includes('工作区目录') && findInputs(failTree).length === 4, '选择失败后页面照常渲染（不崩）')
+
+// ══════════════════════════════════════════════════════════════════
+// [12] 能力配置页（P4：读写子插件设置）
+// 契约：GET /settings（白名单裁剪的只读枚举）→ POST /settings/write
+// （{ ns, dryRun:false, revision, ops }，409 = 版本冲突）；
+// GET /experts/preview?text= 只读打分预览。
+// 覆盖：四组渲染 / 「已覆盖」标记 / unset / 恢复默认 / 409 冲突重读不丢输入 /
+// 预览渲染 / 服务不可用与子插件未安装的降级不崩 / 桌面形象跳转。
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[12] 能力配置页')
+
+const findByAttr = (n, attr, val) => findAll(n, (x) => x.props && x.props[attr] === val, [])
+
+/** work-memory 24 键（与 modules/dsh-work-memory/lib/settings.js 的 DEFAULTS 对齐） */
+const CFG_MEM_DEFAULTS = {
+  memoryDir: null, personaLabel: '记忆', injectMemory: true, snapshotOrder: 500,
+  snapshotMaxChars: 4000, snapshotLimitGlobal: 20, snapshotLimitUser: 12,
+  snapshotLimitProject: 16, snapshotLimitDaily: 8, reviewEnabled: true, dailyAutoLog: true,
+  maintainWarnDays: 7, archiveEnabled: true, dailyRetentionDays: 7, projectTtlDays: 30,
+  userTtlDays: 90, triageEnabled: true, triageGraceDays: 7, triageAskInSnapshot: true,
+  globalWarnCount: 20, backupEnabled: true, backupDir: '', backupKeep: 7, obsidianSyncDir: null,
+}
+/** 用户层覆盖两项（用于「已覆盖」标记 / unset / 恢复默认断言） */
+const CFG_MEM_USER0 = { snapshotMaxChars: 6000, backupDir: 'D:/bak' }
+/** experts 10 键（= settings schema 全量；expertInjectMax 默认值按契约第六节已拍板为 2）。
+ * 注意：injectOrder 只在部署层 base（不在 schema），宿主 describe() 不会返回它，故 mock 也不含它。 */
+const CFG_EXP_DEFAULTS = {
+  expertsEnabled: true, defaultDomain: 'presales', identityExpert: '',
+  enabledDomains: '', enabledExperts: '', expertInjectMax: 2, expertSecondThreshold: 0.8,
+  expertMinScore: 0.35, expertShowBanner: true, expertSetupDone: false,
+}
+const cfgTypeOf = (v) => (typeof v === 'boolean' ? 'boolean' : (typeof v === 'number' ? 'number' : 'string'))
+const cfgFieldsOf = (defaults) => Object.keys(defaults).map((k) => ({
+  key: k, type: cfgTypeOf(defaults[k]), default: defaults[k], description: '接口说明·' + k,
+}))
+
+/** 可变的 mock 服务端状态（写成功会真的改它，供重读一致性断言） */
+let cfgRevision = 12
+let cfgConflict = false
+let cfgMemValue = Object.assign({}, CFG_MEM_DEFAULTS, CFG_MEM_USER0)
+let cfgMemUser = Object.assign({}, CFG_MEM_USER0)
+/** experts 的三种服务端形态：on 已注册 / placeholder 未安装占位（宿主实态）/ absent 直接不给 */
+let cfgExpertMode = 'on'
+/** 模拟「宿主忽略了 dryRun:false」的回归场景 */
+let cfgIgnoreDryRun = false
+const cfgNamespaces = () => {
+  const list = [{
+    ns: 'work-memory', title: '记忆库', revision: cfgRevision, writable: true, applies: 'live',
+    installed: true, value: cfgMemValue, user: cfgMemUser, fields: cfgFieldsOf(CFG_MEM_DEFAULTS),
+  }]
+  if (cfgExpertMode === 'on') {
+    list.push({
+      ns: 'experts', title: '专家库', revision: cfgRevision, writable: true, applies: 'live',
+      installed: true, value: CFG_EXP_DEFAULTS, user: {}, fields: cfgFieldsOf(CFG_EXP_DEFAULTS),
+    })
+  } else if (cfgExpertMode === 'placeholder') {
+    // 宿主实态：子插件未安装时**不省略 ns**，而是给 fields/value 全空的占位条目
+    list.push({
+      ns: 'experts', title: '专家库', revision: 0, writable: false, applies: 'live',
+      installed: false, value: {}, user: {}, fields: [],
+    })
+  }
+  return list
+}
+const CFG_PREVIEW_PAYLOAD = {
+  ok: true, reason: 'identity+1',
+  ranked: [
+    { id: 'presales-ics-security', domain: 'presales', score: 0.9, evidence: 0.9, reasons: ['身份专家'] },
+    { id: 'aftersales-djbh', domain: 'aftersales', score: 0.7, evidence: 0.7, reasons: ['关键词·等保'] },
+  ],
+  selected: ['presales-ics-security', 'aftersales-djbh'],
+  config: { expertInjectMax: 2, expertSecondThreshold: 0.8, expertMinScore: 0.35 },
+}
+const cfgFetch = async (url, opts) => {
+  const u = String(url)
+  const method = (opts && opts.method) || 'GET'
+  calls.push({ url: u, method: method, body: opts && opts.body })
+  if (!/^https?:/i.test(u)) throw new Error('relative URL unavailable in desktop shell')
+  if (u.indexOf('/settings/write') >= 0) {
+    let body = {}
+    try { body = JSON.parse(String((opts && opts.body) || '{}')) } catch (err) { body = {} }
+    if (cfgConflict) {
+      return { ok: false, status: 409, json: async () => ({ ok: false, error: 'conflict', expected: body.revision, actual: (body.revision || 0) + 1 }) }
+    }
+    if (cfgIgnoreDryRun) return jsonRes({ ok: true, ns: body.ns, dryRun: true, revision: cfgRevision, value: cfgMemValue, user: cfgMemUser })
+    if (body.dryRun !== false) return jsonRes({ ok: true, ns: body.ns, dryRun: true })
+    const nextValue = Object.assign({}, cfgMemValue)
+    const nextUser = Object.assign({}, cfgMemUser)
+    for (const op of (body.ops || [])) {
+      const k = op && Array.isArray(op.path) ? op.path[0] : ''
+      if (!k) continue
+      if (op.op === 'unset') { delete nextUser[k]; nextValue[k] = CFG_MEM_DEFAULTS[k] }
+      else { nextValue[k] = op.value; nextUser[k] = op.value }
+    }
+    if (body.ns === 'work-memory') { cfgMemValue = nextValue; cfgMemUser = nextUser }
+    cfgRevision = (typeof body.revision === 'number' ? body.revision : cfgRevision) + 1
+    return jsonRes({ ok: true, ns: body.ns, revision: cfgRevision, value: nextValue, user: nextUser })
+  }
+  if (u.indexOf('/experts/preview') >= 0) {
+    if (cfgExpertMode !== 'on') return jsonRes({ ok: false, unavailable: true, message: '专家库（dsh-experts）未安装或无法加载' })
+    return jsonRes(CFG_PREVIEW_PAYLOAD)
+  }
+  if (u.indexOf('/settings') >= 0) return jsonRes({ ok: true, namespaces: cfgNamespaces() })
+  if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)
+  if (u.indexOf('/plugins') >= 0) return jsonRes(PLUGINS_PAYLOAD)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+
+// ── 段 1：骨架 —— 五个页签不变 + 四组齐全 + 只读枚举 ──────────────
+globalThis.fetch = cfgFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+let cfTree = expand(reg.render({ initialTab: 'config' }))
+let cfText = collect(cfTree, []).join(' | ')
+ok(['安装与检查', '安装子插件', '初始化', '能力配置', '关于与致谢'].every((x) => cfText.includes(x)),
+  '五个页签保持既有文案（安装与检查 / 安装子插件 / 初始化 / 能力配置 / 关于与致谢）')
+ok(cfText.includes('读取中'), '首屏显示「读取中…」（异步枚举前骨架可读）')
+const cfBootErr = []
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { cfBootErr.push(err) } }
+ok(cfBootErr.length === 0, '能力配置页挂载 effect 不抛错')
+await tick(60)
+ok(calls.some((c) => c.method === 'GET' && c.url === 'http://dsh.internal/work-personal-secretary/api/settings'),
+  '进入页 GET /settings（桌面载体命中合成基址）')
+
+// ── 段 2：四组渲染 + 记忆库五个语义小节 + 已覆盖标记 ─────────────
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+ok(['记忆库', '专家库', '文档能力', '桌面形象'].every((x) => cfText.includes(x)), '顶部插件级标签齐全（记忆库 / 专家库 / 文档能力 / 桌面形象）')
+/**
+ * 切到某个插件标签并重渲染（能力配置页按插件分批显示，不再四组铺开）。
+ * 注意：文档能力 / 桌面形象是独立组件，切换后会**重新挂载并各自 fetch**，
+ * 所以这里要跑一遍 effect 再等一拍，否则断言看到的还是 loading 态。
+ */
+const cfSwitchTo = async (gid) => {
+  const btn = findByAttr(cfTree, 'data-cfg-group', gid).filter((b) => b.type === 'button')[0]
+  if (btn) btn.props.onClick()
+  hookCursor = 0
+  effectQueue = []
+  cfTree = expand(reg.render({ initialTab: 'config' }))
+  for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+  await tick(80)
+  hookCursor = 0
+  effectQueue = []
+  cfTree = expand(reg.render({ initialTab: 'config' }))
+  cfText = collect(cfTree, []).join(' | ')
+  return cfTree
+}
+ok(['注入与快照', '冷热与归档', '转冷预审', '备份与运维', '目录'].every((x) => cfText.includes(x)),
+  '记忆库按语义分五个小节（注入与快照 / 冷热与归档 / 转冷预审 / 备份与运维 / 目录）')
+ok(cfText.includes('快照字符上限') && cfText.includes('Obsidian 镜像目录'), '默认只渲染记忆库（顶部标签默认选中记忆库）')
+ok(cfText.includes('已覆盖'), 'user 层含该键 → 显示「已覆盖」标记')
+const cfNum0 = findByAttr(cfTree, 'data-cfg-key', 'snapshotMaxChars').filter((x) => x.type === 'input')[0]
+ok(cfNum0 && String(cfNum0.props.value) === '6000', '数字字段用输入框并回显覆盖值 6000')
+const cfUnsetBtns = findByAttr(cfTree, 'data-cfg-action', 'unset')
+const cfRestoreBtns = findByAttr(cfTree, 'data-cfg-action', 'restore')
+ok(cfUnsetBtns.length === 24, '记忆库 24 个设置项各有「清除覆盖」（实测 ' + cfUnsetBtns.length + '）')
+ok(cfRestoreBtns.length === 24, '记忆库 24 个设置项各有「恢复默认」（实测 ' + cfRestoreBtns.length + '）')
+ok(cfUnsetBtns.filter((b) => b.props.disabled !== true).length === 2, '只有用户层覆盖过的两个键「清除覆盖」可用')
+
+// 切到专家库标签：只渲染专家库
+await cfSwitchTo('experts')
+ok(cfText.includes('最低注入分') && !cfText.includes('快照字符上限'), '切到专家库后只渲染专家库（记忆库字段不再出现）')
+const cfUnsetExp = findByAttr(cfTree, 'data-cfg-action', 'unset')
+ok(cfUnsetExp.length === 10, '专家库 10 个设置项各有「清除覆盖」（实测 ' + cfUnsetExp.length + '）')
+const cfRanges = findAll(cfTree, (x) => x.type === 'input' && x.props && x.props.type === 'range', [])
+ok(cfRanges.length === 3, '专家库三个阈值渲染为滑块（实测 ' + cfRanges.length + '）')
+const cfInjectMax = findByAttr(cfTree, 'data-cfg-key', 'expertInjectMax').filter((x) => x.type === 'input')[0]
+ok(cfInjectMax && Number(cfInjectMax.props.min) === 1 && Number(cfInjectMax.props.max) === 3, 'expertInjectMax 滑块范围 1–3')
+ok(cfText.includes('占用较多 TOKEN'), '注入上限 > 1 时就地提示 TOKEN 代价（契约第六节）')
+const cfSelects = findSelects(cfTree)
+ok(cfSelects.length === 1, 'defaultDomain 渲染为下拉（实测 ' + cfSelects.length + '）')
+const cfSelectText = collect(cfSelects[0], []).join(' | ')
+ok(['售前', '售后·技术支持', '会计财务', '法务', '文档', '核查·通用'].every((x) => cfSelectText.includes(x)),
+  '岗位域下拉六项带中文标签')
+ok(cfSelects[0].props.value === 'presales', '岗位域下拉回显当前值')
+const cfIdent = findByAttr(cfTree, 'data-cfg-key', 'identityExpert').filter((x) => x.type === 'input')[0]
+ok(cfIdent && cfIdent.props.type === 'text', 'identityExpert 用输入框（非下拉）')
+
+// 文档能力标签
+await cfSwitchTo('docs')
+ok(cfText.includes('office-word') && cfText.includes('pdf-tools') && cfText.includes('未检测'), '文档能力面板显示四技能清单（不空）')
+ok(cfText.includes('Python') && cfText.includes('WPS Office'), '文档能力面板显示 Python / WPS 依赖状态')
+
+// 桌面形象标签
+await cfSwitchTo('pet')
+ok(cfText.includes('0.5.1') && cfText.includes('打开桌面形象面板'), '桌面形象分组显示安装状态与跳转按钮')
+
+// 切回记忆库：后续段 3/4 都在记忆库上下文操作
+await cfSwitchTo('work-memory')
+
+// ── 段 3：编辑草稿 → 「保存改动」→ POST /settings/write（dryRun:false） ──
+cfNum0.props.onChange({ target: { value: '7777' } })
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+let cfSave = findByAttr(cfTree, 'data-cfg-action', 'save').filter((b) => b.props['data-cfg-ns'] === 'work-memory')[0]
+ok(Boolean(cfSave) && label(cfSave) === '保存改动（1）', '编辑后主按钮变为「保存改动（1）」')
+ok(String(findByAttr(cfTree, 'data-cfg-key', 'snapshotMaxChars').filter((x) => x.type === 'input')[0].props.value) === '7777',
+  '输入先进本地草稿（未保存也已回显）')
+calls.length = 0
+cfSave.props.onClick()
+await tick(60)
+const cfPosts = calls.filter((c) => c.method === 'POST' && c.url.indexOf('/settings/write') >= 0)
+ok(cfPosts.length === 1, '「保存改动」只发一次 POST /settings/write（实测 ' + cfPosts.length + '）')
+const cfBody = cfPosts.length ? JSON.parse(String(cfPosts[0].body)) : {}
+ok(cfBody.ns === 'work-memory', 'body.ns = work-memory（白名单命名空间）')
+ok(cfBody.dryRun === false, 'body 恒带 dryRun:false（真写，不是试运行）')
+ok(cfBody.revision === 12, 'body 带当前 revision（栅栏；实测 ' + String(cfBody.revision) + '）')
+ok(JSON.stringify(cfBody.ops) === JSON.stringify([{ op: 'set', path: ['snapshotMaxChars'], value: 7777 }]),
+  'ops 只发有变化的键且数字保持数字类型')
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+ok(cfText.includes('已保存'), '保存成功给出回执')
+ok(String(findByAttr(cfTree, 'data-cfg-key', 'snapshotMaxChars').filter((x) => x.type === 'input')[0].props.value) === '7777', '保存后回填新值')
+ok(cfText.includes('版本 r13'), 'revision 前进到 r13（实测文本含「版本 r13」）')
+
+// ── 段 4：「清除覆盖」= 单键 unset ──────────────────────────────
+calls.length = 0
+const cfUnset = findByAttr(cfTree, 'data-cfg-action', 'unset').filter((b) => b.props['data-cfg-key'] === 'backupDir')[0]
+ok(Boolean(cfUnset) && cfUnset.props.disabled !== true, '已覆盖的键可点「清除覆盖」')
+cfUnset.props.onClick()
+await tick(60)
+const cfUnsetPosts = calls.filter((c) => c.method === 'POST' && c.url.indexOf('/settings/write') >= 0)
+ok(cfUnsetPosts.length === 1, '「清除覆盖」即时发一次写入（实测 ' + cfUnsetPosts.length + '）')
+const cfUnsetBody = cfUnsetPosts.length ? JSON.parse(String(cfUnsetPosts[0].body)) : {}
+ok(JSON.stringify(cfUnsetBody.ops) === JSON.stringify([{ op: 'unset', path: ['backupDir'] }]),
+  'ops = [{ op:"unset", path:["backupDir"] }]（回到 base / 默认）')
+ok(cfUnsetBody.dryRun === false, 'unset 同样带 dryRun:false')
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+ok(findByAttr(cfTree, 'data-cfg-action', 'unset').filter((b) => b.props.disabled !== true).length === 1,
+  '清除后只剩 snapshotMaxChars 仍可「清除覆盖」')
+
+// ── 段 5：「恢复默认」= set schema 默认值 ────────────────────────
+calls.length = 0
+const cfRestore = findByAttr(cfTree, 'data-cfg-action', 'restore').filter((b) => b.props['data-cfg-key'] === 'snapshotMaxChars')[0]
+ok(Boolean(cfRestore) && cfRestore.props.disabled !== true, '值与默认不同时「恢复默认」可用')
+cfRestore.props.onClick()
+await tick(60)
+const cfRestorePosts = calls.filter((c) => c.method === 'POST' && c.url.indexOf('/settings/write') >= 0)
+ok(cfRestorePosts.length === 1, '「恢复默认」即时发一次写入')
+const cfRestoreBody = cfRestorePosts.length ? JSON.parse(String(cfRestorePosts[0].body)) : {}
+ok(JSON.stringify(cfRestoreBody.ops) === JSON.stringify([{ op: 'set', path: ['snapshotMaxChars'], value: 4000 }]),
+  '恢复默认 = set 到接口给的 schema 默认值 4000')
+
+// ── 段 6：409 冲突 → 提示 + 自动重读 + 不丢输入 ──────────────────
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+findByAttr(cfTree, 'data-cfg-key', 'personaLabel').filter((x) => x.type === 'input')[0]
+  .props.onChange({ target: { value: '我的记忆' } })
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfgConflict = true
+calls.length = 0
+const cfSave409 = findByAttr(cfTree, 'data-cfg-action', 'save').filter((b) => b.props['data-cfg-ns'] === 'work-memory')[0]
+cfSave409.props.onClick()
+await tick(80)
+cfgConflict = false
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+ok(cfText.includes('设置已被其他改动更新'), '409 → 提示「设置已被其他改动更新」')
+ok(calls.filter((c) => c.method === 'GET' && c.url.indexOf('/work-personal-secretary/api/settings') >= 0).length === 1,
+  '409 后自动重读一次 GET /settings（实测 '
+  + calls.filter((c) => c.method === 'GET' && c.url.indexOf('/work-personal-secretary/api/settings') >= 0).length + '）')
+ok(String(findByAttr(cfTree, 'data-cfg-key', 'personaLabel').filter((x) => x.type === 'input')[0].props.value) === '我的记忆',
+  '冲突重读后使用者输入仍在（草稿不被覆盖）')
+ok(label(findByAttr(cfTree, 'data-cfg-action', 'save').filter((b) => b.props['data-cfg-ns'] === 'work-memory')[0]) === '保存改动（1）',
+  '冲突后草稿仍算 1 项待保存（可再次提交）')
+
+// ── 段 7：专家打分实时预览（只读） ──────────────────────────────
+await cfSwitchTo('experts')
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+const cfPvInput = findByAttr(cfTree, 'data-cfg-action', 'preview-text')[0]
+ok(Boolean(cfPvInput), '预览区有任务文本框')
+cfPvInput.props.onChange({ target: { value: '这份合同的付款与税务怎么处理？' } })
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+const cfPvBtn = findByAttr(cfTree, 'data-cfg-action', 'preview')[0]
+ok(Boolean(cfPvBtn) && cfPvBtn.props.disabled !== true, '填了文本后「试算」可用')
+calls.length = 0
+cfPvBtn.props.onClick()
+await tick(60)
+const cfPvGet = calls.filter((c) => c.method === 'GET' && c.url.indexOf('/experts/preview') >= 0)
+ok(cfPvGet.length === 1, '预览走 GET /experts/preview（实测 ' + cfPvGet.length + '）')
+ok(cfPvGet.length > 0 && cfPvGet[0].url.indexOf('text=' + encodeURIComponent('这份合同的付款与税务怎么处理？')) >= 0,
+  '任务文本经 URL 编码传入 text=')
+ok(calls.every((c) => c.method === 'GET'), '预览全程只读：不产生任何写入')
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+ok(cfText.includes('presales-ics-security') && cfText.includes('aftersales-djbh'), '渲染注入名单（两位专家）')
+ok(cfText.includes('0.9') && cfText.includes('0.7'), '渲染每位 score')
+ok(cfText.includes('关键词·等保') && cfText.includes('身份专家'), '渲染每位 reasons')
+ok(cfText.includes('identity+1'), '渲染判定理由 reason')
+ok(cfText.includes('expertInjectMax=2') && cfText.includes('expertSecondThreshold=0.8') && cfText.includes('expertMinScore=0.35'),
+  '渲染试算所用三项阈值')
+
+// ── 段 8a：降级 —— 子插件未安装（宿主给 installed:false 占位条目） ──
+cfgExpertMode = 'placeholder'
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+expand(reg.render({ initialTab: 'config' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+// 占位降级发生在专家库标签内（该 ns 未安装），切过去看
+await cfSwitchTo('experts')
+ok(cfText.includes('本机服务未提供该能力的设置命名空间'), 'installed:false 占位条目 → 分组内可读降级提示（不渲染 11 个禁用字段）')
+ok(findByAttr(cfTree, 'data-cfg-action', 'save').length === 0, '未安装的分组不出现「保存改动」按钮（实测 '
+  + findByAttr(cfTree, 'data-cfg-action', 'save').length + '）')
+ok(cfText.includes('记忆库') && cfText.includes('专家库') && cfText.includes('文档能力'), '降级时顶部标签仍在（不出现空分组）')
+findByAttr(cfTree, 'data-cfg-action', 'preview-text')[0].props.onChange({ target: { value: '预览降级用例' } })
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+findByAttr(cfTree, 'data-cfg-action', 'preview')[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+cfText = collect(expand(reg.render({ initialTab: 'config' })), []).join(' | ')
+ok(cfText.includes('专家库未安装或未启用'), '预览 available:false → 可读降级提示且不崩')
+ok(cfText.includes('未安装或无法加载'), '预览降级时回显服务端的可读 message')
+
+// ── 段 8b：降级 —— 宿主响应里干脆没有该 ns（兼容形态） ──────────
+cfgExpertMode = 'absent'
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({ initialTab: 'config' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+cfText = collect(expand(reg.render({ initialTab: 'config' })), []).join(' | ')
+ok(cfText.includes('快照字符上限'), '记忆库仍正常渲染（一个 ns 缺失不影响另一个）')
+await cfSwitchTo('experts')
+ok(cfText.includes('本机服务未提供该能力的设置命名空间'), 'ns 完全缺失 → 同样给可读降级提示')
+cfgExpertMode = 'on'
+
+// ── 段 8c：服务端忽略 dryRun:false → 不谎报成功，草稿保留 ────────
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({ initialTab: 'config' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+findByAttr(cfTree, 'data-cfg-key', 'backupKeep').filter((x) => x.type === 'input')[0]
+  .props.onChange({ target: { value: '9' } })
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfgIgnoreDryRun = true
+findByAttr(cfTree, 'data-cfg-action', 'save').filter((b) => b.props['data-cfg-ns'] === 'work-memory')[0].props.onClick()
+await tick(60)
+cfgIgnoreDryRun = false
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+ok(cfText.includes('仍按试运行处理'), '服务端 dryRun:true → 明确提示未真正写入（不谎报「已保存」）')
+ok(cfText.indexOf('已保存（') < 0, '试运行场景不显示成功回执')
+ok(String(findByAttr(cfTree, 'data-cfg-key', 'backupKeep').filter((x) => x.type === 'input')[0].props.value) === '9',
+  '试运行场景草稿保留（改动不丢）')
+
+// ── 段 9：服务完全不可用 —— 页面不崩、四组仍在 ──────────────────
+globalThis.fetch = async (url, opts) => {
+  calls.push({ url: String(url), method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (!/^https?:/i.test(String(url))) throw new Error('relative URL unavailable in desktop shell')
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+expand(reg.render({ initialTab: 'config' }))
+const cfDownErr = []
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { cfDownErr.push(err) } }
+await tick(80)
+ok(cfDownErr.length === 0, '服务完全不可用（404）时挂载 effect 不抛错')
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+ok(cfText.includes('能力配置读取失败') && cfText.includes('重试'), '显示可读错误与「重试」而非白屏')
+ok(['记忆库', '专家库', '文档能力', '桌面形象'].every((x) => cfText.includes(x)), '降级时四组标签仍在')
+ok(cfText.includes('本机服务未提供该能力的设置命名空间'), '记忆库分组给出可读降级提示')
+await cfSwitchTo('experts')
+ok(cfText.includes('本机服务未提供该能力的设置命名空间'), '专家库分组给出可读降级提示')
+await cfSwitchTo('docs')
+ok(cfText.includes('office-word') && cfText.includes('pdf-tools') && cfText.includes('/doc-doctor'),
+  '文档面板在无接口时仍显示四技能清单与自检说明（不空分组）')
+ok(cfText.includes('未能取到依赖状态'), '文档面板给出可读降级提示')
+await cfSwitchTo('pet')
+ok(cfText.includes('未能取到安装状态'), '桌面形象面板给出可读降级提示')
+
+// ── 段 10：桌面形象跳转（无 DOM 载体 → 可读提示，不崩） ─────────
+const cfPetBtn = findByAttr(cfTree, 'data-cfg-action', 'open-pet')[0]
+ok(Boolean(cfPetBtn), '桌面形象分组有跳转按钮')
+cfPetBtn.props.onClick()
+hookCursor = 0
+effectQueue = []
+cfText = collect(expand(reg.render({ initialTab: 'config' })), []).join(' | ')
+ok(cfText.includes('未能自动定位设置面板'), '无法自动跳转（无 DOM）时给出可读提示，页面不崩')
+
+// ── 段 11：Web 载体 —— GET /settings 走根相对路径 ───────────────
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/settings') >= 0) return jsonRes({ ok: true, namespaces: cfgNamespaces() })
+  if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)
+  if (u.indexOf('/plugins') >= 0) return jsonRes(PLUGINS_PAYLOAD)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+expand(webReg.render({ initialTab: 'config' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+ok(calls.length > 0 && calls[0].url === '/work-personal-secretary/api/settings', 'Web 载体 GET /settings 走根相对路径（' + (calls[0] && calls[0].url) + '）')
+ok(calls.every((c) => c.url.indexOf('dsh.internal') < 0), 'Web 载体不发合成基址请求')
+
+// ── 段 12：重读要有可见反馈（真机曾误判「按钮被禁用」） ──────────
+globalThis.fetch = cfgFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+const cfReloadBtn = findButtons(cfTree).filter((b) => label(b) === '重新读取')[0]
+ok(Boolean(cfReloadBtn) && cfReloadBtn.props.disabled !== true, '「重新读取」在加载完成后可点（disabled 只覆盖读取中）')
+ok(collect(cfTree, []).join(' | ').includes('最近读取'), '加载完成后即显示「最近读取」时刻（首次加载也算，便于判断数据新鲜度）')
+cfReloadBtn.props.onClick()
+await tick(40)
+hookCursor = 0
+effectQueue = []
+cfText = collect(expand(reg.render({ initialTab: 'config' })), []).join(' | ')
+ok(cfText.includes('最近读取'), '点击「重新读取」后仍显示读取时刻（不白屏、不永久停在读取中）')
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
