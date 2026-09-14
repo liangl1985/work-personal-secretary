@@ -2,8 +2,10 @@
  * work-personal-secretary —— 子插件安装引擎（安装器第三步：安装子插件）
  *
  * 职责：把**集成体仓库自带的五个子插件**（<repoRoot>/modules/<id>）安装到当前 profile：
- *   1. 解析集成体仓库根：① 设置项 repoRoot ② 相对探测（本体模块目录逐级向上找含 modules/ 的目录）
- *      ③ 常见位置（使用者主目录下的若干约定目录）④ 都没有 → null（面板提示去设置里指定）；
+ *   1. 解析集成体仓库根（2026-09-14 起四层）：① 设置页设置值（settingsRoot，最高优先级）
+ *      ② 部署配置层（configRoot：组合配置 / cordis.patch.yml 经宿主注入的 config）
+ *      ③ profile 的 cordis.patch.yml 里显式写的 repoRoot（readProfileRepoRoot）
+ *      ④ 相对探测（本体模块目录逐级向上找含 modules/ 的目录）+ 常见位置；都不成立 → null；
  *   2. 只读列出五个子插件的 bundled / installed 版本与 installMode；
  *   3. 安装（**原子替换**，原目录保留到最后一刻）：
  *      复制到同级临时目录 <id>.wps-new（排除 node_modules/.git/__pycache__）
@@ -15,9 +17,12 @@
  * 红线（本文件）：
  * 1. **来源只由服务端拼接**：<repoRoot>/modules/<id>；id 只用于查白名单表，
  *    **绝不接受客户端传入的源 / 目标路径**。
- * 2. 路径解析（resolveRepoRoot / listSubPlugins）**只读**；只有 installSubPlugin 会写盘，
+ * 2. 路径解析（resolveRepoRoot / listSubPlugins）**只读**；会写盘的只有 installSubPlugin
+ *    与 writeProfileRepoRoot（把 repoRoot 写回 profile 的 cordis.patch.yml，写前备份；由 api.js
+ *    在「已安装但仓库根从未登记」时调用，失败只 warn 不阻断），
  *    写入范围仅限 <profileDir>/node_modules/<id>（含 .wps-new / .wps-old 暂存名）、
- *    <profileDir>/package.json（含 .bak- 备份），以及**仅当安装 workspace-tokenpet 时**的桌宠素材目录
+ *    <profileDir>/package.json（含 .bak- 备份）、<profileDir>/cordis.patch.yml（含 .bak- 备份），
+ *    以及**仅当安装 workspace-tokenpet 时**的桌宠素材目录
  *    <dshHome>/data/workspace-tokenpet/skins/<套装>（**只补缺失、绝不覆盖**使用者已有套装；
  *    新址缺套装而旧址 <dshHome>/data/dsh-token-pet/skins 有同名套装时**复制迁移**，旧址数据保留）。
  * 3. 所有文本写入一律 Node fs（writeFileSync）+ UTF-8 **无 BOM**；不使用 PowerShell 的文本写入命令
@@ -26,7 +31,11 @@
  *
  * 契约字段说明：
  * - 接口契约的 repoRootSource 只有 config / relative / none 三个值，而解析优先级有四种来源；
- *   本模块把「常见位置」归入 relative，并用附加字段 sourceDetail ∈ config|ancestor|common|none 保留精确来源。
+ *   本模块把「常见位置」归入 relative，并用附加字段 sourceDetail ∈
+ *   settings|config|patch|ancestor|common|none 保留精确来源。
+ * - **installed 判定（2026-09-14 增补）**：installed = registered（dependencies[id]）+ bundleHit
+ *   （dsh.profile.bundles 命中）+ dirPresent（<profileDir>/node_modules/<id> 在）；
+ *   items[] 另增 registered / bundleHit / dirPresent 三个只读字段（既有字段一律不动）。
  * - 安装结果在契约字段之外增加 replaced（目标原本存在并被替换）与 overwrite（本次是对「已是最新版本」的
  *   强制覆盖重装）两个布尔字段，供面板标注；前端可忽略。
  *
@@ -56,6 +65,12 @@ export const MODULE_DIR = dirname(dirname(fileURLToPath(import.meta.url)))
 
 /** 集成体仓库内子插件的父目录名 */
 export const MODULES_DIR_NAME = 'modules'
+
+/** 本体（集成体）包名 / 设置命名空间名（两处必须一致） */
+export const MODULE_ID = 'work-personal-secretary'
+
+/** profile 的用户覆盖层文件名（既有机制：按 id 定向覆盖插件 config） */
+export const PROFILE_PATCH_FILE = 'cordis.patch.yml'
 
 /** 复制时排除的目录名（node_modules / .git / __pycache__） */
 export const EXCLUDED_DIRS = ['node_modules', '.git', '__pycache__']
@@ -425,57 +440,298 @@ export function isRepoRoot(dir, options = {}) {
 }
 
 /**
+ * 去 YAML 单/双引号（路径值可能带引号）。
+ */
+function unquoteYaml(raw) {
+  const s = String(raw == null ? '' : raw).trim()
+  if (s.length >= 2 && ((s[0] === "'" && s[s.length - 1] === "'") || (s[0] === '"' && s[s.length - 1] === '"'))) {
+    return s.slice(1, -1)
+  }
+  return s
+}
+
+/**
+ * 在 cordis.patch.yml 文本里定位本体的 patch 条目（纯文本行级解析，**不引入 YAML 依赖**）。
+ * 只认数组条目 `- id: <id>` 及其下的 `config:` 段。
+ *
+ * @returns {{entryLine:number, entryIndent:number, configLine:number, configIndent:number,
+ *            repoRootLine:number, repoRootIndent:number, repoRootValue:string, eol:string, lines:string[]}}
+ *          entryLine / configLine / repoRootLine 为 -1 表示未找到
+ */
+export function locatePatchEntry(text, id = MODULE_ID) {
+  const src = String(text == null ? '' : text)
+  const eol = src.indexOf('\r\n') >= 0 ? '\r\n' : '\n'
+  const lines = src.split(/\r?\n/)
+  const wantId = String(id == null ? '' : id).trim()
+  const indentOf = (line) => line.length - line.trimStart().length
+  const info = {
+    entryLine: -1, entryIndent: -1,
+    configLine: -1, configIndent: -1,
+    repoRootLine: -1, repoRootIndent: -1, repoRootValue: '',
+    eol: eol, lines: lines,
+  }
+  let active = false
+  let inConfig = false
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]
+    const trimmed = raw.trim()
+    if (!trimmed || trimmed.charAt(0) === '#') continue
+    const indent = indentOf(raw)
+    const body = trimmed
+    const idMatch = /^-\s*id\s*:\s*(.*)$/.exec(body)
+    if (idMatch) {
+      active = unquoteYaml(idMatch[1]) === wantId
+      inConfig = false
+      if (active) {
+        info.entryLine = i
+        info.entryIndent = indent
+      }
+      continue
+    }
+    if (!active) continue
+    if (indent <= info.entryIndent) { active = false; inConfig = false; continue }
+    if (/^config\s*:/.test(body)) {
+      info.configLine = i
+      info.configIndent = indent
+      inConfig = true
+      continue
+    }
+    if (inConfig && indent > info.configIndent) {
+      const m = /^repoRoot\s*:\s*(.*)$/.exec(body)
+      if (m) {
+        info.repoRootLine = i
+        info.repoRootIndent = indent
+        info.repoRootValue = unquoteYaml(m[1])
+      }
+      continue
+    }
+    if (inConfig && indent <= info.configIndent) inConfig = false
+  }
+  return info
+}
+
+/**
+ * 读 profile 用户覆盖层 cordis.patch.yml 里本体的 repoRoot（**只读**）。
+ * 解析不到 / 文件不存在 / 不是数组条目 → 返回空串（调用方继续降级探测）。
+ */
+export function readProfileRepoRoot(profileDir, id = MODULE_ID) {
+  const dir = normalizeDir(profileDir)
+  if (!dir) return ''
+  const raw = readUtf8(join(dir, PROFILE_PATCH_FILE))
+  if (!raw || !raw.text || raw.bom) return ''
+  const info = locatePatchEntry(raw.text, id)
+  return normalizeDir(info.repoRootValue) || info.repoRootValue
+}
+
+/**
+ * 把集成体仓库根写回 profile 的 cordis.patch.yml（**写入前备份；失败只返回错误，绝不抛**）。
+ *
+ * - 已有 `- id: work-personal-secretary` 条目：在该条目 config 段内替换 / 追加 repoRoot；
+ * - 有条目但没有 config 段：在条目下补 config + repoRoot；
+ * - 没有条目：文件末尾追加最小条目（保留原文件内容与 EOL 风格）；
+ * - 值未变化 → changed=false，**不写盘、不备份**；
+ * - 带 BOM 的文件**拒绝写入**（与 profile/package.json 同纪律）。
+ *
+ * @param {string} profileDir
+ * @param {string} repoRoot 目标仓库根（非空）
+ * @param {{now?:(Date|Function), io?:object, id?:string}} [options]
+ * @returns {{ok:boolean, changed:boolean, file:string, backup:string, error?:string}}
+ */
+export function writeProfileRepoRoot(profileDir, repoRoot, options = {}) {
+  const io = resolveIo(options)
+  const dir = normalizeDir(profileDir)
+  const value = normalizeDir(repoRoot)
+  const file = dir ? join(dir, PROFILE_PATCH_FILE) : ''
+  const out = { ok: false, changed: false, file: posix(file), backup: '' }
+  if (!dir) return Object.assign(out, { error: '未指定 profile 目录，未写入' })
+  if (!value) return Object.assign(out, { error: '仓库目录为空，未写入' })
+  const nowOpt = options.now
+  const now = typeof nowOpt === 'function' ? nowOpt() : (nowOpt instanceof Date ? nowOpt : new Date())
+
+  let existed = false
+  let text = ''
+  try { existed = existsSync(file) } catch (e) { existed = false }
+  if (existed) {
+    const raw = readUtf8(file)
+    if (!raw) return Object.assign(out, { error: '无法读取 ' + PROFILE_PATCH_FILE + '：' + posix(file) })
+    if (raw.bom) return Object.assign(out, { error: PROFILE_PATCH_FILE + ' 带 ' + raw.bom + ' BOM，已拒绝覆盖（请先另存为 UTF-8 无 BOM）' })
+    text = raw.text
+  }
+
+  const quote = (v) => "'" + String(v).replace(/'/g, "''") + "'"
+  const info = locatePatchEntry(text, options.id || MODULE_ID)
+  const lines = info.lines.slice()
+  if (text === '' && lines.length === 1 && lines[0] === '') lines.pop()
+  const eol = info.eol
+
+  if (info.repoRootLine >= 0) {
+    if (unquoteYaml(info.repoRootValue) === value) return Object.assign(out, { ok: true, changed: false })
+    lines[info.repoRootLine] = ' '.repeat(info.repoRootIndent) + 'repoRoot: ' + quote(posix(value))
+  } else if (info.configLine >= 0) {
+    lines.splice(info.configLine + 1, 0, ' '.repeat(info.configIndent + 2) + 'repoRoot: ' + quote(posix(value)))
+  } else if (info.entryLine >= 0) {
+    const ind = ' '.repeat(info.entryIndent + 2)
+    lines.splice(info.entryLine + 1, 0, ind + 'config:', ind + '  repoRoot: ' + quote(posix(value)))
+  } else {
+    if (lines.length > 0 && lines[lines.length - 1].trim() !== '') lines.push('')
+    lines.push('- id: ' + (options.id || MODULE_ID), '  config:', '    repoRoot: ' + quote(posix(value)))
+  }
+  const next = lines.join(eol)
+  if (next === text) return Object.assign(out, { ok: true, changed: false })
+
+  if (existed) {
+    const backup = file + BACKUP_SUFFIX + backupStamp(now)
+    try {
+      io.copyFileSync(file, backup)
+      out.backup = posix(backup)
+    } catch (e) {
+      return Object.assign(out, { error: '备份失败：' + String(e && e.message ? e.message : e) })
+    }
+  }
+  try {
+    io.mkdirSync(dir, { recursive: true })
+    io.writeFileSync(file, Buffer.from(next, 'utf8'))
+  } catch (e) {
+    return Object.assign(out, { error: '写入 ' + PROFILE_PATCH_FILE + ' 失败：' + String(e && e.message ? e.message : e) })
+  }
+  const back = readUtf8(file)
+  if (!back || back.bom) {
+    return Object.assign(out, { error: '写后校验失败（读不回或带 BOM）：' + posix(file) })
+  }
+  return Object.assign(out, { ok: true, changed: true })
+}
+
+/**
  * 解析集成体仓库根（**只读探测**）。
- * 优先级：① 设置项 repoRoot ② 相对探测（moduleDir 逐级向上）③ 常见位置 ④ null。
- * ①②③ 均无效时返回 { repoRoot: null, source: 'none' }。
+ * 优先级（2026-09-14 起）：① 设置页设置项 repoRoot（settingsRoot）
+ * ② 部署配置层（configRoot：组合配置 / cordis.patch.yml 经宿主注入的 config）
+ * ③ profile 的 cordis.patch.yml 里显式的 repoRoot（profileRoot / profileDir 自动读取）
+ * ④ 相对探测（moduleDir 逐级向上）⑤ 常见位置 ⑥ 都不成立 → null。
+ *
+ * 降级纪律：设置值**非空但无效**时不静默 —— 返回值带 settingsError 可读文案，
+ * 同时仍继续降级探测（保证旧行为：无效设置项不会把可用仓库挡在门外）。
  *
  * @param {object} [options]
- * @param {string} [options.configRoot] 设置项里的 repoRoot（可空）
+ * @param {string} [options.settingsRoot] 设置页（settings ns）里的 repoRoot（可空，优先级最高）
+ * @param {string} [options.configRoot] 部署配置层 repoRoot（可空；兼容旧调用）
+ * @param {string} [options.profileRoot] 显式给出的 patch repoRoot（可空）
+ * @param {string} [options.profileDir] profile 目录（用于自动读 cordis.patch.yml）
  * @param {string} [options.moduleDir] 本体模块目录（默认本文件所在模块目录）
  * @param {object} [options.env] 环境变量来源（测试注入）
  * @param {string[]} [options.commonCandidates] 常见位置候选（测试注入，默认 commonRepoRootCandidates）
- * @returns {{repoRoot:(string|null), source:('config'|'relative'|'none'), sourceDetail:('config'|'ancestor'|'common'|'none'), tried:string[]}}
+ * @param {boolean} [options.readPatch] false = 不读 profile 的 cordis.patch.yml（测试注入）
+ * @returns {{repoRoot:(string|null), source:('config'|'relative'|'none'),
+ *            sourceDetail:('settings'|'config'|'patch'|'ancestor'|'common'|'none'),
+ *            settingsError:string, tried:string[]}}
  */
 export function resolveRepoRoot(options = {}) {
   const env = options.env || process.env
   const tried = []
+  let settingsError = ''
 
-  // ① 设置项（无效则降级继续探测，不直接放弃）
-  const configRoot = normalizeDir(options.configRoot)
-  if (configRoot) {
-    tried.push(configRoot)
-    if (isRepoRoot(configRoot)) return { repoRoot: configRoot, source: 'config', sourceDetail: 'config', tried: tried }
+  // ① 设置页设置项（最高优先级；非空但无效 → 记可读错误后继续降级，不静默）
+  const settingsRoot = normalizeDir(options.settingsRoot)
+  if (settingsRoot) {
+    tried.push(settingsRoot)
+    if (isRepoRoot(settingsRoot)) {
+      return { repoRoot: settingsRoot, source: 'config', sourceDetail: 'settings', settingsError: '', tried: tried }
+    }
+    settingsError = '设置里的集成体仓库目录无效（应包含 modules/<id>/package.json）：' + posix(settingsRoot)
   }
 
-  // ② 相对探测：从本模块目录逐级向上
+  // ② 部署配置层（组合配置 / 宿主注入的 patch config；兼容旧参数名 configRoot）
+  const configRoot = normalizeDir(options.configRoot)
+  if (configRoot && configRoot !== settingsRoot) {
+    tried.push(configRoot)
+    if (isRepoRoot(configRoot)) {
+      return { repoRoot: configRoot, source: 'config', sourceDetail: 'config', settingsError: settingsError, tried: tried }
+    }
+  }
+
+  // ③ profile 的 cordis.patch.yml 里显式写的 repoRoot（宿主未注入 config 时的兜底）
+  if (options.readPatch !== false) {
+    const explicit = normalizeDir(options.profileRoot)
+    const patchRoot = explicit || readProfileRepoRoot(options.profileDir)
+    if (patchRoot && patchRoot !== settingsRoot && patchRoot !== configRoot) {
+      tried.push(patchRoot)
+      if (isRepoRoot(patchRoot)) {
+        return { repoRoot: patchRoot, source: 'config', sourceDetail: 'patch', settingsError: settingsError, tried: tried }
+      }
+    }
+  }
+
+  // ④ 相对探测：从本模块目录逐级向上
   const start = normalizeDir(options.moduleDir) || MODULE_DIR
   let cursor = start
   for (let i = 0; i < MAX_ANCESTOR_LEVELS; i++) {
     if (cursor && tried.indexOf(cursor) === -1) tried.push(cursor)
-    if (isRepoRoot(cursor)) return { repoRoot: cursor, source: 'relative', sourceDetail: 'ancestor', tried: tried }
+    if (isRepoRoot(cursor)) {
+      return { repoRoot: cursor, source: 'relative', sourceDetail: 'ancestor', settingsError: settingsError, tried: tried }
+    }
     const parent = dirname(cursor)
     if (!parent || parent === cursor) break
     cursor = parent
   }
 
-  // ③ 常见位置
+  // ⑤ 常见位置
   const common = Array.isArray(options.commonCandidates) ? options.commonCandidates : commonRepoRootCandidates(env)
   for (const raw of common) {
     const cand = normalizeDir(raw)
     if (!cand || tried.indexOf(cand) >= 0) continue
     tried.push(cand)
-    if (isRepoRoot(cand)) return { repoRoot: cand, source: 'relative', sourceDetail: 'common', tried: tried }
+    if (isRepoRoot(cand)) {
+      return { repoRoot: cand, source: 'relative', sourceDetail: 'common', settingsError: settingsError, tried: tried }
+    }
   }
 
-  return { repoRoot: null, source: 'none', sourceDetail: 'none', tried: tried }
+  return { repoRoot: null, source: 'none', sourceDetail: 'none', settingsError: settingsError, tried: tried }
 }
 
 // ───────────────────── 子插件清单（只读） ─────────────────────
 
 /**
+ * 读 profile 的 package.json 里本安装器关心的两处登记（**只读，容错**）：
+ *   - dependencies：依赖登记（dependencies[id] 存在且非空）；
+ *   - dsh.profile.bundles：DSH 装载登记（bundles 数组里命中 id）。
+ * 读不到 / 不是合法 JSON / 带 BOM 一律返回空登记（不抛）。
+ *
+ * @returns {{dependencies:object, bundles:string[]}}
+ */
+export function readProfileRegistry(profileDir) {
+  const out = { dependencies: {}, bundles: [] }
+  const dir = normalizeDir(profileDir)
+  if (!dir) return out
+  const raw = readUtf8(join(dir, 'package.json'))
+  if (!raw || raw.bom === 'UTF-8') return out
+  let pkg = null
+  try {
+    pkg = JSON.parse(raw.text)
+  } catch (e) {
+    return out
+  }
+  if (!pkg || Array.isArray(pkg) || typeof pkg !== 'object') return out
+  if (pkg.dependencies && typeof pkg.dependencies === 'object' && !Array.isArray(pkg.dependencies)) {
+    out.dependencies = pkg.dependencies
+  }
+  const profile = (pkg.dsh && typeof pkg.dsh === 'object' && !Array.isArray(pkg.dsh)) ? pkg.dsh.profile : null
+  if (profile && typeof profile === 'object' && !Array.isArray(profile) && Array.isArray(profile.bundles)) {
+    out.bundles = profile.bundles.filter((x) => typeof x === 'string' && x.trim() !== '')
+  }
+  return out
+}
+
+/**
  * 列出五个子插件的 bundled / installed 版本与安装模式（**只读**）。
  * installMode 来自 profile 的 package.json dependencies[id]：link: → 'link'，
  * file: → 'file'，其它非空写法（版本号等）→ 'copy'，无条目 → null。
+ *
+ * **installed 判定（2026-09-14 口径，改为「登记为准」）**：
+ * `installed = registered && bundleHit && dirPresent` ——
+ *   ① registered：dependencies[id] 已登记；② bundleHit：dsh.profile.bundles 命中；
+ *   ③ dirPresent：<profileDir>/node_modules/<id> 目录在。
+ * 只按目录存在判定是**假阳性来源**：卸载后残留的目录（junction / 复制件）会被当成已安装，
+ * 面板显示「已是最新」且不给安装按钮，使用者反而装不上。未安装时 installedVersion 一律 null
+ * （避免客户端把残留目录里的版本当成「已装版本」）。
  *
  * @param {{repoRoot?:string, profileDir?:string}} [options]
  * @returns {{repoRoot:(string|null), profileDir:(string|null), items:object[], summary:{total:number, installed:number, upToDate:number}}}
@@ -483,35 +739,26 @@ export function resolveRepoRoot(options = {}) {
 export function listSubPlugins(options = {}) {
   const repoRoot = normalizeDir(options.repoRoot)
   const profileDir = normalizeDir(options.profileDir)
-
-  let dependencies = {}
-  if (profileDir) {
-    const raw = readUtf8(join(profileDir, 'package.json'))
-    if (raw && raw.bom !== 'UTF-8') {
-      try {
-        const pkg = JSON.parse(raw.text)
-        if (pkg && !Array.isArray(pkg) && pkg.dependencies && typeof pkg.dependencies === 'object' && !Array.isArray(pkg.dependencies)) {
-          dependencies = pkg.dependencies
-        }
-      } catch (e) {
-        dependencies = {}
-      }
-    }
-  }
+  const registry = readProfileRegistry(profileDir)
+  const dependencies = registry.dependencies
+  const bundles = registry.bundles
 
   const items = SUB_PLUGIN_IDS.map((spec) => {
     const bundledVersion = repoRoot
       ? (readPackageVersion(join(repoRoot, MODULES_DIR_NAME, spec.id, 'package.json')) || '')
       : ''
     const installedDir = profileDir ? join(profileDir, 'node_modules', spec.id) : ''
-    let installed = false
+    let dirPresent = false
     if (installedDir) {
-      try { installed = existsSync(installedDir) } catch (e) { installed = false }
+      try { dirPresent = existsSync(installedDir) } catch (e) { dirPresent = false }
     }
-    const installedVersion = installed ? readPackageVersion(join(installedDir, 'package.json')) : null
     const dep = dependencies[spec.id]
+    const registered = typeof dep === 'string' && dep.trim() !== ''
+    const bundleHit = bundles.indexOf(spec.id) >= 0
+    const installed = Boolean(registered && bundleHit && dirPresent)
+    const installedVersion = installed ? readPackageVersion(join(installedDir, 'package.json')) : null
     let installMode = null
-    if (typeof dep === 'string' && dep) {
+    if (registered) {
       if (/^link:/i.test(dep)) installMode = 'link'
       else if (/^file:/i.test(dep)) installMode = 'file'
       else installMode = 'copy'
@@ -525,6 +772,10 @@ export function listSubPlugins(options = {}) {
       installedVersion: installedVersion,
       installMode: installMode,
       upToDate: Boolean(bundledVersion && installedVersion && bundledVersion === installedVersion),
+      // ── 2026-09-14 增补字段（只增不改：既有字段语义与顺序保持） ──
+      registered: registered,
+      bundleHit: bundleHit,
+      dirPresent: dirPresent,
     }
   })
 

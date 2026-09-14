@@ -53,10 +53,14 @@ import {
 
 import {
   MODULE_DIR,
+  MODULE_ID,
   SUB_PLUGIN_ID_LIST,
+  isRepoRoot,
   listSubPlugins,
   installSubPlugin,
+  readProfileRepoRoot,
   resolveRepoRoot,
+  writeProfileRepoRoot,
   resolveInstallAllPlan,
 } from './install.js'
 
@@ -75,6 +79,15 @@ import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
 export const API_ROOT = '/work-personal-secretary/api'
 /** 精确路由（桌面载体的 fetch 桥只认精确路由） */
 export const API_PATHS = ['/check', '/fix', '/fix-all', '/plugins', '/install', '/install-all', '/basedeck']
+
+/**
+ * 本体设置命名空间名（与 lib/settings.js 的 SETTINGS_NS 同值：= 本体包名）。
+ * 这里直接用 MODULE_ID，避免为取一个字符串常量把 settings.js 的 top-level await 拉进依赖链。
+ */
+export const SETTINGS_NS = MODULE_ID
+
+/** /repo-root 可接受的仓库目录字符串长度上限（防滥用；远超正常路径） */
+export const REPO_ROOT_MAX_CHARS = 512
 
 /** 安装类命令的超时上限（15 分钟：winget / pip 都可能较慢） */
 export const FIX_TIMEOUT_MS = 900000
@@ -274,13 +287,129 @@ export function installApi(ctx, deps = {}) {
     ? deps.dshHome
     : (String(installEnv.DSH_HOME || '').trim() || '')
 
+  const currentProfileDir = () => profileDirOverride || resolveProfileDir(installEnv)
+
+  // ── repoRoot 四种来源（2026-09-14 起的优先级） ──────────────────────────
+  // ① 设置页设置值（settingsRepoRoot，用户层，免重启）② 部署配置层（repoRootConfig：
+  //   组合配置 / cordis.patch.yml 经宿主注入的 config）③ profile 的 cordis.patch.yml 里
+  //   显式写的 repoRoot（profileRepoRoot，宿主未注入 config 时兜底）④ 自动探测（祖先 / 常见位置）。
+  const settingsHandle = (deps.settings && typeof deps.settings.read === 'function') ? deps.settings : null
+  const settingsOf = () => (ctx && ctx.settings && typeof ctx.settings.describe === 'function') ? ctx.settings : null
+  const sanitizeErr = (err) => {
+    const s = String(err && err.message ? err.message : err).split('\n')[0]
+    return s.length > 300 ? s.slice(0, 300) + '…' : s
+  }
+  /** 输出 POSIX 风格路径（JSON 里不出现转义反斜杠；与 install.js 的 posix 同口径） */
+  const slash = (p) => String(p == null ? '' : p).replace(/\\/g, '/')
+
+  /** 设置页里的 repoRoot（实时读；无设置服务 / 句柄缺失 → 空串） */
+  function settingsRepoRoot() {
+    if (!settingsHandle) return ''
+    try {
+      const v = settingsHandle.read()
+      return v && typeof v.repoRoot === 'string' ? v.repoRoot.trim() : ''
+    } catch (e) {
+      return ''
+    }
+  }
+
+  /** profile 的 cordis.patch.yml 里的 repoRoot（只读；读不到 → 空串） */
+  function profileRepoRoot() {
+    try {
+      return readProfileRepoRoot(currentProfileDir())
+    } catch (e) {
+      return ''
+    }
+  }
+
   const currentRepoRoot = () => resolveRepoRoot({
+    settingsRoot: settingsRepoRoot(),
     configRoot: repoRootConfig,
+    profileRoot: '',
+    profileDir: currentProfileDir(),
     moduleDir: installModuleDir,
     env: installEnv,
     commonCandidates: deps.commonCandidates,
   })
-  const currentProfileDir = () => profileDirOverride || resolveProfileDir(installEnv)
+
+  /**
+   * 把 repoRoot 写进**设置用户层**（免重启热生效）。写入前先 describe 取 revision（栅栏）。
+   * 设置服务不可用 / ns 未注册 / 写入失败 → 返回可读错误（调用方决定是否退回写 patch）。
+   * @returns {Promise<{ok:boolean, revision?:(number|null), code?:string, error?:string}>}
+   */
+  async function writeSettingsRepoRoot(value) {
+    const settings = settingsOf()
+    if (!settings || typeof settings.mutate !== 'function') {
+      return { ok: false, code: 'settings-unavailable', error: '设置服务不可用（ctx.settings 缺失或只读）' }
+    }
+    let list = []
+    try {
+      const described = await settings.describe({ redactSecrets: true })
+      list = Array.isArray(described) ? described : (described && Array.isArray(described.namespaces) ? described.namespaces : [])
+    } catch (err) {
+      return { ok: false, code: 'describe-failed', error: '读取设置失败：' + sanitizeErr(err) }
+    }
+    const target = list.filter((n) => n && n.ns === SETTINGS_NS)[0]
+    if (!target || target.installed === false) {
+      return { ok: false, code: 'ns-unavailable', error: '设置命名空间 ' + SETTINGS_NS + ' 未注册（本体设置服务未就绪）' }
+    }
+    const revision = Number.isInteger(target.revision) ? target.revision : 0
+    try {
+      await settings.mutate(SETTINGS_NS, [{ op: 'set', path: ['repoRoot'], value: value }], revision)
+    } catch (err) {
+      const code = (err && err.code) ? String(err.code) : 'write-failed'
+      const extra = code === 'SETTINGS_CONFLICT' ? '（设置已被其它窗口改动，请重新读取后再写）' : ''
+      return { ok: false, code: code, error: '写入设置失败' + extra + '：' + sanitizeErr(err) }
+    }
+    let after = null
+    try {
+      const described = await settings.describe({ redactSecrets: true })
+      const l = Array.isArray(described) ? described : (described && described.namespaces) || []
+      after = l.filter((n) => n && n.ns === SETTINGS_NS)[0] || null
+    } catch (e) {
+      after = null
+    }
+    return { ok: true, revision: (after && Number.isInteger(after.revision)) ? after.revision : null }
+  }
+
+  /**
+   * 安装成功后：若仓库根此前**没有任何登记**（设置 / 部署配置 / profile patch 都空）而只靠自动
+   * 探测命中，就把它写回（优先设置用户层，其次 profile 的 cordis.patch.yml —— 写前备份）。
+   * **任何失败都只 warn，绝不改安装结果**（写回是便利，不是安装的前置条件）。
+   * @returns {Promise<object|null>} null = 无需求（已有登记 / 非探测来源）
+   */
+  async function ensureRepoRootRecorded(repo) {
+    try {
+      const root = (repo && typeof repo.repoRoot === 'string') ? repo.repoRoot : ''
+      if (!root) return null
+      if (settingsRepoRoot() || repoRootConfig || profileRepoRoot()) return null
+      const detail = repo.sourceDetail
+      if (detail !== 'ancestor' && detail !== 'common') return null
+      const how = detail === 'ancestor' ? '从本体模块位置逐级向上推导' : '从常见安装位置探测'
+      const written = await writeSettingsRepoRoot(root)
+      if (written.ok) {
+        return {
+          ok: true, written: 'settings', repoRoot: root, sourceDetail: detail, revision: written.revision,
+          message: '安装器已把' + how + '出的集成体仓库目录写回设置（' + SETTINGS_NS + '.repoRoot），下次无需再填',
+        }
+      }
+      const patch = writeProfileRepoRoot(currentProfileDir(), root, { now: installNow })
+      if (patch.ok) {
+        return {
+          ok: true, written: 'patch', repoRoot: root, sourceDetail: detail,
+          file: patch.file, backup: patch.backup, message: '安装器已把' + how
+            + '出的集成体仓库目录写回 profile 配置（' + SETTINGS_NS + ' → repoRoot；改前已备份）',
+        }
+      }
+      const why = written.error + '；' + patch.error
+      ctx.logger?.warn?.('work-personal-secretary: repoRoot 自动写回失败（不影响安装）：' + why)
+      return { ok: false, written: '', repoRoot: root, sourceDetail: detail, message: 'repoRoot 自动写回失败（不影响安装）：' + why }
+    } catch (err) {
+      const msg = sanitizeErr(err)
+      ctx.logger?.warn?.('work-personal-secretary: repoRoot 自动写回异常（不影响安装）：' + msg)
+      return { ok: false, written: '', message: 'repoRoot 自动写回异常（不影响安装）：' + msg }
+    }
+  }
 
   // ---- P4 能力配置页（契约《17_P4 能力配置页接口契约与安全边界》§4）：三条路由 ----
   // 走本文件的 prefix handler（浏览器载体）；HTTP 小工具与路径解析器直接复用本文件的，
@@ -377,6 +506,8 @@ export function installApi(ctx, deps = {}) {
       }
 
       // GET /plugins —— 五个子插件的版本 / 安装模式清单（**只读**，不触发任何安装）
+      // 2026-09-14 增补（只增不改）：items[] 增加 registered / bundleHit / dirPresent，
+      // 顶层增加 settingsRepoRoot / configRepoRoot / profileRepoRoot / repoRootError。
       if (req.method === 'GET' && (sub === '/plugins' || sub === '/plugins/')) {
         const repo = currentRepoRoot()
         const listing = listSubPlugins({ repoRoot: repo.repoRoot, profileDir: currentProfileDir() })
@@ -388,12 +519,98 @@ export function installApi(ctx, deps = {}) {
           profileDir: listing.profileDir,
           items: listing.items,
           summary: listing.summary,
+          settingsRepoRoot: settingsRepoRoot() ? slash(settingsRepoRoot()) : null,
+          configRepoRoot: repoRootConfig ? slash(repoRootConfig) : null,
+          profileRepoRoot: profileRepoRoot() ? slash(profileRepoRoot()) : null,
         }
         const hints = []
-        if (!listing.repoRoot) hints.push('未找到集成体仓库目录，请在设置里指定集成体仓库目录')
+        // 设置值非空但无效 → 显式回显（不静默），并继续用后面的来源
+        if (repo.settingsError) {
+          payload.repoRootError = repo.settingsError
+          hints.push(repo.settingsError)
+        }
+        if (!listing.repoRoot) {
+          hints.push('未找到集成体仓库目录：可在「设置 → 工作秘书 → 安装与检查」里填集成体仓库目录，或在该 profile 的 cordis.patch.yml 写 repoRoot')
+        }
         if (!listing.profileDir) hints.push('未找到当前 profile 目录（可用 DSH_PROFILE_DIR / DSH_PROFILE 指定，默认 ~/.dsh/profiles/desktop）')
         if (hints.length > 0) payload.message = hints.join('；')
         return sendJson(res, 200, payload)
+      }
+
+      // GET /repo-root —— repoRoot 四种来源与当前解析结果（**只读**）
+      // POST /repo-root { repoRoot } —— 写**设置用户层**（免重启）；设置服务不可用时退回写 profile 的
+      //   cordis.patch.yml（写前备份）。非空但无效 → 400 可读错误且**绝不写盘**（不静默）。
+      if (sub === '/repo-root' || sub === '/repo-root/') {
+        const profileDirNow = currentProfileDir()
+        if (req.method === 'GET') {
+          const repo = currentRepoRoot()
+          const payload = {
+            ok: true,
+            repoRoot: repo.repoRoot ? slash(repo.repoRoot) : null,
+            repoRootSource: repo.source,
+            repoRootSourceDetail: repo.sourceDetail,
+            settingsRepoRoot: settingsRepoRoot() ? slash(settingsRepoRoot()) : null,
+            configRepoRoot: repoRootConfig ? slash(repoRootConfig) : null,
+            profileRepoRoot: profileRepoRoot() ? slash(profileRepoRoot()) : null,
+            profileDir: profileDirNow ? slash(profileDirNow) : null,
+            settingsAvailable: Boolean(settingsOf() && typeof settingsOf().mutate === 'function'),
+            hint: '留空 = 自动探测（先读 profile 的 cordis.patch.yml，再从本体模块位置向上找含 modules/ 的目录）',
+          }
+          if (repo.settingsError) {
+            payload.repoRootError = repo.settingsError
+            payload.message = repo.settingsError
+          }
+          return sendJson(res, 200, payload)
+        }
+        if (req.method === 'POST') {
+          const guard = sameOriginGuard(req)
+          if (guard) return sendError(res, 403, guard)
+          let body
+          try {
+            body = await readBody(req)
+          } catch (err) {
+            return sendError(res, 400, String(err && err.message ? err.message : err))
+          }
+          const rawValue = (body && typeof body.repoRoot === 'string') ? body.repoRoot.trim() : ''
+          const value = rawValue.slice(0, REPO_ROOT_MAX_CHARS)
+          if (value && !isRepoRoot(value)) {
+            return sendJson(res, 400, {
+              ok: false, error: 'repo-root-invalid', repoRoot: slash(value), written: '',
+              message: '集成体仓库目录无效（应包含 modules/<id>/package.json）：' + slash(value) + '；未写盘',
+            })
+          }
+          const written = await writeSettingsRepoRoot(value)
+          if (written.ok) {
+            const after = currentRepoRoot()
+            return sendJson(res, 200, {
+              ok: true, written: 'settings', repoRoot: value ? slash(value) : null,
+              revision: written.revision,
+              repoRootSource: after.source, repoRootSourceDetail: after.sourceDetail,
+              message: value
+                ? '已写入设置（' + SETTINGS_NS + '.repoRoot，免重启生效）'
+                : '已清空设置里的 repoRoot（回到自动探测）',
+            })
+          }
+          // 设置服务不可用 → 退回写 profile 配置（写前备份；写失败只回可读错误）
+          if (value) {
+            const patch = writeProfileRepoRoot(profileDirNow, value, { now: installNow })
+            if (patch.ok) {
+              return sendJson(res, 200, {
+                ok: true, written: 'patch', repoRoot: slash(value), file: patch.file, backup: patch.backup,
+                message: '设置服务不可用（' + written.error + '），已写回 profile 的 cordis.patch.yml（改前已备份）',
+              })
+            }
+            return sendJson(res, 200, {
+              ok: false, written: '', error: 'write-failed', repoRoot: slash(value),
+              message: written.error + '；' + patch.error,
+            })
+          }
+          return sendJson(res, 200, {
+            ok: false, written: '', error: written.code || 'settings-unavailable',
+            message: written.error + '（清空设置需要设置服务可用）',
+          })
+        }
+        return sendError(res, 405, 'repo-root 只支持 GET（读取）与 POST（写入）')
       }
 
       // ---- 以下为写操作（同源保护） ----
@@ -463,6 +680,11 @@ export function installApi(ctx, deps = {}) {
         const result = installSubPlugin(id, {
           repoRoot: repo.repoRoot, profileDir: currentProfileDir(), now: installNow, dshHome: basedeckDshHome,
         })
+        // 安装成功且仓库根此前没有任何登记 → 把探测结果写回设置 / patch（**失败不影响安装结果**）
+        if (result && result.ok) {
+          const recorded = await ensureRepoRootRecorded(repo)
+          if (recorded) result.repoRootRecorded = recorded
+        }
         return sendJson(res, 200, result)
       }
 
@@ -494,6 +716,10 @@ export function installApi(ctx, deps = {}) {
           results: results,
           rejected: plan.rejected,
           durationMs: Date.now() - startedAll,
+        }
+        if (results.some((r) => r.ok)) {
+          const recorded = await ensureRepoRootRecorded(repo)
+          if (recorded) payload.repoRootRecorded = recorded
         }
         if (plan.rejected.length > 0) payload.message = '已忽略不在白名单的 id：' + plan.rejected.join(' / ')
         return sendJson(res, 200, payload)

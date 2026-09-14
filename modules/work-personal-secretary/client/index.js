@@ -293,6 +293,23 @@ window.__ModuleLoader__.load({
       plugStatusUpToDate: '已是最新',
       plugStatusInstallable: '可安装',
       plugStatusUpdatable: '可更新',
+      // ── 2026-09-14 增补：安装页的残留提示 + repoRoot 可配置（设置值 / patch / 自动探测） ──
+      plugResidueHint: '检测到未登记的残留目录（依赖与 bundles 均未登记）：本项按「未安装」处理，点「安装」可覆盖重装。',
+      repoRootFieldLabel: '集成体仓库目录',
+      repoRootFieldEmpty: '留空 = 自动探测',
+      repoRootFieldHint: '留空 = 自动探测；本机若为 file: / link: 链接安装，安装器会自动推导并写回。填写用绝对路径，须包含 modules/<id>/package.json。',
+      repoRootFieldSave: '保存',
+      repoRootFieldSaving: '保存中…',
+      repoRootFieldSaved: '已保存，免重启生效',
+      repoRootFieldCleared: '已清空，回到自动探测',
+      repoRootFieldFailed: '保存失败',
+      repoRootSourceNow: '当前来源',
+      repoRootSrcSettings: '设置',
+      repoRootSrcConfig: '部署配置',
+      repoRootSrcPatch: 'profile 配置',
+      repoRootSrcAncestor: '自动推导',
+      repoRootSrcCommon: '常见位置',
+      repoRootSrcNone: '未找到',
       plugMemory: '记忆库',
       plugDocs: '文档能力',
       plugExperts: '专家库',
@@ -723,6 +740,23 @@ window.__ModuleLoader__.load({
       plugStatusUpToDate: 'Up to date',
       plugStatusInstallable: 'Installable',
       plugStatusUpdatable: 'Updatable',
+      // ── added 2026-09-14: residue hint + configurable repoRoot ──
+      plugResidueHint: 'An unregistered leftover directory was found (neither dependencies nor bundles list it). It is treated as not installed — press Install to replace it.',
+      repoRootFieldLabel: 'Integrator repository',
+      repoRootFieldEmpty: 'Empty = auto-detect',
+      repoRootFieldHint: 'Empty = auto-detect. For file: / link: installs the installer derives it and writes it back automatically. Use an absolute path that contains modules/<id>/package.json.',
+      repoRootFieldSave: 'Save',
+      repoRootFieldSaving: 'Saving…',
+      repoRootFieldSaved: 'Saved — takes effect without restart',
+      repoRootFieldCleared: 'Cleared — back to auto-detect',
+      repoRootFieldFailed: 'Save failed',
+      repoRootSourceNow: 'Current source',
+      repoRootSrcSettings: 'settings',
+      repoRootSrcConfig: 'deploy config',
+      repoRootSrcPatch: 'profile config',
+      repoRootSrcAncestor: 'auto-derived',
+      repoRootSrcCommon: 'common location',
+      repoRootSrcNone: 'not found',
       plugMemory: 'Memory',
       plugDocs: 'Documents',
       plugExperts: 'Experts',
@@ -1421,16 +1455,27 @@ window.__ModuleLoader__.load({
       // 避免「已安装但版本读不到」被误判成可安装。
       const installedFlag = Boolean(r && (r.installed === true
         || (typeof r.installed === 'string' && r.installed.trim() !== '')))
-      const installedVersion = r
+      // 2026-09-14：服务端 installed 已改为「登记为准」（依赖登记 + bundles 命中 + 目录在），
+      // 未安装时 installedVersion 恒为 null。这里再兜一层：**仅当服务端显式说 installed=false 时**
+      // 忽略 installedVersion（否则残留目录里的版本号会被当成「已装且最新」，使用者反而看不到安装按钮）。
+      // 响应里没有 installed 字段（旧服务端 / 契约不完整的 mock）→ 保持旧行为（按 installedVersion 认已装）。
+      const installedExplicitFalse = Boolean(r && r.installed === false)
+      const installedVersion = (!installedExplicitFalse && r)
         ? firstText(r.installedVersion, typeof r.installed === 'string' ? r.installed : '')
         : ''
       const hasInstalled = installedFlag || installedVersion !== ''
+      // dirPresent = 目录在但没登记（卸载残留）；residual 时**照常提供安装按钮**（状态强制「可安装」）
+      const dirPresent = Boolean(r && r.dirPresent === true)
+      const registered = Boolean(r && r.registered === true)
+      const bundleHit = Boolean(r && r.bundleHit === true)
+      const residual = dirPresent && !hasInstalled
       const installed = installedVersion || (hasInstalled ? '—' : '')
       const mode = modeKey(r && (r.mode || r.installMode || r.installKind))
-      const status = r ? pluginStatus(r, hasInstalled, installedVersion, builtin) : ''
+      const status = r ? (residual ? 'installable' : pluginStatus(r, hasInstalled, installedVersion, builtin)) : ''
       return {
         id: id, name: name, nature: nature, builtin: builtin, installed: installed,
         mode: mode, status: status,
+        registered: registered, bundleHit: bundleHit, dirPresent: dirPresent, residual: residual,
         pickable: status === 'installable' || status === 'updatable',
       }
     }
@@ -2178,6 +2223,8 @@ window.__ModuleLoader__.load({
         ' · ' + t('colInstalled') + ' ' + (item.installed || t('notInstalled')),
         ' · ' + t('colMode') + ' ' + (MODE_KEYS[item.mode] ? t(MODE_KEYS[item.mode]) : (item.mode || '—')),
       ].join('')))
+      // 残留目录（目录在、依赖与 bundles 都没登记）：给可读提示，并**照常提供安装按钮**
+      if (item.residual) nodes.push(h('div', { key: 'res', style: S.note }, t('plugResidueHint')))
       nodes.push(h('div', { key: 'act', style: S.actions }, [
         h('button', {
           key: 'go', type: 'button',
@@ -2267,9 +2314,52 @@ window.__ModuleLoader__.load({
       const state = useState({
         phase: 'loading', items: [], repoRoot: '', hint: '', error: '',
         picked: {}, installingId: '', batch: null,
+        // 2026-09-14：repoRoot 可配置 —— 输入框值 / 当前来源 / 四种来源回显 / 保存结果提示
+        settingsRepoRoot: '', configRepoRoot: '', profileRepoRoot: '', repoRootError: '',
+        repoRootSourceDetail: '', repoRootInput: '', repoRootMsg: '', repoRootErr: false, repoRootBusy: false,
       })
       const st = state[0]
       const setSt = state[1]
+
+      /** 仓库根来源 → 可读文案 */
+      function repoRootSourceText(t, detail) {
+        const map = {
+          settings: 'repoRootSrcSettings',
+          config: 'repoRootSrcConfig',
+          patch: 'repoRootSrcPatch',
+          ancestor: 'repoRootSrcAncestor',
+          common: 'repoRootSrcCommon',
+        }
+        const key = map[detail]
+        return key ? t(key) : t('repoRootSrcNone')
+      }
+
+      /**
+       * 保存 repoRoot（POST /repo-root）：写设置用户层（免重启）；服务端设置不可用时退回写
+       * profile 的 cordis.patch.yml。**非空但无效时服务端返回 400 且不写盘** —— 这里原样回显。
+       */
+      async function saveRepoRoot(value) {
+        setSt((prev) => Object.assign({}, prev, { repoRootBusy: true, repoRootMsg: '', repoRootErr: false }))
+        let okFlag = false
+        let msg = ''
+        try {
+          const res = await requestJsonFull('/repo-root', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', accept: 'application/json' },
+            body: JSON.stringify({ repoRoot: String(value == null ? '' : value) }),
+          }, 30000)
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          okFlag = Boolean(res && res.ok === true && body.ok === true)
+          msg = firstText(body.message)
+            || (okFlag
+              ? (String(value || '').trim() ? t('repoRootFieldSaved') : t('repoRootFieldCleared'))
+              : t('repoRootFieldFailed'))
+        } catch (err) {
+          msg = String((err && err.message) || err)
+        }
+        setSt((prev) => Object.assign({}, prev, { repoRootBusy: false, repoRootMsg: msg, repoRootErr: !okFlag }))
+        if (okFlag) await detect()
+      }
 
       async function detect() {
         setSt((prev) => Object.assign({}, prev, { phase: 'loading', error: '' }))
@@ -2278,12 +2368,20 @@ window.__ModuleLoader__.load({
           const body = await getJson('/plugins', 15000)
           if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
           if (body.ok === false) throw new Error(String(body.error || 'plugins 返回 ok:false'))
+          const settingsRepoRoot = typeof body.settingsRepoRoot === 'string' ? body.settingsRepoRoot.trim() : ''
           setSt((prev) => Object.assign({}, prev, {
             phase: 'ready', error: '',
             items: pluginList(body),
             repoRoot: typeof body.repoRoot === 'string' ? body.repoRoot.trim() : '',
             // 接口的 message（例如「未找到当前 profile 目录」）原样回显，不吞掉可读原因
             hint: typeof body.message === 'string' ? body.message.trim() : '',
+            // 2026-09-14：四种来源分别回显（设置 / 部署配置 / profile 配置 / 自动探测）
+            settingsRepoRoot: settingsRepoRoot,
+            configRepoRoot: typeof body.configRepoRoot === 'string' ? body.configRepoRoot.trim() : '',
+            profileRepoRoot: typeof body.profileRepoRoot === 'string' ? body.profileRepoRoot.trim() : '',
+            repoRootError: typeof body.repoRootError === 'string' ? body.repoRootError.trim() : '',
+            repoRootSourceDetail: typeof body.repoRootSourceDetail === 'string' ? body.repoRootSourceDetail.trim() : '',
+            repoRootInput: settingsRepoRoot,
             picked: {}, // 重新检测后回到默认勾选（可安装 / 可更新的项）
           }))
         } catch (err) {
@@ -2470,6 +2568,35 @@ window.__ModuleLoader__.load({
                 onClick: () => detect(),
               }, t('retry')),
             ]) : null,
+            // 2026-09-14：repoRoot 可配置（可读可写、免重启生效）—— 这就是「设置里指定」的落点；
+            // 留空 = 自动探测；服务端设置不可用时退回写 profile 的 cordis.patch.yml。
+            h('div', { key: 'rrcfg', style: S.note }, [
+              h('div', { key: 't', style: S.label }, t('repoRootFieldLabel')
+                + '（' + t('repoRootSourceNow') + '：' + repoRootSourceText(t, st.repoRootSourceDetail)
+                + (st.repoRoot ? ' · ' + st.repoRoot : '') + '）'),
+              h('div', { key: 'row', style: S.inputRow }, [
+                h('input', {
+                  key: 'i', type: 'text', style: S.input,
+                  value: st.repoRootInput,
+                  placeholder: t('repoRootFieldEmpty'),
+                  disabled: st.repoRootBusy || loading,
+                  onChange: (e) => {
+                    const v = (e && e.target && typeof e.target.value === 'string') ? e.target.value : ''
+                    setSt((prev) => Object.assign({}, prev, { repoRootInput: v }))
+                  },
+                }),
+                h('button', {
+                  key: 'b', type: 'button',
+                  disabled: st.repoRootBusy || loading || st.repoRootInput === (st.settingsRepoRoot || ''),
+                  style: Object.assign({}, S.btn,
+                    (st.repoRootBusy || loading || st.repoRootInput === (st.settingsRepoRoot || '')) ? S.btnDisabled : null),
+                  onClick: () => saveRepoRoot(st.repoRootInput),
+                }, st.repoRootBusy ? t('repoRootFieldSaving') : t('repoRootFieldSave')),
+              ]),
+              h('div', { key: 'h', style: S.labelHint }, t('repoRootFieldHint')),
+              st.repoRootError ? h('div', { key: 'e', style: S.errorMsg }, st.repoRootError) : null,
+              st.repoRootMsg ? h('div', { key: 'm', style: st.repoRootErr ? S.errorMsg : S.labelHint }, st.repoRootMsg) : null,
+            ]),
             repoBlocked ? h('div', { key: 'repo', style: S.warnLine }, t('repoMissing')) : null,
             // repoRoot 在、但接口另有提示（典型：profileDir 缺失）时原样显示
             (!repoBlocked && canInstall && st.hint) ? h('div', { key: 'hint', style: S.warnLine }, st.hint) : null,

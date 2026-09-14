@@ -43,6 +43,8 @@ import {
   BACKUP_KEEP,
   listBackups,
   resolveRepoRoot,
+  readProfileRepoRoot,
+  writeProfileRepoRoot,
   listSubPlugins,
   installSubPlugin,
   resolveInstallAllPlan,
@@ -208,12 +210,55 @@ ok(rDegrade.repoRoot === FAKE_REPO && rDegrade.source === 'relative', '无效设
 const rNoModules = resolveRepoRoot({ configRoot: TMP_ROOT, moduleDir: join(TMP_ROOT, 'nowhere'), commonCandidates: [] })
 ok(rNoModules.repoRoot === null, '缺 modules/ 的目录不被当作仓库根')
 
+// ── 2026-09-14 增补：repoRoot 四层优先级（设置值 → 部署配置 → profile patch → 自动探测） ──
+
+/** 造一个最小可用仓库根（只要有 modules/<白名单 id>/package.json 即被认作仓库根） */
+function makeMiniRepo(dir, tag) {
+  mkdirSync(join(dir, 'modules', 'dsh-mermaid'), { recursive: true })
+  writeFileSync(join(dir, 'modules', 'dsh-mermaid', 'package.json'),
+    JSON.stringify({ name: 'dsh-mermaid', version: '0.0.' + tag }, null, 2) + '\n')
+  return dir
+}
+const REPO_SET = makeMiniRepo(join(TMP_ROOT, 'repo-settings'), '1')
+const REPO_PATCH = makeMiniRepo(join(TMP_ROOT, 'repo-patch'), '2')
+const REPO_ANC = makeMiniRepo(join(TMP_ROOT, 'repo-ancestor'), '3')
+const PATCH_PROFILE = join(TMP_ROOT, 'profile-patch')
+mkdirSync(PATCH_PROFILE, { recursive: true })
+writeFileSync(join(PATCH_PROFILE, 'cordis.patch.yml'),
+  '# 测试夹具：profile 的用户覆盖层\n- id: work-personal-secretary\n  config:\n    repoRoot: '
+  + "'" + REPO_PATCH.replace(/\\/g, '/') + "'" + '\n')
+const ANC_MODULE_DIR = join(REPO_ANC, 'modules', 'work-personal-secretary')
+const patchTried = { profileDir: PATCH_PROFILE, moduleDir: ANC_MODULE_DIR, commonCandidates: [], env: {} }
+
+const rPrio1 = resolveRepoRoot(Object.assign({ settingsRoot: REPO_SET, configRoot: REPO_PATCH }, patchTried))
+ok(rPrio1.repoRoot === REPO_SET && rPrio1.sourceDetail === 'settings',
+  '优先级 ①：设置值 > 部署配置 / patch / 祖先（sourceDetail=settings）')
+const rPrio2 = resolveRepoRoot(Object.assign({ settingsRoot: '', configRoot: REPO_PATCH }, patchTried))
+ok(rPrio2.repoRoot === REPO_PATCH && rPrio2.sourceDetail === 'config',
+  '优先级 ②：部署配置命中（sourceDetail=config）')
+const rPrio3 = resolveRepoRoot(Object.assign({ settingsRoot: '', configRoot: '' }, patchTried))
+ok(rPrio3.repoRoot === REPO_PATCH && rPrio3.sourceDetail === 'patch',
+  '优先级 ③：profile 的 cordis.patch.yml 命中（sourceDetail=patch），且优先于祖先探测')
+const rPrio4 = resolveRepoRoot({ settingsRoot: '', configRoot: '', moduleDir: ANC_MODULE_DIR, commonCandidates: [], env: {} })
+ok(rPrio4.repoRoot === REPO_ANC && rPrio4.sourceDetail === 'ancestor',
+  '优先级 ④：都没有 → 祖先探测（sourceDetail=ancestor）')
+const rPrio5 = resolveRepoRoot(Object.assign({ settingsRoot: join(TMP_ROOT, 'not-a-repo'), configRoot: '' }, patchTried))
+ok(rPrio5.repoRoot === REPO_PATCH && rPrio5.settingsError.indexOf('无效') >= 0,
+  '设置值非空但无效 → 不静默（settingsError 文案）且降级到 patch')
+ok(rPrio5.settingsError.indexOf('modules/<id>/package.json') >= 0, '无效设置的报错文案给出口径（应包含 modules/<id>/package.json）')
+ok(rPrio1.settingsError === '' && rPrio4.settingsError === '', '设置值为空时不产生 settingsError')
+ok(readProfileRepoRoot(PATCH_PROFILE) === REPO_PATCH, 'readProfileRepoRoot 能从 patch 里读出 repoRoot')
+ok(readProfileRepoRoot(FAKE_PROFILE) === '' && readProfileRepoRoot('') === '', '无 patch 文件 / 空目录 → 空串（不抛）')
+ok(readProfileRepoRoot(PATCH_PROFILE) === REPO_PATCH && readFileSync(join(PATCH_PROFILE, 'cordis.patch.yml'), 'utf8').indexOf("'") > 0,
+  'patch 解析兼容带引号写法（值带单引号也能读出）')
+
 section('[3] listSubPlugins：形状与 installMode（临时 repo + 临时 profile）')
 const listing0 = listSubPlugins({ repoRoot: FAKE_REPO, profileDir: FAKE_PROFILE })
 ok(listing0.items.length === 5, 'items 五项')
 ok(listing0.summary.total === 5 && listing0.summary.installed === 0 && listing0.summary.upToDate === 0, 'summary 初始为 5/0/0')
 const keys = Object.keys(listing0.items[0]).sort().join(',')
-ok(keys === 'bundledVersion,id,installMode,installed,installedVersion,kind,label,upToDate', 'item 字段与契约一致')
+ok(keys === 'bundleHit,bundledVersion,dirPresent,id,installMode,installed,installedVersion,kind,label,registered,upToDate',
+  'item 字段与契约一致（2026-09-14 增补 registered / bundleHit / dirPresent，既有字段一字未改）')
 ok(listing0.items[0].bundledVersion === VERSIONS['dsh-work-memory'], 'bundledVersion 取自 <repoRoot>/modules/<id>/package.json')
 ok(listing0.items[0].installMode === 'file', 'file: 依赖 → installMode=file')
 ok(listing0.items[3].installMode === 'copy', '版本号依赖 → installMode=copy')
@@ -221,6 +266,88 @@ ok(listing0.items[4].installMode === 'link', 'link: 依赖 → installMode=link'
 ok(listing0.items[1].installMode === null && listing0.items[1].installed === false, '无依赖条目 → installMode=null')
 ok(listing0.repoRoot.indexOf('\\') === -1 && listing0.profileDir.indexOf('\\') === -1, '路径输出为 POSIX 风格')
 ok(listSubPlugins({ repoRoot: null, profileDir: null }).items.every((it) => it.bundledVersion === '' && it.installed === false), 'repoRoot/profileDir 为空时仍返回完整形状')
+
+// ── 2026-09-14 增补：installed 改为「登记为准」—— 残留 / 缺目录 / 登记齐全 ──
+
+/** 造一个只读判定用的 profile 夹具：dependencies / bundles / node_modules 目录三者可控 */
+function makeRegistryProfile(tag, deps, bundles, dirIds) {
+  const dir = join(TMP_ROOT, 'profile-reg-' + tag)
+  mkdirSync(join(dir, 'node_modules'), { recursive: true })
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({
+    name: 'desktop', private: true,
+    dependencies: deps || {},
+    dsh: { profile: { bundles: bundles || [] } },
+  }, null, 2) + '\n')
+  for (const id of (dirIds || [])) {
+    mkdirSync(join(dir, 'node_modules', id), { recursive: true })
+    writeFileSync(join(dir, 'node_modules', id, 'package.json'),
+      JSON.stringify({ name: id, version: VERSIONS[id] || '0.0.0' }, null, 2) + '\n')
+  }
+  return dir
+}
+const REG_RESIDUE = makeRegistryProfile('residue', {}, [], ['dsh-mermaid'])
+const residueItem = listSubPlugins({ repoRoot: FAKE_REPO, profileDir: REG_RESIDUE }).items[3]
+ok(residueItem.installed === false && residueItem.dirPresent === true,
+  '卸载残留（目录在、依赖与 bundles 都没登记）→ installed=false / dirPresent=true')
+ok(residueItem.registered === false && residueItem.bundleHit === false, '残留项：registered=false / bundleHit=false')
+ok(residueItem.installedVersion === null && residueItem.upToDate === false,
+  '残留项不给 installedVersion / 不标已是最新（否则面板不出安装按钮）')
+ok(listSubPlugins({ repoRoot: FAKE_REPO, profileDir: REG_RESIDUE }).summary.installed === 0, '残留项不计入 summary.installed')
+
+const REG_NO_DIR = makeRegistryProfile('nodir', { 'dsh-experts': 'file:node_modules/dsh-experts' }, ['dsh-experts'], [])
+const noDirItem = listSubPlugins({ repoRoot: FAKE_REPO, profileDir: REG_NO_DIR }).items[2]
+ok(noDirItem.registered === true && noDirItem.bundleHit === true && noDirItem.dirPresent === false,
+  'bundles 命中但目录缺失：registered / bundleHit = true、dirPresent=false')
+ok(noDirItem.installed === false, 'bundles 命中但目录缺失 → 未安装')
+
+const REG_OK = makeRegistryProfile('full', { 'dsh-mermaid': 'file:node_modules/dsh-mermaid' }, ['dsh-mermaid'], ['dsh-mermaid'])
+const regOkItem = listSubPlugins({ repoRoot: FAKE_REPO, profileDir: REG_OK }).items[3]
+ok(regOkItem.installed === true && regOkItem.dirPresent === true && regOkItem.registered === true && regOkItem.bundleHit === true,
+  '登记齐全（依赖 + bundles + 目录）→ 已安装')
+ok(regOkItem.installedVersion === VERSIONS['dsh-mermaid'] && regOkItem.upToDate === true,
+  '登记齐全且版本一致 → installedVersion 正常 + upToDate=true')
+
+const REG_DEP_ONLY = makeRegistryProfile('deponly', { 'dsh-mermaid': 'file:node_modules/dsh-mermaid' }, [], ['dsh-mermaid'])
+const depOnlyItem = listSubPlugins({ repoRoot: FAKE_REPO, profileDir: REG_DEP_ONLY }).items[3]
+ok(depOnlyItem.registered === true && depOnlyItem.bundleHit === false && depOnlyItem.installed === false,
+  '只有依赖登记、bundles 缺 → 未安装（登记为准）')
+
+// ── 2026-09-14 增补：repoRoot 写回 profile 配置（写前备份 / 同值不写 / 失败只返回错误） ──
+section('[3b] writeProfileRepoRoot：写回 profile 的 cordis.patch.yml（写前备份）')
+const WP = join(TMP_ROOT, 'profile-wpatch')
+mkdirSync(WP, { recursive: true })
+const wpNow = new Date(2026, 0, 2, 3, 4, 5, 678)
+const wNew = writeProfileRepoRoot(WP, FAKE_REPO, { now: wpNow })
+ok(wNew.ok === true && wNew.changed === true && wNew.backup === '', '文件不存在 → 新建条目成功（无需备份）')
+const wpText = readFileSync(join(WP, 'cordis.patch.yml'), 'utf8')
+ok(wpText.indexOf('- id: work-personal-secretary') >= 0 && wpText.indexOf('repoRoot: ') > 0, '写入内容为「- id + config.repoRoot」')
+ok(readProfileRepoRoot(WP) === FAKE_REPO, '写后能读回同一个仓库根')
+const wSame = writeProfileRepoRoot(WP, FAKE_REPO, { now: wpNow })
+ok(wSame.ok === true && wSame.changed === false && wSame.backup === '', '同值 → changed=false 且不写盘、不备份')
+const wNext = writeProfileRepoRoot(WP, REPO_PATCH, { now: new Date(2026, 0, 2, 3, 4, 6, 0) })
+ok(wNext.ok === true && wNext.changed === true && wNext.backup.indexOf('cordis.patch.yml.bak-') > 0, '改值 → 写前备份（*.bak-<时间戳>）')
+ok(readProfileRepoRoot(WP) === REPO_PATCH, '读回新值')
+ok(readdirSync(WP).filter((n) => n.indexOf('cordis.patch.yml.bak-') === 0).length === 1, '恰好留下 1 份备份')
+const WP_NO_CFG = join(TMP_ROOT, 'profile-wpatch2')
+mkdirSync(WP_NO_CFG, { recursive: true })
+writeFileSync(join(WP_NO_CFG, 'cordis.patch.yml'), '- id: work-personal-secretary\n')
+const wNoCfg = writeProfileRepoRoot(WP_NO_CFG, FAKE_REPO, { now: wpNow })
+ok(wNoCfg.ok === true && readProfileRepoRoot(WP_NO_CFG) === FAKE_REPO, '有条目但缺 config 段 → 自动补 config + repoRoot')
+const WP_BOM = join(TMP_ROOT, 'profile-wpatch3')
+mkdirSync(WP_BOM, { recursive: true })
+writeFileSync(join(WP_BOM, 'cordis.patch.yml'), '\uFEFF- id: work-personal-secretary\n')
+const wBom = writeProfileRepoRoot(WP_BOM, FAKE_REPO, { now: wpNow })
+ok(wBom.ok === false && String(wBom.error).indexOf('BOM') >= 0, '带 BOM 的 profile 配置 → 拒绝写入并给出可读原因')
+const wEmpty = writeProfileRepoRoot(WP, '', { now: wpNow })
+ok(wEmpty.ok === false && String(wEmpty.error).indexOf('为空') >= 0, '空仓库根 → 拒绝写入（不静默）')
+const wFail = writeProfileRepoRoot(WP, REPO_ANC, {
+  now: wpNow,
+  io: {
+    copyFileSync: copyFileSync, mkdirSync: mkdirSync, rmSync: rmSync, renameSync: renameSync,
+    writeFileSync: () => { throw new Error('disk full') },
+  },
+})
+ok(wFail.ok === false && String(wFail.error).indexOf('失败') >= 0, '注入写失败 → ok=false + 可读原因（**不抛异常**，调用方可不阻断）')
 
 section('[4] installSubPlugin 全流程（临时目录）')
 assertInsideTmp(FAKE_REPO, 'fakeRepo')
@@ -340,9 +467,35 @@ ok(rPlugins.status === 200 && rPlugins.body.ok === true, 'GET /plugins → 200 o
 ok(rPlugins.body.items.length === 5, 'GET /plugins items 五项')
 ok(rPlugins.body.repoRootSource === 'relative' && rPlugins.body.repoRoot === FAKE_REPO.replace(/\\/g, '/'), 'GET /plugins 用相对探测解析 repoRoot')
 ok(rPlugins.body.summary.installed === 1, 'GET /plugins 是只读快照（未触发新安装）')
+ok(rPlugins.body.settingsRepoRoot === null && rPlugins.body.profileRepoRoot === null,
+  'GET /plugins 增补 settingsRepoRoot / profileRepoRoot 来源回显（此时都为空）')
+
+// ── 2026-09-14 增补：GET / POST /repo-root（设置值可读可写；无效值 400 且不写盘） ──
+const PATCH_FILE = join(FAKE_PROFILE, 'cordis.patch.yml')
+const rRepoGet = await call('GET', '/repo-root')
+ok(rRepoGet.status === 200 && rRepoGet.body.ok === true && rRepoGet.body.repoRootSourceDetail === 'ancestor',
+  'GET /repo-root → 200，回显当前来源（自动推导）')
+ok(rRepoGet.body.repoRoot === FAKE_REPO.replace(/\\/g, '/') && rRepoGet.body.settingsAvailable === false,
+  'GET /repo-root 回显解析结果；无 ctx.settings 时 settingsAvailable=false')
+const rRepoBad = await call('POST', '/repo-root', { repoRoot: join(TMP_ROOT, 'not-a-repo') }, ORIGIN_HEADERS)
+ok(rRepoBad.status === 400 && rRepoBad.body.error === 'repo-root-invalid',
+  'POST /repo-root 无效目录 → 400 repo-root-invalid')
+ok(String(rRepoBad.body.message).indexOf('未写盘') >= 0 && String(rRepoBad.body.message).indexOf('modules/<id>/package.json') >= 0,
+  '无效值报错文案给出口径并声明未写盘（不静默）')
+ok(!existsSync(PATCH_FILE), '无效值未产生任何写盘（profile 的 cordis.patch.yml 未创建）')
+const rRepoCross = await call('POST', '/repo-root', { repoRoot: FAKE_REPO }, CROSS_HEADERS)
+ok(rRepoCross.status === 403, '跨站 POST /repo-root → 403（同源保护）')
 
 const rInstall = await call('POST', '/install', { id: 'dsh-mermaid' }, ORIGIN_HEADERS)
 ok(rInstall.status === 200 && rInstall.body.ok === true && rInstall.body.id === 'dsh-mermaid', 'POST /install → 200 ok')
+ok(rInstall.body.repoRootRecorded && rInstall.body.repoRootRecorded.ok === true
+  && rInstall.body.repoRootRecorded.written === 'patch',
+  '安装成功后把自动探测出的 repoRoot 写回 profile 配置（written=patch；设置服务缺失时的兜底）')
+ok(existsSync(PATCH_FILE) && readProfileRepoRoot(FAKE_PROFILE) === FAKE_REPO,
+  'profile 的 cordis.patch.yml 已生成且能读回仓库根')
+const rPlugins2 = await call('GET', '/plugins')
+ok(rPlugins2.body.repoRootSourceDetail === 'patch' && rPlugins2.body.profileRepoRoot === FAKE_REPO.replace(/\\/g, '/'),
+  '写回后再查：来源变为 patch（不重复写、可区分来源）')
 ok(rInstall.body.files === 3 && rInstall.body.verified === true, 'POST /install 复制并校验通过')
 ok(rInstall.body.backup.indexOf('.bak-') > 0, 'POST /install 返回备份路径')
 ok(typeof rInstall.body.prunedBackups === 'number', 'POST /install 透传 prunedBackups（备份轮转计数）')
@@ -378,6 +531,37 @@ const rFixCross = await call('POST', '/fix', { id: 'python' }, CROSS_HEADERS)
 ok(rFixCross.status === 403, '既有 POST /fix 同源保护仍生效')
 const r404 = await call('GET', '/nope')
 ok(r404.status === 404, '未知子路径仍 404')
+
+// ── 2026-09-14 增补：repoRoot 写回失败**不阻断安装**（设置与 profile 配置都写不进去时） ──
+section('[6b] repoRoot 写回失败不阻断安装（配置文件带 BOM + 无设置服务）')
+const RR_BOM_PROFILE = join(TMP_ROOT, 'profile-bom')
+mkdirSync(join(RR_BOM_PROFILE, 'node_modules'), { recursive: true })
+writeFileSync(join(RR_BOM_PROFILE, 'package.json'), JSON.stringify({
+  name: 'desktop', private: true, dependencies: {}, dsh: { profile: { bundles: [] } },
+}, null, 2) + '\n')
+writeFileSync(join(RR_BOM_PROFILE, 'cordis.patch.yml'), '\uFEFF# 带 BOM 的夹具：本引擎必须拒绝改写\n')
+const rrCtx = makeMockCtx()
+installApi(rrCtx, {
+  platform: 'win32', repoRoot: '', profileDir: RR_BOM_PROFILE,
+  moduleDir: join(FAKE_REPO, 'modules', 'work-personal-secretary'),
+  commonCandidates: [join(TMP_ROOT, 'nope')], env: {}, now: fixedNow,
+})
+const rrHandler = prefixHandler(rrCtx)
+const rrRes = makeRes()
+await rrHandler(makeReq({
+  method: 'POST', url: API_ROOT + '/install', body: { id: 'dsh-experts' }, headers: ORIGIN_HEADERS,
+}), rrRes)
+const rrBody = { status: rrRes.status, body: JSON.parse(rrRes.body) }
+ok(rrBody.body.ok === true, '写回失败不阻断：安装本身仍 ok=true')
+ok(rrBody.body.repoRootRecorded && rrBody.body.repoRootRecorded.ok === false
+  && String(rrBody.body.repoRootRecorded.message).indexOf('不影响安装') >= 0,
+  'repoRootRecorded.ok=false 且文案声明「不影响安装」')
+ok(existsSync(join(RR_BOM_PROFILE, 'node_modules', 'dsh-experts')), '插件目录照常安装到位（写回失败无副作用）')
+const rrGetRes = makeRes()
+await rrHandler(makeReq({ method: 'GET', url: API_ROOT + '/repo-root' }), rrGetRes)
+const rrGet = JSON.parse(rrGetRes.body)
+ok(rrGet.ok === true && rrGet.repoRootSourceDetail === 'ancestor',
+  'GET /repo-root 仍可用：来源为自动推导（BOM 文件被忽略）')
 
 section('[7] 原子替换与失败回滚（注入 mock 失败）')
 

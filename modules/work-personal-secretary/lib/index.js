@@ -29,6 +29,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installApi } from './api.js'
 import { runProbes } from './probe.js'
+import { installSettings } from './settings.js'
 
 export const name = 'work-personal-secretary'
 
@@ -64,6 +65,12 @@ export function apply(ctx, config = {}) {
   const version = readVersion()
   ctx.logger?.debug?.('work-personal-secretary: 集成体本体已挂载 v' + version + '（客户端提供设置分区「工作秘书」）')
 
+  // ---- 设置命名空间（本体自己）：repoRoot 可在设置页读写，免重启热生效（2026-09-14） ----
+  // base 层**故意留空**：组合配置里的 repoRoot（cordis.patch.yml / bundle 配置）由 installApi 的
+  // configRoot 单独承载，这样「设置值 / 部署配置 / patch / 自动探测」四种来源在响应里可区分，
+  // 不会被 base 层伪装成「设置值」。设置服务缺失时本调用降级为空设置（repoRoot 走自动探测）。
+  const settings = installSettings(ctx, {})
+
   // ---- 安装器宿主半：环境检查（只读）、自动补齐（服务端白名单）与子插件安装 ----
   // 服务缺失（无 webServer）时降级：只装设置分区，路由不可用并在日志里说明。
   // 配置项 repoRoot（可选）：集成体仓库目录；留空则服务端做相对探测 / 常见位置探测。
@@ -74,6 +81,8 @@ export function apply(ctx, config = {}) {
     disposeApi = installApi(ctx, {
       repoRoot: config && typeof config.repoRoot === 'string' ? config.repoRoot : '',
       workspace: config && typeof config.workspace === 'string' ? config.workspace : '',
+      // 设置句柄（repoRoot 的实时读取源；写入走 ctx.settings.mutate，见 /repo-root 路由）
+      settings: settings,
     })
   } catch (err) {
     ctx.logger?.warn?.('work-personal-secretary: Web API 安装失败，环境检查 / 补齐路由不可用（降级为仅设置分区）：'
