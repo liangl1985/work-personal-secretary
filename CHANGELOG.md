@@ -12,7 +12,8 @@
 - **运行时数据目录**：新址 `~/.dsh/data/workspace-tokenpet/skins/`（**新址优先**）；新址缺套装而旧址 `~/.dsh/data/dsh-token-pet/skins/` 有同名套装时**复制迁移**（旧数据保留、绝不覆盖使用者已有套装、单套失败不影响安装结果）。
 - **下游同步**：集成体本体（安装器 / 配置底座 / 探针 / 模块清单 / 客户端安装顺序与设置页跳转）与全部测试夹具一并更名。
 - **性质口径**：安装页与文档新增「**独立项目模块**」性质（`workspace-tokenpet` 由「第三方」改标；`dsh-mermaid` 仍为「第三方」），上游版权、MIT 许可与致谢表述不变。
-- **本机迁移尚未执行**（硬边界：不改本机 profile、不 commit / push）：换 id 由主人按模块 `CHANGELOG.md` 的 1.0.0 段执行。
+- **构建完整性（模块升 1.0.1）**：补入两个从未入库的构建输入（`src/client/*.generated.ts`，+22.5 MB）；`client/client.js` 换为**真实构建产物**（与旧版仅差 1 处注释）；`lib/**` 与 `tsc` 产物 **26/26 逐字节一致**；新增发布门禁「`npm run build` 后 `git diff --exit-code -- lib client` 必须为空」。
+- **本机迁移已执行**（主人 2026-09-14）：profile 换 id 至 `workspace-tokenpet`、旧 `dsh-token-pet` 目录清除、素材新址 42 文件在用、旧址保留。
 
 ### 专家库 0.1.4（dsh-experts）
 

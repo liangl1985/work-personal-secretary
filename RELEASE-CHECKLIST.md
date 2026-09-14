@@ -160,6 +160,23 @@
 - [x] **配置引导页两缺陷**（`28e398d`）：桌面版「浏览…」改走 `window.__DSH_DESKTOP_PICK_DIRECTORY__`（原走 host `pickDirectory` 必抛 native 能力错）；第 1 步「重新检查」按阶段刷新、不再自动跳步；「浏览…」按钮 `nowrap` 修竖排。**重启后主人复验通过**
 - [x] 提交推送：`e388985`(P4) · `4a3afe7` · `287000e` · `24c16d0` · `219e11a`(experts 升版) · `d20a648`(NOTICE)
 
+## 三点九、构建产物同轨门禁（2026-09-14 增）
+
+> 背景：`workspace-tokenpet` 独立化时，`lib/**` 与 `client/client.js` 是用**与 `src/` 一一对应的确定性字符串替换**同步的（`287000e` 起还有一处注释只改了源码、产物手工补），存在「产物与源码不同轨」的风险。2026-09-14 做过一次真实重建核对，结论与门禁如下。
+
+- [x] **构建输入齐备**：`src/client/pet-action-sheets.generated.ts`（22.5 MB）与 `src/client/pet-asset.generated.ts`（260 KB）已入库（此前从未入库 → 干净 clone 的 `npm install` 会因 `prepare → build` 直接失败）
+- [x] **宿主产物一致**：`lib/**` **26/26**（13 `.js` + 13 `.d.ts`）与真实 `tsc` 产物**逐字节一致**
+- [x] **客户端产物一致**：`client/client.js` 已换为真实 `npm run build`（tsdown v0.22.14）产物；与上一版仅差 1 处注释，剥离注释后等价文本 sha256 相同
+- [x] 模块版本 **1.0.1**（构建完整性；无功能变化、无 API / 数据格式变化）
+- [ ] **发布门禁（每次发版前必过）**：
+  ```
+  cd modules/workspace-tokenpet
+  npm.cmd install --ignore-scripts --no-audit --no-fund
+  npm.cmd run build
+  git diff --exit-code -- lib client        # 必须为空
+  ```
+  说明：`tsdown` 配了 `clean:true`，**构建失败会先删掉 `client/`** —— 构建前确认两个 `*.generated.ts` 在位，避免产物丢失。
+
 ## 四、宿主兼容性
 
 - [x] 仅使用当前 host 的**原生扩展点**（tools / commands / settings / resources / sidebarRightTabs / locale / skills），不用已弃用槽位

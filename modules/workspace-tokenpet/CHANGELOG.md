@@ -7,6 +7,27 @@
 > 1.0.0 之前的条目**保留原文**：其中「补丁 / patches / 上游基线 / 定制层」等措辞属于当时的
 > 历史形态记录，对应的文件已在 1.0.0 中删除。
 
+## 1.0.1 — 构建完整性（2026-09-14）
+
+### 补入两个构建输入（此前从未入库）
+- `src/client/pet-action-sheets.generated.ts`（22,510,041 B）与 `src/client/pet-asset.generated.ts`（260,672 B）
+  是 `tsc` / `tsdown` 的**必需输入**（被 `animation.ts` / `index.ts` / `pet-action-player.tsx` / `pet.tsx` / `skin.ts` 引用）。
+  未入库时干净 clone 无法构建，且 `npm install` 会因 `prepare → build` 直接失败。
+- **来源可核**：入库 bundle 内联 region 反提 + 上游 `Jimmy0123-ux/dsh-token-pet@cc49233f`（`NOTICE` 记录的 v0.2.0 基线）原文，
+  双源交叉验证一致（12/12 action 的 sheet base64 与数值字段 deepEqual；`pet-asset` base64 sha256 相同）。
+
+### `client/client.js` 改为真实构建产物
+- 由 `npm run build`（tsdown v0.22.14 / rolldown）产出；与上一版**仅差 1 处注释**
+  （`petHitbox` 的 3 行旧注释 → 9 行 JSDoc，与 `src/client/index.ts` 一致）。
+- 剥离注释后两份等价文本长度与 sha256 相同（`9736e03b…`）；生成表 region / `pet-asset` base64 / region 顺序全部 deepEqual。
+
+### `lib/**` 核对
+- 26/26 文件（13 `.js` + 13 `.d.ts`）与真实 `tsc` 产物**逐字节一致** —— 独立化时的字符串替换恰好等价。
+
+### 影响
+- **无功能变化、无 API / 数据格式变化**；npm 发布物（`package.json` 的 `files` 白名单）不受影响（不含 `src/`）。
+- 发布门禁新增：`npm run build` 后 `git diff --exit-code -- lib client` 必须为空（见仓库 `RELEASE-CHECKLIST.md` 三点九）。
+
 ## 1.0.0 — 独立化（2026-09-14）
 
 ### 破坏性变更
