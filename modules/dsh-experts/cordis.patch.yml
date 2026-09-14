@@ -18,11 +18,16 @@
       config:
         expertsEnabled: true      # 总开关（设置页可改，免重启）
         injectOrder: 480          # runtime 快照顺序：略早于记忆快照(500)，让"专家视角"先立起来（改动需重启）
+        expertCatalogEnabled: true # 专家库目录段（systemPrompt.section，order 10150）：稳定段，列出六域成员与可用能力；不占每轮注入预算
+        disciplineEnabled: true   # 交付层纪律块（systemPrompt.context，order 481）：从项目记忆读【纪律块 v1】，每轮注入、不随裁剪丢弃
+        disciplineMemoryDir: ''   # 纪律块的记忆库根；留空 = 取 work-memory 的 memoryDir，再退 $DSH_HOME/memories/work-memory
         defaultDomain: 'infosec' # 本人岗位默认域（安装引导会问一次）。取值：infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融 / general 通用职能
         identityExpert: ''        # 常驻注入的**唯一身份专家**（id）；留空 = 取 defaultDomain 域的第一位
         enabledDomains: ''        # 把匹配范围收窄到这些域（逗号分隔）；留空 = 全量参与（岗位只作先验）
         enabledExperts: ''        # 把匹配范围收窄到这些专家 id（逗号分隔）；留空 = 不收窄
-        expertInjectMax: 2        # 每轮最多注入几位专家：1 / 2（默认）/ 3 —— >1 会占用较多 TOKEN
+        expertInjectMax: 2        # persona 软上限：0 = 不限（由预算守门）/ 1 / 2（默认）/ 3 —— >1 会占用较多 TOKEN
+        skillInjectEnabled: true # 能力层指针（工具/技能）：从任务识别技能，只注入「去哪拿」的指针行；不占 expertInjectMax 配额
+        skillBudgetChars: 300    # 能力层指针字符预算（约 3 条）；0 = 不注入指针
         expertInjectDetail: 'auto' # 注入形态：auto（默认，按预算降级：命中全文→命中精简卡→只留身份精简卡）/ card（全精简卡）/ full（全文，旧行为）
         expertInjectBudgetChars: 2000 # 每轮专家注入字符预算（默认 2000 ≈ 1.3–1.7k TOKEN；方法条 clip 放宽到 90 后由 1400 上调）：超预算按序降级，绝不静默超限
         expertSecondThreshold: 0.8 # 第 2/3 位的分数门槛：Top-N ≥ Top-1 × 该值，且须跨域

@@ -24,7 +24,7 @@ import { selectExperts } from '../lib/match.js'
 import { apply } from '../lib/index.js'
 import { buildInjection, buildPersonaBlock, buildPersonaCard, parsePersonaSections, CARD_NOTE, PERSONA_MAX_CHARS, PATH_HINT } from '../lib/inject.js'
 import { DEFAULTS } from '../lib/settings.js'
-import { clampBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, INJECT_BUDGET_MIN, INJECT_BUDGET_MAX } from '../lib/limits.js'
+import { clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, INJECT_BUDGET_MIN, INJECT_BUDGET_MAX, SKILL_BUDGET_DEFAULT, SKILL_BUDGET_MAX } from '../lib/limits.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PATH_LEN = PATH_HINT.length + 2
@@ -146,6 +146,22 @@ test('三态：full = 全文 / card = 全精简卡 / auto = 按预算降级', ()
   assert.ok(!auto.includes('未注入：'), '未丢专家时不该写未注入')
 })
 
+test('阶段（层 5）：execute 丢方法行 / deliver 只留交付，不传 stage 行为不变', () => {
+  const card = buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX }))
+  assert.ok(card.includes('方法：') && card.includes('适用：'), '全卡应含方法行与适用行')
+  const exec = buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX, stage: 'execute' }))
+  assert.ok(!exec.includes('方法：'), 'execute 应丢方法行：' + exec.slice(0, 120))
+  assert.ok(exec.includes('交付：') && exec.includes('角色：'), 'execute 应保留角色与交付')
+  assert.ok(exec.length < card.length, 'execute 应比全卡短')
+  const dlv = buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX, stage: 'deliver' }))
+  assert.ok(!dlv.includes('适用：') && !dlv.includes('方法：'), 'deliver 只应留交付：' + dlv.slice(0, 120))
+  assert.ok(dlv.includes('交付：'), 'deliver 缺交付行')
+  assert.ok(dlv.length < exec.length, 'deliver 应比 execute 短')
+  // full 形态不做阶段裁剪（全文信息完整，裁剪等于丢信息）
+  const fullStage = buildInjection(baseSel, opt({ detail: 'full', stage: 'deliver' }))
+  assert.ok(fullStage.includes('## 工作方法'), 'full 形态不应被阶段裁剪')
+})
+
 // ---------- 5. 预算降级顺序 ----------
 test('auto 第 0 级：预算足够（5000 字符）时命中专家给全文', () => {
   const out = buildInjection(baseSel, opt({ detail: 'auto', budgetChars: 5000 }))
@@ -201,6 +217,14 @@ test('默认值三处一致：schema default / settings DEFAULTS / cordis.patch.
   const patchBudget = /expertInjectBudgetChars:\s*(\d+)/.exec(patchSrc)
   assert.ok(patchDetail && patchBudget, 'cordis.patch.yml base 未声明新键')
 
+  // 能力层预算（批二新增）：同样要求 schema / DEFAULTS / patch base 三处一致
+  assert.ok(/skillBudgetChars:\s*z\.natural\(\)\.default\(SKILL_BUDGET_DEFAULT\)/.test(settingsSrc),
+    'schema 未用 SKILL_BUDGET_DEFAULT 作为能力层预算默认值')
+  const patchSkill = /skillBudgetChars:\s*(\d+)/.exec(patchSrc)
+  assert.ok(patchSkill, 'cordis.patch.yml base 未声明 skillBudgetChars')
+  assert.equal(DEFAULTS.skillBudgetChars, SKILL_BUDGET_DEFAULT, 'DEFAULTS 与 limits 常量不一致')
+  assert.equal(DEFAULTS.skillBudgetChars, Number(patchSkill[1]), 'patch base 与 DEFAULTS 的 skillBudgetChars 不一致')
+
   assert.equal(DEFAULTS.expertInjectDetail, schemaDetail[1], 'DEFAULTS 与 schema 的 detail 默认值不一致')
   assert.equal(DEFAULTS.expertInjectDetail, patchDetail[1], 'patch base 与 schema 的 detail 默认值不一致')
   assert.equal(DEFAULTS.expertInjectBudgetChars, schemaBudget, 'DEFAULTS 与 schema 的预算默认值不一致')
@@ -220,11 +244,15 @@ test('归一化：预算 clamp 与注入形态回落', () => {
   assert.equal(normalizeDetail(' full '), 'full')
   assert.equal(normalizeDetail('bogus'), 'auto')
   assert.equal(normalizeDetail('bogus', 'full'), 'full')
+  assert.equal(clampSkillBudget(0), 0)
+  assert.equal(clampSkillBudget(-1), SKILL_BUDGET_DEFAULT)
+  assert.equal(clampSkillBudget('x'), SKILL_BUDGET_DEFAULT)
+  assert.equal(clampSkillBudget(9e9), SKILL_BUDGET_MAX)
 })
 
 // ---------- 9. 注入回调：设置热更与缓存键 ----------
 function makeCtx() {
-  const ctx = { _def: null, _scope: null }
+  const ctx = { _def: null, _defs: [], _scope: null }
   const watchers = []
   ctx.logger = { debug() {}, info() {}, warn() {} }
   ctx.settings = {
@@ -238,7 +266,14 @@ function makeCtx() {
       return ctx._scope
     },
   }
-  ctx.systemPrompt = { context: (def) => { ctx._def = def; return () => {} } }
+  ctx.systemPrompt = {
+    context: (def) => {
+      ctx._defs.push(def)
+      // 批二新增「交付层」context（order 481）：_def 固定指向 persona 段，卡契约断言不受影响
+      if (def.name === 'dsh-experts:persona') ctx._def = def
+      return () => {}
+    },
+  }
   ctx.tools = { register: () => () => {} }
   ctx.commands = { register: () => () => {} }
   return ctx

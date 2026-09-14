@@ -21,10 +21,12 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { DOMAINS, EXPERTS_ROOT, allExperts, findExpert, activeExperts, loadPersona, splitList, domainById, identityExpertOf } from '../lib/store.js'
+import { DOMAINS, EXPERTS_ROOT, allExperts, allPersonas, allSkills, findSkill, kindOf, findExpert, activeExperts, loadPersona, splitList, domainById, identityExpertOf } from '../lib/store.js'
 import { selectExperts, rankExperts, WEIGHTS } from '../lib/match.js'
-import { clampInjectMax, clampUnit, INJECT_MAX_HARD } from '../lib/limits.js'
-import { buildInjection, buildPersonaBlock, PERSONA_MAX_CHARS } from '../lib/inject.js'
+import { clampInjectMax, clampUnit, INJECT_MAX_HARD, INJECT_MAX_DEFAULT, COST_PERSONA_CARD, COST_SKILL_LINE } from '../lib/limits.js'
+import { buildInjection, buildPersonaBlock, buildPersonaCard, PERSONA_MAX_CHARS, buildCatalog, CATALOG_MAX_CHARS } from '../lib/inject.js'
+import { parseDiscipline, formatDiscipline, DISCIPLINE_MARK } from '../lib/discipline.js'
+import { toCapabilityEntry, capabilityLine, routeCapabilities, createSkillSource } from '../lib/capability.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
@@ -81,6 +83,21 @@ test('id 唯一', () => {
     assert.ok(!seen.has(e.id), '重复 id：' + e.id)
     seen.add(e.id)
   }
+})
+
+test('kind 分池：persona 池 = 索引全部（无 kind 视为 persona）；能力池缺文件时为空且不报错', () => {
+  const personas = allPersonas()
+  assert.equal(personas.length, experts.length, 'persona 池应等于索引条目数，实际 ' + personas.length)
+  assert.ok(personas.every((e) => kindOf(e) === 'persona'), 'persona 池混入了非 persona 条目')
+  const skills = allSkills()
+  assert.ok(Array.isArray(skills), '能力池应为数组')
+  for (const s of skills) {
+    assert.equal(s.kind, 'skill', '能力条目缺 kind=skill：' + s.id)
+    assert.ok(s.id && s.name, '能力条目缺 id / name：' + JSON.stringify(s))
+  }
+  assert.equal(findSkill('no-such-skill'), null)
+  assert.equal(kindOf({ kind: 'persona' }), 'persona')
+  assert.equal(kindOf({}), 'persona')
 })
 
 test('每位专家的正文文件真实存在', () => {
@@ -312,6 +329,22 @@ test('身份专家：留空时取岗位域第一位；显式指定优先；无�
   assert.ok(fallback && fallback.domain === 'infosec', '无效 id 应回退到岗位域')
 })
 
+test('expertInjectMax = 0（不限）：跨职能可全部补入，不再受个数上限截断', () => {
+  const { selected } = selectExperts(
+    experts,
+    ctx({ text: '工控项目要过等保，还要投标', defaultDomain: 'coding' }),
+    cfg({ expertInjectMax: 0 }),
+  )
+  assert.ok(selected.length >= 2, '不限时应补入多位跨职能专家，实际 ' + selected.length)
+  const funcs = selected.map((s) => s.entry.role_tag[0])
+  assert.equal(new Set(funcs).size, funcs.length, '同职能键被重复选中：' + funcs.join(','))
+})
+
+test('成本常量与个数量级自洽（装填规划用）', () => {
+  assert.ok(COST_PERSONA_CARD >= 300 && COST_PERSONA_CARD <= 800, 'persona 卡成本常量越界：' + COST_PERSONA_CARD)
+  assert.ok(COST_SKILL_LINE > 0 && COST_SKILL_LINE < COST_PERSONA_CARD, '技能指针成本应远小于 persona 卡')
+})
+
 test('身份专家恒选：默认上限 1 时只注入身份专家（跨域任务也不挤占常驻上下文）', () => {
   const { selected, reason } = selectExperts(
     experts,
@@ -355,13 +388,115 @@ test('空 persona 不产出注入块', () => {
   assert.equal(buildInjection([{ entry: { id: 'x', name: 'x', file: 'nope.md' }, score: 1 }], {}), '')
 })
 
-test('注入上限归一化：非法 → 1，超界 → ' + INJECT_MAX_HARD, () => {
-  assert.equal(clampInjectMax(0), 1)
-  assert.equal(clampInjectMax('abc'), 1)
+test('注入上限归一化：0 = 不限，非法 → 默认，超界 → ' + INJECT_MAX_HARD, () => {
+  assert.equal(clampInjectMax(0), 0)
+  assert.equal(clampInjectMax('abc'), INJECT_MAX_DEFAULT)
+  assert.equal(clampInjectMax(-5), INJECT_MAX_DEFAULT)
   assert.equal(clampInjectMax(2), 2)
   assert.equal(clampInjectMax(99), INJECT_MAX_HARD)
   assert.equal(clampUnit('bad', 0.8), 0.8)
   assert.equal(clampUnit(0.5, 0.8), 0.5)
+})
+
+test('交付层纪律块：按 § 条目解析【纪律块 v1】，只取列表行（不解析 markdown 标题）', () => {
+  const text = [
+    '[id:aaa111] [2026-09-14] [tag:常规] 无关条目',
+    '§',
+    '[id:bbb222] [2026-09-14] [branch:dsh-experts] [tag:关键] ' + DISCIPLINE_MARK,
+    '- 红线一：数字要么实测要么不写',
+    '## 这不是标题而是正文',
+    '- 红线二：汇报给出来处',
+    '§',
+    '[id:ccc333] [2026-09-14] [tag:常规] 另一条',
+  ].join('\n')
+  assert.deepEqual(parseDiscipline(text), ['红线一：数字要么实测要么不写', '## 这不是标题而是正文', '红线二：汇报给出来处'])
+  assert.deepEqual(parseDiscipline('没有任何纪律条目'), [])
+  assert.deepEqual(parseDiscipline(''), [])
+})
+
+test('交付层纪律块：只有「正文以标记开头」的条目才算（正文里提到标记不算），多条合并', () => {
+  const text = [
+    '[id:aaa111] [2026-09-14] [tag:常规] 这条正文里提到了 ' + DISCIPLINE_MARK + ' 但并不是它',
+    '§',
+    '[id:bbb222] [2026-09-14] [branch:x] [tag:关键] ' + DISCIPLINE_MARK,
+    '- 红线一：不臆断',
+    '§',
+    '[id:ccc333] [2026-09-14] [branch:x] [tag:关键] ' + DISCIPLINE_MARK,
+    '- 红线二：给出来处',
+  ].join('\n')
+  assert.deepEqual(parseDiscipline(text), ['红线一：不臆断', '红线二：给出来处'],
+    '正文提到标记的条目不应被当成纪律块；多条纪律块应合并')
+})
+
+test('交付层纪律块：ok / absent / unreadable 三态（absent 静默、unreadable 明示）', () => {
+  assert.equal(formatDiscipline({ status: 'absent', lines: [], file: 'F' }), '', 'absent 应静默')
+  assert.ok(formatDiscipline({ status: 'unreadable', lines: [], file: 'F' }).includes('未加载'), 'unreadable 应明示')
+  const ok = formatDiscipline({ status: 'ok', lines: ['A', 'B'] })
+  assert.ok(ok.includes('交付层') && ok.includes('A') && ok.includes('B'), 'ok 渲染异常：' + ok)
+  const many = formatDiscipline({ status: 'ok', lines: ['1', '2', '3', '4', '5', '6', '7'] })
+  assert.ok(many.includes('还有 1 条'), '超出上限应标注省略：' + many)
+})
+
+test('阶段裁剪（层 5）：understand 全卡 / execute 丢方法行 / deliver 只留交付；不传 stage 逐字不变', () => {
+  const e = findExpert('infosec-ics-security')
+  const body = loadPersona(e)
+  const full = buildPersonaCard(e, body)
+  assert.equal(buildPersonaCard(e, body, {}), full, '不传 stage 应与旧行为逐字一致')
+  assert.equal(buildPersonaCard(e, body, { stage: 'understand' }), full, 'understand 即全卡')
+  assert.ok(full.includes('方法：') && full.includes('角色：') && full.includes('适用：'), '全卡结构异常')
+
+  const exec = buildPersonaCard(e, body, { stage: 'execute' })
+  assert.ok(!exec.includes('方法：'), 'execute 阶段应丢掉方法行：' + exec.slice(0, 80))
+  assert.ok(exec.includes('角色：') && exec.includes('交付：'), 'execute 阶段应保留角色与交付')
+  assert.ok(exec.includes('阶段·execute'), 'execute 阶段应有阶段标注')
+  assert.ok(exec.length < full.length, 'execute 卡应比全卡短')
+
+  const dlv = buildPersonaCard(e, body, { stage: 'deliver' })
+  assert.ok(!dlv.includes('角色：') && !dlv.includes('方法：') && !dlv.includes('适用：'), 'deliver 阶段只应留交付：' + dlv.slice(0, 80))
+  assert.ok(dlv.includes('交付：'), 'deliver 阶段缺交付行')
+  assert.ok(dlv.length < exec.length, 'deliver 卡应比 execute 卡短')
+})
+
+test('目录段：六域成员 + 能力节；无能力索引时省略该节且不超上限', () => {
+  const cat = buildCatalog({ domains: DOMAINS, personas: experts, skills: [] })
+  assert.ok(cat.includes('【专家库·目录】'), '缺目录标题')
+  assert.ok(cat.includes('信息安全') && cat.includes('通用职能'), '缺域行')
+  assert.ok(!cat.includes('可用能力'), '无能力索引时不应出现能力节')
+  const withSkills = buildCatalog({ domains: DOMAINS, personas: experts, skills: [{ id: 'office-excel', kind: 'skill', skill: 'office-excel' }] })
+  assert.ok(withSkills.includes('可用能力') && withSkills.includes('office-excel'), '能力节未生成')
+  assert.ok(cat.length <= CATALOG_MAX_CHARS + 1, '目录段超上限：' + cat.length)
+  assert.equal(buildCatalog({ domains: [], personas: [], skills: [] }), '', '空库应不注入目录段')
+})
+
+test('能力层：技能条目映射 / 指针行格式 / 开放命中 / 预算守门', () => {
+  const excel = toCapabilityEntry({ name: 'office-excel', description: '处理 Excel 表格（.xlsx/.xls/.et）：读取工作表与单元格…', provider: 'filesystem', resourceBase: { path: 'X' } })
+  assert.equal(excel.kind, 'skill', '能力条目 kind 应为 skill')
+  assert.equal(excel.skill, 'office-excel')
+  assert.ok(excel.trigger_keywords.length > 0, '缺触发关键词')
+  assert.ok(excel.when_to_use.length > 0, '缺一句话定位')
+  const line = capabilityLine(excel)
+  assert.ok(line.startsWith('【工具·office-excel】'), '指针行格式异常：' + line)
+  assert.ok(line.endsWith('· skill 加载'), '指针行缺少加载提示：' + line)
+  assert.ok(line.length <= 120, '指针行过长：' + line.length)
+  assert.equal(toCapabilityEntry({}), null, '无名技能应返回 null')
+
+  const pdf = toCapabilityEntry({ name: 'pdf-tools', description: 'PDF 处理' })
+  const pool = [excel, pdf]
+  assert.equal(routeCapabilities(pool, '', {}).length, 0, '空任务不应命中任何能力')
+  assert.equal(routeCapabilities(pool, '今天天气不错', {}).length, 0, '无关任务不应命中')
+  const hit = routeCapabilities(pool, '帮我把这个 xlsx 表合并一下', { budgetChars: 300 })
+  assert.equal(hit.length, 1, '应只命中 office-excel：' + hit.join('|'))
+  assert.ok(hit[0].includes('office-excel'))
+  const both = routeCapabilities(pool, 'xlsx 和 pdf 都要处理', { budgetChars: 300 })
+  assert.equal(both.length, 2, '两个强信号应都命中：' + both.join('|'))
+  const tight = routeCapabilities(pool, 'xlsx 和 pdf 都要处理', { budgetChars: 10, maxLines: 3 })
+  assert.equal(tight.length, 1, '预算收紧后只应保留第一条：' + tight.length)
+
+  const src = createSkillSource()
+  assert.equal(src.entries().length, 0, '未刷新时能力池应为空（不抛错）')
+  assert.equal(src.usingFallback(), true, '未就绪时应报 usingFallback')
+  src.refresh(null, '')   // 无 skills 上下文 → 安全跳过
+  assert.equal(src.entries().length, 0)
 })
 
 test('lib 域表（DOMAINS）覆盖 index.json 中实际使用的全部域', () => {

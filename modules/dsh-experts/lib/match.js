@@ -180,7 +180,11 @@ export function rankExperts(entries, ctx = {}) {
  */
 export function selectExperts(entries, ctx = {}, cfg = {}) {
   const ranked = rankExperts(entries, ctx)
-  const max = Math.min(3, Math.max(1, Number(cfg.expertInjectMax) || 1))
+  // 0 = 不限（交由预算与阈值守门）；其余按硬边界 clamp，绝不静默超限
+  const rawMax = Number(cfg.expertInjectMax)
+  const max = (Number.isFinite(rawMax) && rawMax === 0)
+    ? Number.POSITIVE_INFINITY
+    : Math.min(3, Math.max(1, Number.isFinite(rawMax) ? Math.floor(rawMax) : 1))
   const minScore = Number.isFinite(Number(cfg.expertMinScore)) ? Number(cfg.expertMinScore) : 0.35
   const threshold = Number.isFinite(Number(cfg.expertSecondThreshold)) ? Number(cfg.expertSecondThreshold) : 0.8
   const identityId = String(ctx.identityId || '').toLowerCase()

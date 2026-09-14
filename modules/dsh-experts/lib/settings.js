@@ -14,9 +14,9 @@
  * @module dsh-experts/settings
  */
 
-import { INJECT_MAX_HARD, clampInjectMax, clampUnit, clampBudget, normalizeDetail, INJECT_BUDGET_DEFAULT } from './limits.js'
+import { INJECT_MAX_HARD, clampInjectMax, clampUnit, clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, SKILL_BUDGET_DEFAULT } from './limits.js'
 
-export { INJECT_MAX_HARD, clampInjectMax, clampBudget, normalizeDetail, INJECT_BUDGET_DEFAULT }
+export { INJECT_MAX_HARD, clampInjectMax, clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, SKILL_BUDGET_DEFAULT }
 
 /**
  * schemastery 是宿主运行时依赖（peerDependencies）。这里用**动态导入降级**：
@@ -40,11 +40,16 @@ export const SETTINGS_NS = 'experts'
 export const DEFAULTS = {
   expertsEnabled: true,
   injectOrder: 480,
+  expertCatalogEnabled: true,
+  disciplineEnabled: true,
+  disciplineMemoryDir: '',
   defaultDomain: 'infosec',
   identityExpert: '',
   enabledDomains: '',
   enabledExperts: '',
   expertInjectMax: 2,
+  skillInjectEnabled: true,
+  skillBudgetChars: SKILL_BUDGET_DEFAULT,
   expertInjectDetail: 'auto',
   expertInjectBudgetChars: INJECT_BUDGET_DEFAULT,
   expertSecondThreshold: 0.8,
@@ -57,6 +62,15 @@ export const DEFAULTS = {
 export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
   expertsEnabled: z.boolean().default(true)
     .description('专家库总开关（关闭后不注入任何 persona，专家工具与命令仍可用）'),
+
+  expertCatalogEnabled: z.boolean().default(true)
+    .description('是否注入「专家库目录段」（走 systemPrompt.section，order 10150）：列出六个域的成员与「可用能力」，让模型判断问题归属时知道库里有什么。它是**稳定段**（只在专家库增删专家/技能时变，不随任务变），也不占每轮专家注入预算；追求极简上下文时可关闭'),
+
+  disciplineEnabled: z.boolean().default(true)
+    .description('是否注入「交付层·纪律块」（走 systemPrompt.context，order 481）：从项目记忆里读【纪律块 v1】条目，每轮注入、不随专家裁剪丢弃。自检红线的新家 —— 红线写在记忆里（真相源），插件只读不改'),
+
+  disciplineMemoryDir: z.string().default('')
+    .description('纪律块的记忆库根目录；留空 = 自动取 work-memory 设置里的 memoryDir（本机为 ~/.dsh/memories/lina），再退到 $DSH_HOME/memories/work-memory。读取的是 <根>/PROJECTS/dsh-experts.md 里的【纪律块 v1】条目（只读，绝不写）'),
 
   defaultDomain: z.string().default('infosec')
     .description('本人岗位默认域 —— 安装引导会问一次。取值：infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融 / general 通用职能。它决定任务优先从哪个专业角度被拆解（给会计岗同事用时改成 accounting 即可，无需改代码）'),
@@ -71,7 +85,13 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
     .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 infosec-bid-proposal,accounting-tax）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 /expert use <id> 临时注入'),
 
   expertInjectMax: z.natural().default(2)
-    .description('每轮最多注入几位专家：1 / 2（默认）/ 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB），且只在分数接近且跨域时才补第 2/3 位'),
+    .description('**persona 注入软上限**：0 = 不限（交由字符预算与分数阈值守门）/ 1 / 2（默认）/ 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 精简卡约 0.4–0.6 千字符），且只在分数接近且跨域时才补第 2/3 位；工具/技能指针不占该配额'),
+
+  skillInjectEnabled: z.boolean().default(true)
+    .description('是否注入**能力层指针**（工具 / 技能专家）：从本轮任务识别要用的技能，只注入一行「去哪拿」的指针（约 100 字符/条），做法原文由 skill 工具按需加载。它独立于 persona 命中，**不占** expertInjectMax 配额，也不受 enabledDomains 收窄'),
+
+  skillBudgetChars: z.natural().default(SKILL_BUDGET_DEFAULT)
+    .description('能力层指针的字符预算（默认 300，约 3 条）：只放指针不放做法原文；0 = 不注入指针（等同只关能力层注入，persona 不受影响）'),
 
   expertInjectDetail: z.string().default('auto')
     .description('每轮注入形态：auto（默认，按预算自动降级）/ card（全部精简卡）/ full（全文，保持旧行为）。⚠️ full 会把每位 persona 正文全文注入（1.8–2.6 千字符/位），单轮约 4.5–5.2KB；auto / card 只注入精简卡（角色首句 + 方法前 3 条 + 交付前 2 条 + 适用），单轮约 1.3–1.8 千字符，省约 2/3 TOKEN；取值非法时回落 auto'),
@@ -109,6 +129,7 @@ function toConfig(resolved) {
   cfg.expertInjectMax = clampInjectMax(cfg.expertInjectMax)
   cfg.expertInjectDetail = normalizeDetail(cfg.expertInjectDetail, DEFAULTS.expertInjectDetail)
   cfg.expertInjectBudgetChars = clampBudget(cfg.expertInjectBudgetChars, DEFAULTS.expertInjectBudgetChars)
+  cfg.skillBudgetChars = clampSkillBudget(cfg.skillBudgetChars, DEFAULTS.skillBudgetChars)
   const th = clampUnit(cfg.expertSecondThreshold, DEFAULTS.expertSecondThreshold)
   cfg.expertSecondThreshold = th > 0 ? th : DEFAULTS.expertSecondThreshold
   cfg.expertMinScore = clampUnit(cfg.expertMinScore, DEFAULTS.expertMinScore)

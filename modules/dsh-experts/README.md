@@ -64,7 +64,9 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-experts
 | 跨领域多专家 / 需要独立作业 | **派子代理**：`expert_recall({ id })` 取 persona → 内联进 `subagent.prompt`（**跨域首选，不占主对话上下文**） |
 | 未命中任何专家 | **原生处理**，不硬套专家视角（宁缺勿滥） |
 
-需要临时在主对话切视角：`/expert use <id>`（本会话生效）· `/expert off` · `/expert auto` · `/expert list` · `/expert status` · `/expert why <任务文本>` · `/expert setup [<域> [<身份专家id>]]`。
+需要临时在主对话切视角：`/expert use <id>`（本会话生效）· `/expert off` · `/expert auto` · `/expert phase [understand|execute|deliver|auto]` · `/expert list` · `/expert status` · `/expert why <任务文本>` · `/expert setup [<域> [<身份专家id>]]`。
+
+> **阶段（层 5）**：`understand` 完整精简卡；`execute` 丢掉方法行（保留角色与交付）并把能力指针上限 3→5；`deliver` 只留「交付与自检」。不指定时按**任务清单**推断（有未完成 → execute，全部完成 → deliver），读不到清单就用 understand。
 
 > 建议把这条流程同时写进会话工作区的 `AGENTS.md`（**指令层每轮生效**，约束力强于插件自身）——集成体已带通用模板：`defaults/AGENTS.zh-CN.md`。
 
@@ -81,6 +83,18 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-experts
 精简卡由正文**确定性生成**（不重写、不修改 `experts/**.md`），所以取全文时内容一字不少；
 `expertInjectBudgetChars`（默认 2000）约束每轮专家块总长，超预算按序降级：
 命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡 → 截断，**任何降级/截断都写明，绝不静默超限**。
+
+### 批二：四个注入通道（2026-09-14）
+
+| 通道 | 承载 | order | 变化频率 |
+|---|---|---|---|
+| `systemPrompt.section` | **专家库目录段**（六域成员 + 可用能力） | 10150 | 只在专家库增删专家/技能时变 —— **稳定段**，不打断系统提示词前缀复用 |
+| `systemPrompt.context` | 本轮命中 persona 精简卡 + **能力层指针行** | 480 | 每轮按任务变 |
+| `systemPrompt.context` | **交付层·纪律块**（自检红线的新家） | 481 | 真相源在项目记忆（只读 + 指纹），每轮注入、**不随阶段裁剪丢弃** |
+| 工具 / 命令 | `expert_recall` / `/expert` | — | 现取现用，不占上下文 |
+
+- **能力层**（工具 / 技能专家，能力轴与行业域正交）：数据源是宿主 skill 注册表 `ctx.skills`（它已做合并 / 重名裁决 / 热监视 / 缓存），本插件只注入一行「去哪拿」的**指针**（约 100 字符/条，默认至多 3 条），做法原文由 `skill` 工具按需加载；拿不到宿主注册表时退回 `experts/skills.auto.json`。指针**不占** `expertInjectMax` 配额，也不受 `enabledDomains` 收窄。
+- **交付层纪律块**：从记忆库读 `<根>/PROJECTS/dsh-experts.md` 里的 `【纪律块 v1】` 条目（`tag=关键`，只读、指纹缓存），每轮注入；文件**不可读**时明示一行（不静默），**未配置**时静默。
 
 ### 卡友好结构（2026-09-14 约定，全库已落地）
 
@@ -105,16 +119,21 @@ L1 卡只取「交付与自检」**前 2 条、每条 clip(90)**，所以每位�
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `expertsEnabled` | `true` | 总开关 |
+| `expertCatalogEnabled` | `true` | 是否注入**专家库目录段**（`section`，order 10150）：六域成员 + 可用能力；稳定段、**不占**每轮专家注入预算 |
 | `defaultDomain` | `infosec` | **本人岗位默认域** —— 权重最高的先验，决定任务优先从哪个专业角度被拆解 |
 | `identityExpert` | 空 | **常驻注入的唯一身份专家**（id）；留空 = 取岗位域第一位。本机已于 2026-09-14 清空，身份由 work-memory 记忆承担 |
 | `enabledDomains` | 空 | 把匹配范围**收窄**到这些域；留空 = 全量参与（「本人岗位」只作打分先验，**不作白名单**） |
 | `enabledExperts` | 空 | 把匹配范围**收窄**到这些专家 id；范围外的专家不参与自动匹配，仍可临时注入 |
-| `expertInjectMax` | `2` | 每轮最多注入几位（含身份专家）：**1 / 2 / 3**；默认形态下每位只占 0.4–0.7 千字符（精简卡），调到 3 时仍受 `expertInjectBudgetChars` 约束 |
+| `expertInjectMax` | `2` | **persona 注入软上限**（含身份专家）：**0 = 不限**（交由 `expertInjectBudgetChars` 与分数阈值守门）/ 1 / 2 / 3；默认形态下每位只占 0.4–0.7 千字符（精简卡），调到 3 时仍受预算约束；工具/技能指针不占该配额 |
+| `skillInjectEnabled` | `true` | 是否注入**能力层指针**（工具/技能）：识别到技能就注入一行指针；不占 `expertInjectMax` 配额，也不受 `enabledDomains` 收窄 |
+| `skillBudgetChars` | `300` | 能力层指针字符预算（约 3 条）；`0` = 不注入指针（persona 不受影响） |
 | `expertInjectDetail` | `auto` | 注入形态：`auto`（默认，按预算降级）/ `card`（全部精简卡）/ `full`（**全文，旧行为**，单轮约 4.5–5.2KB，可一键回退） |
 | `expertInjectBudgetChars` | `2000` | 每轮专家注入字符预算（约 1.3–1.7k TOKEN；clip 放宽到 90 后上调）：超预算按序降级；下限 200 / 上限 20000 |
 | `expertSecondThreshold` | `0.8` | 第 2/3 位门槛：分数 ≥ 第 1 位 × 该值，且须**跨域** |
 | `expertMinScore` | `0.35` | 低于此分不注入（宁缺勿滥） |
 | `expertShowBanner` | `true` | 注入时显示「当前专家视角」标识 |
+| `disciplineEnabled` | `true` | 是否注入**交付层·纪律块**（`context`，order 481）：从项目记忆读 `【纪律块 v1】`，每轮注入、不随裁剪丢弃 |
+| `disciplineMemoryDir` | 空 | 纪律块的记忆库根；留空 = 取 work-memory 设置里的 `memoryDir`，再退 `$DSH_HOME/memories/work-memory`（**只读，绝不写记忆**） |
 | `expertSetupDone` | `false` | 安装引导是否已完成（问过「你的工作方向是？」并写入 `defaultDomain`）；重置为关可让引导下次再问一次 |
 
 ## 目录结构
@@ -123,16 +142,21 @@ L1 卡只取「交付与自检」**前 2 条、每条 clip(90)**，所以每位�
 dsh-experts/
 ├── experts/
 │   ├── index.json          # 元数据（id/域/关键词/文件/来源与许可）
+│   ├── skills.auto.json    # 能力层兜底索引（可选；缺文件时能力层退回宿主 skill 注册表 / 空池）
 │   ├── infosec/ accounting/ hr/ coding/ finance/ general/   # 正文（纯 Markdown，约 1.8–2.6 千字符）
 ├── lib/
-│   ├── index.js            # 宿主半：注入 + expert_recall 工具 + /expert 命令
+│   ├── index.js            # 宿主半：三通道注入 + expert_recall 工具 + /expert 命令
 │   ├── match.js            # 匹配打分与排序（显式 > 实证 > 总分；纯函数，可单测）
-│   ├── store.js            # 索引与 persona 读取（按 mtime 失效缓存）
-│   ├── inject.js           # 注入文本组装（L1 精简卡 / L2 全文 + 预算降级）
-│   ├── limits.js           # 注入上限、预算与阈值归一化（硬边界 / 夹取）
-│   └── settings.js         # 设置命名空间（12 项，免重启）
+│   ├── store.js            # 索引 / persona / 能力池读取（按 mtime 失效缓存）
+│   ├── inject.js           # 注入文本组装（目录段 / L1 精简卡 / L2 全文 + 预算降级）
+│   ├── capability.js       # 能力层（层 3）：技能条目映射、指针行、开放命中与预算守门
+│   ├── discipline.js       # 交付层（层 4）：纪律块只读解析（项目记忆 + mtime/size 指纹）
+│   ├── limits.js           # 注入上限、预算、成本常量与归一化（硬边界 / 夹取）
+│   └── settings.js         # 设置命名空间（17 项，免重启）
 ├── scripts/                # 自测与工具：regression / injection-tier-test / smoke-load / coexist /
-│                           #   card-preview（L1 卡验收器，不依赖宿主运行时，退出码 0/1 可接 CI）
+│                           #   card-preview（L1 卡验收器）/ capability-test（能力层）/ phase-test（阶段切面）/
+│                           #   skill-index（扫技能源→生成 experts/skills.auto.json 兜底索引）
+│                           #   以上全部不依赖宿主运行时，退出码 0/1 可接 CI
 └── NOTICE                  # 来源与许可（MIT / Apache-2.0 / 自撰）
 ```
 

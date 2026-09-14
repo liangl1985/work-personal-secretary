@@ -42,11 +42,14 @@ async function t(label, fn) {
   }
 }
 
-const captured = { contexts: [], tools: [], commands: [] }
+const captured = { contexts: [], sections: [], tools: [], commands: [] }
 const ctx = {
   logger: { debug() {}, info() {}, warn() {} },
   settings: { register: () => ({ get: () => ({}), set() {}, watch() {} }) },
-  systemPrompt: { context: (def) => { captured.contexts.push(def); return () => {} } },
+  systemPrompt: {
+    context: (def) => { captured.contexts.push(def); return () => {} },
+    section: (def) => { captured.sections.push(def); return () => {} },
+  },
   tools: { register: (def) => { captured.tools.push(def); return () => {} } },
   commands: { register: (def) => { captured.commands.push(def); return () => {} } },
   webServer: { register: () => () => {} },
@@ -95,10 +98,17 @@ await t('先后 apply 到同一个 ctx，互不抛错', () => {
   disposers.push(experts.apply(ctx, { defaultDomain: 'infosec' }))
 })
 
-await t('两个注入注册都在，且顺序为 专家 480 → 记忆 500', () => {
-  assert.equal(captured.contexts.length, 2, '注入注册数应为 2，实际 ' + captured.contexts.length)
+await t('三个 context 注册都在，顺序为 专家 480 → 交付层 481 → 记忆 500', () => {
+  assert.equal(captured.contexts.length, 3, '注入注册数应为 3，实际 ' + captured.contexts.length)
   const orders = captured.contexts.map((c) => c.order).sort((a, b) => a - b)
-  assert.deepEqual(orders, [480, 500], '顺序异常：' + orders.join(', '))
+  assert.deepEqual(orders, [480, 481, 500], '顺序异常：' + orders.join(', '))
+})
+
+await t('experts 新增目录段 section（order 10150），与 work-memory 的 context 不抢位', () => {
+  const cat = captured.sections.find((s) => s.name === 'dsh-experts:catalog')
+  assert.ok(cat, '缺目录段 section：' + captured.sections.map((s) => s.name).join(','))
+  assert.equal(cat.order, 10150)
+  assert.ok(captured.contexts.every((c) => Number(c.order) < 10000), 'context 段不应落在 section 的 10xxx 区间')
 })
 
 await t('两个注入回调各自返回字符串（互不干扰）', () => {

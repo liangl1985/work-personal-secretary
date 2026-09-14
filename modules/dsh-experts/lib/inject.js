@@ -154,24 +154,39 @@ function clipPersona(entry, text) {
  * 解析失败或段落缺失 → 回退「全文截断」并标注，**永不产出空块**。
  * @returns {string} 卡正文（不含标题与尾注；空串仅当正文为空）
  */
-export function buildPersonaCard(entry, body) {
+export function buildPersonaCard(entry, body, { stage = '' } = {}) {
   const text = String(body ?? '').trim()
   if (!text) return ''
   const { role, methods, deliveries, ok } = parsePersonaSections(text)
   if (!ok || methods.length === 0) {
     return clipPersona(entry, text) + '\n（结构未识别 · 已回退全文截断 · 全文用 expert_recall 取）'
   }
+  // 阶段裁剪（design-v2 第 9 节）：understand = 全卡；execute = 丢方法行、留角色与交付；
+  // deliver = 只留交付与自检。**不传 stage 即不裁剪**（旧调用方 / card-preview 行为逐字不变）。
+  const mode = String(stage || '').toLowerCase()
+  const showRole = mode !== 'deliver'
+  const showMethods = mode !== 'execute' && mode !== 'deliver'
+  const showWhen = mode !== 'deliver'
   const lines = []
-  const roleLine = leadSentence(role, CARD_ROLE_MAX_CHARS, CARD_ROLE_MIN_CHARS)
-  if (roleLine) lines.push('角色：' + roleLine)
-  const methods3 = methods.slice(0, CARD_METHOD_COUNT)
-    .map((t, i) => (i + 1) + ') ' + clip(t, CARD_METHOD_MAX_CHARS))
-  if (methods3.length > 0) lines.push('方法：' + methods3.join('  '))
+  if (showRole) {
+    const roleLine = leadSentence(role, CARD_ROLE_MAX_CHARS, CARD_ROLE_MIN_CHARS)
+    if (roleLine) lines.push('角色：' + roleLine)
+  }
+  if (showMethods) {
+    const methods3 = methods.slice(0, CARD_METHOD_COUNT)
+      .map((t, i) => (i + 1) + ') ' + clip(t, CARD_METHOD_MAX_CHARS))
+    if (methods3.length > 0) lines.push('方法：' + methods3.join('  '))
+  }
   const deliveries2 = deliveries.slice(0, CARD_DELIVERY_COUNT)
     .map((t) => '• ' + clip(t, CARD_DELIVERY_MAX_CHARS))
   if (deliveries2.length > 0) lines.push('交付：' + deliveries2.join('  '))
-  const when = stripMarks(entry?.when_to_use || '').slice(0, CARD_WHEN_MAX_CHARS)
-  if (when) lines.push('适用：' + when)
+  if (showWhen) {
+    const when = stripMarks(entry?.when_to_use || '').slice(0, CARD_WHEN_MAX_CHARS)
+    if (when) lines.push('适用：' + when)
+  }
+  if (mode === 'execute' || mode === 'deliver') {
+    lines.push('（阶段·' + mode + '：已按阶段裁剪，完整视角用 expert_recall 取）')
+  }
   if (lines.length === 0) return clipPersona(entry, text)
   return lines.join('\n')
 }
@@ -190,11 +205,11 @@ function cardNote(kind) {
  *   detail 默认 'full' —— 旧调用方（不传 detail）行为与旧版**完全一致**；
  *   注入形态由设置 expertInjectDetail 决定，由 buildInjection() 显式传入。
  */
-export function buildPersonaBlock(entry, body, { banner = true, kind = 'match', note = null, detail = 'full' } = {}) {
+export function buildPersonaBlock(entry, body, { banner = true, kind = 'match', note = null, detail = 'full', stage = '' } = {}) {
   const text = String(body || '').trim()
   if (!text) return ''
   const useCard = String(detail).toLowerCase() === 'card'
-  const rendered = useCard ? buildPersonaCard(entry, text) : clipPersona(entry, text)
+  const rendered = useCard ? buildPersonaCard(entry, text, { stage }) : clipPersona(entry, text)
   if (!rendered) return ''
 
   const head = !banner
@@ -220,7 +235,7 @@ function coreItems(items) {
 }
 
 /** 渲染一个降级级别（mode: 'full' | 'card' | 'mixed'；mixed = 身份卡 + 命中全文） */
-function renderLevel(list, mode, banner) {
+function renderLevel(list, mode, banner, stage = '') {
   const blocks = []
   for (const it of list) {
     const detail = mode === 'mixed' ? (it.isIdentity ? 'card' : 'full') : mode
@@ -228,6 +243,7 @@ function renderLevel(list, mode, banner) {
       banner,
       kind: it.isIdentity ? 'identity' : 'match',
       detail,
+      stage,
     }))
   }
   return blocks.filter(Boolean).join('\n\n')
@@ -237,7 +253,7 @@ function renderLevel(list, mode, banner) {
  * 选形态 + 按预算降级（绝不静默）。
  * @returns {{ text:string, notes:string[] }}
  */
-function planInjection(items, { detail, budget, banner }) {
+function planInjection(items, { detail, budget, banner, stage = '' }) {
   const core = coreItems(items)
   let levels
   if (detail === 'full') {
@@ -268,7 +284,7 @@ function planInjection(items, { detail, budget, banner }) {
   let chosenIndex = -1
   for (let i = 0; i < uniq.length; i++) {
     const lv = uniq[i]
-    const text = renderLevel(lv.list, lv.mode, banner)
+    const text = renderLevel(lv.list, lv.mode, banner, stage)
     if (!text) continue
     const fits = detail === 'full' || text.length <= budget
     chosen = { lv, text }
@@ -319,6 +335,7 @@ export function buildInjection(selected, opts = {}) {
   const banner = opts.banner !== false
   const detail = normalizeDetail(opts.detail, 'full')
   const budget = clampBudget(opts.budgetChars)
+  const stage = String(opts.stage || '')
   const items = []
   for (const item of selected || []) {
     const body = loadPersona(item.entry)
@@ -331,7 +348,7 @@ export function buildInjection(selected, opts = {}) {
   }
   if (items.length === 0) return ''
 
-  const plan = planInjection(items, { detail, budget, banner })
+  const plan = planInjection(items, { detail, budget, banner, stage })
   if (!plan.text) return ''
   const head = (banner && opts.withPathHint !== false) ? PATH_HINT + '\n\n' : ''
   const tail = plan.notes.length > 0 ? '\n' + plan.notes.join('\n') : ''
@@ -343,6 +360,39 @@ export function buildManualInjection(entry, { banner = true } = {}) {
   const body = loadPersona(entry)
   if (!body) return ''
   return buildPersonaBlock(entry, body, { banner, kind: 'manual', detail: 'full' })
+}
+
+/** 目录段字符上限（design-v2：独立小预算，建议不超过 400 字符；超出截断并标注） */
+export const CATALOG_MAX_CHARS = 400
+
+/**
+ * 专家库目录段（走 systemPrompt.section，**稳定通道**）。
+ *
+ * 内容 = 六个域的成员（展示名，逗号级）+「可用能力」节（能力层索引，未就绪时整节省略）。
+ * 刻意**不依赖任何设置项**：同一 index.json / skills.auto.json 渲染出的文本逐字稳定，
+ * 因此切换命中专家时系统提示词节点不动（宿主 system-prompt README.zh.md:149），
+ * 避免「头节点重写导致前缀复用从首个变化 token 起失效」。
+ *
+ * @param {object} args - { domains, personas, skills }
+ * @returns {string} 目录段文本（空串 = 不注入）
+ */
+export function buildCatalog({ domains = [], personas = [], skills = [] } = {}) {
+  const lines = ['【专家库·目录】先判断问题归属，命中则按该专家视角处理；派子代理时用 expert_recall 取全文。']
+  for (const d of domains) {
+    const names = personas
+      .filter((p) => p && p.domain === d.id)
+      .map((p) => String(p.name || p.id))
+      .filter(Boolean)
+    if (names.length === 0) continue
+    lines.push('· ' + d.name + '：' + names.join('、'))
+  }
+  const capNames = skills
+    .map((s) => String(s?.skill || s?.id || ''))
+    .filter(Boolean)
+  if (capNames.length > 0) lines.push('· 可用能力：' + capNames.join('、'))
+  if (lines.length <= 1) return ''
+  const text = lines.join('\n')
+  return text.length <= CATALOG_MAX_CHARS ? text : text.slice(0, CATALOG_MAX_CHARS - 1) + '…'
 }
 
 /** 无匹配时的空注入（保持通用助手行为，刻意不提示，避免刷屏） */

@@ -73,6 +73,21 @@ L1 卡只取「交付与自检」**前 2 条、每条 clip(90)**，长清单必�
 - **会计 4 位 + 金融 2 位补工具路径**：在 `## 交付明细` 末（**不进 L1 卡**、零卡面风险）补 `**工具路径**` 一条——`dsh-doc-suite` 的 `office-excel` 取数 / 重算 / 透视 + `office-word` 成文；统一 **WPS** 口径，旧格式 `.xls/.et` 走 WPS COM 较慢，并写明「**公式先重算再读数**」（避免读到旧缓存或空值）。
 - 补后复验：`card-preview --all` **FAIL 0 · WARN 0 · OK 19 · INFO 3** · `regression 32/0` · `injection-tier 16/0` · `smoke-load 18/0` · `coexist 7/0` · src ↔ profile 哈希一致。
 
+### 十一、批二·架构层（2026-09-14，0.2.0 内含）
+
+design-v2 第 15/18 节的架构层改造落地（实施顺序 1 → 5 → 3 → 2 → 4 → 6）：
+
+- **kind 分池**：条目分 persona / skill 两池（`kind` 缺省即 persona，向后兼容）；新增 `readSkillsIndex()` / `kindOf()` / `allPersonas()` / `allSkills()` / `findSkill()`，自动匹配与注入只走 persona 池，能力条目走能力轴。
+- **专家库目录段**（`systemPrompt.section`，name `dsh-experts:catalog`，order **10150**）：六域成员 + 「可用能力」，≤400 字符；**稳定段** —— 只在专家库增删专家/技能时变，不打断系统提示词前缀复用（宿主 README.zh.md:149）。
+- **交付层·纪律块**（`systemPrompt.context`，name `dsh-experts:delivery`，order 481）：自检红线的新家。只读记忆库 `PROJECTS/dsh-experts.md` 的 `【纪律块 v1】` 条目（`mtime+size` 指纹缓存，**绝不写记忆**）；`absent` 静默 / `unreadable` 明示一行（不静默）；与 persona 段分开注册 → **不参与**预算降级、阶段裁剪时不丢。判定采「**正文以 `【纪律块 v1】` 开头**」而非「包含」—— 否则别的记忆条目只要在正文里提到这个词，就会被误当成红线内容（2026-09-14 实测踩到并已修正）；记忆根解析为 设置项 → work-memory 的 `memoryDir` → `$DSH_HOME/memories/*` 中含 `PROJECTS` 的目录。
+- **能力层**（`lib/capability.js`）：工具 / 技能专家。数据源**首选宿主 `ctx.skills` 注册表**（异步预取 + 同步读缓存，TTL + cwd 变化刷新），拿不到时退回 `experts/skills.auto.json`（由新增 `scripts/skill-index.mjs` 离线生成，本轮已入库 **10 条**）；只注入**指针行**（≈100 字符/条），做法原文交给 `skill` 工具；**开放命中**（只看强信号），**不占** `expertInjectMax`、**不受** `enabledDomains` 收窄。
+- **成本装填**：新增 `COST_PERSONA_CARD` / `COST_SKILL_LINE` / `SKILL_BUDGET_DEFAULT|MIN|MAX` / `clampSkillBudget`；`expertInjectMax` 降级为 **persona 软上限（0 = 不限）**。
+- **阶段切面（层 5）**：`/expert phase understand|execute|deliver|auto`（会话级）。understand = 完整卡；execute = 丢方法行、保留角色与交付、能力指针上限 3 → 5；deliver = 只留「交付与自检」。阶段也可由**任务清单**推断（只读 `sessionProjections` 的 `todos`；宿主在 `turn/start` 会清零，插件自建 10 分钟时间窗缓存兜底，读不到则退化为显式阶段）。
+- **顺带修复**：注入文本缓存由 apply 级闭包 `lastKey/lastText` 改为 **`Map` 按 sessionId 分槽** —— 多会话交替时不再互相顶掉缓存（原实现每次会话切换都重算、缓存命中率退化；因缓存键含选中集合与设置，**内容本身不会错配**）。
+- 新增设置项：`expertCatalogEnabled` / `skillInjectEnabled` / `skillBudgetChars` / `disciplineEnabled` / `disciplineMemoryDir`（schema / DEFAULTS / patch base **三处一致**，已进注入分级测试）。
+- 验收（2026-09-14）：`regression 41/0` · `injection-tier 17/0` · **`capability-test 8/0`** · **`phase-test 6/0`** · `smoke-load 22/0` · `coexist 8/0` · `card-preview --all` **FAIL 0 · WARN 0 · OK 19 · INFO 3** · **src ↔ profile 哈希全一致**（发布件 43 个文件）。
+- 新增开发工具：`scripts/capability-test.mjs`（能力层：映射 / 指针行 / 开放命中 / 预算守门 / 指纹不重扫 / 兜底索引）、`scripts/phase-test.mjs`（阶段矩阵：全库四态裁剪 + 卡长单调 + 红线保留 + full 不裁剪），均不依赖宿主运行时、退出码 0/1 可接 CI。
+
 ---
 
 ## 0.1.4 — 2026-09-14（匹配排序修复 + 提示词注入分级）

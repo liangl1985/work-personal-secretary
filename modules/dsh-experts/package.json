@@ -34,12 +34,14 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node scripts/regression.mjs && node scripts/injection-tier-test.mjs",
+    "test": "node scripts/regression.mjs && node scripts/injection-tier-test.mjs && node scripts/capability-test.mjs && node scripts/phase-test.mjs",
     "test:inject": "node scripts/injection-tier-test.mjs",
+    "test:capability": "node scripts/capability-test.mjs",
+    "test:phase": "node scripts/phase-test.mjs",
     "smoke": "node scripts/smoke-load.mjs",
     "coexist": "node scripts/coexist.mjs",
     "card": "node scripts/card-preview.mjs",
-    "check": "node --check lib/index.js && node --check lib/match.js && node --check lib/store.js && node --check lib/inject.js && node --check lib/settings.js && node --check lib/limits.js"
+    "check": "node --check lib/index.js && node --check lib/match.js && node --check lib/store.js && node --check lib/inject.js && node --check lib/settings.js && node --check lib/limits.js && node --check lib/capability.js && node --check lib/discipline.js"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

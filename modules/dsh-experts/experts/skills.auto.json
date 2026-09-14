@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "updated": "2026-09-14",
+  "note": "能力层兜底索引（运行时首选宿主 skill 注册表 ctx.skills）。由 scripts/skill-index.mjs 生成，可重建、可入库。",
+  "projectRoot": "E:\\lina",
+  "fingerprint": "6cdd9a08e392bd9e",
+  "roots": [
+    {
+      "source": "project-dsh",
+      "rank": 100,
+      "dir": "E:\\lina\\.dsh\\skills",
+      "skills": 9
+    },
+    {
+      "source": "user-agents",
+      "rank": 500,
+      "dir": "C:\\Users\\liangl\\.agents\\skills",
+      "skills": 1
+    }
+  ],
+  "skills": [
+    {
+      "id": "skill:image-vision",
+      "kind": "skill",
+      "skill": "image-vision",
+      "name": "批量读图（已弃用）",
+      "when_to_use": "批量脚本化处理本地图片时（日常读图直接用原生图片输入）",
+      "trigger_keywords": [
+        "读图",
+        "ocr",
+        "图片识别",
+        "批量图片"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\image-vision"
+      }
+    },
+    {
+      "id": "skill:knowledge-base",
+      "kind": "skill",
+      "skill": "knowledge-base",
+      "name": "业务知识库",
+      "when_to_use": "归档资料、全文检索、维护双索引、查法规产品时",
+      "trigger_keywords": [
+        "知识库",
+        "归档",
+        "检索",
+        "法规查询",
+        "索引"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\knowledge-base"
+      }
+    },
+    {
+      "id": "skill:office-excel",
+      "kind": "skill",
+      "skill": "office-excel",
+      "name": "Excel 表格处理",
+      "when_to_use": "表格读写、公式重算、透视、图表、合并、导出时",
+      "trigger_keywords": [
+        "excel",
+        "xlsx",
+        "xls",
+        "表格",
+        "透视",
+        "重算",
+        "csv"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\office-excel"
+      }
+    },
+    {
+      "id": "skill:office-ppt",
+      "kind": "skill",
+      "skill": "office-ppt",
+      "name": "PPT 演示处理",
+      "when_to_use": "读写 pptx/dps、套模板、导出 PDF 或逐页出图时",
+      "trigger_keywords": [
+        "ppt",
+        "pptx",
+        "幻灯片",
+        "演示文稿",
+        "汇报"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\office-ppt"
+      }
+    },
+    {
+      "id": "skill:office-word",
+      "kind": "skill",
+      "skill": "office-word",
+      "name": "Word 文档处理",
+      "when_to_use": "读写 docx/doc、红线修订比对、导出 PDF 时",
+      "trigger_keywords": [
+        "word",
+        "docx",
+        "文档比对",
+        "红线",
+        "修订",
+        "wps 文字"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\office-word"
+      }
+    },
+    {
+      "id": "skill:pdf-tools",
+      "kind": "skill",
+      "skill": "pdf-tools",
+      "name": "PDF 处理",
+      "when_to_use": "提取文本表格、合并拆分选页、页面转图时",
+      "trigger_keywords": [
+        "pdf",
+        "扫描件",
+        "提取表格",
+        "合并 pdf",
+        "拆分 pdf"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\pdf-tools"
+      }
+    },
+    {
+      "id": "skill:skill-management",
+      "kind": "skill",
+      "skill": "skill-management",
+      "name": "技能管理",
+      "when_to_use": "加载、新建、修改技能或核对 SKILL.md 规范时",
+      "trigger_keywords": [
+        "技能",
+        "skill",
+        "skill.md",
+        "新建技能"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\skill-management"
+      }
+    },
+    {
+      "id": "skill:vibe",
+      "kind": "skill",
+      "skill": "vibe",
+      "name": "Vibe 编排（VCO）",
+      "when_to_use": "需要冻结需求、限定执行、强制验证的受治理运行时入口时",
+      "trigger_keywords": [
+        "vibe",
+        "vco",
+        "受治理",
+        "冻结需求"
+      ],
+      "source": {
+        "origin": "user-agents",
+        "path": "C:\\Users\\liangl\\.agents\\skills\\vibe"
+      }
+    },
+    {
+      "id": "skill:web-fetch",
+      "kind": "skill",
+      "skill": "web-fetch",
+      "name": "网页抓取",
+      "when_to_use": "按链接抓取网页正文或检查原始 HTML 时",
+      "trigger_keywords": [
+        "网页",
+        "抓取",
+        "链接",
+        "url",
+        "http"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\web-fetch"
+      }
+    },
+    {
+      "id": "skill:workflow-authoring",
+      "kind": "skill",
+      "skill": "workflow-authoring",
+      "name": "多智能体工作流",
+      "when_to_use": "把大任务拆成多个子代理并行/分阶段执行时",
+      "trigger_keywords": [
+        "工作流",
+        "workflow",
+        "多智能体",
+        "并行",
+        "编排"
+      ],
+      "source": {
+        "origin": "project-dsh",
+        "path": "E:\\lina\\.dsh\\skills\\workflow-authoring"
+      }
+    }
+  ]
+}

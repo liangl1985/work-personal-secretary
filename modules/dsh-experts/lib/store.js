@@ -22,6 +22,9 @@ export const MODULE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 /** 专家数据根目录 */
 export const EXPERTS_ROOT = join(MODULE_ROOT, 'experts')
 
+/** 能力层索引文件名（由 lib/capability.js 生成，可重建；skill 条目不占行业域） */
+export const SKILLS_INDEX_FILE = 'skills.auto.json'
+
 /** 域定义（顺序即设置页/命令输出里的展示顺序）：五个行业域 + 一个通用职能域 */
 export const DOMAINS = [
   { id: 'infosec', name: '信息安全', desc: '工控安全与网络安全：售前方案·投标·等保测评·技术支持' },
@@ -70,9 +73,65 @@ export function readIndex() {
   }
 }
 
-/** 全部专家元数据 */
+let skillsCache = { at: 0, index: null }
+
+/**
+ * 读取能力层索引（experts/skills.auto.json，由 lib/capability.js 确定性生成）。
+ * 文件缺失/损坏一律返回空池 —— 能力层未就绪时行为与批一完全一致（不报错、不注入）。
+ * @returns {{version:number, updated:string, fingerprint:string, skills:Array<object>}}
+ */
+export function readSkillsIndex() {
+  const file = join(EXPERTS_ROOT, SKILLS_INDEX_FILE)
+  let mtime = 0
+  try {
+    mtime = statSync(file).mtimeMs
+  } catch {
+    return { version: 0, updated: '', fingerprint: '', skills: [] }
+  }
+  if (skillsCache.index && skillsCache.at === mtime) return skillsCache.index
+  try {
+    const parsed = JSON.parse(readFileSync(file, 'utf8'))
+    const skills = Array.isArray(parsed?.skills) ? parsed.skills : []
+    skillsCache = {
+      at: mtime,
+      index: {
+        version: parsed?.version ?? 1,
+        updated: parsed?.updated ?? '',
+        fingerprint: parsed?.fingerprint ?? '',
+        skills: skills.map((s) => ({ ...s, kind: 'skill' })),
+      },
+    }
+    return skillsCache.index
+  } catch {
+    return { version: 0, updated: '', fingerprint: '', skills: [] }
+  }
+}
+
+/** 全部专家元数据（persona 池的真相源；kind 缺省视为 persona，向后兼容） */
 export function allExperts() {
   return readIndex().experts
+}
+
+/** 条目类别：persona（视角型，缺省）/ skill（能力型） */
+export function kindOf(entry) {
+  return entry?.kind === 'skill' ? 'skill' : 'persona'
+}
+
+/** persona 池（行业域视角型专家）—— 自动匹配与注入只在这一池里选 */
+export function allPersonas() {
+  return allExperts().filter((e) => kindOf(e) === 'persona')
+}
+
+/** 能力池（工具/技能专家）—— 能力轴，无域，独立排序与守门 */
+export function allSkills() {
+  return readSkillsIndex().skills
+}
+
+/** 按 id 取能力条目 */
+export function findSkill(id) {
+  const key = String(id ?? '').trim().toLowerCase()
+  if (!key) return null
+  return allSkills().find((s) => String(s.id).toLowerCase() === key) || null
 }
 
 /** 按 id 取专家元数据（支持简写：省略域前缀时后缀匹配，如 `accountant` → `accounting-accountant`） */
@@ -102,7 +161,7 @@ export function findExpert(id) {
  * @returns {Array<object>} 参与自动匹配的专家元数据
  */
 export function activeExperts(cfg) {
-  const list = allExperts()
+  const list = allPersonas()
   const ids = splitList(cfg?.enabledExperts)
   if (ids.length > 0) {
     const want = new Set(ids.map((s) => s.toLowerCase()))
@@ -143,7 +202,7 @@ export function loadPersona(entry) {
  * @returns {object|null} 身份专家条目
  */
 export function identityExpertOf(cfg) {
-  const list = allExperts()
+  const list = allPersonas()
   if (list.length === 0) return null
   const want = String(cfg?.identityExpert || '').trim()
   if (want) {

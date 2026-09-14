@@ -16,9 +16,12 @@
  */
 
 import { installSettings } from './settings.js'
-import { activeExperts, allExperts, findExpert, groupByDomain, domainById, splitList, identityExpertOf } from './store.js'
+import { DOMAINS, activeExperts, allExperts, allPersonas, allSkills, findExpert, groupByDomain, domainById, splitList, identityExpertOf } from './store.js'
 import { selectExperts, rankExperts, BRANCH_DOMAIN_HINTS } from './match.js'
-import { buildInjection, buildManualInjection } from './inject.js'
+import { buildInjection, buildCatalog, buildManualInjection } from './inject.js'
+import { loadDiscipline, resolveMemoryRoot, formatDiscipline } from './discipline.js'
+import { createSkillSource, routeCapabilities } from './capability.js'
+import { COST_PERSONA_CARD } from './limits.js'
 
 /**
  * 官方工具辅助 `defineTool`（宿主运行时 `@deepseek-ai/dsh-tools` 提供）。
@@ -106,17 +109,79 @@ export function apply(ctx, config = {}) {
   /** 每轮实时读设置：改设置页免重启生效 */
   const cfg = () => settings.read()
 
-  /** 会话级临时状态：{ useId?: string, off?: boolean } —— 只在内存，重启即清 */
+  /** 会话级临时状态：{ useId?: string, off?: boolean, phase?: string } —— 只在内存，重启即清 */
   const tempState = new Map()
   const state = (sid) => tempState.get(sid) || {}
 
   const disposers = []
 
+  // ---- 0. 能力层数据源（宿主 skill 注册表：异步预取 + 同步读缓存） ----
+  // ctx.skills.snapshot() 是 async，而注入回调是同步的 —— 这里预取进缓存、回调只读缓存；
+  // 拿不到宿主注册表时（CI / 单测 / 未装 skill 插件）退回 experts/skills.auto.json。
+  const skillSource = createSkillSource()
+  let skillsCtx = null
+  const capabilityEntries = () => {
+    const live = skillSource.entries()
+    return live.length > 0 ? live : allSkills()
+  }
+  if (typeof ctx.inject === 'function') {
+    try {
+      ctx.inject(['skills'], (sctx) => {
+        skillsCtx = sctx
+        skillSource.refresh(sctx, '')
+      })
+    } catch (err) {
+      ctx.logger?.debug?.('dsh-experts: skills 服务不可用，能力层退回 skills.auto.json：' + (err?.message || err))
+    }
+  }
+
+  // ---- 0b. 会话阶段（层 5）：显式 > 任务清单推断 > 默认 understand ----
+  // 任务清单存在 session projection（key: todos），插件**只读**；宿主在每轮 turn/start 会把它清零
+  // （dsh-tool-todo 的 projection apply），所以这里自建一份带时间窗的缓存兜住跨轮粘性；
+  // 拿不到就退化为默认阶段 —— 绝不假装读到了（design-v2 第 9 节「读不到则退化为显式置位」）。
+  const todoCache = new Map()
+  let projectionsCtx = null
+  if (typeof ctx.inject === 'function') {
+    try {
+      ctx.inject(['sessionProjections'], (pctx) => {
+        projectionsCtx = pctx
+      })
+    } catch (err) {
+      ctx.logger?.debug?.('dsh-experts: sessionProjections 不可用，阶段改为纯显式：' + (err?.message || err))
+    }
+  }
+  function readTodos(sid, session) {
+    try {
+      const list = projectionsCtx?.sessionProjections?.stateOf?.(session, 'todos')
+      if (Array.isArray(list)) {
+        todoCache.set(sid, { todos: list, at: Date.now() })
+        return list
+      }
+    } catch {
+      /* projection 读取失败不致命 */
+    }
+    const hit = todoCache.get(sid)
+    if (hit && (Date.now() - hit.at) < 10 * 60_000) return hit.todos
+    return null
+  }
+  /** 阶段：显式 phase > 任务清单推断（全完成 → deliver，有未完成 → execute）> understand */
+  function resolveStage(st, sid, session) {
+    if (st && st.phase) return st.phase
+    const todos = readTodos(sid, session)
+    if (Array.isArray(todos) && todos.length > 0) {
+      const done = todos.filter((t) => t && t.status === 'completed').length
+      return done === todos.length ? 'deliver' : 'execute'
+    }
+    return 'understand'
+  }
+
   // ---- 1. 按需注入专家视角（systemPrompt.context，官方 API） ----
   // 常驻注册，开关在回调内判断（切总开关免重启）；order 注册期固定，改动需重启。
+  // 注入文本缓存**按 sessionId 分槽**（2026-09-14 批二修复）：此前 lastKey / lastText 是
+  // apply 级闭包，多会话交替时**互相顶掉**（每次会话切换都重算，缓存命中率退化）；
+  // 内容本身不会错配（缓存键含选中集合与设置，不同键必然重算），所以这是性能与时序问题。
+  const injectCache = new Map()
   {
-    let lastKey = ''
-    let lastText = ''
     disposers.push(ctx.systemPrompt.context({
       name: 'dsh-experts:persona',
       order: Number(config.injectOrder) || 480,
@@ -136,15 +201,16 @@ export function apply(ctx, config = {}) {
           if (!entry) {
             tempState.set(sid, { ...st, useId: null })
           } else {
-            const text = buildManualInjection(entry, { banner: c.expertShowBanner })
             const key = 'manual:' + entry.id
-            if (key === lastKey) return lastText
-            lastKey = key
-            lastText = text
-            return lastText
+            const hit = injectCache.get(sid)
+            if (hit && hit.key === key) return hit.text
+            const text = buildManualInjection(entry, { banner: c.expertShowBanner })
+            injectCache.set(sid, { key, text })
+            return text
           }
         }
 
+        const taskText = extractTaskText(context)
         const pool = activeExperts(c)
         if (pool.length === 0) return ''
         // 身份专家：常驻注入的唯一一位（切合使用者身份）；其余按问题归属补充
@@ -152,16 +218,32 @@ export function apply(ctx, config = {}) {
         const { selected } = selectExperts(
           pool,
           {
-            text: extractTaskText(context),
+            text: taskText,
             defaultDomain: c.defaultDomain,
             branchDomain: branchDomain(session),
             identityId: identity?.id || '',
           },
           c,
         )
-        if (selected.length === 0) {
-          lastKey = ''
-          lastText = ''
+        // 成本装填（design-v2 第 6 节）：persona 侧也按成本常量守门 —— 预算放不下就不塞多位
+        const maxByCost = Math.max(1, Math.floor(Number(c.expertInjectBudgetChars) / COST_PERSONA_CARD))
+        if (selected.length > maxByCost) selected.length = maxByCost
+
+        // 能力层（层 3）：技能指针 —— 独立于 persona 命中，按强信号 + 自己的预算守门
+        // 阶段（层 5）：understand = 完整卡；execute = 丢方法行 + 指针上限提到 5 条；deliver = 只留交付
+        const stage = resolveStage(st, sid, session)
+        skillSource.refresh(skillsCtx, session?.header?.cwd)
+        const capLines = (c.skillInjectEnabled && Number(c.skillBudgetChars) > 0)
+          ? routeCapabilities(capabilityEntries(), taskText, {
+              budgetChars: c.skillBudgetChars,
+              maxLines: stage === 'execute' ? 5 : 3,
+            })
+          : []
+        const capText = capLines.length > 0
+          ? '\n【可用能力·指针】\n' + capLines.map((l) => '· ' + l).join('\n')
+          : ''
+        if (selected.length === 0 && capLines.length === 0) {
+          injectCache.delete(sid)
           return ''
         }
         // 安装引导提醒：未确认本人岗位时，在注入内容末尾带一行提示（确认后不再出现）
@@ -173,16 +255,63 @@ export function apply(ctx, config = {}) {
         const key = selected.map((s) => s.entry.id + ':' + s.score).join('|')
           + '|id:' + (identity?.id || '-')
           + '|d:' + c.expertInjectDetail + '|b:' + c.expertInjectBudgetChars
+          + '|cap:' + capLines.join(',')
+          + '|s:' + stage
           + (setupHint ? '|hint' : '')
-        if (key === lastKey) return lastText // 内容未变 → 返回上次文本（保持缓存稳定）
-        lastKey = key
-        lastText = buildInjection(selected, {
-          banner: c.expertShowBanner,
-          identityId: identity?.id || '',
-          detail: c.expertInjectDetail,
-          budgetChars: c.expertInjectBudgetChars,
-        }) + setupHint
-        return lastText
+        const cached = injectCache.get(sid)
+        if (cached && cached.key === key) return cached.text // 内容未变 → 返回上次文本（保持缓存稳定）
+        const selectedText = selected.length > 0
+          ? buildInjection(selected, {
+              banner: c.expertShowBanner,
+              identityId: identity?.id || '',
+              detail: c.expertInjectDetail,
+              budgetChars: c.expertInjectBudgetChars,
+              stage,
+            })
+          : ''
+        const text = selectedText + capText + setupHint
+        injectCache.set(sid, { key, text })
+        return text
+      },
+    }))
+  }
+
+  // ---- 1b. 专家库目录段（systemPrompt.section，**稳定通道**） ----
+  // order 10150：宿主 SECTION_ORDERS 里 10100（Web 表层）与 10200（部署 persona 后缀）之间无占用。
+  // 内容只由索引与能力索引决定（不依赖任何设置，除总开关）——同一专家库渲染出的文本逐字稳定，
+  // 于是换任务时系统提示词节点不动、不打断前缀复用（宿主 system-prompt README.zh.md:149）。
+  if (typeof ctx.systemPrompt?.section === 'function') {
+    disposers.push(ctx.systemPrompt.section({
+      name: 'dsh-experts:catalog',
+      order: Number(config.catalogOrder) || 10150,
+      text: () => {
+        const c = cfg()
+        if (!c.expertsEnabled || !c.expertCatalogEnabled) return ''
+        return buildCatalog({ domains: DOMAINS, personas: allPersonas(), skills: capabilityEntries() })
+      },
+    }))
+  } else {
+    ctx.logger?.debug?.('dsh-experts: 宿主未提供 systemPrompt.section，目录段跳过（仅 context 通道）')
+  }
+
+  // ---- 1c. 交付层·纪律块（systemPrompt.context，order 481） ----
+  // 自检红线不再写进 persona，统一由交付层每轮注入（design-v2 第 8 节 + 使用者口径①）：
+  // 只读项目记忆（PROJECTS/dsh-experts.md 的【纪律块 v1】条目），按 mtime+size 指纹缓存。
+  // 与 persona 段**分开注册**：不参与 persona 预算降级，阶段裁剪时也不丢弃。
+  if (typeof ctx.systemPrompt?.context === 'function') {
+    disposers.push(ctx.systemPrompt.context({
+      name: 'dsh-experts:delivery',
+      order: Number(config.deliveryOrder) || 481,
+      text: () => {
+        const c = cfg()
+        if (!c.expertsEnabled || !c.disciplineEnabled) return ''
+        try {
+          const result = loadDiscipline({ root: resolveMemoryRoot(ctx, c) })
+          return formatDiscipline(result)
+        } catch (err) {
+          // 绝不把异常抛进 text 回调（宿主对回调不容错）
+          return '【交付层·纪律】未加载（读取异常：' + (err?.message || err) + '）'
+        }
       },
     }))
   }
@@ -255,7 +384,7 @@ export function apply(ctx, config = {}) {
   // ---- 3. 命令：/expert（list / use / off / auto / status / setup / why） ----
   disposers.push(ctx.commands.register({
     name: 'expert',
-    description: '专家库：/expert list 列专家 · use <id> 临时注入 · off 关闭 · auto 恢复自动 · status 当前状态 · setup 安装引导 · why <文本> 看打分',
+    description: '专家库：/expert list 列专家 · use <id> 临时注入 · off 关闭 · auto 恢复自动 · phase 切理解/执行/交付阶段 · status 当前状态 · setup 安装引导 · why <文本> 看打分',
     handler: async (input = {}, exec) => {
       const rawInput = input?.rawInput
       // 会话信息在不同宿主版本可能落在 input.session 或 exec.agent.session —— 三处都试，取不到则退化为全局状态
@@ -284,6 +413,25 @@ export function apply(ctx, config = {}) {
       if (sub === 'auto') {
         tempState.set(sid, { off: false, useId: null })
         return reply('success', '已恢复自动匹配注入')
+      }
+
+      if (sub === 'phase') {
+        const want = (argv[0] || '').toLowerCase()
+        const st = state(sid)
+        if (!want || want === 'status') {
+          return reply('success', '当前注入阶段：' + (st.phase || 'auto（按任务清单推断；无清单时 understand）')
+            + '\n用法：/expert phase understand|execute|deliver|auto')
+        }
+        if (!['understand', 'execute', 'deliver', 'auto'].includes(want)) {
+          return reply('error', '未知阶段：' + want + '（可选 understand / execute / deliver / auto）')
+        }
+        tempState.set(sid, { ...st, phase: want === 'auto' ? '' : want })
+        const detail = want === 'execute'
+          ? '已丢掉方法行（保留角色与交付），能力指针上限提到 5 条'
+          : (want === 'deliver' ? '只留「交付与自检」' : '完整精简卡')
+        return reply('success', want === 'auto'
+          ? '已恢复「按任务清单推断阶段」'
+          : '已切到「' + want + '」阶段（仅本会话）：' + detail + ' · 恢复用 /expert phase auto')
       }
 
       if (sub === 'setup') {

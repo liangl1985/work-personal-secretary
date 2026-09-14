@@ -11,11 +11,44 @@
 /** 每轮注入上限的硬边界：设置页填超范围时按此 clamp（产品口径 2026-09-12 定的上限 3） */
 export const INJECT_MAX_HARD = 3
 
-/** 注入上限归一化：非法值回落到 1，超过硬边界则 clamp */
-export function clampInjectMax(value) {
+/** persona 注入上限的默认值（0 = 不限，由预算与阈值守门） */
+export const INJECT_MAX_DEFAULT = 2
+
+/**
+ * 注入上限归一化（2026-09-14 批二：expertInjectMax 降级为 **persona 软上限**）：
+ *   - 0 → 0（不限：交由字符预算与分数阈值守门；技能指针不占该配额）；
+ *   - 非法 / 负数 → 默认 2；
+ *   - 1..3 → 原值；超过硬边界 → clamp 到 3（绝不静默超限）。
+ */
+export function clampInjectMax(value, fallback = INJECT_MAX_DEFAULT) {
   const n = Number(value)
-  if (!Number.isFinite(n) || n < 1) return 1
+  if (!Number.isFinite(n) || n < 0) return fallback
+  if (n === 0) return 0
   return Math.min(INJECT_MAX_HARD, Math.floor(n))
+}
+
+/**
+ * 装填成本常量（字符，2026-09-14 批二口径）：把「按个数配额」换成「按成本装填」。
+ *   - persona 精简卡：实测 383–562 字符，取 500 作估算常量；
+ *   - skill 指针行：「【工具·office-ppt】演示文稿读写 / 导出 / 逐页出图 · skill 加载」约 100 字符。
+ * 仅用于**预算规划与降级判定**，不改变实际渲染文本（绝不按常量裁剪正文）。
+ */
+export const COST_PERSONA_CARD = 500
+export const COST_SKILL_LINE = 100
+
+/** 能力层（技能指针）预算默认值：约 3 行指针（每行 ≈100 字符，只放「去哪拿」不放做法原文） */
+export const SKILL_BUDGET_DEFAULT = 300
+export const SKILL_BUDGET_MIN = 0
+export const SKILL_BUDGET_MAX = 2000
+
+/**
+ * 能力层预算归一化：非法 / 负数回落默认；0 = 不注入指针（等同关掉能力层注入）；
+ * 超上限按硬边界 clamp（绝不静默超限）。
+ */
+export function clampSkillBudget(value, fallback = SKILL_BUDGET_DEFAULT) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return fallback
+  return Math.min(SKILL_BUDGET_MAX, Math.floor(n))
 }
 
 /** 分数阈值归一化：非法值回落到默认值 */
