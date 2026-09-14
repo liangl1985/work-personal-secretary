@@ -524,7 +524,7 @@ ok(hostLogs.some((l) => /Web API 安装失败/.test(l)), '降级时日志说明�
 if (typeof disposeNo === 'function') disposeNo()
 
 section('[7] 一致性与中立性')
-ok(SUB_PLUGINS.map((p) => p.name).join(',') === ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'dsh-token-pet'].join(','),
+ok(SUB_PLUGINS.map((p) => p.name).join(',') === ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'workspace-tokenpet'].join(','),
   'index.js SUB_PLUGINS 与探针清单一致')
 const pkgVersion = JSON.parse(readFileSync(join(MODULE_DIR, 'package.json'), 'utf8')).version
 ok(readVersion() === pkgVersion, 'readVersion 与 package.json 一致：v' + pkgVersion)

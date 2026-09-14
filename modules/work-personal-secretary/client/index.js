@@ -115,13 +115,13 @@ window.__ModuleLoader__.load({
      * 保证加载中/出错时也能渲染骨架）。nameKey = 接口未给 name 时的中英文名兜底；
      * nature = 性质兜底（self=自研 / third=第三方）。
      */
-    const INSTALL_ORDER = ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'dsh-token-pet']
+    const INSTALL_ORDER = ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'workspace-tokenpet']
     const PLUGIN_META = {
       'dsh-work-memory': { nameKey: 'plugMemory', nature: 'self' },
       'dsh-doc-suite': { nameKey: 'plugDocs', nature: 'self' },
       'dsh-experts': { nameKey: 'plugExperts', nature: 'self' },
       'dsh-mermaid': { nameKey: 'plugCharts', nature: 'third' },
-      'dsh-token-pet': { nameKey: 'plugPet', nature: 'third' },
+      'workspace-tokenpet': { nameKey: 'plugPet', nature: 'third' },
     }
     /** 子插件状态 → 文案键 / 徽标样式 */
     const PLUG_STATUS_KEYS = {
@@ -481,8 +481,8 @@ window.__ModuleLoader__.load({
       cfgExpertsLead: '岗位专家库（dsh-experts）。常驻注入的只有一位身份专家，其余由「问题归属判断」决定是否补位。',
       cfgExpGCore: '专家与匹配范围',
       cfgExpGCoreHint: '身份专家、岗位域与参与自动匹配的范围',
-      cfgExpGThreshold: '注入阈值',
-      cfgExpGThresholdHint: '决定每轮注入几位专家、第 2/3 位的门槛与最低分',
+      cfgExpGThreshold: '注入阈值与形态',
+      cfgExpGThresholdHint: '决定每轮注入几位、注入多完整（精简卡还是全文）、字符预算与最低分',
       cfgExpPreview: '实时预览',
       cfgExpPreviewHint: '输入一段任务文本，按当前阈值试算注入名单与打分理由（只读，不产生写入）',
       cfgExpPreviewPlaceholder: '例如：这份合同的付款节点与税务怎么处理？',
@@ -522,7 +522,7 @@ window.__ModuleLoader__.load({
 
       cfgGroupPet: '桌面形象',
       cfgPetLead:
-        '桌面形象（dsh-token-pet）的 14 项设置存在它自己的面板里（浏览器 localStorage）；本页只显示安装状态并提供跳转，不读写它的设置。',
+        '桌面形象（workspace-tokenpet）的 14 项设置存在它自己的面板里（浏览器 localStorage）；本页只显示安装状态并提供跳转，不读写它的设置。',
       cfgPetOpen: '打开桌面形象面板',
       cfgPetOpenFailed: '未能自动定位设置面板 —— 请点左侧设置列表里的「用量小宠物」分区。',
       cfgPetState: '安装状态',
@@ -593,7 +593,14 @@ window.__ModuleLoader__.load({
       cfgFEnabledExperts: '匹配范围·专家',
       cfgHEnabledExperts: 'id 逗号分隔；留空 = 不收窄。范围外仍可用 /expert use 临时注入',
       cfgFExpertInjectMax: '每轮最多注入几位',
-      cfgHExpertInjectMax: '1（默认）/ 2 / 3；只在分数接近且跨域时才补第 2/3 位',
+      cfgHExpertInjectMax: '默认 2：身份专家 + 至多 1 位按问题归属补位的对口专家；3 位会占更多 TOKEN',
+      cfgFExpertInjectDetail: '注入形态',
+      cfgHExpertInjectDetail: 'auto（默认，按预算自动降级）/ card（全部精简卡）/ full（全文，旧行为，单轮约 4.5–5.2KB）',
+      cfgFExpertInjectBudgetChars: '每轮注入预算（字符）',
+      cfgHExpertInjectBudgetChars: '默认 1400。超预算按序降级：命中全文 → 命中精简卡 → 只留身份卡；越小越省 TOKEN',
+      cfgDetailAuto: 'auto（按预算自动降级）',
+      cfgDetailCard: 'card（全部精简卡）',
+      cfgDetailFull: 'full（全文，旧行为）',
       cfgFExpertSecondThreshold: '第 2/3 位门槛',
       cfgHExpertSecondThreshold: '其分数 ≥ 第 1 位 × 该值时才注入（仅注入上限 ≥ 2 时生效）',
       cfgFExpertMinScore: '最低注入分',
@@ -900,8 +907,8 @@ window.__ModuleLoader__.load({
       cfgExpertsLead: 'Domain expert library (dsh-experts). Only one identity expert is resident; the rest join when the task calls for them.',
       cfgExpGCore: 'Experts & match scope',
       cfgExpGCoreHint: 'Identity expert, job domain and the domains/experts that may match automatically',
-      cfgExpGThreshold: 'Injection thresholds',
-      cfgExpGThresholdHint: 'How many experts are injected, the 2nd/3rd cutoff, and the minimum score',
+      cfgExpGThreshold: 'Injection limits & detail',
+      cfgExpGThresholdHint: 'How many experts are injected, how detailed (card or full), the character budget, and the minimum score',
       cfgExpPreview: 'Live preview',
       cfgExpPreviewHint: 'Type a task and preview the injected roster with scoring reasons (read-only, nothing is written)',
       cfgExpPreviewPlaceholder: 'e.g. How should the payment milestones and taxes of this contract be handled?',
@@ -941,9 +948,9 @@ window.__ModuleLoader__.load({
 
       cfgGroupPet: 'Desktop pet',
       cfgPetLead:
-        'The 14 desktop pet (dsh-token-pet) settings live in its own panel (browser localStorage). This page only shows install status and offers a jump; it never reads or writes those settings.',
+        'The 14 desktop pet (workspace-tokenpet) settings live in its own panel (browser localStorage). This page only shows install status and offers a jump; it never reads or writes those settings.',
       cfgPetOpen: 'Open desktop pet panel',
-      // token-pet 的导航标签**不本地化**：中英文界面下都显示「用量小宠物」（2026-09-13 实测），
+      // workspace-tokenpet 的导航标签**不本地化**：中英文界面下都显示「用量小宠物」（2026-09-13 实测），
       // 所以这里也照实写它，避免提示指向一个界面上不存在的英文名。
       cfgPetOpenFailed: 'Could not locate the settings panel automatically — pick the "用量小宠物" section in the settings list on the left.',
       cfgPetState: 'Install status',
@@ -1012,7 +1019,14 @@ window.__ModuleLoader__.load({
       cfgFEnabledExperts: 'Match scope · experts',
       cfgHEnabledExperts: 'Comma separated ids; empty = no narrowing. Experts outside the scope can still be injected with /expert use',
       cfgFExpertInjectMax: 'Experts per turn',
-      cfgHExpertInjectMax: '1 (default) / 2 / 3; the 2nd/3rd join only when scores are close and domains differ',
+      cfgHExpertInjectMax: 'Default 2: the identity expert plus at most one task-matched expert; 3 costs more tokens',
+      cfgFExpertInjectDetail: 'Injection detail',
+      cfgHExpertInjectDetail: 'auto (default, budget-driven) / card (compact cards only) / full (full personas, about 4.5–5.2 KB per turn)',
+      cfgFExpertInjectBudgetChars: 'Injection budget (characters)',
+      cfgHExpertInjectBudgetChars: 'Default 1400. Over budget it degrades in order: full persona → compact card → identity card only; smaller saves tokens',
+      cfgDetailAuto: 'auto (budget-driven)',
+      cfgDetailCard: 'card (compact cards only)',
+      cfgDetailFull: 'full (full personas)',
       cfgFExpertSecondThreshold: '2nd/3rd cutoff',
       cfgHExpertSecondThreshold: 'A candidate needs score ≥ top score × this value (only with a limit of 2 or more)',
       cfgFExpertMinScore: 'Minimum score',
@@ -1029,7 +1043,7 @@ window.__ModuleLoader__.load({
       ['dsh-doc-suite', '文档能力', '自研', 'MIT', 'Word / Excel / PPT / PDF 四格式处理与只读精确提取（需 Python 与 WPS）'],
       ['dsh-experts', '专家库', '自研', 'MIT', '按岗位关联的专家 persona：常驻一位身份专家，其余按问题归属补位或派子代理'],
       ['dsh-mermaid', '思维链与图表', '第三方', 'MIT', '把 Mermaid 代码块渲染成流程图 / 时序图，可切换图与代码'],
-      ['dsh-token-pet', '桌面形象', '第三方定制层', 'MIT', '桌面宠物外观与动作（以上游为基线、以补丁维护）'],
+      ['workspace-tokenpet', '桌面形象', '独立项目模块', 'MIT', '桌面宠物外观与动作（自持源码与素材；致谢见模块 NOTICE）'],
     ]
 
     /** 第三方来源与致谢（主要上游；完整清单见各模块 NOTICE） */
@@ -3065,7 +3079,7 @@ window.__ModuleLoader__.load({
     // work-memory + experts，fields 为 schema 归一化结果）；
     // POST /settings/write { ns, dryRun:false, revision, ops }，默认 dry-run，
     // revision 落后返回 409。ns 与 path 的白名单全在**宿主侧**硬编码，
-    // 客户端只发键名与值 —— 不直写 settings.yaml，也不读写 token-pet 的 localStorage。
+    // 客户端只发键名与值 —— 不直写 settings.yaml，也不读写 workspace-tokenpet 的 localStorage。
     //
     // 降级纪律：服务不可用 / 子插件未安装 → 分组内给可读提示，页面照常渲染。
     // 冲突纪律：409 → 提示「设置已被其他改动更新」+ 自动重读，**草稿保留**（不丢输入）。
@@ -3080,8 +3094,8 @@ window.__ModuleLoader__.load({
      * 只活在客户端草稿里，上报时转成 ops 的 { op:'unset', path:[key] }。
      */
     const CFG_UNSET = '\u0000unset'
-    /** 桌面形象（token-pet）自己的设置分区 id —— 只作为跳转目标 */
-    const CFG_PET_SECTION = 'token-pet'
+    /** 桌面形象（workspace-tokenpet）自己的设置分区 id —— 只作为跳转目标 */
+    const CFG_PET_SECTION = 'workspace-tokenpet'
     /** 预览文本上限（与契约一致） */
     const CFG_PREVIEW_MAX = 2000
     /** 数值输入兜底上限（schema 只保证 natural，给 UI 一个防误触的边界） */
@@ -3127,6 +3141,11 @@ window.__ModuleLoader__.load({
       enabledDomains: { type: 'str' },
       enabledExperts: { type: 'str' },
       expertInjectMax: { type: 'slider', min: 1, max: 3, step: 1 },
+      expertInjectDetail: {
+        type: 'select',
+        options: [['auto', 'cfgDetailAuto'], ['card', 'cfgDetailCard'], ['full', 'cfgDetailFull']],
+      },
+      expertInjectBudgetChars: { type: 'slider', min: 200, max: 4000, step: 100 },
       expertSecondThreshold: { type: 'slider', min: 0, max: 1, step: 0.05 },
       expertMinScore: { type: 'slider', min: 0, max: 1, step: 0.05 },
       expertShowBanner: { type: 'bool' },
@@ -3168,7 +3187,8 @@ window.__ModuleLoader__.load({
       },
       {
         id: 'threshold', titleKey: 'cfgExpGThreshold', hintKey: 'cfgExpGThresholdHint', slider: true,
-        keys: ['expertInjectMax', 'expertSecondThreshold', 'expertMinScore'],
+        keys: ['expertInjectMax', 'expertInjectDetail', 'expertInjectBudgetChars',
+          'expertSecondThreshold', 'expertMinScore'],
       },
     ]
 
@@ -3490,12 +3510,14 @@ window.__ModuleLoader__.load({
         ])
       } else if (type === 'select') {
         const value = rawValue === undefined || rawValue === null ? '' : String(rawValue)
-        const known = DOMAIN_OPTIONS.some((o) => o[0] === value)
+        // 选项来源：字段自带 options（[值, 字典 key] 对）优先，否则回落到岗位域表
+        const opts = Array.isArray(meta.options) && meta.options.length > 0 ? meta.options : DOMAIN_OPTIONS
+        const known = opts.some((o) => o[0] === value)
         control = h('select', Object.assign({
           key: 's', style: S.select, value: value,
           'data-cfg-action': 'select',
           onChange: (e) => handlers.setDraft(nsKey, key, e && e.target ? e.target.value : ''),
-        }, common), DOMAIN_OPTIONS.map((o) => h('option', { key: o[0], value: o[0] }, t(o[1])))
+        }, common), opts.map((o) => h('option', { key: o[0], value: o[0] }, t(o[1])))
           .concat(!known && value ? [h('option', { key: '__other', value: value }, value)] : []))
       } else if (type === 'complex') {
         // 复杂类型（契约：标记 type:"complex" 并降级只读）
@@ -3716,7 +3738,7 @@ window.__ModuleLoader__.load({
 
     /**
      * 「桌面形象」状态 + 跳转面板。契约决定：不实现 localStorage 读写桥，
-     * 只显示安装状态（复用 GET /plugins）并把使用者送到 token-pet 自己的面板。
+     * 只显示安装状态（复用 GET /plugins）并把使用者送到 workspace-tokenpet 自己的面板。
      */
     function PetPanel(props) {
       const t = props.t
@@ -3734,7 +3756,7 @@ window.__ModuleLoader__.load({
             const list = Array.isArray(body.plugins) ? body.plugins : (Array.isArray(body.items) ? body.items : [])
             let found = null
             for (const it of list) {
-              if (it && String(it.id || it.name || '') === 'dsh-token-pet') { found = it; break }
+              if (it && String(it.id || it.name || '') === 'workspace-tokenpet') { found = it; break }
             }
             setSt({ phase: 'ready', error: '', item: found, jumpFailed: false })
           } catch (err) {
@@ -3756,7 +3778,7 @@ window.__ModuleLoader__.load({
         h('div', { key: 'h', style: S.cardHead }, [
           h('h3', { key: 't', style: S.cardTitle }, [
             t('cfgGroupPet'),
-            badge('dsh-token-pet'),
+            badge('workspace-tokenpet'),
             h('span', { style: Object.assign({}, S.badge, installed ? S.badgeOk : S.badgeSkip) }, statusText),
             version ? badge(version, S.badgeBrand) : null,
           ]),
@@ -3769,7 +3791,7 @@ window.__ModuleLoader__.load({
               'data-cfg-action': 'open-pet',
               style: Object.assign({}, S.btn, S.btnPrimary),
               onClick: () => {
-                // 左侧导航里 token-pet 那一项由它自己渲染，且**不本地化**：
+                // 左侧导航里 workspace-tokenpet 那一项由它自己渲染，且**不本地化**：
           // 中英文界面下实测都显示「用量小宠物」（2026-09-13 两次验证）。
           // 我们这边叫「桌面形象」只是集成体自己的组名，不是宿主 UI 里的分区名，切勿再拿来匹配。
           // 候选只保留实测名 + ns id（后者是万一将来外壳改用 id 渲染导航的兜底）。

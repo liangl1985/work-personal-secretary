@@ -168,11 +168,20 @@ export function apply(ctx, config = {}) {
         const setupHint = c.expertSetupDone
           ? ''
           : '\n（专家库还没确认本人岗位，当前按 ' + c.defaultDomain + ' 处理：跑一次 /expert setup <域> [身份专家id] 即可，之后不再提示）'
+        // 缓存键：选中集合与分数之外，**注入形态与预算也参与** —— 否则改设置后
+        // 同一选中集合会命中旧文本（形态/预算变了但内容未变，缓存必须失效）
         const key = selected.map((s) => s.entry.id + ':' + s.score).join('|')
-          + '|id:' + (identity?.id || '-') + (setupHint ? '|hint' : '')
+          + '|id:' + (identity?.id || '-')
+          + '|d:' + c.expertInjectDetail + '|b:' + c.expertInjectBudgetChars
+          + (setupHint ? '|hint' : '')
         if (key === lastKey) return lastText // 内容未变 → 返回上次文本（保持缓存稳定）
         lastKey = key
-        lastText = buildInjection(selected, { banner: c.expertShowBanner, identityId: identity?.id || '' }) + setupHint
+        lastText = buildInjection(selected, {
+          banner: c.expertShowBanner,
+          identityId: identity?.id || '',
+          detail: c.expertInjectDetail,
+          budgetChars: c.expertInjectBudgetChars,
+        }) + setupHint
         return lastText
       },
     }))
@@ -325,6 +334,7 @@ export function apply(ctx, config = {}) {
           '参与匹配：' + pool.length + ' / ' + allExperts().length + ' 位' +
             (c.enabledExperts ? '（enabledExperts 白名单）' : (c.enabledDomains ? '（enabledDomains 收窄）' : '（默认全量参与）')),
           '注入上限：' + c.expertInjectMax + ' 位' + (c.expertInjectMax > 1 ? '（⚠️ 占用较多 TOKEN）' : ''),
+          '注入形态：' + c.expertInjectDetail + '（auto = 按预算降级 / card = 全精简卡 / full = 全文）；每轮预算：' + c.expertInjectBudgetChars + ' 字符',
           '第 2/3 位门槛：' + c.expertSecondThreshold + '；最低分：' + c.expertMinScore,
           '本会话：' + (state(sid).off ? '已关闭' : (state(sid).useId ? '临时注入 ' + state(sid).useId : '自动匹配')),
         ].join('\n'))

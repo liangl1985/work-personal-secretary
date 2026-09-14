@@ -4,6 +4,22 @@
 > 集成体打 `v<major>.<minor>.<patch>`（例 `v1.0.0`），子模块另可打 `dsh-work-memory@1.0.5` 形式的 tag。
 > 各子模块自己的变更史见其目录下的 `CHANGELOG.md`。
 
+## v1.1.0 — 未发布（桌宠独立化 → `workspace-tokenpet`；专家库 0.1.4：匹配排序修复 + 注入分级）
+
+- **目录与包名**：`modules/dsh-token-pet` → `modules/workspace-tokenpet`（`git mv`，git 历史保留）；包名 `dsh-token-pet` → `workspace-tokenpet`；版本 `0.2.1-lina.1` → `1.0.0`；**插件运行时 id 一并改为 `workspace-tokenpet`**（cordis entry id/name、客户端 bundle 装载 id、插槽与设置分区 id、路由前缀 `/workspace-tokenpet/...`）。
+- **去掉定制层 / 补丁形态**：删除 `patches/**`、`scripts/apply-customizations.*`、`scripts/upstream/**`；README 重写为独立项目文档（定位 / 功能清单 / 安装 / 开发与构建 / 致谢）并新增 `README.en.md`。
+- **法律**：模块 `LICENSE` 保留上游 MIT 版权行并新增本项目版权行；`NOTICE` 改写为「本项目 + 致谢上游（项目名 / 仓库 / 许可 / 基线 commit）」。
+- **运行时数据目录**：新址 `~/.dsh/data/workspace-tokenpet/skins/`（**新址优先**）；新址缺套装而旧址 `~/.dsh/data/dsh-token-pet/skins/` 有同名套装时**复制迁移**（旧数据保留、绝不覆盖使用者已有套装、单套失败不影响安装结果）。
+- **下游同步**：集成体本体（安装器 / 配置底座 / 探针 / 模块清单 / 客户端安装顺序与设置页跳转）与全部测试夹具一并更名。
+- **本机迁移尚未执行**（硬边界：不改本机 profile、不 commit / push）：换 id 由主人按模块 `CHANGELOG.md` 的 1.0.0 段执行。
+
+### 专家库 0.1.4（dsh-experts）
+
+- **匹配排序修复**：`rankExperts` 排序键改为「显式指定 > 任务实证（evidence）> 总分 > index 顺序」，`expertMinScore` 只卡**零实证**候选 —— 修掉"跨域单关键词任务被岗位域先验压过"（实测「这份采购合同的钱怎么算、税怎么处理」原先返回投标策略师，现命中法务；上限 2 且无身份专家时「法务 + 会计」可同时选中）。
+- **提示词注入分级（L0 / L1 / L2）**：默认只注入**精简卡**（角色首句 + 工作方法前 3 条 + 交付与自检前 2 条 + 适用；实测 **464–509 字符/位**）；新增设置 `expertInjectDetail`（auto / card / **full 可一键回退旧行为**）与 `expertInjectBudgetChars`（默认 1400，超预算按序降级并标注，绝不静默超限）；`expert_recall` 与派子代理内联仍取全文。实测单轮专家注入 3674 → **1218 字符**（降 67%），短任务 1951 → **660 字符**。
+- **本体同步**：能力配置页新增两键（形态下拉 + 预算滑块）、`EXPERTS_CONFIG_FALLBACK` 补齐、`settings-api-test.mjs` 对齐 12 键。
+- **门禁**：experts 回归 27/27 · 注入分级 16/16 · 装载冒烟 18/18 · 共存 7/7；本体五套 settings-api 109 · install 200 · probe 136 · basedeck 179 · smoke 337，全部 0 失败；`node --check` 全量 57 文件 0 失败。
+
 ## v1.0.0 — 2026-09-13（正式版第一版）
 
 集成体从"记忆插件"演进为**面向通用工作者的工作秘书集成体**，本版为第一次正式发布。

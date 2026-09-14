@@ -194,11 +194,33 @@ test('跨域 Top-2：上限 2 且分数达标时补第二位；同域不叠加',
   assert.equal(same.selected.length, 1, '同域不得叠加')
 })
 
-test('rankExperts 按分数降序且稳定', () => {
-  const ranked = rankExperts(experts, ctx({ text: '工控安全方案' }))
+test('rankExperts 证据优先：有任务实证的排在只有岗位先验的之前', () => {
+  const ranked = rankExperts(experts, ctx({ text: '这份采购合同的钱怎么算、税怎么处理' }))
+  assert.equal(ranked[0].entry.id, 'legal-civil', '第一名应是被「合同」命中的法务专家，实际 ' + ranked[0].entry.id)
+  assert.ok(ranked[0].evidence > 0, '第一名应带任务实证')
+  const firstPresales = ranked.findIndex((r) => r.entry.domain === 'presales')
+  const taxAt = ranked.findIndex((r) => r.entry.id === 'finance-tax')
+  assert.ok(taxAt >= 0 && taxAt < firstPresales,
+    '会计税务专家应排在只有岗位先验的售前专家之前（tax@' + taxAt + ' vs presales@' + firstPresales + '）')
+})
+
+test('rankExperts 同 evidence 档内按总分降序、空任务由岗位先验兜底', () => {
+  const ranked = rankExperts(experts, ctx())
   for (let i = 1; i < ranked.length; i++) {
-    assert.ok(ranked[i - 1].score >= ranked[i].score, '排序不稳定')
+    assert.ok(ranked[i - 1].evidence >= ranked[i].evidence, 'evidence 未降序')
   }
+  assert.equal(ranked[0].entry.domain, 'presales', '空任务应由岗位先验兜底')
+  assert.equal(ranked[0].score, WEIGHTS.domain)
+})
+
+test('跨域单关键词：法务 + 会计 同时选中（上限 2、无身份专家时）', () => {
+  const { selected } = selectExperts(experts,
+    ctx({ text: '这份采购合同的钱怎么算、税怎么处理', defaultDomain: 'presales' }),
+    cfg({ expertInjectMax: 2 }))
+  const ids = selected.map((s) => s.entry.id)
+  assert.equal(selected.length, 2, '实际：' + ids.join(','))
+  assert.ok(ids.includes('legal-civil'), '缺法务专家：' + ids.join(','))
+  assert.ok(ids.includes('finance-tax'), '缺会计税务专家：' + ids.join(','))
 })
 
 test('身份专家：留空时取岗位域第一位；显式指定优先', () => {

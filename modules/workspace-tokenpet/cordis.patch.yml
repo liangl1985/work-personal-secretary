@@ -1,0 +1,10 @@
+# workspace-tokenpet bundle patch —— 挂载桌宠 entry（浏览器宠物/面板 UI + 宿主快照路由与后台维护）。
+# 用 dsh.profile.bundles + dsh plugin add 安装；本文件是**部署默认层（base）**，保持**中性**
+# （不含任何个人路径与称呼）；个性化请在设置页用户层或该 profile 的 cordis.patch.yml 里按 id 覆盖。
+#
+# 注意：形象素材随本模块分发（modules/workspace-tokenpet/skins/<套装id>/），安装时会自动
+#       部署到 ~/.dsh/data/workspace-tokenpet/skins/（只补缺失、绝不覆盖）；目录为空时
+#       宠物回退插件内置素材，不会报错。
+- insert:
+    - id: workspace-tokenpet
+      name: 'workspace-tokenpet'

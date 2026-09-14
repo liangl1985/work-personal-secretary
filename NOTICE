@@ -17,7 +17,7 @@ Copyright (c) 2026 liangl1985 · MIT License（全文见根 LICENSE）
 | `modules/dsh-doc-suite` | `dsh-doc-suite` | 0.1.4 | MIT | 自研：Word / Excel / PPT / PDF 文档能力（Python 脚本 + DSH 原生技能） |
 | `modules/dsh-experts` | `dsh-experts` | 0.1.3 | MIT | 自研：专家库（persona 改写自第三方，见第三节） |
 | `modules/dsh-mermaid` | `dsh-mermaid` | 0.4.0 | MIT | **第三方整包**（MrmoLabs/dsh-mermaid） |
-| `modules/dsh-token-pet` | `dsh-token-pet` | 0.2.1-lina.1 | MIT | **第三方定制层**（以上游为基线、以补丁维护） |
+| `modules/workspace-tokenpet` | `workspace-tokenpet` | 1.0.0 | MIT | **独立项目模块**（源码 / 产物 / 文档 / 素材自持；由三方项目独立化，见该模块 NOTICE 的致谢） |
 
 
 二、第三方组件
@@ -26,12 +26,11 @@ Copyright (c) 2026 liangl1985 · MIT License（全文见根 LICENSE）
 1. **dsh-mermaid** —— 第三方 DSH 插件（上游 MIT），本仓库内为完整副本（vendored）。
    许可原文：`modules/dsh-mermaid/LICENSE`
 
-2. **dsh-token-pet** —— 第三方 DSH 插件（上游 MIT；基线 commit `cc49233` / v0.2.0）。
-   本仓库只保存**定制层**：补丁 `patches/0001-lina-customizations.patch`（上游 → 定制版）与
-   `patches/0002-pet-hitbox.patch`（定制版 → 本次修正），以及我们的定制源码；
-   **不含上游整包、不含 sourcemap**。上游版权归 DSH Token Pet contributors。
-   许可原文：`modules/dsh-token-pet/LICENSE`；定制层声明：`modules/dsh-token-pet/NOTICE`
-
+2. **workspace-tokenpet** —— 桌面形象**独立项目模块**，由三方 DSH 插件 **dsh-token-pet** 独立化而来。
+   上游：dsh-token-pet（MIT；Copyright (c) DSH Token Pet contributors；基线 commit `cc49233` / v0.2.0，仅作追溯）。
+   本仓库内的 `modules/workspace-tokenpet` 为**自持源码的完整模块**（含构建产物与三套素材），
+   不再以补丁 / 定制层形态存在；**上游版权与 MIT 许可文本原样保留**在该模块 `LICENSE`，
+   归属与致谢见 `modules/workspace-tokenpet/NOTICE`。
 
 三、dsh-experts 的内容来源（20 位 persona，均为压缩改写）
 ------------------------------------------------------------------
@@ -79,7 +78,7 @@ Copyright (c) 2026 liangl1985 · MIT License（全文见根 LICENSE）
 五、未随本仓库分发
 ------------------------------------------------------------------
 
-> 桌面形象素材**不在此列**：三套套装已随仓库分发（`modules/dsh-token-pet/skins/`，见该模块 `NOTICE`）。
+> 桌面形象素材**不在此列**：三套套装已随仓库分发（`modules/workspace-tokenpet/skins/`，见该模块 `NOTICE`）。
 
 - 使用者的工作区数据：记忆库（`~/.dsh/memories/`）、Obsidian 镜像、日志与个人配置；
 - 上游整包与构建产物 sourcemap；

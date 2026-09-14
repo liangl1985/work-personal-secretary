@@ -15,7 +15,7 @@
  *   [9] GET /experts/preview：真实子插件打分（契约 §六.1 三级等保用例 + max=1↔2 因果对照）
  *  [10] 预览文本上限 2000：超长截断并标记 truncated
  *  [11] 路由注册口径：installApi 的 exact 数不变（既有测试不破），P4 精确路由独立补注册
- *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 10）+ 默认值 1→2 落点
+ *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 12）+ 默认值 1→2 与注入分级落点
  *  [13] 真实环境只读快照首尾比对（证明本次开发未写入真实设置文件 / 工作区 / 子插件源码）
  *
  * 隔离红线（本测试的全部保证）：
@@ -143,6 +143,8 @@ const EXP_SCHEMA = {
         defaultDomain: 12,
         identityExpert: 13,
         expertInjectMax: 14,
+        expertInjectDetail: 17,
+        expertInjectBudgetChars: 18,
         expertSecondThreshold: 15,
         expertMinScore: 16,
       },
@@ -153,6 +155,8 @@ const EXP_SCHEMA = {
     14: { type: 'number', meta: { default: 2, description: '每轮最多注入几位专家' } },
     15: { type: 'number', meta: { default: 0.8, description: '' } },
     16: { type: 'number', meta: { default: 0.35, description: '' } },
+    17: { type: 'string', meta: { default: 'auto', description: '注入形态：auto / card / full' } },
+    18: { type: 'number', meta: { default: 1400, description: '每轮注入字符预算' } },
   },
 }
 
@@ -179,6 +183,8 @@ function makeMockSettings(options = {}) {
         defaultDomain: 'presales',
         identityExpert: '',
         expertInjectMax: 2,
+        expertInjectDetail: 'auto',
+        expertInjectBudgetChars: 1400,
         expertSecondThreshold: 0.8,
         expertMinScore: 0.35,
       }, options.expertsValue || {}),
@@ -192,7 +198,7 @@ function makeMockSettings(options = {}) {
       return [
         { ns: 'work-memory', schema: WM_SCHEMA, value: state.value['work-memory'], revision: state.revision['work-memory'], user: state.user['work-memory'], applies: 'live' },
         { ns: 'experts', schema: EXP_SCHEMA, value: state.value.experts, revision: state.revision.experts, user: state.user.experts, applies: 'live' },
-        { ns: 'token-pet', schema: OTHER_SCHEMA, value: { theme: 'dark' }, revision: 1, applies: 'restart' },
+        { ns: 'workspace-tokenpet', schema: OTHER_SCHEMA, value: { theme: 'dark' }, revision: 1, applies: 'restart' },
       ]
     },
     async mutate(ns, ops, rev) {
@@ -338,7 +344,7 @@ const mock = makeMockSettings()
 const view = buildSettingsView(mock.settings.describe({ redactSecrets: true }), { writable: true })
 ok(view.ok === true && view.namespaces.length === 2, '只保留白名单两个 ns')
 ok(view.namespaces.map((n) => n.ns).join(',') === 'work-memory,experts', '顺序按白名单（页面分组稳定）')
-ok(JSON.stringify(view).indexOf('token-pet') < 0, 'describe 里的非白名单 ns（token-pet）不出现在响应里')
+ok(JSON.stringify(view).indexOf('workspace-tokenpet') < 0, 'describe 里的非白名单 ns（workspace-tokenpet）不出现在响应里')
 ok(view.namespaces[0].title === '记忆库' && view.namespaces[1].title === '专家库', 'ns 标题按契约 §3')
 ok(view.namespaces[0].revision === 12 && view.namespaces[1].revision === 5, 'revision 透出')
 ok(view.namespaces[0].applies === 'live', 'applies 透出')
@@ -360,7 +366,7 @@ const good = { ns: 'work-memory', ops: [{ op: 'set', path: ['snapshotMaxChars'],
 ok(validateWriteRequest(good, V).ok === true, '白名单 ns + 已声明 path → 通过')
 ok(validateWriteRequest(good, V).dryRun === true, '未传 dryRun → dryRun=true（契约 §5.4）')
 ok(validateWriteRequest(Object.assign({}, good, { dryRun: false }), V).dryRun === false, 'dryRun:false 透传')
-ok(validateWriteRequest(Object.assign({}, good, { ns: 'token-pet' }), V).error === 'ns-not-allowed', '非白名单 ns 被拒（契约 §5.1）')
+ok(validateWriteRequest(Object.assign({}, good, { ns: 'workspace-tokenpet' }), V).error === 'ns-not-allowed', '非白名单 ns 被拒（契约 §5.1）')
 ok(validateWriteRequest(Object.assign({}, good, { ns: 'dsh-doc-suite' }), V).error === 'ns-not-allowed', '任意 ns 一律被拒')
 ok(validateWriteRequest({ ns: 'experts', ops: [{ op: 'set', path: ['expertInjectMax'], value: 2 }] }, V).ok === true,
   '白名单里的另一个 ns 允许（path 白名单按该 ns schema 各自判定）')
@@ -409,7 +415,7 @@ ok(wWrite.body.user.snapshotMaxChars === 6000, '写后 user 层能看到新值�
 const wUnset = await callPrefix(ctx1, 'POST', '/settings/write', { ns: 'work-memory', dryRun: false, ops: [{ op: 'unset', path: ['personaLabel'] }] }, REQ_HEADERS)
 ok(wUnset.body.ok === true && mock.state.mutateCalls[1].ops[0].op === 'unset', 'unset 走同一 mutate 通道')
 
-const wBad = await callPrefix(ctx1, 'POST', '/settings/write', { ns: 'token-pet', dryRun: false, ops: [{ op: 'set', path: ['theme'], value: 'light' }] }, REQ_HEADERS)
+const wBad = await callPrefix(ctx1, 'POST', '/settings/write', { ns: 'workspace-tokenpet', dryRun: false, ops: [{ op: 'set', path: ['theme'], value: 'light' }] }, REQ_HEADERS)
 ok(wBad.status === 400 && wBad.body.ok === false && wBad.body.error === 'ns-not-allowed', '非白名单 ns → 400 + 机器码')
 ok(mock.state.mutateCalls.length === 2, '被拒的请求没有触发 mutate')
 
@@ -550,7 +556,7 @@ function countSchemaKeys(file) {
 const wmSettingsFile = join(MODULES_DIR, 'dsh-work-memory', 'lib', 'settings.js')
 const expSettingsFile = join(MODULES_DIR, 'dsh-experts', 'lib', 'settings.js')
 ok(countSchemaKeys(wmSettingsFile) === 24, 'work-memory schema 24 键（契约 §一）')
-ok(countSchemaKeys(expSettingsFile) === 10, 'experts schema 10 键（契约 §一）')
+ok(countSchemaKeys(expSettingsFile) === 12, 'experts schema 12 键（契约 §一 + 注入分级两项）')
 const expSrc = readFileSync(expSettingsFile, 'utf8')
 ok(/expertInjectMax: 2,/.test(expSrc), 'DEFAULTS.expertInjectMax = 2（契约 §六.1 甲案，settings.js:47）')
 ok(/expertInjectMax: z\.natural\(\)\.default\(2\)/.test(expSrc), 'schema 默认值 = 2（settings.js:71）')

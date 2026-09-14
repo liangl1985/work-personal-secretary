@@ -17,8 +17,9 @@
  *    **绝不接受客户端传入的源 / 目标路径**。
  * 2. 路径解析（resolveRepoRoot / listSubPlugins）**只读**；只有 installSubPlugin 会写盘，
  *    写入范围仅限 <profileDir>/node_modules/<id>（含 .wps-new / .wps-old 暂存名）、
- *    <profileDir>/package.json（含 .bak- 备份），以及**仅当安装 dsh-token-pet 时**的桌宠素材目录
- *    <dshHome>/data/dsh-token-pet/skins/<套装>（**只补缺失、绝不覆盖**使用者已有套装）。
+ *    <profileDir>/package.json（含 .bak- 备份），以及**仅当安装 workspace-tokenpet 时**的桌宠素材目录
+ *    <dshHome>/data/workspace-tokenpet/skins/<套装>（**只补缺失、绝不覆盖**使用者已有套装；
+ *    新址缺套装而旧址 <dshHome>/data/dsh-token-pet/skins 有同名套装时**复制迁移**，旧址数据保留）。
  * 3. 所有文本写入一律 Node fs（writeFileSync）+ UTF-8 **无 BOM**；不使用 PowerShell 的文本写入命令
  *    （其编码开关会引入 BOM，本引擎与自测都显式禁止）。
  * 4. 发布件中立：不写死任何使用者信息 / 本机绝对路径 / 称呼。
@@ -101,13 +102,21 @@ export const ATOMIC_NEW_SUFFIX = '.wps-new'
 export const ATOMIC_OLD_SUFFIX = '.wps-old'
 
 /** 唯一带形象素材的子插件：只有它在安装后需要把套装部署到 DSH 运行时目录 */
-export const PET_SKINS_PLUGIN_ID = 'dsh-token-pet'
+export const PET_SKINS_PLUGIN_ID = 'workspace-tokenpet'
 
-/** 套装素材在子插件模块内的目录名（<repoRoot>/modules/dsh-token-pet/skins） */
+/** 套装素材在子插件模块内的目录名（<repoRoot>/modules/workspace-tokenpet/skins） */
 export const SKINS_DIR_NAME = 'skins'
 
-/** 桌宠运行时真正读取的素材目录（与 dsh-token-pet 的 skinsDir 完全一致）：<dsh home>/data/dsh-token-pet/skins */
-export const PET_SKINS_SUBDIR = join('data', 'dsh-token-pet', 'skins')
+/** 桌宠运行时读取的素材目录（与 workspace-tokenpet 的 skinsDir 完全一致）：<dsh home>/data/workspace-tokenpet/skins */
+export const PET_SKINS_SUBDIR = join('data', 'workspace-tokenpet', 'skins')
+
+/**
+ * **旧址**：独立化之前 dsh-token-pet 的运行时素材目录（<dsh home>/data/dsh-token-pet/skins）。
+ * 新址缺某套装而旧址有同名套装时，从旧址**复制迁移**到新址：旧址数据保留、不删除，
+ * 新址已有内容绝不覆盖。旧 id 只在此常量与迁移代码里出现（数据搬家用，不是依赖）。
+ */
+export const LEGACY_PET_SKINS_PLUGIN_ID = 'dsh-token-pet'
+export const LEGACY_PET_SKINS_SUBDIR = join('data', 'dsh-token-pet', 'skins')
 
 /** 五个子插件 id 的**唯一来源**（顺序 = 面板展示顺序 = /install-all 的串行顺序，接口契约定死） */
 export const SUB_PLUGIN_IDS = [
@@ -115,7 +124,7 @@ export const SUB_PLUGIN_IDS = [
   { id: 'dsh-doc-suite', label: '文档能力', kind: '自研' },
   { id: 'dsh-experts', label: '专家库', kind: '自研' },
   { id: 'dsh-mermaid', label: '思维链与图表', kind: '第三方' },
-  { id: 'dsh-token-pet', label: '桌面形象', kind: '第三方' },
+  { id: 'workspace-tokenpet', label: '桌面形象', kind: '第三方' },
 ]
 
 /** 五个 id 的字符串数组（查表 / 回显用） */
@@ -191,50 +200,64 @@ function skinsErrText(err) {
 /**
  * 把子插件模块内的套装素材部署到 DSH 运行时素材目录（**只补缺失、绝不覆盖**）。
  *
- * 为什么必须做：桌宠插件运行时只从 <dsh home>/data/dsh-token-pet/skins/ 读套装
- * （见 dsh-token-pet/lib/skins.js 的 skinsDir），模块内的 skins/ **运行时不会被读取**；
+ * 为什么必须做：桌宠插件运行时只从 <dsh home>/data/workspace-tokenpet/skins/ 读套装
+ * （见 workspace-tokenpet/lib/skins.js 的 skinsDir），模块内的 skins/ **运行时不会被读取**；
  * 安装器若只复制模块，使用者装完只剩 client 内置的默认形象 —— 自研套装全部不出现
  * （2026-09-13 灰度测试实测：新环境里两套套装都没加载）。
  *
+ * **落地顺序（新址优先）**：① 新址已有该套装 → 跳过（使用者可能改过素材，绝不覆盖）；
+ * ② 新址缺、但**旧址** <dsh home>/data/dsh-token-pet/skins 有同名套装 → 从旧址**复制迁移**
+ *   （旧址数据保留，不移动、不删除；只补新址缺的那一套）；③ 都缺 → 从模块内随包素材复制部署。
+ *
  * 红线：① 目标已存在的套装**一律跳过**（使用者可能改过素材，绝不覆盖）；
  *      ② 单套失败只清理该套的半成品，**不影响插件安装结果**（插件已装好，素材可重试）；
- *      ③ 源目录缺失（如未来改成纯补丁形态）视为 skipped，不算错误。
- * @returns {{ok:boolean, skipped:boolean, reason:string, source:string, target:string, deployed:string[], kept:string[], failed:string[], files:number}}
+ *      ③ 源目录与旧址都没有套装时视为 skipped，不算错误。
+ * @returns {{ok:boolean, skipped:boolean, reason:string, source:string, legacy:string, target:string,
+ *            deployed:string[], migrated:string[], kept:string[], failed:string[], files:number}}
  */
 export function deployPetSkins(sourceDir, targetDir, options = {}) {
   const io = resolveIo(options)
   const src = normalizeDir(sourceDir)
   const dst = normalizeDir(targetDir)
+  // 旧址（独立化之前 dsh-token-pet 的运行时目录）：只用于**复制迁移**，绝不作为删除源
+  const legacy = normalizeDir(options.legacyDir)
   const result = {
     ok: false,
     skipped: false,
     reason: '',
     source: posix(src),
+    legacy: posix(legacy),
     target: posix(dst),
     deployed: [],
+    migrated: [],
     kept: [],
     failed: [],
     files: 0,
   }
-  if (!src || !existsSync(src)) {
+  if (!dst) {
     result.skipped = true
-    result.reason = '模块内没有 skins 目录（该模块不含套装素材）'
+    result.reason = '未解析出运行时素材目录'
     return result
   }
-  let entries = []
-  try {
-    entries = readdirSync(src, { withFileTypes: true })
-  } catch (err) {
-    result.reason = '无法读取套装目录：' + skinsErrText(err)
-    return result
+  /** 列出某目录下带 manifest.json 的套装名（目录不存在 / 读不了 → 空数组，不抛） */
+  const packsIn = (dir) => {
+    if (!dir || !existsSync(dir)) return []
+    try {
+      return readdirSync(dir, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && existsSync(join(dir, e.name, 'manifest.json')))
+        .map((e) => e.name)
+    } catch (err) {
+      return []
+    }
   }
-  const packs = entries
-    .filter((e) => e.isDirectory() && existsSync(join(src, e.name, 'manifest.json')))
-    .map((e) => e.name)
-    .sort()
+  const sourcePacks = packsIn(src)
+  const legacyPacks = (legacy && legacy !== dst) ? packsIn(legacy) : []
+  const packs = Array.from(new Set(sourcePacks.concat(legacyPacks))).sort()
   if (packs.length === 0) {
     result.skipped = true
-    result.reason = '模块内没有带 manifest.json 的套装'
+    result.reason = (!src || !existsSync(src))
+      ? '模块内没有 skins 目录（该模块不含套装素材）'
+      : '模块内没有带 manifest.json 的套装'
     return result
   }
   try {
@@ -244,10 +267,20 @@ export function deployPetSkins(sourceDir, targetDir, options = {}) {
     return result
   }
   for (const pack of packs) {
-    const packSrc = join(src, pack)
     const packDst = join(dst, pack)
     if (existsSync(packDst)) {
-      result.kept.push(pack) // 使用者已有该套装：绝不覆盖
+      result.kept.push(pack) // 新址已有该套装（新址优先）：绝不覆盖
+      continue
+    }
+    // ① 新址缺 → ② 旧址同名套装**复制迁移** → ③ 模块内随包素材复制部署
+    let packSrc = ''
+    let fromLegacy = false
+    if (legacyPacks.indexOf(pack) >= 0) {
+      packSrc = join(legacy, pack)
+      fromLegacy = true
+    } else if (sourcePacks.indexOf(pack) >= 0) {
+      packSrc = join(src, pack)
+    } else {
       continue
     }
     const files = walkFiles(packSrc)
@@ -257,7 +290,8 @@ export function deployPetSkins(sourceDir, targetDir, options = {}) {
         io.mkdirSync(dirname(target), { recursive: true })
         io.copyFileSync(join(packSrc, rel), target)
       }
-      result.deployed.push(pack)
+      if (fromLegacy) result.migrated.push(pack)
+      else result.deployed.push(pack)
       result.files += files.length
     } catch (err) {
       try { io.rmSync(packDst, { recursive: true, force: true }) } catch (e2) { /* best-effort */ }
@@ -273,11 +307,16 @@ export function deployPetSkins(sourceDir, targetDir, options = {}) {
 export function describePetSkins(skins) {
   if (!skins) return '不适用'
   if (skins.skipped) return '跳过（' + skins.reason + '）'
-  if (skins.deployed.length === 0 && skins.failed.length === 0) return '跳过（无可部署套装）'
+  const migrated = skins.migrated || []
+  if (skins.deployed.length === 0 && migrated.length === 0 && skins.kept.length === 0
+    && skins.failed.length === 0) return '跳过（无可部署套装）'
   const bits = []
   if (skins.deployed.length > 0) {
     bits.push('已部署 ' + skins.deployed.length + ' 套（' + skins.deployed.join(', ')
       + '，' + skins.files + ' 个文件）')
+  }
+  if (migrated.length > 0) {
+    bits.push('已从旧址迁移 ' + migrated.length + ' 套（' + migrated.join(', ') + '，旧数据保留）')
   }
   if (skins.kept.length > 0) {
     bits.push('已存在跳过 ' + skins.kept.length + ' 套（' + skins.kept.join(', ') + '，不覆盖）')
@@ -810,7 +849,7 @@ export function installSubPlugin(id, options = {}) {
     overwrite: false,
     backup: '',
     prunedBackups: 0,
-    /** 桌宠素材部署结果（只有 dsh-token-pet 会得到对象；其余与失败分支一律 null，保证形状稳定） */
+    /** 桌宠素材部署结果（只有 workspace-tokenpet 会得到对象；其余与失败分支一律 null，保证形状稳定） */
     skins: null,
     durationMs: Date.now() - started,
     output: '',
@@ -1000,13 +1039,17 @@ export function installSubPlugin(id, options = {}) {
     lines.push('提示：暂存目录 ' + posix(oldDir) + ' 未能删除（不影响使用，可手动清理）')
   }
 
-  // ── 6. 桌宠素材部署（只有 dsh-token-pet；**只补缺失、绝不覆盖**） ──
-  // 运行时只认 <dsh home>/data/dsh-token-pet/skins/，模块内的 skins/ 不会被读取；
+  // ── 6. 桌宠素材部署（只有 workspace-tokenpet；**只补缺失、绝不覆盖**） ──
+  // 运行时只认 <dsh home>/data/workspace-tokenpet/skins/，模块内的 skins/ 不会被读取；
   // 只复制模块会导致装完只剩内置形象（2026-09-13 灰度测试实测）。
   let skins = null
   if (spec.id === PET_SKINS_PLUGIN_ID) {
     const dshHome = resolveDshHome(options)
-    skins = deployPetSkins(join(fromDir, SKINS_DIR_NAME), join(dshHome, PET_SKINS_SUBDIR), { io })
+    skins = deployPetSkins(join(fromDir, SKINS_DIR_NAME), join(dshHome, PET_SKINS_SUBDIR), {
+      io,
+      // 旧址（独立化之前 dsh-token-pet 的素材目录）：新址缺套装时从那里复制迁移
+      legacyDir: join(dshHome, LEGACY_PET_SKINS_SUBDIR),
+    })
     lines.push('桌宠素材：' + describePetSkins(skins))
   }
 

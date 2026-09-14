@@ -70,7 +70,7 @@ export const SUB_PLUGIN_NAMES = [
   'dsh-doc-suite',
   'dsh-experts',
   'dsh-mermaid',
-  'dsh-token-pet',
+  'workspace-tokenpet',
 ]
 
 /** WPS COM ProgID（只实例化 + 退出，**不打开任何文档**） */

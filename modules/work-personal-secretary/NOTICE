@@ -10,7 +10,7 @@ work-personal-secretary — 集成体包含的插件与第三方致谢
 2. dsh-doc-suite     Word / Excel / PPT / PDF 文档能力（自研 · MIT）
 3. dsh-experts       专家库 persona（自研 · MIT；persona 改写自第三方，见下）
 4. dsh-mermaid       Mermaid 图表渲染（第三方 · MIT · MrmoLabs/dsh-mermaid）
-5. dsh-token-pet     桌面形象（第三方定制层 · MIT · 以上游 cc49233 为基线以补丁维护）
+5. workspace-tokenpet 桌面形象（独立项目模块 · MIT · 由三方项目 dsh-token-pet 独立化，致谢与上游版权见其 NOTICE / LICENSE）
 
 二、dsh-experts 的 persona 来源（压缩改写，标 adapted: true）
 ---------------------------------------------------------------

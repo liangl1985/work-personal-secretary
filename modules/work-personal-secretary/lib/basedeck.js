@@ -97,8 +97,8 @@ export const SEED_DEFAULT_TAG = '常规'
 export const DEFAULT_MEMORY_SUBDIR = join('memories', 'work-memory')
 export const DEFAULT_BACKUP_SUBDIR = join('memories', 'work-memory-backup')
 
-/** 桌宠素材目录（与 dsh-token-pet 的 skinsDir 一致：<dsh home>/data/dsh-token-pet/skins） */
-export const PET_SKINS_SUBDIR = join('data', 'dsh-token-pet', 'skins')
+/** 桌宠素材目录（与 workspace-tokenpet 的 skinsDir 一致：<dsh home>/data/workspace-tokenpet/skins） */
+export const PET_SKINS_SUBDIR = join('data', 'workspace-tokenpet', 'skins')
 
 /** 文档技能所在子模块与技能目录名 */
 export const DOC_SUITE_MODULE = 'dsh-doc-suite'

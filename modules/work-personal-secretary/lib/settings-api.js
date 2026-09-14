@@ -58,6 +58,8 @@ export const EXPERTS_CONFIG_FALLBACK = {
   defaultDomain: 'presales',
   identityExpert: '',
   expertInjectMax: 2,
+  expertInjectDetail: 'auto',
+  expertInjectBudgetChars: 1400,
   expertSecondThreshold: 0.8,
   expertMinScore: 0.35,
 }

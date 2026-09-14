@@ -14,9 +14,9 @@
  * @module dsh-experts/settings
  */
 
-import { INJECT_MAX_HARD, clampInjectMax, clampUnit } from './limits.js'
+import { INJECT_MAX_HARD, clampInjectMax, clampUnit, clampBudget, normalizeDetail, INJECT_BUDGET_DEFAULT } from './limits.js'
 
-export { INJECT_MAX_HARD, clampInjectMax }
+export { INJECT_MAX_HARD, clampInjectMax, clampBudget, normalizeDetail, INJECT_BUDGET_DEFAULT }
 
 /**
  * schemastery 是宿主运行时依赖（peerDependencies）。这里用**动态导入降级**：
@@ -45,6 +45,8 @@ export const DEFAULTS = {
   enabledDomains: '',
   enabledExperts: '',
   expertInjectMax: 2,
+  expertInjectDetail: 'auto',
+  expertInjectBudgetChars: INJECT_BUDGET_DEFAULT,
   expertSecondThreshold: 0.8,
   expertMinScore: 0.35,
   expertShowBanner: true,
@@ -70,6 +72,12 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
 
   expertInjectMax: z.natural().default(2)
     .description('每轮最多注入几位专家：1 / 2（默认）/ 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB），且只在分数接近且跨域时才补第 2/3 位'),
+
+  expertInjectDetail: z.string().default('auto')
+    .description('每轮注入形态：auto（默认，按预算自动降级）/ card（全部精简卡）/ full（全文，保持旧行为）。⚠️ full 会把每位 persona 正文全文注入（1.8–2.6 千字符/位），单轮约 4.5–5.2KB；auto / card 只注入精简卡（角色首句 + 方法前 3 条 + 交付前 2 条 + 适用），单轮约 0.9–1.4 千字符，省约 3/4 TOKEN；取值非法时回落 auto'),
+
+  expertInjectBudgetChars: z.natural().default(INJECT_BUDGET_DEFAULT)
+    .description('每轮专家注入的**字符预算**（默认 1400，约 0.9–1.2k TOKEN）：超预算按序降级 —— 命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；连最低形态都放不下则截断并标注（绝不静默超限）。调大＝视角更完整但更占 TOKEN；调小＝更省但卡片更薄（下限 200，上限 20000）'),
 
   expertSecondThreshold: z.number().default(0.8)
     .description('第 2/3 位专家的门槛：其分数 ≥ 第 1 位 × 该值时才注入（默认 0.8；仅 expertInjectMax ≥ 2 时生效）'),
@@ -99,6 +107,8 @@ function normalizeBase(base) {
 function toConfig(resolved) {
   const cfg = { ...DEFAULTS, ...(resolved ?? {}) }
   cfg.expertInjectMax = clampInjectMax(cfg.expertInjectMax)
+  cfg.expertInjectDetail = normalizeDetail(cfg.expertInjectDetail, DEFAULTS.expertInjectDetail)
+  cfg.expertInjectBudgetChars = clampBudget(cfg.expertInjectBudgetChars, DEFAULTS.expertInjectBudgetChars)
   const th = clampUnit(cfg.expertSecondThreshold, DEFAULTS.expertSecondThreshold)
   cfg.expertSecondThreshold = th > 0 ? th : DEFAULTS.expertSecondThreshold
   cfg.expertMinScore = clampUnit(cfg.expertMinScore, DEFAULTS.expertMinScore)

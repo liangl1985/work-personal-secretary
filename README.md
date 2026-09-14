@@ -14,8 +14,8 @@
 |---|---|---|---|
 | 1 | **强记忆**：三级记忆模型（全局永不遗忘 / 热记忆按 TTL 转冷 / 冷归档被用到即转热）+ 转冷预审 + 会话原生注入 + 右侧边栏面板 + Obsidian 镜像 | `modules/dsh-work-memory` | ✅ v1.0.5 |
 | 2 | **强文档处理**：Word（处理 + 比对/红线修订）/ Excel（处理 + 重算 + 透视）/ PPT（制作 + 排版）/ PDF（只读精确提取） | `modules/dsh-doc-suite`（Python 脚本 + DSH 原生技能；宿主半只提供 `/doc-doctor`） | ✅ v0.1.4 |
-| 3 | **专家库**：20 位专家 / 6 域（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）；**常驻注入一位「身份专家」**，默认再补入至多一位**按问题归属判断**的对口专家（`expertInjectMax` 默认 2），其余派子代理激活 | `modules/dsh-experts` | ✅ v0.1.3 |
-| 4 | **桌面宠物形象**：小秘书两套形象（**纯欲乖巧＝默认** / 慵懒性感）各 12 动作；插件支持多套装切换 + 「设为默认形象」；动作做到 pingPong 闭环、抠图无紫边/绿边、无背景底色 | `modules/dsh-token-pet`（**三方插件 `dsh-token-pet` 的定制层**，上游 MIT，以补丁维护） | ✅ v0.2.1-lina.1 |
+| 3 | **专家库**：20 位专家 / 6 域（售前 5 · 售后 4 · 会计财务 5 · 法务 2 · 文档 3 · 核查 1）；**常驻注入一位「身份专家」**，默认再补入至多一位**按问题归属判断**的对口专家（`expertInjectMax` 默认 2）；默认注入**精简卡**（L1，约 0.4–0.7 千字符/位，`expertInjectDetail=full` 可切回全文），其余派子代理激活 | `modules/dsh-experts` | ✅ v0.1.4 |
+| 4 | **桌面宠物形象**：小秘书两套形象（**纯欲乖巧＝默认** / 慵懒性感）各 12 动作；插件支持多套装切换 + 「设为默认形象」；动作做到 pingPong 闭环、抠图无紫边/绿边、无背景底色 | `modules/workspace-tokenpet`（**独立项目模块**，MIT；来源致谢见模块 `NOTICE`） | ✅ v1.0.0 |
 | 5 | **强思维链分析**（方法 + 在思维过程中以**流程图等形式展示**） | 候选评估中，见 `00_项目主页/插件关注列表.md` #7–#11（首选 `dsh-flowglass`） | ⏳ 待评估 |
 
 ## 子项目
@@ -24,8 +24,8 @@
 |---|---|---|---|
 | [`modules/dsh-work-memory`](modules/dsh-work-memory) | `dsh-work-memory` | ✅ 可用（**v1.0.5**） | 执行层长期记忆：**三级记忆模型** + **转冷预审**（到期前先判：保留 / 自然转冷 / 待判断）+ 会话原生注入 + `remember`/`recall`/`link` 工具 + 右侧边栏面板 + Obsidian 镜像。运行时 id 为 `work-memory`（包名与 id 均已中性化） |
 | [`modules/dsh-doc-suite`](modules/dsh-doc-suite) | `dsh-doc-suite` | ✅ 可用（**v0.1.4**） | 文档能力：**Word 处理+比对（红线修订）/ Excel 处理+重算+透视 / PPT 制作+排版 / PDF 只读精确提取**。实现是 Python 脚本 + DSH 原生技能，宿主半只提供 `/doc-doctor` 自检入口 |
-| [`modules/dsh-experts`](modules/dsh-experts) | `dsh-experts` | ✅ 可用（**v0.1.3**） | 专家库：**20 位专家 / 6 域**。**常驻注入一位「身份专家」**（切合使用者岗位，设置项 `identityExpert`）；默认再补入至多一位**按问题归属判断**的对口专家（`expertInjectMax` 默认 2，可调 1–3，>1 提示占 TOKEN）或派子代理（`expert_recall` 把 persona 内联进 `subagent.prompt`）；未命中则原生处理。来源为成熟开源件压缩/组合改写（**MIT 17 · Apache-2.0+MIT 双许可 2 · Apache-2.0 1 · 自撰 1**，合计 20），逐条记于 `experts/index.json` + `NOTICE` |
-| [`modules/dsh-token-pet`](modules/dsh-token-pet) | `dsh-token-pet` | ✅ 可用（**v0.2.1-lina.1**） | **三方插件定制层**（上游 MIT，基线 `cc49233` / v0.2.0）：**不 fork 上游整包**，以**补丁 + 完整可安装副本**交付改造——① **多形象套装**运行时化（宿主扫描 `~/.dsh/data/dsh-token-pet/skins/`，manifest 校验 + 路径穿越防护 + 客户端解析 + blob URL 桥 + 设置面板）；② **条带切帧修复**（宿主透传 `rows`，否则客户端回退内置模板的 2 行 → 宠物显示"两个细长人影"）；③ UI 清理（移除 `aura` 环绕光圈 / `meter` 脚底横条）；④ 默认形象 + 「设为默认形象」按钮。**随包提供三套形象素材**（`default` 上游内置 + 两套自有形象），安装时自动部署到运行时目录（只补缺失、不覆盖） |
+| [`modules/dsh-experts`](modules/dsh-experts) | `dsh-experts` | ✅ 可用（**v0.1.4**） | 专家库：**20 位专家 / 6 域**。**常驻注入一位「身份专家」**（切合使用者岗位，设置项 `identityExpert`）；默认再补入至多一位**按问题归属判断**的对口专家（`expertInjectMax` 默认 2，可调 1–3，>1 提示占 TOKEN）或派子代理（`expert_recall` 把 persona 内联进 `subagent.prompt`）；未命中则原生处理。来源为成熟开源件压缩/组合改写（**MIT 17 · Apache-2.0+MIT 双许可 2 · Apache-2.0 1 · 自撰 1**，合计 20），逐条记于 `experts/index.json` + `NOTICE` |
+| [`modules/workspace-tokenpet`](modules/workspace-tokenpet) | `workspace-tokenpet` | ✅ 可用（**v1.0.0**） | **独立项目模块**（源码 / 构建产物 / 文档 / 素材全部自持；由三方插件独立化，对上游只保留致谢，上游 MIT 版权与许可文本保留在模块 `LICENSE`）：**不依赖上游仓库、无需应用补丁**。① **多形象套装**运行时化（宿主扫描 `~/.dsh/data/workspace-tokenpet/skins/`，manifest 校验 + 路径穿越防护 + 客户端解析 + blob URL 桥 + 设置面板）；② **条带切帧修复**（宿主透传 `rows`，否则客户端回退内置模板的 2 行 → 宠物显示"两个细长人影"）；③ UI 清理（移除 `aura` 环绕光圈 / `meter` 脚底横条）；④ 默认形象 + 「设为默认形象」按钮。**随包提供三套形象素材**（`default` 上游内置 + 两套自有形象），安装时自动部署到运行时目录（只补缺失、不覆盖；新址缺套装时自旧址复制迁移） |
 
 后续候选（待定，需先确认许可证与必要性）：多代理团队引擎、思维链可视化（见关注列表）。
 
@@ -56,7 +56,7 @@ dsh plugin --profile <profile> add <模块目录或包名>
 | `dsh-work-memory` | 无（零运行时依赖，只用 node 内置模块） |
 | `dsh-experts` | 无（零运行时依赖） |
 | `dsh-doc-suite` | **Python ≥ 3.10**（建议 3.12；Windows 用 `py -3`）+ **WPS Office** —— **两者都不会被自动安装**，由 `/doc-doctor` 检测并给出修复命令 |
-| `dsh-token-pet` | 先克隆上游基线并应用 `modules/dsh-token-pet` 的补丁，再 `add link:<克隆目录>` |
+| `workspace-tokenpet` | 无（零运行时依赖：宿主半只用 node 内置模块，客户端为预构建产物；`npm install` 只在开发/重建时需要） |
 
 宿主侧代码改动需**重启 DSH** 才加载；仅客户端改动刷新页面即可（客户端 bundle 按 revision 缓存，故每次改动都会升版本号）。
 
@@ -72,7 +72,7 @@ dsh plugin --profile <profile> add <模块目录或包名>
 - 卸载插件：`dsh plugin --profile <profile> remove <包名>`，随后重启 DSH。
 - **记忆数据不随插件卸载而删除**：默认位于 `~/.dsh/memories/work-memory/`（Markdown 正文 + 索引/状态文件），默认备份目录 `~/.dsh/memories/work-memory-backup/`。需要彻底清除时手动删除这两个目录。
 - **外部知识库镜像**（如已配置）是一份可读的 Markdown 副本，卸载后保留，可继续当资料使用。
-- 桌宠**形象素材**位于 `~/.dsh/data/dsh-token-pet/skins/`，属使用者自有资产，卸载插件不受影响（模块内 `skins/` 是随包副本，运行时用的是部署后的那一份；安装器只补缺失、不覆盖你改过的套装）。
+- 桌宠**形象素材**位于 `~/.dsh/data/workspace-tokenpet/skins/`，属使用者自有资产，卸载插件不受影响（模块内 `skins/` 是随包副本，运行时用的是部署后的那一份；安装器只补缺失、不覆盖你改过的套装）。**旧目录 `~/.dsh/data/dsh-token-pet/skins/` 的数据不删除**：装新模块时新址缺哪套就从旧址**复制**哪套（旧数据保留、新址已有内容不覆盖）。
 - 全部数据**本地存放、明文、不联网、无遥测**；除使用者自己配置的模型服务外，本集成体不向外发送任何内容。
 
 ## 已验证的安装形态（desktop profile，2026-09-13）
@@ -83,10 +83,12 @@ dsh plugin --profile <profile> add <模块目录或包名>
 | `dshmarket` | 1.45.1 | npm（插件市场本体，**市场界面通常不列自己**） |
 | `dsh-mermaid` | 0.4.0 | npm |
 | `dsh-doc-suite` | 0.1.4 | 本地（`file:<集成体仓库>/modules/dsh-doc-suite`） |
-| `dsh-experts` | 0.1.3 | 本地（`file:<集成体仓库>/modules/dsh-experts`） |
-| `dsh-token-pet` | 0.2.1-lina.1 | 本地 `link:`（**上游克隆 + 已应用补丁**；定制层补丁在 `modules/dsh-token-pet`，素材在 `~/.dsh/data/dsh-token-pet/skins/`） |
+| `dsh-experts` | 0.1.4 | 本地（`file:<集成体仓库>/modules/dsh-experts`） |
+| `workspace-tokenpet` | 1.0.0 | 本地（`file:<集成体仓库>/modules/workspace-tokenpet`；素材随安装部署到 `~/.dsh/data/workspace-tokenpet/skins/`） |
 
-`dsh --profile desktop --dump-config` 退出码 **0**，上述条目均在组合树中且无 `disabled`。
+> **本机 desktop profile 尚需一次迁移**（旧 id `dsh-token-pet@0.2.1-lina.1` → 新 id `workspace-tokenpet@1.0.0`）：卸载旧 id → 安装新 id → 确认素材目录；步骤见 [`modules/workspace-tokenpet/CHANGELOG.md`](modules/workspace-tokenpet/CHANGELOG.md) 1.0.0 段。本次未改动本机 profile。
+
+`dsh --profile desktop --dump-config` 退出码 **0**（2026-09-14 独立化后复核：退出码仍为 0；本机换 id 之前，组合树中的桌宠条目仍显示旧 id `token-pet` / `dsh-token-pet`，迁移后应为 `workspace-tokenpet`）。
 
 > **`dsh-doc-suite` 的硬前置**（安装前必须满足，`/doc-doctor` 会逐项检测并给出修复命令）：
 > **Python ≥ 3.10**（建议 3.12；Windows 一律用 `py -3`，不要用 `python`——它可能是 Microsoft Store 别名 stub）
@@ -101,7 +103,7 @@ work-personal-secretary/
 │   ├── dsh-work-memory/         #   记忆插件（lib/ + client/ + scripts/regression.mjs）
 │   ├── dsh-doc-suite/           #   文档能力模块（Python 脚本 + skills/ + doctor.py）
 │   ├── dsh-experts/             #   专家库（experts/ 专家数据 + lib/ 匹配与注入 + 三套自测）
-│   └── dsh-token-pet/           #   桌宠定制层（三方插件补丁 + 完整可安装副本 + 三套形象素材）
+│   └── workspace-tokenpet/      #   桌面形象（独立项目模块：src/ 源码 + lib/ 产物 + client/ 预构建 + skins/ 三套素材）
 ├── defaults/                    # 随包默认：全局记忆种子 + AGENTS 指令模板（中文）
 ├── CHANGELOG.md                 # 集成体版本历史（正式版第一版 v1.0.0）
 ├── .github/workflows/ci.yml     # 仓库级 CI：语法自检 + 遍历子项目跑回归 + 冒烟/共存 + 必需文件自检
@@ -133,7 +135,7 @@ py -3 modules/dsh-doc-suite/doctor.py
 py -3 modules/dsh-doc-suite/doctor.py --emit-skill-paths
 ```
 
-- **JS 子项目**（`dsh-work-memory`、`dsh-experts`）**零运行时依赖**（只用 node 内置模块；宿主 peer 缺失时自动降级），回归与自测脚本可直接执行，CI 不需要 `npm install`。
+- **JS 子项目**（`dsh-work-memory`、`dsh-experts`）**零运行时依赖**（只用 node 内置模块；宿主 peer 缺失时自动降级），回归与自测脚本可直接执行，CI 不需要 `npm install`。`workspace-tokenpet` 的宿主半同样零运行时依赖（`lib/` 只用 node 内置模块，`client/client.js` 为预构建产物）。
 - **文档子模块**（`dsh-doc-suite`）的运行时依赖是 **Python 库 + WPS Office**，不经 npm；CI 只做语法自检（`py -3 -m py_compile`），环境就绪性交给使用者本机的 `doctor.py`。
 
 ## 默认约定（随包发布时同样生效）

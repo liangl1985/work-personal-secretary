@@ -23,6 +23,8 @@
         enabledDomains: ''        # 把匹配范围收窄到这些域（逗号分隔）；留空 = 全量参与（岗位只作先验）
         enabledExperts: ''        # 把匹配范围收窄到这些专家 id（逗号分隔）；留空 = 不收窄
         expertInjectMax: 2        # 每轮最多注入几位专家：1 / 2（默认）/ 3 —— >1 会占用较多 TOKEN
+        expertInjectDetail: 'auto' # 注入形态：auto（默认，按预算降级：命中全文→命中精简卡→只留身份精简卡）/ card（全精简卡）/ full（全文，旧行为）
+        expertInjectBudgetChars: 1400 # 每轮专家注入字符预算（默认 1400 ≈ 0.9–1.2k TOKEN）：超预算按序降级，绝不静默超限
         expertSecondThreshold: 0.8 # 第 2/3 位的分数门槛：Top-N ≥ Top-1 × 该值，且须跨域
         expertMinScore: 0.35      # 低于此分不注入（宁缺勿滥，保持通用助手行为）
         expertShowBanner: true    # 注入时显示「当前专家视角」标识

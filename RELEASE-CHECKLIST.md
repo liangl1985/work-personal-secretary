@@ -2,7 +2,7 @@
 
 > 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
 >
-> 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.3、`dsh-token-pet` v0.2.1-lina.1（**三方插件定制层**）；四者已实装本机 desktop，桌宠为 `link:` 装机。
+> 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.3、`workspace-tokenpet` v1.0.0（**独立项目模块**）；四者已实装本机 desktop（桌宠模块本机尚需按 1.0.0 迁移步骤换 id：卸载旧 id → 安装新 id → 确认素材目录）。
 
 ## 一、默认约定必须随包生效（2026-09-11 定）
 
@@ -40,7 +40,7 @@
 - [x] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
 - [x] **仓库根 `NOTICE` 存在**（聚合索引：随包内容与各模块版本 / 20 位 persona 来源与许可 / `review: pending` 免责 / 未随包分发清单）
 - [x] **CI 覆盖范围核对（2026-09-13 P5）**：语法自检已覆盖全量 `*.js` / `*.mjs`（含本体 `lib/settings-api.js`）；回归 / 装载冒烟 / 共存契约分别由 `*/scripts/regression.mjs`、`*/scripts/smoke-load.mjs`、`*/scripts/coexist.mjs` 覆盖；
-      **本体四套自测**（`probe-test.mjs` 136 · `install-test.mjs` 169 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
+      **本体四套自测**（`probe-test.mjs` 136 · `install-test.mjs` 200 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
 - [x] **补入 CI 后首轮即暴露并修掉测试自身的平台缺陷**：`probe-test.mjs` 的 `/fix` 白名单断言未锁定 `platform`，在 Linux runner 上走「非 Windows 平台无 winget」分支（**9 项失败**）→ 锁定 `platform: 'win32'`、`pythonDeps` 真跑断言容忍「解释器在、pip 不可用」的降级形态、`maskUserPath` 断言做分隔符归一化，并**新增 2 条非 Windows 平台分支正向断言**（不再依赖宿主恰好是 Windows）；本机 win32 **136/136** · 伪装 linux **133/133** · CI `e4943c7` Node 22/24 双版本 **success**
 
 ## 三点五、文档模块硬前置与路径（2026-09-12 增）
@@ -79,6 +79,8 @@
 
 - [x] 常驻注入**只有一位**「身份专家」（设置项 `identityExpert`；留空取岗位域第一位）——发布件不得写成"多位专家常驻"
 - [x] 其余专家按**问题归属判断**补位：命中单一 → 按该专家视角原生处理；**跨领域/需独立作业 → 派子代理**（`expert_recall` 取 persona 后**内联进 `subagent.prompt`**）；未命中 → **原生处理**（宁缺勿滥，不硬套视角）
+- [x] **匹配排序修复（0.1.4）**：排序改为「显式指定 > 任务实证 > 总分 > index 顺序」，`expertMinScore` 只卡零实证候选 —— 实测「这份采购合同的钱怎么算、税怎么处理」由投标策略师改为命中法务，上限 2 且无身份专家时「法务 + 会计」同时选中
+- [x] **提示词注入分级（0.1.4）**：默认形态 `auto` 只注入**精简卡**（464–509 字符/位）；`expertInjectDetail`（auto / card / full，**full 可回退旧行为**）与 `expertInjectBudgetChars`（默认 1400，超预算按序降级并标注）；`expert_recall` 与派子代理仍取全文；实测单轮 3674 → 1218 字符
 - [x] `enabledDomains` / `enabledExperts` 只**收窄**"参与自动匹配"的集合，不改变上述流程
 - [x] 敏感行业（军工/商密/烟草/数据安全）仍**主上下文直接做、不派子代理**（与第一节红线一致）
 
@@ -90,37 +92,36 @@
 - [x] 设置项齐全且默认值正确：`expertsEnabled` / `defaultDomain` / `identityExpert` / `enabledDomains` / `enabledExperts` / `expertInjectMax` / `expertSecondThreshold` / `expertMinScore` / `expertShowBanner`（另有一项 `expertSetupDone` 安装引导完成标记，由引导自动写入）
 - [x] 注入块标题固定为 **【处理路径】+【身份视角·…】**（命中/临时注入时另有【本轮命中·…】/【临时注入·…】）
 
-## 三点七、桌宠定制层（dsh-token-pet，2026-09-13 增）
+## 三点七、桌面形象模块（workspace-tokenpet，2026-09-14 独立化）
 
-> 性质特殊：**不是自研模块，而是三方插件（MIT）的定制层**——以补丁记录改造，并随仓库提供**完整可安装副本**（含三套形象素材，42 个文件 / 68.8 MB）。
+> 形态：**独立项目模块**（源码 + 构建产物 + 文档 + 素材自持）。此前为三方插件 `dsh-token-pet` 的本地定制层；1.0.0 起独立化，对上游只保留致谢（上游版权与 MIT 许可文本保留在该模块 `LICENSE`）。
 
-### 结构与来源
+### 结构与命名
 
-- [x] 模块结构齐备：`README.md` / `CHANGELOG.md` / `LICENSE` / `NOTICE` / `cordis.patch.yml` / `patches/` / `scripts/` / `tests/`
-- [x] `patches/0001-lina-customizations.patch` 存在，且 `patches/UPSTREAM-BASE.txt` 记录**基线 commit**（当前 `cc49233` / 上游 v0.2.0）
-- [x] `LICENSE` = 上游 MIT 全文（Copyright (c) DSH Token Pet contributors），**未经改动**
-- [x] `NOTICE` 写明上游项目与仓库、基线 commit、许可类型，以及**本定制层的改造边界**（只改源码；上游版权声明一律保留）
-- [x] 版本号与上游可区分：`0.2.1-lina.1`（形如 `<上游版本>-lina.<n>`）
-- [x] `cordis.patch.yml` 为**中性部署默认层**（不含个人路径/称呼）
+- [x] 模块结构齐备：`README.md` / `README.en.md` / `CHANGELOG.md` / `LICENSE` / `NOTICE` / `CONTRIBUTING.md` / `SECURITY.md` / `cordis.patch.yml` / `src/` / `lib/` / `client/` / `skins/` / `tests/`
+- [x] 包名与插件运行时 id 一致为 `workspace-tokenpet`；版本 `1.0.0`
+- [x] 目录为 `modules/workspace-tokenpet`（`git mv` 自 `modules/dsh-token-pet`，历史保留）
+- [x] `LICENSE` 同时保留**上游 MIT 版权行**（Copyright (c) DSH Token Pet contributors）与本项目版权行
+- [x] `NOTICE` 写明「本项目 + 致谢上游」（项目名 / 仓库 / 许可 / 基线 commit `cc49233`），上游版权与许可文本**未删除**
+- [x] `package.json`：`bugs.url` 指向本仓库 issues、`repository.directory` = `modules/workspace-tokenpet`、`files` 不再含 `patches`
+- [x] **补丁形态已清除**：`patches/**`、`scripts/apply-customizations.*`、`scripts/upstream/**` 均不存在；`package.json` 无相关失效 scripts
+- [x] `cordis.patch.yml` 为**中性部署默认层**（不含个人路径 / 称呼），entry `id` / `name` = `workspace-tokenpet`
+- [x] README 不再含「上游与基线 / 改造清单 / 补丁应用」三节；致谢独立成节
 
-### 补丁质量
+### 素材与数据目录
 
-- [x] **补丁可干净应用**：`scripts/apply-customizations.ps1 -Target <克隆> -Check` 通过
-- [x] **应用后与装机工作区一致**（逐文件 SHA256 比对，防补丁漏文件）
-- [x] 补丁**不含个人绝对路径、称呼、凭据**（集成体第二节红线）
-- [x] `README.md` 的改造清单与补丁实际内容一致（当前 12 个文件）
+- [x] **形象素材随包完整**：`modules/workspace-tokenpet/skins/` 含三套（`default` + `lina-pure` + `lina-lazy`），每套 14 个文件（`manifest.json` + 12 条动作 + `preview.webp`），合计 **42 个文件**
+- [x] 运行时目录为新址 `~/.dsh/data/workspace-tokenpet/skins/<套装id>/`；安装器**新址优先**、只补缺失、绝不覆盖
+- [x] **旧址迁移**：新址缺套装而旧址 `~/.dsh/data/dsh-token-pet/skins/` 有同名套装时**复制迁移**（旧址数据保留、绝不覆盖新址已有内容、单套失败不影响安装结果）
+- [x] 相关常量集中在 `lib/install.js`（`PET_SKINS_PLUGIN_ID` / `PET_SKINS_SUBDIR` / `LEGACY_PET_SKINS_SUBDIR`）与 `lib/basedeck.js`（`PET_SKINS_SUBDIR`），未散落他处
+- [x] README / NOTICE 与仓库实际形态一致：素材随包分发（`default` 为上游 MIT；两套自有形象未经授权不得再分发）
 
-### 素材与体积
+### 验证
 
-- [x] **形象素材随包完整**：`modules/dsh-token-pet/skins/` 含三套（`default` + `lina-pure` + `lina-lazy`），每套 14 个文件（`manifest.json` + 12 条动作 + `preview.webp`），合计 **42 个文件**；**不得**缺少自研套装（2026-09-13 灰度测试暴露过"只复制模块、不部署素材"的遗漏）
-- [x] 模块体积含素材（当前 ≈ **68.8 MB**；若骤减多为素材被误删或被 `.gitignore` 挡住）
-- [x] README / NOTICE 与仓库实际形态一致：素材**随包分发**（`default` 为上游 MIT；两套自有形象未经授权不得再分发），运行时由安装器部署到 `~/.dsh/data/dsh-token-pet/skins/<套装id>/`（**只补缺失、绝不覆盖**）
-
-### 验证与升级纪律
-
-- [x] 回归测试**在应用补丁并 build 后的克隆目录**执行（`node tests/lina-skins.test.mjs`，8 项）——依赖上游构建产物 `lib/skins.js`，**CI 不跑它**
-- [x] 集成体 CI 不因本模块失败（本模块不含 `scripts/regression.mjs` / `smoke-load.mjs` / `coexist.mjs`）
-- [x] 上游升级后**重新应用补丁并复跑测试**，冲突按补丁意图手工合并，同时更新 `UPSTREAM-BASE.txt` 与 `CHANGELOG`
+- [x] `tests/lina-skins.test.mjs` 8 项全绿（直接跑模块内 `lib/` 产物，**不再需要上游克隆**）
+- [x] 集成体侧：`install-test.mjs` **200 通过 / 0 失败**（[9]/[9b] 节覆盖部署与旧址迁移）、`probe-test.mjs` 136/0、`basedeck-test.mjs` 179/0、`smoke-load.mjs` 337/0
+- [x] `node --check` 覆盖全部改动的 JS（含 `client/client.js`）
+- [x] 本机 profile 未改动；换 id 迁移步骤已写进根 README 与模块 CHANGELOG
 
 ## 三点八、P4 能力配置页与 UI 验收（2026-09-13 增）
 
@@ -128,7 +129,7 @@
 
 ### 宿主半（读写子插件设置）
 
-- [x] `GET /settings` 白名单枚举：只暴露 work-memory（**24 键**）与 experts（**10 键**）两个 ns；非白名单 ns（如 token-pet）不出现在响应里
+- [x] `GET /settings` 白名单枚举：只暴露 work-memory（**24 键**）与 experts（**12 键**）两个 ns；非白名单 ns（如 workspace-tokenpet）不出现在响应里
 - [x] `POST /settings/write` 双重白名单（ns + 顶层键，**按 ns 隔离**：work-memory 的键不能写进 experts）+ revision 冲突栅栏（旧 revision → **409** `error:"conflict"`，且原值不被破坏）
 - [x] 默认 **dry-run**：不传 `dryRun` 一律只回填当前值、不写盘；`dryRun:false` 才走官方 `mutate`
 - [x] 同源守卫：跨站 Origin / 缺 `application/json` / 缺 Origin → **403**，且被拦下的请求零写入
@@ -141,7 +142,7 @@
 
 ### 客户端半（能力配置页）
 
-- [x] 记忆库 24 键五小节 / 专家库 10 键 + 三滑块 + **实时预览** / 文档能力自检面板 / 桌面形象状态跳转
+- [x] 记忆库 24 键五小节 / 专家库 12 键 + 四滑块 + 一下拉 + **实时预览** / 文档能力自检面板 / 桌面形象状态跳转
 - [x] 已覆盖标记、`unset`（清除覆盖回默认）、**409 冲突自动重读且不丢输入**；`ConfigFieldRow` 对不在 settings schema 的字段（如 `experts.injectOrder`）**早退不渲染**（否则用户一改必被宿主 400 拒绝）
 - [x] 装载冒烟 `scripts/smoke-load.mjs` **330 通过 / 0 失败**（256 → 330）
 
@@ -152,8 +153,8 @@
 
 ### 真机验收（2026-09-13）
 
-- [x] **能力配置页**：`expertInjectMax` 显示 **2** 且无「已覆盖」徽章（甲案生效）；24+10 键可读可写；写入两次 revision 实测递增（R1→R2）；`settings.yaml` 落盘新值且**原有键与注释逐字保留**、无 `.bak-`（官方原子写路径如此）；**免重启热生效**
-- [x] **UI 打磨**（真机反馈驱动）：「重新读取」加读取中态 + 「最近读取 HH:MM:SS」（首次加载也算）；能力配置页改**插件级标签**（一次只渲染当前插件）；设置页跳转修正 —— 宿主左侧导航项实际叫 **「用量小宠物」且不本地化**，候选名收敛为 `["用量小宠物","token-pet"]`，并修掉「硬依赖 `<nav>`」（真机面板非 nav 元素）→ **跳转真机验证成功**
+- [x] **能力配置页**：`expertInjectMax` 显示 **2** 且无「已覆盖」徽章（甲案生效）；24+12 键可读可写；写入两次 revision 实测递增（R1→R2）；`settings.yaml` 落盘新值且**原有键与注释逐字保留**、无 `.bak-`（官方原子写路径如此）；**免重启热生效**
+- [x] **UI 打磨**（真机反馈驱动）：「重新读取」加读取中态 + 「最近读取 HH:MM:SS」（首次加载也算）；能力配置页改**插件级标签**（一次只渲染当前插件）；设置页跳转修正 —— 宿主左侧导航项实际叫 **「用量小宠物」且不本地化**，候选名收敛为 `["用量小宠物","workspace-tokenpet"]`（设置分区 id 随模块 id 更名），并修掉「硬依赖 `<nav>`」（真机面板非 nav 元素）→ **跳转真机验证成功**
 - [x] **桌宠热区收敛**（`287000e`）：外层容器改 `pointerEvents:none` / `cursor:default`，新增精确热区层只覆盖形象渲染框（等高等宽），`stageChip` 移出热区；**主人刷新后实测**：左右空白不再响应点击/拖动、点形象仍能开合、拖动正常
 - [x] **配置引导页两缺陷**（`28e398d`）：桌面版「浏览…」改走 `window.__DSH_DESKTOP_PICK_DIRECTORY__`（原走 host `pickDirectory` 必抛 native 能力错）；第 1 步「重新检查」按阶段刷新、不再自动跳步；「浏览…」按钮 `nowrap` 修竖排。**重启后主人复验通过**
 - [x] 提交推送：`e388985`(P4) · `4a3afe7` · `287000e` · `24c16d0` · `219e11a`(experts 升版) · `d20a648`(NOTICE)

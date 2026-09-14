@@ -57,7 +57,7 @@ export const SUB_PLUGINS = [
   { name: 'dsh-doc-suite', zh: '文档能力', purpose: 'Word / Excel / PPT / PDF 四格式处理与精确提取' },
   { name: 'dsh-experts', zh: '专家库', purpose: '按岗位关联的专家 persona：常驻一位身份专家，其余按问题归属补位' },
   { name: 'dsh-mermaid', zh: '思维链与图表', purpose: '把 Mermaid 代码块渲染成流程图 / 时序图（第三方，MIT）' },
-  { name: 'dsh-token-pet', zh: '桌面形象', purpose: '桌面宠物外观与动作（第三方定制层，MIT）' },
+  { name: 'workspace-tokenpet', zh: '桌面形象', purpose: '桌面宠物外观与动作（独立项目模块，MIT）' },
 ]
 
 export function apply(ctx, config = {}) {

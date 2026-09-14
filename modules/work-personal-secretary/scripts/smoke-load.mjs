@@ -118,7 +118,7 @@ const texts = collect(tree, [])
 const joined = texts.join(' | ')
 
 console.log('\n[5] 内容完整性（关于与致谢）')
-const expectPlugins = ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'dsh-token-pet']
+const expectPlugins = ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'workspace-tokenpet']
 for (const p of expectPlugins) {
   ok(joined.includes(p), '列出子插件 ' + p)
 }
@@ -444,7 +444,7 @@ const PLUGINS_PAYLOAD = {
     // 故意不给 name（走内置中文名兜底）与 status（按「已装 vs 内置」推导）
     { id: 'dsh-experts', nature: '第三方', builtinVersion: '0.9.0', installedVersion: '0.8.0', mode: '复制', status: 'updatable' },
     { id: 'dsh-mermaid', name: '思维链与图表', nature: 'third', builtinVersion: '0.4.0', installedVersion: null, mode: 'link' },
-    { id: 'dsh-token-pet', name: '桌面形象', nature: 'third', builtinVersion: '0.5.1', installedVersion: '0.5.1', mode: 'copy', status: 'upToDate' },
+    { id: 'workspace-tokenpet', name: '桌面形象', nature: 'third', builtinVersion: '0.5.1', installedVersion: '0.5.1', mode: 'copy', status: 'upToDate' },
   ],
 }
 const installOnePayload = (opts) => {
@@ -660,7 +660,7 @@ const REAL_PLUGINS_PAYLOAD = {
     { id: 'dsh-doc-suite', label: '文档能力', kind: '自研', bundledVersion: '1.0.0', installed: false, installedVersion: null, installMode: null, upToDate: false },
     { id: 'dsh-experts', label: '专家库', kind: '自研', bundledVersion: '1.0.0', installed: true, installedVersion: '0.9.0', installMode: 'copy', upToDate: false },
     { id: 'dsh-mermaid', label: '思维链与图表', kind: '第三方', bundledVersion: '0.4.2', installed: true, installedVersion: null, installMode: 'link', upToDate: false },
-    { id: 'dsh-token-pet', label: '桌面形象', kind: '第三方', bundledVersion: '0.5.1', installed: false, installedVersion: null, installMode: null, upToDate: false },
+    { id: 'workspace-tokenpet', label: '桌面形象', kind: '第三方', bundledVersion: '0.5.1', installed: false, installedVersion: null, installMode: null, upToDate: false },
   ],
   summary: { total: 5, installed: 3, upToDate: 1 },
 }

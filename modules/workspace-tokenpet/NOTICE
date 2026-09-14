@@ -1,0 +1,48 @@
+NOTICE — workspace-tokenpet
+============================
+
+本目录是**独立项目模块 workspace-tokenpet**（DSH 桌面宠物插件），不是上游发行物的
+定制层、补丁或补丁应用结果。本模块的源码、构建产物、文档与形象素材均自持。
+
+本项目
+------
+  包名   : workspace-tokenpet
+  版本   : 1.0.0
+  仓库   : https://github.com/liangl1985/work-personal-secretary.git
+  目录   : modules/workspace-tokenpet
+  许可   : MIT —— 见本目录 LICENSE（含本项目版权行）
+  构建   : 源码 src/ → 宿主产物 lib/（tsc）与客户端产物 client/client.js（tsdown）
+
+致谢上游（原始来源）
+--------------------
+  本模块由三方 DSH 插件 **dsh-token-pet** 独立化而来。上游的代码、形象与设计
+  是本模块的基础，特此致谢。上游的版权与 MIT 许可文本**原样保留**在本目录
+  LICENSE 中，不因独立化而删除。
+
+  项目   : dsh-token-pet —— A bilingual floating pet for DeepSeek Harness
+  仓库   : https://github.com/Jimmy0123-ux/dsh-token-pet
+  许可   : MIT License, Copyright (c) DSH Token Pet contributors
+  许可全文: 见本目录 LICENSE（第 3 行起的上游版权行与其后的 MIT 条款）
+  基线   : commit cc49233f8d951dff7d979ee500ae74918497978e（v0.2.0）
+           —— 独立化时本模块所对应的上游版本，仅供版本对照与追溯。
+
+  独立化之后，本模块不再应用上游补丁、不再随上游升级；上游如继续演进，
+  与本模块无自动同步关系。
+
+随本模块分发的内容
+------------------
+  · 宿主产物 lib/ 与客户端产物 client/client.js（含内置形象，装完即可用）；
+  · 三套形象素材 skins/<套装id>/（manifest.json + <action>.webp 条带，共 42 个文件）：
+      - default    —— 上游内置形象（MIT，署名见该套装 manifest.json 的 author 字段）；
+      - lina-pure / lina-lazy —— 本项目自有形象资产（各 12 动作），随本仓库分发，
+                     未经授权不得再分发或商用。
+    安装器会把**缺失**的套装部署到 ~/.dsh/data/workspace-tokenpet/skins/
+    （只补缺失、不覆盖使用者改过的套装）；若新址缺套装而旧址
+    ~/.dsh/data/dsh-token-pet/skins/ 存在同名套装，则从旧址**复制迁移**（旧数据保留）。
+
+不包含的内容
+------------
+  · 上游源仓库的 assets/ 原始素材与 sourcemap（只保留构建产物 client/client.js）；
+  · 任何凭证、密钥或 API Key。
+
+*小秘书 · 2026-09-14 · 独立化*

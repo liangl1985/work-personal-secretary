@@ -1,8 +1,9 @@
 # dsh-experts · 专家库模块
 
 > `work-personal-secretary` 集成体的专家库子模块：把"每次临场手写专家人设"变成"按需调用现成专家定义"。
-> **默认每轮只注入 1 位专家**（可调到 2/3，调大时设置页会提示占用较多 TOKEN），
-> 其余专家按需**临时注入**，绝不全部加载。
+> **默认每轮注入 2 位**（身份专家 + 至多 1 位按问题归属补位的对口专家，可调 1–3），
+> 且默认只注入**精简卡**（L1，约 0.4–0.7 千字符/位）而不是正文全文 —— 单轮专家开销约为全文口径的 1/4；
+> 需要全文时用 `expert_recall` 现取现用（派子代理时内联进 prompt），绝不把 20 位全部加载。
 
 ## 它解决什么
 
@@ -10,7 +11,8 @@
 - 主对话只能临场手写人设 → 每次重写、质量不稳；
 - 换个人用（例如会计岗同事）→ 拿到的是通用助手，**不会自动从会计角度拆解任务**。
 
-本模块提供 20 位专家的**使用提示词**（persona），按「显式指令 > 岗位先验 ≈ 任务关键词 > 会话域」自动匹配注入，
+本模块提供 20 位专家的**使用提示词**（persona），按「显式指令 > 任务实证（关键词/标签）> 总分（岗位先验…）」
+自动匹配注入 —— **有实证的对口专家排在"只沾岗位域"的本域专家之前**（否则"合同+税"这类跨域任务会被岗位先验压住），
 让任务天然从对应专业角度被理解与拆解。
 
 ## 安装
@@ -49,6 +51,20 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-experts
 
 > 建议把这条流程同时写进会话工作区的 `AGENTS.md`（**指令层每轮生效**，约束力强于插件自身）——集成体已带通用模板：`defaults/AGENTS.zh-CN.md`。
 
+### 注入分级（L0 / L1 / L2，2026-09-14）
+
+每轮注入的不是 persona 全文，而是按级别选择（`expertInjectDetail` 控制）：
+
+| 级别 | 内容 | 何时用 |
+|---|---|---|
+| **L0 目录** | 只有索引（id / 名称 / 适用场景），不注入正文 | 默认：未命中的专家不进上下文，靠 `expert_recall` / `/expert list` 现取 |
+| **L1 精简卡**（默认） | 角色首句 + 工作方法前 3 条 + 交付与自检前 2 条 + 适用场景（每位约 464–509 字符） | `auto` / `card` 形态：身份专家与命中专家都注入卡 |
+| **L2 全文** | 现有 persona 正文（每位约 1.8–2.6 千字符） | `/expert use`、`expert_recall`、**派子代理时内联进 prompt** |
+
+精简卡由正文**确定性生成**（不重写、不修改 `experts/**.md`），所以取全文时内容一字不少；
+`expertInjectBudgetChars`（默认 1400）约束每轮专家块总长，超预算按序降级：
+命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡 → 截断，**任何降级/截断都写明，绝不静默超限**。
+
 首次启用建议先跑一次安装引导：
 
 ```
@@ -68,7 +84,9 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-experts
 | `identityExpert` | 空 | **常驻注入的唯一身份专家**（id，如 `presales-ics-security`）；留空 = 取岗位域第一位 |
 | `enabledDomains` | 空 | 把匹配范围**收窄**到这些域；留空 = 全量参与（「本人岗位」只作打分先验，**不作白名单**） |
 | `enabledExperts` | 空 | 把匹配范围**收窄**到这些专家 id；范围外的专家不参与自动匹配，仍可临时注入 |
-| `expertInjectMax` | `1` | 每轮最多注入几位：**1 / 2 / 3**；⚠️ >1 会占用较多 TOKEN（每位 persona 约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB） |
+| `expertInjectMax` | `2` | 每轮最多注入几位（含身份专家）：**1 / 2 / 3**；默认形态下每位只占 0.4–0.7 千字符（精简卡），调到 3 时仍受 `expertInjectBudgetChars` 约束 |
+| `expertInjectDetail` | `auto` | 注入形态：`auto`（默认，按预算降级）/ `card`（全部精简卡）/ `full`（**全文，旧行为**，单轮约 4.5–5.2KB，可一键回退） |
+| `expertInjectBudgetChars` | `1400` | 每轮专家注入字符预算（约 0.9–1.2k TOKEN）：超预算按序降级；下限 200 / 上限 20000 |
 | `expertSecondThreshold` | `0.8` | 第 2/3 位门槛：分数 ≥ 第 1 位 × 该值，且须**跨域** |
 | `expertMinScore` | `0.35` | 低于此分不注入（宁缺勿滥） |
 | `expertShowBanner` | `true` | 注入时显示「当前专家视角」标识 |
@@ -80,15 +98,15 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-experts
 dsh-experts/
 ├── experts/
 │   ├── index.json          # 元数据（id/域/关键词/文件/来源与许可）
-│   ├── presales/ aftersales/ finance/ legal/ doc/ general/   # 正文（纯 Markdown，约 1.3–1.8 千字）
+│   ├── presales/ aftersales/ finance/ legal/ doc/ general/   # 正文（纯 Markdown，约 1.8–2.6 千字符）
 ├── lib/
 │   ├── index.js            # 宿主半：注入 + expert_recall 工具 + /expert 命令
-│   ├── match.js            # 匹配打分（纯函数，可单测）
+│   ├── match.js            # 匹配打分与排序（显式 > 实证 > 总分；纯函数，可单测）
 │   ├── store.js            # 索引与 persona 读取（按 mtime 失效缓存）
-│   ├── inject.js           # 注入文本组装
-│   ├── limits.js           # 注入上限与阈值归一化（硬上限 / 夹取）
-│   └── settings.js         # 设置命名空间（10 项，免重启）
-├── scripts/                # 自测：regression / smoke-load / coexist（不依赖宿主运行时）
+│   ├── inject.js           # 注入文本组装（L1 精简卡 / L2 全文 + 预算降级）
+│   ├── limits.js           # 注入上限、预算与阈值归一化（硬边界 / 夹取）
+│   └── settings.js         # 设置命名空间（12 项，免重启）
+├── scripts/                # 自测：regression / injection-tier-test / smoke-load / coexist（不依赖宿主运行时）
 └── NOTICE                  # 来源与许可（MIT / Apache-2.0 / 自撰）
 ```
 
@@ -118,9 +136,10 @@ dsh-experts/
 ## 自测
 
 ```bash
-node scripts/regression.mjs   # 25 项：索引 / persona 体量 / 匹配打分 / 注入组装
-node scripts/smoke-load.mjs   # 18 项：mock ctx 真跑 apply()（命令与工具）
-node scripts/coexist.mjs      # 7 项：与 dsh-work-memory 同 ctx 共存的契约测试
+node scripts/regression.mjs          # 27 项：索引 / persona 体量 / 匹配打分与排序 / 注入组装
+node scripts/injection-tier-test.mjs # 16 项：精简卡确定性 / 三态 / 预算降级 / 默认值三处一致
+node scripts/smoke-load.mjs          # 18 项：mock ctx 真跑 apply()（命令与工具）
+node scripts/coexist.mjs             # 7 项：与 dsh-work-memory 同 ctx 共存的契约测试
 ```
 
 三套都不依赖宿主运行时（`schemastery` / `dsh-tools` 缺失时自动降级），可直接在本机或 CI 跑；CI 已包含回归 + 装载冒烟 + 共存契约。

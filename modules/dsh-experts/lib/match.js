@@ -4,12 +4,16 @@
  * 两套分数，各司其职：
  *   - **总分**（`score`）决定"本轮主角是谁"：岗位先验 + 会话域 + 关键词/标签 + 显式指令；
  *   - **证据分**（`evidence`）只统计**任务文本里的实证**（关键词 + 角色标签命中），
- *     用于判断"要不要再补一位跨域专家"。
+ *     决定**排序先后**与"要不要再补一位跨域专家"。
  *
- * 为什么补位不能只看总分：岗位先验会给本域每位专家都加同样的分，
+ * 为什么不能只看总分：岗位先验给本域每位专家都加同样的分（0.35），
  * 使跨域专家在总分上天然吃亏。于是"这份合同的钱怎么算、税怎么处理"（法务+会计）
- * 这类任务永远补不上第二位 —— 而它恰恰是该补的场景。
- * 所以第 2/3 位比的是**跨域证据的强度**，不是被岗位先验抬高的总分。
+ * 这类任务里，对口专家（0.20–0.25）永远排在"只沾岗位域"的本域专家（0.35）之后 ——
+ * 而它恰恰是该命中的场景（2026-09-13 真机实测：期望法务+会计，实际返回投标策略师）。
+ * 所以排序**先看实证、再看总分**：有实证的专家排在"只有先验"的专家之前；
+ * 补位同样比**跨域证据的强度**，不是被岗位先验抬高的总分。
+ * 取舍是刻意的：任务里偶然出现的一个词会把跨域对口专家排到前面 —— 宁可命中者优先，
+ * 也不要"只靠岗位域兜底"；而**显式指定**（/expert use、消息点名）永远最高优先。
  *
  * 权重口径（产品口径 2026-09-12 定：岗位先验权重最高，但任务信号明确时应压过先验）：
  *   显式指令 > 岗位默认域 ≈ 密集关键词 > 会话域 > 零散标签
@@ -119,15 +123,27 @@ export function scoreEntry(entry, ctx = {}) {
 }
 
 /**
- * 全体专家排序（分数降序；同分时按 index.json 顺序稳定排列）。
+ * 全体专家排序：**显式指定 > 任务实证（evidence）> 总分 > index.json 顺序**。
+ *
+ * 排序口径（2026-09-14 修「跨域单关键词任务被岗位域先验压过」）：
+ *   总分里的岗位先验（0.35）给本域每位专家同样的分，而单关键词命中的跨域对口专家
+ *   只有 0.20–0.25 —— 纯按总分排，对口专家永远排在"只沾岗位域"的本域专家之后。
+ *   改为先比 evidence（只有任务文本里有实据的专家才 > 0），把有实据的排前面、
+ *   只靠先验兜底的退后面；同 evidence 档内仍按总分降序，最后按 index.json 顺序稳定排列。
+ *   显式指定单独占最高优先级，完全不受 evidence 影响。
  * @param {Array<object>} entries - 参与匹配的专家（通常来自 activeExperts()）
  * @param {object} ctx - 打分上下文
  * @returns {Array<{entry:object, score:number, evidence:number, reasons:string[]}>}
  */
 export function rankExperts(entries, ctx = {}) {
+  const explicitRank = (x) => (x.reasons.includes('显式指定') ? 1 : 0)
   return (entries || [])
     .map((entry, i) => ({ entry, i, ...scoreEntry(entry, ctx) }))
-    .sort((a, b) => (b.score - a.score) || (a.i - b.i))
+    .sort((a, b) =>
+      (explicitRank(b) - explicitRank(a))
+      || (b.evidence - a.evidence)
+      || (b.score - a.score)
+      || (a.i - b.i))
     .map(({ entry, score, evidence, reasons }) => ({ entry, score, evidence, reasons }))
 }
 
@@ -170,7 +186,9 @@ export function selectExperts(entries, ctx = {}, cfg = {}) {
     if (idItem && item.entry.id === idItem.entry.id) continue
     if (selected.length === 0) {
       const explicit = item.reasons.includes('显式指定')
-      if (!explicit && item.score < minScore) break // 分数不足 → 本轮不注入
+      // 门槛只卡「没有任何任务实证」的候选：evidence > 0 说明任务确实指向它，
+      // 哪怕总分低于 expertMinScore 也注入；纯靠岗位先验兜底的才受 minScore 约束。
+      if (!explicit && item.evidence === 0 && item.score < minScore) break
       selected.push(item)
       continue
     }

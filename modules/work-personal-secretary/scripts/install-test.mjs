@@ -15,7 +15,7 @@
  *       SHA256 完好、.wps-new 清理、profile/package.json 未被改动；以及前置失败不触碰目标
  *       G 备份轮转：package.json.bak-* 只保留最近 BACKUP_KEEP（10）份，prunedBackups 如实回报
  *   [8] 隔离与中立性：全部写入都在 os.tmpdir() 下；真实 profile 仅做 **只读 mtime/size 快照**
- *   [9] 桌宠素材部署（dsh-token-pet 专属）：缺失才补 / 已存在绝不覆盖 / 源无 skins 时 skipped 且不影响安装
+ *   [9] 桌宠素材部署（workspace-tokenpet 专属）：缺失才补 / 已存在绝不覆盖 / 源无 skins 时 skipped 且不影响安装
  *
  * 红线：本测试**绝不触碰真实的 ~/.dsh/profiles**——所有 repoRoot / profileDir 都在 os.tmpdir() 下自建，
  * 且每次调用前都用 assertInsideTmp() 复核；测试首尾只**读取**真实 profile 的 stat 快照用于证明未被写入。
@@ -105,7 +105,7 @@ const VERSIONS = {
   'dsh-doc-suite': '8.8.8',
   'dsh-experts': '7.7.7',
   'dsh-mermaid': '6.6.6',
-  'dsh-token-pet': '5.5.5',
+  'workspace-tokenpet': '5.5.5',
 }
 
 /** 造一个带"应当被排除"目录的源子插件 */
@@ -132,7 +132,7 @@ function makeProfile() {
     dependencies: {
       'dsh-work-memory': 'file:node_modules/dsh-work-memory',
       'dsh-mermaid': '0.4.0',
-      'dsh-token-pet': 'link:../somewhere/dsh-token-pet',
+      'workspace-tokenpet': 'link:../somewhere/workspace-tokenpet',
     },
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-work-memory'] } },
   }, null, 2) + '\n')
@@ -184,7 +184,7 @@ const realBefore = snapshot(realProfilePkg)
 
 section('[1] SUB_PLUGIN_IDS：五个固定 id 与顺序')
 ok(SUB_PLUGIN_ID_LIST.length === 5, '共五个 id')
-ok(SUB_PLUGIN_ID_LIST.join(',') === 'dsh-work-memory,dsh-doc-suite,dsh-experts,dsh-mermaid,dsh-token-pet', '顺序与契约一致')
+ok(SUB_PLUGIN_ID_LIST.join(',') === 'dsh-work-memory,dsh-doc-suite,dsh-experts,dsh-mermaid,workspace-tokenpet', '顺序与契约一致')
 ok(SUB_PLUGIN_IDS.every((s) => s.label && s.kind), '每项都有中文 label 与 kind')
 ok(SUB_PLUGIN_IDS.every((s) => s.kind === '自研' || s.kind === '第三方'), 'kind 只取 自研 / 第三方')
 ok(SUB_PLUGINS.map((s) => s.name).join(',') === SUB_PLUGIN_ID_LIST.join(','), '与 lib/index.js 的 SUB_PLUGINS 一致')
@@ -350,10 +350,10 @@ const rBadId = await call('POST', '/install', { id: '../x' }, ORIGIN_HEADERS)
 ok(rBadId.status === 200 && rBadId.body.ok === false, 'POST /install 未知 id → 200 ok=false')
 ok(!existsSync(join(TMP_ROOT, 'x')) && !existsSync(join(TMP_ROOT, 'escape')), '未知 id 未越界写入')
 
-const rAll = await call('POST', '/install-all', { ids: ['dsh-mermaid', 'nope', 'dsh-token-pet'] }, ORIGIN_HEADERS)
+const rAll = await call('POST', '/install-all', { ids: ['dsh-mermaid', 'nope', 'workspace-tokenpet'] }, ORIGIN_HEADERS)
 ok(rAll.status === 200 && rAll.body.results.length === 2, 'POST /install-all 只执行白名单项')
-ok(rAll.body.results[0].id === 'dsh-token-pet' || rAll.body.results[0].id === 'dsh-mermaid', 'install-all 结果为白名单项')
-ok(rAll.body.results.map((x) => x.id).join(',') === 'dsh-mermaid,dsh-token-pet', 'install-all 按固定顺序串行')
+ok(rAll.body.results[0].id === 'workspace-tokenpet' || rAll.body.results[0].id === 'dsh-mermaid', 'install-all 结果为白名单项')
+ok(rAll.body.results.map((x) => x.id).join(',') === 'dsh-mermaid,workspace-tokenpet', 'install-all 按固定顺序串行')
 ok(rAll.body.rejected.join(',') === 'nope', 'install-all 未知 id 计入 rejected')
 ok(rAll.body.ok === true && rAll.body.results.every((x) => x.ok === true), 'install-all ok=true')
 
@@ -456,13 +456,13 @@ ok(readFileSync(join(profB, 'package.json'), 'utf8') === pkgB, 'B profile/packag
 // ── C. 替换阶段失败：回滚后原目录必须完好 ──
 const profC = makeFreshProfile('atomic-swap')
 assertInsideTmp(profC, 'profC')
-const seedC = installSubPlugin('dsh-token-pet', { repoRoot: FAKE_REPO, profileDir: profC, now: fixedNow })
+const seedC = installSubPlugin('workspace-tokenpet', { repoRoot: FAKE_REPO, profileDir: profC, now: fixedNow })
 ok(seedC.ok === true, 'C 前置：首次安装成功')
-const dirC = join(profC, 'node_modules', 'dsh-token-pet')
+const dirC = join(profC, 'node_modules', 'workspace-tokenpet')
 const fpC = fingerprint(dirC)
 const pkgC = readFileSync(join(profC, 'package.json'), 'utf8')
 let renameCalls = 0
-const resSwapFail = installSubPlugin('dsh-token-pet', {
+const resSwapFail = installSubPlugin('workspace-tokenpet', {
   repoRoot: FAKE_REPO, profileDir: profC, now: fixedNow,
   io: {
     renameSync(from, to) {
@@ -481,7 +481,7 @@ ok(readFileSync(join(profC, 'package.json'), 'utf8') === pkgC, 'C profile/packag
 ok(String(resSwapFail.rollback).length > 0, 'C 返回里给出回滚说明：' + String(resSwapFail.rollback).slice(0, 40))
 
 // ── D. 正常覆盖重装：replaced/overwrite 标记 + 暂存目录删除 ──
-const resOver = installSubPlugin('dsh-token-pet', { repoRoot: FAKE_REPO, profileDir: profC, now: fixedNow })
+const resOver = installSubPlugin('workspace-tokenpet', { repoRoot: FAKE_REPO, profileDir: profC, now: fixedNow })
 ok(resOver.ok === true && resOver.replaced === true && resOver.overwrite === true, 'D 同版本重装 → replaced=true / overwrite=true')
 ok(resOver.output.indexOf('覆盖重装') >= 0, 'D output 标注覆盖重装')
 ok(!existsSync(dirC + '.wps-old') && !existsSync(dirC + '.wps-new'), 'D 成功后暂存目录已删除')
@@ -591,7 +591,7 @@ try {
 }
 try { if (hostDisposer) hostDisposer() } catch (e) { /* best-effort */ }
 
-// ───────────────────── [9] 桌宠素材部署（dsh-token-pet 专属） ─────────────────────
+// ───────────────────── [9] 桌宠素材部署（workspace-tokenpet 专属） ─────────────────────
 
 section('[9] 桌宠素材部署（只补缺失 / 绝不覆盖 / 不影响安装结果）')
 const SKIN_REPO = join(TMP_ROOT, 'repo-skins')
@@ -607,12 +607,12 @@ function makeEmptyProfile(dir) {
   }, null, 2) + '\n')
 }
 
-// 专用假仓库：token-pet 带两套套装（各 manifest.json + 两条条带）
+// 专用假仓库：workspace-tokenpet 带两套套装（各 manifest.json + 两条条带）
 {
-  const dir = join(SKIN_REPO, 'modules', 'dsh-token-pet')
+  const dir = join(SKIN_REPO, 'modules', 'workspace-tokenpet')
   mkdirSync(join(dir, 'lib'), { recursive: true })
-  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'dsh-token-pet', version: '5.5.5', main: 'lib/index.js' }, null, 2) + '\n')
-  writeFileSync(join(dir, 'lib', 'index.js'), 'export const name = "dsh-token-pet"\n')
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'workspace-tokenpet', version: '5.5.5', main: 'lib/index.js' }, null, 2) + '\n')
+  writeFileSync(join(dir, 'lib', 'index.js'), 'export const name = "workspace-tokenpet"\n')
   for (const pack of ['lina-pure', 'lina-lazy']) {
     const p = join(dir, 'skins', pack)
     mkdirSync(p, { recursive: true })
@@ -623,12 +623,12 @@ function makeEmptyProfile(dir) {
   makeEmptyProfile(SKIN_PROFILE)
   makeEmptyProfile(SKIN_PROFILE2)
 }
-const skinTarget = join(SKIN_HOME, 'data', 'dsh-token-pet', 'skins')
+const skinTarget = join(SKIN_HOME, 'data', 'workspace-tokenpet', 'skins')
 assertInsideTmp(SKIN_REPO, 'skinRepo')
 assertInsideTmp(SKIN_HOME, 'skinHome')
 
 const resSkin = installSubPlugin(PET_SKINS_PLUGIN_ID, { repoRoot: SKIN_REPO, profileDir: SKIN_PROFILE, dshHome: SKIN_HOME, now: fixedNow })
-ok(resSkin.ok === true, '装 token-pet 成功（素材部署不改变安装结果）')
+ok(resSkin.ok === true, '装 workspace-tokenpet 成功（素材部署不改变安装结果）')
 ok(Boolean(resSkin.skins) && resSkin.skins.ok === true, 'skins.ok=true')
 ok(resSkin.skins.deployed.join(',') === 'lina-lazy,lina-pure', '两套套装都部署（按名排序）：' + resSkin.skins.deployed.join(','))
 ok(resSkin.skins.files === 6, '部署文件数 = 6（每套 manifest+idle+preview）：' + resSkin.skins.files)
@@ -645,17 +645,17 @@ ok(resSkin2.ok === true, '重复安装仍成功')
 ok(resSkin2.skins.deployed.length === 0 && resSkin2.skins.kept.join(',') === 'lina-lazy,lina-pure', '目标已存在 → 两套全部跳过：' + resSkin2.skins.kept.join(','))
 ok(readFileSync(join(skinTarget, 'lina-pure', 'idle.webp'), 'utf8') === '使用者自己改过的内容\n', '使用者改过的素材**未被覆盖**')
 
-// 源模块没有 skins（纯补丁形态）→ skipped，且不影响安装
+// 源模块没有 skins → skipped，且不影响安装
 const resSkin3 = installSubPlugin(PET_SKINS_PLUGIN_ID, { repoRoot: FAKE_REPO, profileDir: SKIN_PROFILE2, dshHome: SKIN_HOME2, now: fixedNow })
 ok(resSkin3.ok === true, '源无 skins 时安装仍成功')
 ok(Boolean(resSkin3.skins) && resSkin3.skins.skipped === true, '素材部署标记 skipped：' + (resSkin3.skins ? resSkin3.skins.reason : '(无 skins 字段)'))
-ok(!existsSync(join(SKIN_HOME2, 'data', 'dsh-token-pet', 'skins', 'lina-pure')), '未凭空造出套装内容')
+ok(!existsSync(join(SKIN_HOME2, 'data', 'workspace-tokenpet', 'skins', 'lina-pure')), '未凭空造出套装内容')
 
-// 非 token-pet 子插件：不做素材部署
+// 非 workspace-tokenpet 子插件：不做素材部署
 const resOther = installSubPlugin('dsh-experts', { repoRoot: FAKE_REPO, profileDir: SKIN_PROFILE2, dshHome: SKIN_HOME2, now: fixedNow })
-ok(resOther.ok === true && resOther.skins === null, '非 token-pet 结果 skins=null（形状稳定）')
+ok(resOther.ok === true && resOther.skins === null, '非 workspace-tokenpet 结果 skins=null（形状稳定）')
 ok(installSubPlugin('dsh-evil', { repoRoot: FAKE_REPO, profileDir: SKIN_PROFILE2 }).skins === null, '失败分支同样带 skins=null（形状稳定）')
-ok(typeof resSkin.skins.target === 'string' && resSkin.skins.target.indexOf('dsh-token-pet') >= 0, 'skins.target 指向运行时素材目录')
+ok(typeof resSkin.skins.target === 'string' && resSkin.skins.target.indexOf('workspace-tokenpet') >= 0, 'skins.target 指向运行时素材目录')
 
 // resolveDshHome：显式 → 环境变量 → 默认 ~/.dsh（与 basedeck 同源）
 ok(resolveDshHome({ dshHome: SKIN_HOME }) === SKIN_HOME, 'resolveDshHome 优先显式 dshHome')
@@ -665,6 +665,37 @@ ok(resolveDshHome({ env: {} }) === join(homedir(), '.dsh'), 'resolveDshHome 兜�
 // deployPetSkins 直接调用：坏源目录不抛异常
 ok(deployPetSkins('', '', {}).skipped === true, 'deployPetSkins 空源 → skipped 不抛错')
 ok(describePetSkins(null) === '不适用', 'describePetSkins(null) 回显「不适用」')
+
+// ── [9b] 数据目录迁移：新址缺套装而旧址（data/dsh-token-pet/skins）有 → 复制迁移 ──
+const SKIN_HOME3 = join(TMP_ROOT, 'dshhome3')
+const SKIN_PROFILE3 = join(TMP_ROOT, 'profile-skins3')
+const legacySkins = join(SKIN_HOME3, 'data', 'dsh-token-pet', 'skins')
+const newSkins = join(SKIN_HOME3, 'data', 'workspace-tokenpet', 'skins')
+{
+  mkdirSync(join(legacySkins, 'lina-pure'), { recursive: true })
+  writeFileSync(join(legacySkins, 'lina-pure', 'manifest.json'), '{"id":"lina-pure"}\n')
+  writeFileSync(join(legacySkins, 'lina-pure', 'idle.webp'), 'legacy-lina-pure\n')
+  // 旧址还多出一套模块里没有的套装（同样应迁移过来）
+  mkdirSync(join(legacySkins, 'lina-custom'), { recursive: true })
+  writeFileSync(join(legacySkins, 'lina-custom', 'manifest.json'), '{"id":"lina-custom"}\n')
+  writeFileSync(join(legacySkins, 'lina-custom', 'idle.webp'), 'legacy-lina-custom\n')
+  // 新址已有 lina-lazy（使用者自己放/改过）→ 必须保持不动
+  mkdirSync(join(newSkins, 'lina-lazy'), { recursive: true })
+  writeFileSync(join(newSkins, 'lina-lazy', 'idle.webp'), '使用者版本\n')
+  makeEmptyProfile(SKIN_PROFILE3)
+  assertInsideTmp(SKIN_HOME3, 'skinHome3')
+}
+const resMig = installSubPlugin(PET_SKINS_PLUGIN_ID, { repoRoot: SKIN_REPO, profileDir: SKIN_PROFILE3, dshHome: SKIN_HOME3, now: fixedNow })
+ok(resMig.ok === true, '旧址迁移场景：安装成功')
+ok(resMig.skins.migrated.join(',') === 'lina-custom,lina-pure', '旧址同名套装被复制迁移：' + resMig.skins.migrated.join(','))
+ok(resMig.skins.deployed.length === 0, '旧址优先：不再从模块内重复部署这些套装')
+ok(resMig.skins.kept.join(',') === 'lina-lazy', '新址已有套装不覆盖：' + resMig.skins.kept.join(','))
+ok(readFileSync(join(newSkins, 'lina-pure', 'idle.webp'), 'utf8') === 'legacy-lina-pure\n', '迁移内容逐字节来自旧址')
+ok(readFileSync(join(legacySkins, 'lina-pure', 'idle.webp'), 'utf8') === 'legacy-lina-pure\n', '旧址数据保留（复制而非移动）')
+ok(readFileSync(join(newSkins, 'lina-lazy', 'idle.webp'), 'utf8') === '使用者版本\n', '新址使用者内容未被迁移覆盖')
+ok(resMig.output.indexOf('已从旧址迁移 2 套') >= 0, '安装回显含迁移结果')
+const resMig2 = installSubPlugin(PET_SKINS_PLUGIN_ID, { repoRoot: SKIN_REPO, profileDir: SKIN_PROFILE3, dshHome: SKIN_HOME3, now: fixedNow })
+ok(resMig2.skins.migrated.length === 0 && resMig2.skins.kept.length === 3, '二次安装：3 套全部已在 → 全跳过（迁移不重复）')
 
 // ───────────────────── 收尾 ─────────────────────
 rmSync(TMP_ROOT, { recursive: true, force: true })
