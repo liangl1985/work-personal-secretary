@@ -221,13 +221,24 @@ test('每位 persona 文件存在、含三段标题、字数 900–3000', () => 
 
 // ---------- 3. 匹配打分 ----------
 const ctx = (over = {}) => ({ text: '', defaultDomain: 'infosec', branchDomain: null, explicitId: null, ...over })
-const cfg = (over = {}) => ({ expertInjectMax: 1, expertSecondThreshold: 0.8, expertMinScore: 0.35, ...over })
+const cfg = (over = {}) => ({ expertInjectMax: 1, expertSecondThreshold: 0.8, ...over })
 
-test('岗位先验：空任务文本也命中本域专家（且分数 = 权重值）', () => {
-  const { selected } = selectExperts(experts, ctx(), cfg())
-  assert.equal(selected.length, 1)
-  assert.equal(selected[0].entry.domain, 'infosec')
-  assert.equal(selected[0].score, WEIGHTS.domain)
+test('零命中不注入：空任务文本下不注入任何专家（宁缺勿滥）', () => {
+  const { selected, reason } = selectExperts(experts, ctx(), cfg())
+  assert.equal(selected.length, 0, '零命中不应注入：' + selected.map((s) => s.entry.id).join(','))
+  assert.equal(reason, 'no-evidence')
+})
+
+test('零命中不补位：上限 2 时空任务也不补出第二位（补位污染根治）', () => {
+  const { selected } = selectExperts(experts, ctx({ text: '帮我看看这个' }), cfg({ expertInjectMax: 2 }))
+  assert.equal(selected.length, 0, '零命中不应补位：' + selected.map((s) => s.entry.id).join(','))
+})
+
+test('有任务实证时跨域命中正常（零命中闸门不误伤真命中）', () => {
+  const { selected } = selectExperts(experts,
+    ctx({ text: '这个月的发票和税务怎么处理', defaultDomain: 'infosec' }), cfg({ expertInjectMax: 2 }))
+  assert.ok(selected.length >= 1, '应命中税务专家')
+  assert.equal(selected[0].entry.id, 'accounting-tax', '实际：' + selected.map((s) => s.entry.id).join(','))
 })
 
 test('关键词命中：等保问题命中等保测评专家', () => {
@@ -237,17 +248,60 @@ test('关键词命中：等保问题命中等保测评专家', () => {
   assert.equal(selected[0].entry.id, 'infosec-djbh')
 })
 
-test('显式指定压过岗位先验', () => {
-  const { selected } = selectExperts(experts, ctx({ text: '帮我看看', explicitId: 'hr-labor-law' }), cfg())
-  assert.equal(selected[0].entry.id, 'hr-labor-law')
-  assert.ok(selected[0].reasons.includes('显式指定'))
+test('任务证据压过岗位先验：跨域对口专家排在只沾岗位域的专家之前', () => {
+  const { selected } = selectExperts(experts,
+    ctx({ text: '这个月的发票和税务怎么处理', defaultDomain: 'infosec' }), cfg())
+  assert.equal(selected.length, 1, '只应注入命中的那一位：' + selected.map((s) => s.entry.id).join(','))
+  assert.equal(selected[0].entry.id, 'accounting-tax', '跨域对口专家未排第一')
 })
 
-test('分数不足则不注入（宁缺勿滥）', () => {
-  const { selected, reason } = selectExperts(experts,
-    ctx({ text: '今天天气不错', defaultDomain: GENERAL_DOMAIN }), cfg({ expertMinScore: 0.9 }))
-  assert.equal(selected.length, 0)
-  assert.equal(reason, 'below-threshold')
+test('role_tag 不再当命中信号（只作职能去重键）', () => {
+  // 「工控安全」在 infosec-sales-engineer 的 role_tag 里、同时是 ics-security 的关键词：
+  // 旧口径会让销售位凭标签分被顺带补位（实测误命中），现只应命中真正带该关键词的那位。
+  const { selected } = selectExperts(experts,
+    ctx({ text: '帮我看看工控安全的事', defaultDomain: 'general' }), cfg({ expertInjectMax: 2 }))
+  const ids = selected.map((s) => s.entry.id)
+  assert.ok(ids.includes('infosec-ics-security'), '应命中工控安全售前：' + ids.join(','))
+  assert.ok(!ids.includes('infosec-sales-engineer'), '销售位不应凭 role_tag 被顺带命中：' + ids.join(','))
+})
+
+test('关键词表：与本位正文不脱节（≥2 词有正文落点）', () => {
+  // 口径说明：关键词表来自**用户语言**（用户会说「质量」「回归」），不要求与正文一一对应；
+  // 但至少要有一两个词在本位正文里有落点，证明「这位专家确实管这件事」。
+  const bad = []
+  for (const e of experts) {
+    const body = loadPersona(e) || ''
+    const kws = e.trigger_keywords || []
+    const inBody = kws.filter((k) => body.includes(k)).length
+    if (inBody < Math.min(2, kws.length)) bad.push(e.id + '（正文仅命中 ' + inBody + '/' + kws.length + '）')
+  }
+  assert.deepEqual(bad, [], '关键词与正文完全脱节：' + bad.join('；'))
+})
+
+test('关键词跨专家撞车只能是已知的 6 处（防词表乱增造成误命中）', () => {
+  // 已知且接受的交叉（语义确有重叠，或同词不同义）：
+  //   合规 / 整改 —— 等保测评 与 内控合规 的固有交叉
+  //   版式 / 字体 —— 报告排版 / 演示设计 / 视觉设计 的固有交叉
+  //   演示 —— 销售工程师（给客户演示产品）与 演示与汇报设计（做演示文稿），同词不同义
+  //   幻灯片 —— 文档与表格处理（处理 pptx）与 演示与汇报设计
+  // 新增撞车必须人工裁定（拆词 / 合并 / 或加入本清单）。
+  const KNOWN = new Set(['合规', '整改', '版式', '字体', '演示', '幻灯片'])
+  const map = new Map()
+  for (const e of experts) for (const k of (e.trigger_keywords || [])) {
+    if (!map.has(k)) map.set(k, [])
+    map.get(k).push(e.id)
+  }
+  const unexpected = [...map.entries()]
+    .filter(([k, ids]) => ids.length > 1 && !KNOWN.has(k))
+    .map(([k, ids]) => k + '（' + ids.join('、') + '）')
+  assert.deepEqual(unexpected, [], '出现新的关键词撞车（请裁定：拆词 / 合并 / 加入已知清单）：' + unexpected.join('；'))
+})
+
+test('「审查」靠关键词表命中（本次从 role_tag 并入的词）', () => {
+  const { selected } = selectExperts(experts,
+    ctx({ text: '这段代码帮我审查一下', defaultDomain: GENERAL_DOMAIN }), cfg())
+  assert.ok(selected.length >= 1, '应命中代码审查专家')
+  assert.equal(selected[0].entry.id, 'coding-review', '实际：' + selected.map((s) => s.entry.id).join(','))
 })
 
 test('跨域 Top-2：上限 2 且两位证据接近时补第二位；两位须跨域', () => {
@@ -319,14 +373,13 @@ test('rankExperts 同 evidence 档内按总分降序、空任务由岗位先验�
   assert.equal(ranked[0].score, WEIGHTS.domain)
 })
 
-test('身份专家：留空时取岗位域第一位；显式指定优先；无效 id 回退', () => {
-  const auto = identityExpertOf({ defaultDomain: 'infosec', identityExpert: '' })
-  assert.ok(auto, '未解析出身份专家')
-  assert.equal(auto.domain, 'infosec', '留空应取岗位域第一位')
+test('身份专家：留空 = 不常驻（身份退场）；显式指定生效；无效 id 返回 null', () => {
+  assert.equal(identityExpertOf({ defaultDomain: 'infosec', identityExpert: '' }), null,
+    '留空不应解析出常驻身份专家（身份由 work-memory 承担）')
   const picked = identityExpertOf({ defaultDomain: 'infosec', identityExpert: 'infosec-djbh' })
-  assert.equal(picked.id, 'infosec-djbh', '显式指定的身份专家未生效')
-  const fallback = identityExpertOf({ defaultDomain: 'infosec', identityExpert: 'no-such-id' })
-  assert.ok(fallback && fallback.domain === 'infosec', '无效 id 应回退到岗位域')
+  assert.ok(picked && picked.id === 'infosec-djbh', '显式指定的身份专家未生效')
+  assert.equal(identityExpertOf({ defaultDomain: 'infosec', identityExpert: 'no-such-id' }), null,
+    '无效 id 应返回 null（不回退到岗位域第一位）')
 })
 
 test('expertInjectMax = 0（不限）：跨职能可全部补入，不再受个数上限截断', () => {
@@ -370,7 +423,8 @@ test('问题归属补位：上限 2 时，跨职能命中的专家被补上（�
 
 // ---------- 4. 注入与设置归一化 ----------
 test('注入组装：无身份专家时命中块带「本轮命中」标题与正文', () => {
-  const { selected } = selectExperts(experts, ctx({ explicitId: 'general-office' }), cfg())
+  const { selected } = selectExperts(experts,
+    ctx({ text: '帮我把这份 Word 文档排版一下' }), cfg({ expertInjectMax: 2 }))
   const text = buildInjection(selected, { banner: true })
   assert.ok(text.includes('【本轮命中·'), '缺标题：' + text.slice(0, 80))
   assert.ok(text.includes('【处理路径】'), '缺处理路径提示')
@@ -435,26 +489,6 @@ test('交付层纪律块：ok / absent / unreadable 三态（absent 静默、unr
   assert.ok(ok.includes('交付层') && ok.includes('A') && ok.includes('B'), 'ok 渲染异常：' + ok)
   const many = formatDiscipline({ status: 'ok', lines: ['1', '2', '3', '4', '5', '6', '7'] })
   assert.ok(many.includes('还有 1 条'), '超出上限应标注省略：' + many)
-})
-
-test('阶段裁剪（层 5）：understand 全卡 / execute 丢方法行 / deliver 只留交付；不传 stage 逐字不变', () => {
-  const e = findExpert('infosec-ics-security')
-  const body = loadPersona(e)
-  const full = buildPersonaCard(e, body)
-  assert.equal(buildPersonaCard(e, body, {}), full, '不传 stage 应与旧行为逐字一致')
-  assert.equal(buildPersonaCard(e, body, { stage: 'understand' }), full, 'understand 即全卡')
-  assert.ok(full.includes('方法：') && full.includes('角色：') && full.includes('适用：'), '全卡结构异常')
-
-  const exec = buildPersonaCard(e, body, { stage: 'execute' })
-  assert.ok(!exec.includes('方法：'), 'execute 阶段应丢掉方法行：' + exec.slice(0, 80))
-  assert.ok(exec.includes('角色：') && exec.includes('交付：'), 'execute 阶段应保留角色与交付')
-  assert.ok(exec.includes('阶段·execute'), 'execute 阶段应有阶段标注')
-  assert.ok(exec.length < full.length, 'execute 卡应比全卡短')
-
-  const dlv = buildPersonaCard(e, body, { stage: 'deliver' })
-  assert.ok(!dlv.includes('角色：') && !dlv.includes('方法：') && !dlv.includes('适用：'), 'deliver 阶段只应留交付：' + dlv.slice(0, 80))
-  assert.ok(dlv.includes('交付：'), 'deliver 阶段缺交付行')
-  assert.ok(dlv.length < exec.length, 'deliver 卡应比 execute 卡短')
 })
 
 test('目录段：六域成员 + 能力节；无能力索引时省略该节且不超上限', () => {

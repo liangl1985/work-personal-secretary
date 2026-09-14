@@ -146,22 +146,6 @@ test('三态：full = 全文 / card = 全精简卡 / auto = 按预算降级', ()
   assert.ok(!auto.includes('未注入：'), '未丢专家时不该写未注入')
 })
 
-test('阶段（层 5）：execute 丢方法行 / deliver 只留交付，不传 stage 行为不变', () => {
-  const card = buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX }))
-  assert.ok(card.includes('方法：') && card.includes('适用：'), '全卡应含方法行与适用行')
-  const exec = buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX, stage: 'execute' }))
-  assert.ok(!exec.includes('方法：'), 'execute 应丢方法行：' + exec.slice(0, 120))
-  assert.ok(exec.includes('交付：') && exec.includes('角色：'), 'execute 应保留角色与交付')
-  assert.ok(exec.length < card.length, 'execute 应比全卡短')
-  const dlv = buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX, stage: 'deliver' }))
-  assert.ok(!dlv.includes('适用：') && !dlv.includes('方法：'), 'deliver 只应留交付：' + dlv.slice(0, 120))
-  assert.ok(dlv.includes('交付：'), 'deliver 缺交付行')
-  assert.ok(dlv.length < exec.length, 'deliver 应比 execute 短')
-  // full 形态不做阶段裁剪（全文信息完整，裁剪等于丢信息）
-  const fullStage = buildInjection(baseSel, opt({ detail: 'full', stage: 'deliver' }))
-  assert.ok(fullStage.includes('## 工作方法'), 'full 形态不应被阶段裁剪')
-})
-
 // ---------- 5. 预算降级顺序 ----------
 test('auto 第 0 级：预算足够（5000 字符）时命中专家给全文', () => {
   const out = buildInjection(baseSel, opt({ detail: 'auto', budgetChars: 5000 }))

@@ -154,39 +154,24 @@ function clipPersona(entry, text) {
  * 解析失败或段落缺失 → 回退「全文截断」并标注，**永不产出空块**。
  * @returns {string} 卡正文（不含标题与尾注；空串仅当正文为空）
  */
-export function buildPersonaCard(entry, body, { stage = '' } = {}) {
+export function buildPersonaCard(entry, body) {
   const text = String(body ?? '').trim()
   if (!text) return ''
   const { role, methods, deliveries, ok } = parsePersonaSections(text)
   if (!ok || methods.length === 0) {
     return clipPersona(entry, text) + '\n（结构未识别 · 已回退全文截断 · 全文用 expert_recall 取）'
   }
-  // 阶段裁剪（design-v2 第 9 节）：understand = 全卡；execute = 丢方法行、留角色与交付；
-  // deliver = 只留交付与自检。**不传 stage 即不裁剪**（旧调用方 / card-preview 行为逐字不变）。
-  const mode = String(stage || '').toLowerCase()
-  const showRole = mode !== 'deliver'
-  const showMethods = mode !== 'execute' && mode !== 'deliver'
-  const showWhen = mode !== 'deliver'
   const lines = []
-  if (showRole) {
-    const roleLine = leadSentence(role, CARD_ROLE_MAX_CHARS, CARD_ROLE_MIN_CHARS)
-    if (roleLine) lines.push('角色：' + roleLine)
-  }
-  if (showMethods) {
-    const methods3 = methods.slice(0, CARD_METHOD_COUNT)
-      .map((t, i) => (i + 1) + ') ' + clip(t, CARD_METHOD_MAX_CHARS))
-    if (methods3.length > 0) lines.push('方法：' + methods3.join('  '))
-  }
+  const roleLine = leadSentence(role, CARD_ROLE_MAX_CHARS, CARD_ROLE_MIN_CHARS)
+  if (roleLine) lines.push('角色：' + roleLine)
+  const methods3 = methods.slice(0, CARD_METHOD_COUNT)
+    .map((t, i) => (i + 1) + ') ' + clip(t, CARD_METHOD_MAX_CHARS))
+  if (methods3.length > 0) lines.push('方法：' + methods3.join('  '))
   const deliveries2 = deliveries.slice(0, CARD_DELIVERY_COUNT)
     .map((t) => '• ' + clip(t, CARD_DELIVERY_MAX_CHARS))
   if (deliveries2.length > 0) lines.push('交付：' + deliveries2.join('  '))
-  if (showWhen) {
-    const when = stripMarks(entry?.when_to_use || '').slice(0, CARD_WHEN_MAX_CHARS)
-    if (when) lines.push('适用：' + when)
-  }
-  if (mode === 'execute' || mode === 'deliver') {
-    lines.push('（阶段·' + mode + '：已按阶段裁剪，完整视角用 expert_recall 取）')
-  }
+  const when = stripMarks(entry?.when_to_use || '').slice(0, CARD_WHEN_MAX_CHARS)
+  if (when) lines.push('适用：' + when)
   if (lines.length === 0) return clipPersona(entry, text)
   return lines.join('\n')
 }
@@ -205,11 +190,11 @@ function cardNote(kind) {
  *   detail 默认 'full' —— 旧调用方（不传 detail）行为与旧版**完全一致**；
  *   注入形态由设置 expertInjectDetail 决定，由 buildInjection() 显式传入。
  */
-export function buildPersonaBlock(entry, body, { banner = true, kind = 'match', note = null, detail = 'full', stage = '' } = {}) {
+export function buildPersonaBlock(entry, body, { banner = true, kind = 'match', note = null, detail = 'full' } = {}) {
   const text = String(body || '').trim()
   if (!text) return ''
   const useCard = String(detail).toLowerCase() === 'card'
-  const rendered = useCard ? buildPersonaCard(entry, text, { stage }) : clipPersona(entry, text)
+  const rendered = useCard ? buildPersonaCard(entry, text) : clipPersona(entry, text)
   if (!rendered) return ''
 
   const head = !banner
@@ -235,7 +220,7 @@ function coreItems(items) {
 }
 
 /** 渲染一个降级级别（mode: 'full' | 'card' | 'mixed'；mixed = 身份卡 + 命中全文） */
-function renderLevel(list, mode, banner, stage = '') {
+function renderLevel(list, mode, banner) {
   const blocks = []
   for (const it of list) {
     const detail = mode === 'mixed' ? (it.isIdentity ? 'card' : 'full') : mode
@@ -243,7 +228,6 @@ function renderLevel(list, mode, banner, stage = '') {
       banner,
       kind: it.isIdentity ? 'identity' : 'match',
       detail,
-      stage,
     }))
   }
   return blocks.filter(Boolean).join('\n\n')
@@ -253,7 +237,7 @@ function renderLevel(list, mode, banner, stage = '') {
  * 选形态 + 按预算降级（绝不静默）。
  * @returns {{ text:string, notes:string[] }}
  */
-function planInjection(items, { detail, budget, banner, stage = '' }) {
+function planInjection(items, { detail, budget, banner }) {
   const core = coreItems(items)
   let levels
   if (detail === 'full') {
@@ -284,7 +268,7 @@ function planInjection(items, { detail, budget, banner, stage = '' }) {
   let chosenIndex = -1
   for (let i = 0; i < uniq.length; i++) {
     const lv = uniq[i]
-    const text = renderLevel(lv.list, lv.mode, banner, stage)
+    const text = renderLevel(lv.list, lv.mode, banner)
     if (!text) continue
     const fits = detail === 'full' || text.length <= budget
     chosen = { lv, text }
@@ -335,7 +319,6 @@ export function buildInjection(selected, opts = {}) {
   const banner = opts.banner !== false
   const detail = normalizeDetail(opts.detail, 'full')
   const budget = clampBudget(opts.budgetChars)
-  const stage = String(opts.stage || '')
   const items = []
   for (const item of selected || []) {
     const body = loadPersona(item.entry)
@@ -348,14 +331,14 @@ export function buildInjection(selected, opts = {}) {
   }
   if (items.length === 0) return ''
 
-  const plan = planInjection(items, { detail, budget, banner, stage })
+  const plan = planInjection(items, { detail, budget, banner })
   if (!plan.text) return ''
   const head = (banner && opts.withPathHint !== false) ? PATH_HINT + '\n\n' : ''
   const tail = plan.notes.length > 0 ? '\n' + plan.notes.join('\n') : ''
   return head + plan.text + tail
 }
 
-/** 手动临时注入某位专家（`/expert use <id>`）——L2 全文，与旧版一致（不受预算与形态影响） */
+/** 取某位专家的 L2 全文（expert_recall 用；不受预算与形态影响） */
 export function buildManualInjection(entry, { banner = true } = {}) {
   const body = loadPersona(entry)
   if (!body) return ''

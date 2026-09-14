@@ -125,18 +125,16 @@ await t('合并上下文同时含「专家视角」与「记忆」两条内容',
     .map((c) => c.text(frame()))
     .filter(Boolean)
     .join('\n\n')
-  assert.ok(merged.includes('【身份视角·'), '缺专家注入：' + merged.slice(0, 160))
+  assert.ok(merged.includes('【交付层·纪律】'), '缺专家注入（交付层纪律块）：' + merged.slice(0, 160))
   assert.ok(merged.includes('记忆'), '缺记忆内容：' + merged.slice(0, 160))
-  assert.ok(merged.indexOf('【身份视角·') < merged.indexOf('记忆'), '顺序应为专家在前、记忆在后')
+  assert.ok(merged.indexOf('【交付层·纪律】') < merged.indexOf('记忆'), '顺序应为专家在前、记忆在后')
 })
 
-await t('工具 / 命令注册不重名（experts 的 expert_recall 与 memories 的工具并存）', () => {
+await t('工具注册不重名；不再注册命令（/expert 已于 0.3.0 移除）', () => {
   const toolNames = captured.tools.map((x) => x.name)
-  const cmdNames = captured.commands.map((x) => x.name)
   assert.ok(toolNames.includes('expert_recall'), '缺 expert_recall：' + toolNames.join(','))
   assert.equal(new Set(toolNames).size, toolNames.length, '工具重名：' + toolNames.join(','))
-  assert.equal(new Set(cmdNames).size, cmdNames.length, '命令重名：' + cmdNames.join(','))
-  assert.ok(cmdNames.includes('expert'), '缺 /expert 命令')
+  assert.equal(captured.commands.length, 0, 'experts 不应再注册命令：' + captured.commands.map((x) => x.name).join(','))
 })
 
 await t('两个模块的 dispose 都可安全调用', () => {

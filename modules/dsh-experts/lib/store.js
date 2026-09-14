@@ -205,13 +205,11 @@ export function identityExpertOf(cfg) {
   const list = allPersonas()
   if (list.length === 0) return null
   const want = String(cfg?.identityExpert || '').trim()
-  if (want) {
-    const hit = findExpert(want)
-    if (hit) return hit
-  }
-  const home = String(cfg?.defaultDomain || '').toLowerCase()
-  const inHome = list.filter((e) => String(e.domain).toLowerCase() === home)
-  return inHome[0] || list[0] || null
+  if (want) return findExpert(want) || null
+  // 身份退场（design-v2 批二）：留空 = 不常驻任何身份专家 —— 身份由 work-memory 记忆层承担，
+  // 专家库不再重复注入；需要常驻时显式填 id。旧行为（留空取岗位域第一位）会让本域专家
+  // 每轮凭空占一个注入位，并掩盖"任务文本读不到"导致的零命中（2026-09-14 复盘）。
+  return null
 }
 
 /** 列出专家（命令输出用）：按域分组 */

@@ -53,7 +53,6 @@ export const DEFAULTS = {
   expertInjectDetail: 'auto',
   expertInjectBudgetChars: INJECT_BUDGET_DEFAULT,
   expertSecondThreshold: 0.8,
-  expertMinScore: 0.35,
   expertShowBanner: true,
   expertSetupDone: false,
 }
@@ -102,8 +101,6 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
   expertSecondThreshold: z.number().default(0.8)
     .description('第 2/3 位专家的门槛：其分数 ≥ 第 1 位 × 该值时才注入（默认 0.8；仅 expertInjectMax ≥ 2 时生效）'),
 
-  expertMinScore: z.number().default(0.35)
-    .description('低于此分数不注入 —— 宁缺勿滥，短任务/无专业信号时保持通用助手行为'),
 
   expertShowBanner: z.boolean().default(true)
     .description('注入时显示「当前专家视角」标识，便于你知道本轮用的是哪位专家'),
@@ -132,7 +129,6 @@ function toConfig(resolved) {
   cfg.skillBudgetChars = clampSkillBudget(cfg.skillBudgetChars, DEFAULTS.skillBudgetChars)
   const th = clampUnit(cfg.expertSecondThreshold, DEFAULTS.expertSecondThreshold)
   cfg.expertSecondThreshold = th > 0 ? th : DEFAULTS.expertSecondThreshold
-  cfg.expertMinScore = clampUnit(cfg.expertMinScore, DEFAULTS.expertMinScore)
   cfg.enabledDomains = String(cfg.enabledDomains ?? '').trim()
   cfg.enabledExperts = String(cfg.enabledExperts ?? '').trim()
   cfg.defaultDomain = String(cfg.defaultDomain ?? '').trim() || DEFAULTS.defaultDomain

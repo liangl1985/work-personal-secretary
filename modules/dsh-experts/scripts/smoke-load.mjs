@@ -26,7 +26,7 @@ async function t(label, fn) {
   }
 }
 
-const captured = { settings: null, contexts: [], sections: [], tools: [], commands: [], injects: [] }
+const captured = { settings: null, contexts: [], sections: [], tools: [], commands: [], injects: [], handlers: {} }
 
 /** persona 段取值：新增「交付层」context 后，不能再按"最后一个 context"取 */
 const firstPersonaDef = () => captured.contexts.find((c) => c.name === 'dsh-experts:persona')
@@ -67,6 +67,11 @@ function makeCtx() {
       },
     },
     commands: { register: (def) => { captured.commands.push(def); return () => {} } },
+    // 事件通道（2026-09-14：任务文本接入 agent/inbox/claimed 与 agent/pre-step）
+    on: (name, handler) => {
+      captured.handlers[name] = handler
+      return () => { delete captured.handlers[name] }
+    },
     // 批二：能力层与阶段推断走 ctx.inject 延迟注入；这里给一个 mock 宿主服务
     inject: (deps, cb) => {
       captured.injects.push(deps.join(','))
@@ -83,8 +88,6 @@ function makeCtx() {
               }),
             },
           })
-        } else if (d === 'sessionProjections') {
-          cb({ sessionProjections: { stateOf: () => null } })
         }
       }
     },
@@ -116,7 +119,6 @@ await t('注册 2 个 context（persona 480 / 交付层 481）与 1 个 section�
   assert.equal(typeof persona.text, 'function')
   assert.equal(typeof delivery.text, 'function')
   assert.ok(captured.injects.includes('skills'), '未延迟注入 skills 服务：' + captured.injects.join('|'))
-  assert.ok(captured.injects.includes('sessionProjections'), '未延迟注入 sessionProjections：' + captured.injects.join('|'))
   const cat = captured.sections.find((s) => s.name === 'dsh-experts:catalog')
   assert.ok(cat, '缺目录段 section')
   assert.equal(cat.order, 10150)
@@ -125,11 +127,10 @@ await t('注册 2 个 context（persona 480 / 交付层 481）与 1 个 section�
   assert.ok(catText.includes('信息安全') && catText.includes('财务'), '目录段缺域成员：' + catText.slice(0, 120))
 })
 
-await t('注册 expert_recall 工具与 /expert 命令', () => {
+await t('注册 expert_recall 工具；不再注册命令（/expert 已于 0.3.0 移除）', () => {
   assert.equal(captured.tools.length, 1)
   assert.equal(captured.tools[0].name, 'expert_recall')
-  assert.equal(captured.commands.length, 1)
-  assert.equal(captured.commands[0].name, 'expert')
+  assert.equal(captured.commands.length, 0, '不应再注册命令：' + captured.commands.map((x) => x.name).join(','))
 })
 
 await t('设置命名空间注册（有 schemastery 时）或降级（无宿主依赖时）', () => {
@@ -141,55 +142,21 @@ await t('设置命名空间注册（有 schemastery 时）或降级（无宿主�
   }
 })
 
-await t('注入回调：身份专家常驻注入（默认 = 岗位域第一位）+ 处理路径提示', () => {
+await t('注入回调：默认不常驻 persona（身份退场）+ 零命中不注入', () => {
   const out = firstPersonaDef().text(frame('帮我看看这个'))
   assert.equal(typeof out, 'string', 'text 回调必须返回字符串')
-  assert.ok(out.includes('【身份视角·'), '未注入身份专家：' + out.slice(0, 120))
-  assert.ok(out.includes('【处理路径】'), '缺处理路径提示：' + out.slice(0, 120))
+  assert.ok(!out.includes('【身份视角·'), '不应再常驻身份专家：' + out.slice(0, 120))
+  assert.ok(!out.includes('【本轮命中·'), '零命中不应注入专家：' + out.slice(0, 120))
 })
 
-await t('注入回调：把上限调回 1 时，跨域专家不再占常驻上下文', () => {
-  // 默认值自 0.1.3 起是 2（身份专家 + 至多一位按问题归属补位的对口专家）；
-  // 这里显式传 1，专门守住「调小上限即收敛为只有身份专家」这条行为。
+await t('注入回调：上限 1 时只注入命中的那一位（命中链路可用）', () => {
   const ctx1 = makeCtx()
   apply(ctx1, { defaultDomain: 'infosec', expertInjectMax: 1 })
   const last = lastPersonaDef()
   const out = last.text(frame('客户要做三级等保测评，定级备案怎么走'))
-  assert.ok(out.includes('【身份视角·'), '缺身份专家')
-  assert.ok(!out.includes('【本轮命中·'), '上限 1 时不应再注入跨域专家：' + out.slice(0, 160))
-})
-
-await t('/expert list 输出专家清单', async () => {
-  const res = await captured.commands[0].handler({ rawInput: 'list', session: { agent: { session } } })
-  assert.ok(res.text.includes('专家库'), '清单缺标题')
-  assert.ok(res.text.includes('infosec-bid-proposal'), '清单缺专家 id')
-})
-
-await t('/expert status 输出四项配置状态', async () => {
-  const res = await captured.commands[0].handler({ rawInput: 'status', session: { agent: { session } } })
-  assert.ok(res.text.includes('本人岗位'), '缺岗位行')
-  assert.ok(res.text.includes('注入上限'), '缺注入上限行')
-})
-
-await t('/expert why 展示打分依据', async () => {
-  const res = await captured.commands[0].handler({ rawInput: 'why 工控安全方案', session: { agent: { session } } })
-  assert.ok(/工控安全/.test(res.text), '未见打分输出')
-})
-
-await t('/expert use 临时注入 → 注入回调切换；/expert off → 不再注入', async () => {
-  const cmd = captured.commands[0]
-  const use = await cmd.handler({ rawInput: 'use hr-labor-law', session: { agent: { session } } })
-  assert.ok(use.text.includes('临时注入'), '临时注入未生效：' + use.text)
-
-  const injected = firstPersonaDef().text(frame('随便问点什么'))
-  assert.ok(injected.includes('劳动'), '临时注入的 persona 未出现：' + injected.slice(0, 80))
-
-  await cmd.handler({ rawInput: 'off', session: { agent: { session } } })
-  assert.equal(firstPersonaDef().text(frame('随便问点什么')), '', 'off 后不应再注入')
-
-  await cmd.handler({ rawInput: 'auto', session: { agent: { session } } })
-  const back = firstPersonaDef().text(frame('帮我看看这个'))
-  assert.ok(back.includes('【身份视角·'), 'auto 后未恢复自动注入')
+  assert.ok(out.includes('【本轮命中·'), '应注入命中的专家：' + out.slice(0, 160))
+  assert.ok(out.includes('等保测评'), '应命中等保测评专家：' + out.slice(0, 160))
+  assert.ok(!out.includes('【身份视角·'), '身份退场后不应再有身份卡')
 })
 
 await t('expert_recall 工具：按 id 取 persona 正文（返回结构化对象）', async () => {
@@ -226,40 +193,13 @@ await t('未知 id 返回 ok:false 的结构化错误（不抛异常）', async 
   assert.ok(String(r.error).includes('未找到专家'))
 })
 
-await t('未知 id 给出明确提示而非抛错', async () => {
-  const res = await captured.commands[0].handler({ rawInput: 'use no-such', session: { agent: { session } } })
-  assert.equal(res.kind, 'error')
-  assert.ok(res.text.includes('未找到专家'), res.text)
-})
-
-await t('注入上限 2 时：跨域命中专家被补上（问题归属判断生效）', () => {
+await t('注入上限 2 时：命中专家被注入（问题归属判断生效）', () => {
   const ctx2 = makeCtx()
   apply(ctx2, { defaultDomain: 'infosec', expertInjectMax: 2 })
   const last = lastPersonaDef()
   const out = last.text(frame('客户要做三级等保测评，定级备案怎么走'))
-  assert.ok(out.includes('【身份视角·'), '缺身份专家：' + out.slice(0, 120))
-  assert.ok(out.includes('【本轮命中·'), '未补上跨域命中专家：' + out.slice(0, 200))
-  assert.ok(out.includes('等保测评'), '补上的应为等保测评专家')
-})
-
-await t('/expert phase：切到 execute 后卡中不再有方法行；auto 恢复；非法值报错', async () => {
-  const cmd = captured.commands[0]
-  const switchTo = await cmd.handler({ rawInput: 'phase execute', session: { agent: { session } } })
-  assert.ok(switchTo.text.includes('execute'), '未切到 execute：' + switchTo.text)
-  const out = firstPersonaDef().text(frame('客户要做三级等保测评，定级备案怎么走'))
-  assert.ok(!out.includes('方法：'), 'execute 阶段卡中不应再有方法行：' + out.slice(0, 200))
-  assert.ok(out.includes('阶段·execute'), 'execute 阶段应带阶段标注：' + out.slice(0, 200))
-
-  const status = await cmd.handler({ rawInput: 'phase', session: { agent: { session } } })
-  assert.ok(status.text.includes('execute'), 'phase status 未显示当前阶段：' + status.text)
-
-  const bad = await cmd.handler({ rawInput: 'phase nonsense', session: { agent: { session } } })
-  assert.equal(bad.kind, 'error', '非法阶段应报错')
-
-  const back = await cmd.handler({ rawInput: 'phase auto', session: { agent: { session } } })
-  assert.ok(back.text.includes('恢复'), '未恢复自动：' + back.text)
-  const after = firstPersonaDef().text(frame('客户要做三级等保测评，定级备案怎么走'))
-  assert.ok(after.includes('方法：') || after.includes('## 工作方法'), '恢复后应重新出现方法行')
+  assert.ok(out.includes('【本轮命中·'), '未注入命中专家：' + out.slice(0, 200))
+  assert.ok(out.includes('等保测评'), '命中的应为等保测评专家')
 })
 
 await t('能力层：宿主 skills 可用时注入「可用能力·指针」行（开放命中 + 预算守门）', async () => {
@@ -273,20 +213,44 @@ await t('能力层：宿主 skills 可用时注入「可用能力·指针」行�
   assert.ok(!quiet.includes('【可用能力·指针】'), '无关任务不该注入指针：' + quiet.slice(0, 160))
 })
 
-await t('多会话隔离：A 会话 /expert off 不影响 B 会话（状态与缓存都按 sessionId）', async () => {
-  const cmd = captured.commands[0]
+await t('多会话隔离：注入缓存按 sessionId 分槽（互不顶掉）', () => {
   const def = firstPersonaDef()
   const sessA = { header: { id: 'sess-A', cwd: 'C:\\workspace\\docs' } }
   const sessB = { header: { id: 'sess-B', cwd: 'C:\\workspace\\docs' } }
-  const ask = '帮我看看这个'
-  const beforeB = def.text({ agent: { session: sessB }, text: ask })
-  await cmd.handler({ rawInput: 'off', session: { agent: { session: sessA } } })
-  const afterA = def.text({ agent: { session: sessA }, text: ask })
-  const afterB = def.text({ agent: { session: sessB }, text: ask })
-  assert.equal(afterA, '', 'A 会话 off 后不应再注入')
-  assert.ok(afterB.includes('【身份视角·'), 'B 会话不应受 A 影响：' + afterB.slice(0, 80))
-  assert.equal(afterB, beforeB, 'B 会话注入文本应逐字不变（各自命中缓存）')
-  await cmd.handler({ rawInput: 'auto', session: { agent: { session: sessA } } })
+  const ask = '客户要做三级等保测评，定级备案怎么走'
+  const a1 = def.text({ agent: { session: sessA }, text: ask })
+  const b1 = def.text({ agent: { session: sessB }, text: ask })
+  const a2 = def.text({ agent: { session: sessA }, text: ask })
+  assert.ok(a1.includes('【本轮命中·'), 'A 会话应命中等保测评专家：' + a1.slice(0, 80))
+  assert.equal(b1, a1, '两个会话同任务应得到相同注入（各自命中缓存）')
+  assert.equal(a2, a1, 'A 会话重复取应命中自身缓存（逐字一致）')
+})
+
+await t('任务文本链路：agent/inbox/claimed 接住本轮输入 → 命中卡注入（2026-09-14 修复）', () => {
+  const def = firstPersonaDef()
+  const agent = { session: { header: { id: 'claim-session', cwd: 'C:\\workspace\\docs' } } }
+  const claim = captured.handlers['agent/inbox/claimed']
+  assert.ok(typeof claim === 'function', '未注册 agent/inbox/claimed 监听')
+  claim({ agent, message: { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '帮我把这份 Word 文档排版一下' }] } })
+  // 传空 text：强制走事件缓存（这正是真机上唯一可用的路径）
+  const out = def.text({ agent, text: '' })
+  assert.ok(out.includes('【本轮命中·'), 'claimed 文本未驱动命中：' + out.slice(0, 160))
+  assert.ok(out.includes('文档与表格处理'), '命中专家不对：' + out.slice(0, 160))
+})
+
+await t('任务文本链路：agent/pre-step 备通道写入缓存且不改 decision（只读）', async () => {
+  const def = firstPersonaDef()
+  const agent = { session: { header: { id: 'prestep-session', cwd: 'C:\\workspace\\docs' } } }
+  const pre = captured.handlers['agent/pre-step']
+  assert.ok(typeof pre === 'function', '未注册 agent/pre-step 监听')
+  const decision = { kind: 'enter', messages: [{ id: 'm1' }] }
+  const back = await pre(
+    { agent, messages: [{ role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '这个月的发票和税务怎么处理' }] }] },
+    async () => decision,
+  )
+  assert.deepEqual(back, decision, 'pre-step 必须原样返回 decision（只读通道）')
+  const out = def.text({ agent, text: '' })
+  assert.ok(out.includes('税务师'), 'pre-step 文本未驱动命中：' + out.slice(0, 160))
 })
 
 await t('交付层纪律块：读不到项目记忆时明示一行（不静默，也不抛错）', () => {

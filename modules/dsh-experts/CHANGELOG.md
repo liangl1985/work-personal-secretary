@@ -2,6 +2,39 @@
 
 本插件的版本历史。
 
+## 0.3.0 — 2026-09-14（命中链路修复 · 打分简化 · 移除 /expert 命令）
+
+### 一、命中链路修复（本版核心）
+
+- **根因**：宿主 `systemPrompt.assemble` 传给 provider 的只有 `{ agent, scope, signal }`（`@deepseek-ai/dsh-agent/lib/types/dispatch.js:92`），**不含任务文本**；原 `extractTaskText` 的 5 条提取路径在该宿主上全部失效 → 打分输入恒空 → 每轮退化为"岗位先验兜底"（实测：与任务无关也固定注入两位 infosec 专家）。
+- **修法**：接住宿主在 assemble **之前**广播的 `agent/inbox/claimed`（`dsh-agent-loop:889 → :107 → :890`）作主通道，`agent/pre-step` 的 `messages` 作备通道；两者都**只读缓存**，不写 `decision.messages`（不进历史、不影响 turn 结束判定）。
+- **连带修复**：能力层指针同样依赖任务文本，此前**从未命中过**（旧文档误记为"当轮无技能关键词，符合预期"）。
+
+### 二、身份退场（补 design-v2 批二漏做项）
+
+- `identityExpertOf` 留空 → 返回 `null`（不再回退"岗位域第一位"）；身份由 work-memory 记忆承担，专家库不再重复常驻。仅显式填 `identityExpert` 才常驻。
+
+### 三、打分 v3（只留「任务实证」一条主线）
+
+- 删 `branch`（会话目录先验）：本机 cwd 末段从不出现在映射表内 → 恒 null 的死配置。
+- 删 `explicit`（消息点名）：注入链路从未传入（`/expert use` 走旁路）→ 死路径。
+- `role_tag` **退出打分**，只作职能去重键：76 条标签中 57 条与自身关键词重复（同词双计），且「工控安全」这类标签会让销售位被售前任务顺带命中（实测 2 处误补位）；真正救回过命中的「审查」已并入 `coding-review` 关键词表。
+- 删设置项 `expertMinScore`：在"零命中不注入"落地后已无任何代码路径使用（设置页仍展示，属欠账）。
+- 补位门槛改为**纯证据比较**（不再掺入含岗位先验常数项的总分）。
+- 新增两条防漂移回归：关键词与本位正文不脱节（≥2 词有落点）、关键词跨专家撞车白名单（6 处已知）。
+
+### 四、移除 /expert 命令与阶段切面
+
+- 命令（list / use / off / auto / phase / setup / status / why）**整体移除**：宿主命令模型只有单行 `input.hint`、无结构化子命令候选，实际使用频率低；能力由「自动命中 + `expert_recall` + 设置页」承担。
+- 阶段切面（层 5）随之下掉：`resolveStage`、todo 投影读取、`inject.js` 的 stage 裁剪全部移除。
+- 需要临时切视角时：在对话里直接说"用 xx 专家看"，助手用 `expert_recall` 取 persona 全文。
+
+### 五、验证
+
+- 五套自测全绿：regression 46 / injection-tier 16 / capability 8 / coexist 8 / smoke-load 18；`card-preview --all` **FAIL 0 · WARN 0 · OK 19**。
+- 真机：命中链路在重启后第一轮即生效（claimed 通道已接住）；零命中任务不注入任何 persona；身份卡不再出现。
+- 批量实测 21 条真实任务：**19 条命中，全部正确**。
+
 ## 0.2.0 — 2026-09-14（域体系按行业重划 · 专家重建为 19 位）
 
 ### 一、域体系重划：职能域 → 行业域
