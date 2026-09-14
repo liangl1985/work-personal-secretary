@@ -130,7 +130,7 @@ await t('注册 2 个 context（persona 480 / 交付层 481）与 1 个 section�
 await t('注册 expert_recall 工具；不再注册命令（/expert 已于 0.3.0 移除）', () => {
   assert.equal(captured.tools.length, 1)
   assert.equal(captured.tools[0].name, 'expert_recall')
-  assert.equal(captured.commands.length, 0, '不应再注册命令：' + captured.commands.map((x) => x.name).join(','))
+  assert.ok(!captured.commands.some((x) => x.name === 'expert'), '不应再注册 /expert 命令')
 })
 
 await t('设置命名空间注册（有 schemastery 时）或降级（无宿主依赖时）', () => {

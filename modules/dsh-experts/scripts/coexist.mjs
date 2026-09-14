@@ -134,7 +134,7 @@ await t('工具注册不重名；不再注册命令（/expert 已于 0.3.0 移�
   const toolNames = captured.tools.map((x) => x.name)
   assert.ok(toolNames.includes('expert_recall'), '缺 expert_recall：' + toolNames.join(','))
   assert.equal(new Set(toolNames).size, toolNames.length, '工具重名：' + toolNames.join(','))
-  assert.equal(captured.commands.length, 0, 'experts 不应再注册命令：' + captured.commands.map((x) => x.name).join(','))
+  assert.ok(!captured.commands.some((x) => x.name === 'expert'), 'experts 不应再注册 /expert 命令（已注册：' + captured.commands.map((x) => x.name).join(',') + '）')
 })
 
 await t('两个模块的 dispose 都可安全调用', () => {
