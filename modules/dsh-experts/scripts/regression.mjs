@@ -468,6 +468,13 @@ test('目录段：六域成员 + 能力节；无能力索引时省略该节且�
   assert.equal(buildCatalog({ domains: [], personas: [], skills: [] }), '', '空库应不注入目录段')
 })
 
+test('目录段：能力节排序与数据源无关（稳定排序 → 两来源渲染逐字相同）', () => {
+  const a = buildCatalog({ domains: DOMAINS, personas: experts, skills: [{ skill: 'pdf-tools' }, { skill: 'office-excel' }, { skill: 'vibe' }] })
+  const b = buildCatalog({ domains: DOMAINS, personas: experts, skills: [{ skill: 'vibe' }, { skill: 'pdf-tools' }, { skill: 'office-excel' }] })
+  assert.equal(a, b, '同一能力集合的不同顺序应渲染出逐字相同的目录段')
+  assert.ok(a.includes('可用能力：office-excel、pdf-tools、vibe'), '能力节应按代码点序稳定排列：' + a.slice(-90))
+})
+
 test('能力层：技能条目映射 / 指针行格式 / 开放命中 / 预算守门', () => {
   const excel = toCapabilityEntry({ name: 'office-excel', description: '处理 Excel 表格（.xlsx/.xls/.et）：读取工作表与单元格…', provider: 'filesystem', resourceBase: { path: 'X' } })
   assert.equal(excel.kind, 'skill', '能力条目 kind 应为 skill')

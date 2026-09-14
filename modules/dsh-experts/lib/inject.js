@@ -386,9 +386,14 @@ export function buildCatalog({ domains = [], personas = [], skills = [] } = {}) 
     if (names.length === 0) continue
     lines.push('· ' + d.name + '：' + names.join('、'))
   }
+  // 能力节**稳定排序**（代码点序，与宿主 skill 注册表的 compareCodePoints 一致）：
+  // 目录段有两个数据源（兜底 skills.auto.json / 运行时 ctx.skills），来源切换时若顺序不同，
+  // 渲染文本就会变 —— 而 section 文本一变，宿主会重写系统提示词节点（2026-09-14 实测：跨重启的
+  // 会话历史里会多留一个旧 system 节点）。排序归一化后两个来源渲染逐字相同。
   const capNames = skills
     .map((s) => String(s?.skill || s?.id || ''))
     .filter(Boolean)
+    .sort()
   if (capNames.length > 0) lines.push('· 可用能力：' + capNames.join('、'))
   if (lines.length <= 1) return ''
   const text = lines.join('\n')
