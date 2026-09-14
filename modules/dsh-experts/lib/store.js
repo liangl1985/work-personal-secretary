@@ -22,14 +22,14 @@ export const MODULE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 /** 专家数据根目录 */
 export const EXPERTS_ROOT = join(MODULE_ROOT, 'experts')
 
-/** 六个域（顺序即设置页/命令输出里的展示顺序） */
+/** 域定义（顺序即设置页/命令输出里的展示顺序）：五个行业域 + 一个通用职能域 */
 export const DOMAINS = [
-  { id: 'presales', name: '售前', desc: '方案·投标·客户与需求·工控安全与网络安全售前' },
-  { id: 'aftersales', name: '售后·技术支持', desc: '网络安全/工控安全技术支持、等保测评、渗透测试服务' },
-  { id: 'finance', name: '会计财务', desc: '会计·税务·出纳·财务分析·内控合规（中国口径）' },
-  { id: 'legal', name: '法务', desc: '民法咨询·刑法咨询' },
-  { id: 'doc', name: '文档', desc: '文档处理·报告与方案排版·PPT（与 dsh-doc-suite 能力对齐）' },
-  { id: 'general', name: '核查·通用', desc: '事实核查与溯源' },
+  { id: 'infosec', name: '信息安全', desc: '工控安全与网络安全：售前方案·投标·等保测评·技术支持' },
+  { id: 'accounting', name: '财务', desc: '会计·税务·财务分析·内控合规（中国企业会计准则口径）' },
+  { id: 'hr', name: '人力资源', desc: '劳动关系·劳动合同·社保与争议处理' },
+  { id: 'coding', name: '代码编程', desc: '软件工程·DSH 插件开发·代码审查与质量' },
+  { id: 'finance', name: '金融', desc: '量化策略·投资研究（A 股/国内期货口径）' },
+  { id: 'general', name: '通用职能', desc: '核查·排版·文档处理·演示·设计（跨行业职能，上限 8）' },
 ]
 
 /** 域 id → 域定义 */
@@ -75,7 +75,7 @@ export function allExperts() {
   return readIndex().experts
 }
 
-/** 按 id 取专家元数据（支持简写：省略域前缀时后缀匹配，如 `accountant` → `finance-accountant`） */
+/** 按 id 取专家元数据（支持简写：省略域前缀时后缀匹配，如 `accountant` → `accounting-accountant`） */
 export function findExpert(id) {
   const key = String(id ?? '').trim().toLowerCase()
   if (!key) return null

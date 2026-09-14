@@ -1,139 +1,16 @@
 {
-  "version": 1,
-  "updated": "2026-09-12",
-  "note": "专家索引：元数据集中在此，正文为 experts/<域>/<id>.md（纯 Markdown）。source 记录来源与许可（MIT/Apache-2.0 需随发布件保留版权与许可文本，见 NOTICE）；origin=self-authored 表示本集成体自撰，不假称来自上游。",
+  "version": 2,
+  "updated": "2026-09-14",
+  "note": "专家索引 v2（2026-09-14 域体系冻结 + 19 位）：infosec / accounting / hr / coding / finance 五个行业域 + general 通用职能域（配额破例 5 位）；role_tag[0] 为职能键（去重粒度）；正文为 experts/<域>/<id>.md。 source.review=\"pending\" = 该域会输出可能被当作专业结论或法规依据的内容（信息安全 / 财务 / 金融 / 人力资源），对外交付前须人工复核；coding 与 general 不标。",
   "experts": [
     {
-      "id": "presales-bid-proposal",
-      "name": "投标/方案策略师",
-      "domain": "presales",
-      "role_tag": [
-        "售前",
-        "投标",
-        "方案",
-        "标书"
-      ],
-      "when_to_use": "写投标文件、技术方案、应答表、评分点对策时",
-      "trigger_keywords": [
-        "投标",
-        "标书",
-        "招标",
-        "应答",
-        "评分",
-        "技术方案",
-        "方案",
-        "商务",
-        "围标",
-        "废标"
-      ],
-      "file": "presales/presales-bid-proposal.md",
-      "source": {
-        "repo": "jnMetaCode/agency-agents-zh",
-        "path": "sales/sales-proposal-strategist.md",
-        "license": "MIT",
-        "adapted": true
-      }
-    },
-    {
-      "id": "presales-sales-engineer",
-      "name": "销售工程师（技术售前）",
-      "domain": "presales",
-      "role_tag": [
-        "售前",
-        "技术交流",
-        "POC",
-        "演示"
-      ],
-      "when_to_use": "技术交流、产品介绍、POC/演示、需求确认、客户答疑时",
-      "trigger_keywords": [
-        "售前",
-        "技术交流",
-        "POC",
-        "演示",
-        "产品介绍",
-        "答疑",
-        "需求确认",
-        "方案宣讲"
-      ],
-      "file": "presales/presales-sales-engineer.md",
-      "source": {
-        "repo": "jnMetaCode/agency-agents-zh + VoltAgent/awesome-claude-code-subagents",
-        "path": "sales/sales-engineer.md + categories/08-business-product/sales-engineer.md",
-        "license": "MIT",
-        "adapted": true
-      }
-    },
-    {
-      "id": "presales-gov-digital",
-      "name": "政务数字化售前顾问",
-      "domain": "presales",
-      "role_tag": [
-        "售前",
-        "政务",
-        "数字化",
-        "信创"
-      ],
-      "when_to_use": "面向政府/事业单位/国企的数字化与安全项目售前时",
-      "trigger_keywords": [
-        "政务",
-        "政府",
-        "数字化",
-        "信创",
-        "政务云",
-        "事业单位",
-        "国企",
-        "专项债",
-        "财政"
-      ],
-      "file": "presales/presales-gov-digital.md",
-      "source": {
-        "repo": "jnMetaCode/agency-agents-zh",
-        "path": "specialized/government-digital-presales-consultant.md",
-        "license": "MIT",
-        "adapted": true
-      }
-    },
-    {
-      "id": "presales-cyber-security",
-      "name": "网络安全售前",
-      "domain": "presales",
-      "role_tag": [
-        "售前",
-        "网络安全",
-        "安全方案",
-        "等保"
-      ],
-      "when_to_use": "做网络安全类项目的方案、防护体系设计、客户安全需求梳理与竞品对比时",
-      "trigger_keywords": [
-        "网络安全",
-        "安全方案",
-        "防护体系",
-        "安全建设",
-        "安全服务",
-        "等保",
-        "安全产品",
-        "态势感知",
-        "安全运营"
-      ],
-      "file": "presales/presales-cyber-security.md",
-      "source": {
-        "repo": "VoltAgent/awesome-claude-code-subagents + Masriyan/Claude-Code-CyberSecurity-Skill",
-        "path": "categories/08-business-product/sales-engineer.md + skills/18-ot-ics-security/SKILL.md",
-        "license": "MIT",
-        "adapted": true,
-        "note": "组合改写：售前方法论取自 VoltAgent，安全知识面取自 Masriyan",
-        "review": "pending"
-      }
-    },
-    {
-      "id": "presales-ics-security",
+      "id": "infosec-ics-security",
       "name": "工控安全售前",
-      "domain": "presales",
+      "domain": "infosec",
       "role_tag": [
         "售前",
         "工控安全",
-        "OT",
-        "ICS",
+        "方案设计",
         "IEC62443"
       ],
       "when_to_use": "面向电力/石化/制造等生产型客户的工控安全方案与投标时",
@@ -151,95 +28,99 @@
         "IEC62443",
         "电力",
         "石化",
-        "智能制造"
+        "智能制造",
+        "分区",
+        "管道"
       ],
-      "file": "presales/presales-ics-security.md",
       "source": {
-        "repo": "daemon-blockint-tech/Agentic-Enteprises-Skill + Masriyan/Claude-Code-CyberSecurity-Skill + nxl801/copilot-industrial-test-system + VoltAgent/awesome-claude-code-subagents",
-        "path": "scada-ics-cyber-security-specialist/SKILL.md + skills/18-ot-ics-security/SKILL.md + (IEC 62443-4-2 证据映射) + sales-engineer.md",
+        "repo": "daemon-blockint-tech/Agentic-Enteprises-Skill + Masriyan/Claude-Code-CyberSecurity-Skill + nxl801/copilot-industrial-test-system",
         "license": "MIT",
         "adapted": true,
-        "note": "组合改写：OT/ICS 知识＋售前方法论；上游无中文工控安全售前成品",
         "review": "pending"
-      }
+      },
+      "file": "infosec/infosec-ics-security.md"
     },
     {
-      "id": "aftersales-cyber-support",
-      "name": "网络安全技术支持",
-      "domain": "aftersales",
+      "id": "infosec-sales-engineer",
+      "name": "工控安全销售工程师",
+      "domain": "infosec",
       "role_tag": [
-        "售后",
-        "技术支持",
-        "应急响应",
-        "安全事件"
-      ],
-      "when_to_use": "客户安全故障、告警处置、应急响应、问题定位与答复时",
-      "trigger_keywords": [
-        "技术支持",
-        "故障",
-        "安全事件",
-        "应急响应",
-        "告警",
-        "处置",
-        "排查",
-        "客户问题",
-        "升级",
-        "工单"
-      ],
-      "file": "aftersales/aftersales-cyber-support.md",
-      "source": {
-        "repo": "VoltAgent/awesome-claude-code-subagents + daemon-blockint-tech/Agentic-Enteprises-Skill",
-        "path": "categories/03-infrastructure/incident-responder.md + product-support-specialist/SKILL.md",
-        "license": "MIT",
-        "adapted": true,
-        "note": "组合改写：应急响应流程＋支持岗位交付规范",
-        "review": "pending"
-      }
-    },
-    {
-      "id": "aftersales-ics-support",
-      "name": "工控安全技术支持",
-      "domain": "aftersales",
-      "role_tag": [
-        "售后",
+        "销售",
         "工控安全",
-        "OT运维",
-        "现场处置"
+        "技术交流",
+        "POC"
       ],
-      "when_to_use": "生产网现场问题、工控设备故障、停机排查与处置时",
+      "when_to_use": "面向工控安全客户的技术交流、产品介绍与选型、POC 组织、需求确认、现场调研与商务推进时",
       "trigger_keywords": [
-        "工控",
-        "上位机",
-        "PLC",
-        "SCADA",
-        "现场",
-        "停机",
-        "生产异常",
-        "OT运维",
-        "工控故障",
-        "生产网"
+        "技术交流",
+        "产品介绍",
+        "产品选型",
+        "POC",
+        "演示",
+        "答疑",
+        "需求确认",
+        "方案宣讲",
+        "客户拜访",
+        "现场调研",
+        "报价",
+        "商务谈判",
+        "培训",
+        "工控产品"
       ],
-      "file": "aftersales/aftersales-ics-support.md",
       "source": {
-        "repo": "Masriyan/Claude-Code-CyberSecurity-Skill + daemon-blockint-tech/Agentic-Enteprises-Skill",
-        "path": "skills/18-ot-ics-security/SKILL.md + scada-ics-cyber-security-specialist/references/ot_detection_and_incident_response.md、ot_asset_vulnerability_management.md",
+        "repo": "jnMetaCode/agency-agents-zh",
+        "path": "sales/sales-engineer.md",
         "license": "MIT",
         "adapted": true,
-        "note": "组合改写：上游无工控技术支持成品角色",
         "review": "pending"
-      }
+      },
+      "file": "infosec/infosec-sales-engineer.md"
     },
     {
-      "id": "aftersales-djbh",
-      "name": "等保测评",
-      "domain": "aftersales",
+      "id": "infosec-bid-proposal",
+      "name": "投标与方案策略师",
+      "domain": "infosec",
       "role_tag": [
-        "售后",
-        "等保",
-        "测评",
-        "合规"
+        "投标",
+        "标书",
+        "评分点",
+        "方案策略"
       ],
-      "when_to_use": "网络安全等级保护定级备案、差距分析、现场测评、整改与复测时",
+      "when_to_use": "写投标文件、技术方案、应答表与评分点对策时",
+      "trigger_keywords": [
+        "投标",
+        "标书",
+        "招标",
+        "应答",
+        "评分",
+        "技术方案",
+        "商务",
+        "围标",
+        "废标",
+        "偏离",
+        "述标",
+        "评标"
+      ],
+      "source": {
+        "repo": "jnMetaCode/agency-agents-zh",
+        "path": "sales/sales-proposal-strategist.md",
+        "license": "MIT",
+        "adapted": true,
+        "review": "pending"
+      },
+      "file": "infosec/infosec-bid-proposal.md"
+    },
+    {
+      "id": "infosec-djbh",
+      "name": "等保测评",
+      "domain": "infosec",
+      "role_tag": [
+        "测评",
+        "等保",
+        "合规",
+        "整改"
+      ],
+      "when_to_use": "等保定级备案、差距分析、现场测评、整改与复测时",
       "trigger_keywords": [
         "等保",
         "等级保护",
@@ -250,58 +131,28 @@
         "整改",
         "二级",
         "三级",
-        "GB/T22239"
+        "GB/T22239",
+        "复测",
+        "合规"
       ],
-      "file": "aftersales/aftersales-djbh.md",
       "source": {
         "repo": "openocta/openocta_skills",
-        "path": "等保测评skill/skill.md",
+        "path": "等保测评skill",
         "license": "MIT",
         "adapted": true,
-        "note": "中文成品（35.5KB）压缩；依据 GB/T 22239-2019 等保 2.0",
         "review": "pending"
-      }
+      },
+      "file": "infosec/infosec-djbh.md"
     },
     {
-      "id": "aftersales-pentest",
-      "name": "渗透测试服务",
-      "domain": "aftersales",
-      "role_tag": [
-        "售后",
-        "渗透测试",
-        "漏洞",
-        "合规服务"
-      ],
-      "when_to_use": "渗透测试服务的授权、实施流程、报告解读与整改建议时（合规服务视角）",
-      "trigger_keywords": [
-        "渗透测试",
-        "漏扫",
-        "漏洞",
-        "授权测试",
-        "风险评估",
-        "整改建议",
-        "测试报告",
-        "红队"
-      ],
-      "file": "aftersales/aftersales-pentest.md",
-      "source": {
-        "repo": "dsh-plugin-t-expert (npm) + VoltAgent/awesome-claude-code-subagents",
-        "path": "data/zh/security/security-penetration-tester.md + categories/04-quality-security/penetration-tester.md",
-        "license": "MIT",
-        "adapted": true,
-        "note": "改写为合规服务视角（授权/流程/报告/整改/法律边界），不写攻击手法；上游 dsh-plugin-t-expert 的 GitHub 仓库已 404，许可仅依据 npm 元数据（MIT），**溯源受限** → 发布前需复核或改用 VoltAgent/awesome-claude-code-subagents 的同源条目",
-        "review": "pending"
-      }
-    },
-    {
-      "id": "finance-accountant",
+      "id": "accounting-accountant",
       "name": "会计师",
-      "domain": "finance",
+      "domain": "accounting",
       "role_tag": [
-        "财务",
         "会计",
         "记账",
-        "月结"
+        "月结",
+        "编报表"
       ],
       "when_to_use": "做账、分录、科目、月结、编报表时（中国企业会计准则口径）",
       "trigger_keywords": [
@@ -312,26 +163,28 @@
         "科目",
         "月结",
         "关账",
+        "结账",
+        "试算平衡",
         "资产负债表",
         "利润表",
         "现金流量表"
       ],
-      "file": "finance/finance-accountant.md",
       "source": {
         "repo": "kylin985ti/china-accounting-skills",
-        "path": "business/journal-entry、chart-of-accounts、month-end-close、balance-sheet、profit-loss、cash-flow",
         "license": "MIT",
-        "adapted": true
-      }
+        "adapted": true,
+        "review": "pending"
+      },
+      "file": "accounting/accounting-accountant.md"
     },
     {
-      "id": "finance-tax",
+      "id": "accounting-tax",
       "name": "税务师",
-      "domain": "finance",
+      "domain": "accounting",
       "role_tag": [
-        "财务",
         "税务",
         "增值税",
+        "所得税",
         "发票"
       ],
       "when_to_use": "增值税/企业所得税/个税计算与申报、发票与抵扣处理时",
@@ -347,57 +200,26 @@
         "销项",
         "申报",
         "税率",
+        "汇算清缴",
         "附加税",
-        "汇算清缴"
+        "印花税"
       ],
-      "file": "finance/finance-tax.md",
       "source": {
         "repo": "kylin985ti/china-accounting-skills",
-        "path": "business/vat-accounting、income-tax、individual-tax、shared/tax-rates-reference",
-        "license": "MIT",
-        "adapted": true
-      }
-    },
-    {
-      "id": "finance-cashier",
-      "name": "出纳",
-      "domain": "finance",
-      "role_tag": [
-        "财务",
-        "出纳",
-        "资金",
-        "报销"
-      ],
-      "when_to_use": "现金与银行日记账、报销付款、开票与认证、对账时",
-      "trigger_keywords": [
-        "出纳",
-        "现金",
-        "银行",
-        "日记账",
-        "报销",
-        "付款",
-        "收款",
-        "对账",
-        "开票",
-        "票据"
-      ],
-      "file": "finance/finance-cashier.md",
-      "source": {
-        "repo": "kylin985ti/china-accounting-skills + stevenup/invoice-ledger-skill + yaowenhu-pm/yaowenhu-skills",
-        "path": "audit/cash-audit + business/journal-entry、invoice-archive",
         "license": "MIT",
         "adapted": true,
-        "note": "组合改写：上游无出纳成品角色定义"
-      }
+        "review": "pending"
+      },
+      "file": "accounting/accounting-tax.md"
     },
     {
-      "id": "finance-analyst",
+      "id": "accounting-analyst",
       "name": "财务分析师",
-      "domain": "finance",
+      "domain": "accounting",
       "role_tag": [
-        "财务",
         "分析",
         "报表分析",
+        "差异分析",
         "预算"
       ],
       "when_to_use": "报表分析、差异分析、预算与经营分析时（中国口径）",
@@ -407,210 +229,240 @@
         "差异分析",
         "预算",
         "毛利",
+        "净利",
         "现金流",
         "比率",
         "经营分析",
         "同比",
-        "环比"
+        "环比",
+        "驱动因素"
       ],
-      "file": "finance/finance-analyst.md",
       "source": {
         "repo": "anthropics/knowledge-work-plugins + kylin985ti/china-accounting-skills",
-        "path": "finance/variance-analysis、finance/financial-statements + business/balance-sheet、profit-loss、cash-flow",
         "license": "Apache-2.0 + MIT",
         "adapted": true,
-        "note": "组合改写并转中国口径"
-      }
+        "review": "pending"
+      },
+      "file": "accounting/accounting-analyst.md"
     },
     {
-      "id": "finance-compliance",
+      "id": "accounting-compliance",
       "name": "财务/内控合规分析师",
-      "domain": "finance",
+      "domain": "accounting",
       "role_tag": [
-        "财务",
         "内控",
         "合规",
-        "审计"
+        "审计",
+        "整改"
       ],
       "when_to_use": "内控制度、税务与发票合规、审计配合与整改时（中国口径）",
       "trigger_keywords": [
         "内控",
+        "控制",
         "合规",
         "内审",
         "审计",
         "发票合规",
         "税务合规",
         "制度",
-        "风险",
+        "缺陷",
         "整改",
-        "底稿"
+        "穿行测试",
+        "控制矩阵"
       ],
-      "file": "finance/finance-compliance.md",
       "source": {
-        "repo": "anthropics/knowledge-work-plugins",
-        "path": "finance/audit-support、finance/sox-testing（→中国内控规范）、operations/compliance-tracking",
-        "license": "Apache-2.0",
-        "adapted": true,
-        "note": "SOX 口径整体替换为中国企业内控规范体系；不保留美国版本"
-      }
-    },
-    {
-      "id": "legal-civil",
-      "name": "民法法律咨询",
-      "domain": "legal",
-      "role_tag": [
-        "法务",
-        "民法",
-        "合同",
-        "民事纠纷"
-      ],
-      "when_to_use": "合同、民事纠纷、违约侵权、借贷、诉讼仲裁等民商事问题咨询时",
-      "trigger_keywords": [
-        "民法",
-        "民法典",
-        "合同",
-        "民事",
-        "违约",
-        "侵权",
-        "借款",
-        "诉讼",
-        "仲裁",
-        "管辖"
-      ],
-      "file": "legal/legal-civil.md",
-      "source": {
-        "repo": "CSlawyer1985/claude-for-legal-ZH + kingselyjoe/dsh-legal-work-bench",
-        "path": "claude-for-legal-ZH（中国法适配） + preset/skills/01-commercial-legal、02-litigation-legal、08-corporate-legal",
+        "repo": "anthropics/knowledge-work-plugins + kylin985ti/china-accounting-skills",
         "license": "Apache-2.0 + MIT",
         "adapted": true,
-        "note": "中国法口径，含《民法典》合同编",
         "review": "pending"
-      }
+      },
+      "file": "accounting/accounting-compliance.md"
     },
     {
-      "id": "legal-criminal",
-      "name": "刑法法律咨询",
-      "domain": "legal",
+      "id": "hr-labor-law",
+      "name": "劳动关系与劳动法",
+      "domain": "hr",
       "role_tag": [
-        "法务",
-        "刑法",
-        "刑事",
-        "辩护"
+        "人力资源",
+        "劳动关系",
+        "劳动合同",
+        "社保"
       ],
-      "when_to_use": "刑事风险、立案与强制措施、罪名构成、量刑与辩护思路咨询时",
+      "when_to_use": "劳动合同、社保、竞业限制、劳动关系与争议处理时（中国大陆口径）",
       "trigger_keywords": [
-        "刑法",
-        "刑事",
-        "犯罪",
-        "立案",
-        "取保",
-        "量刑",
-        "职务犯罪",
-        "诈骗",
-        "辩护",
-        "自首"
+        "劳动合同",
+        "劳动关系",
+        "社保",
+        "五险一金",
+        "试用期",
+        "竞业限制",
+        "经济补偿",
+        "工伤",
+        "劳动仲裁",
+        "离职",
+        "加班",
+        "工资"
       ],
-      "file": "legal/legal-criminal.md",
       "source": {
-        "repo": "kingselyjoe/dsh-legal-work-bench",
-        "path": "preset/skills/11-criminal-legal/SKILL.md",
+        "repo": "jnMetaCode/agency-agents-zh",
+        "path": "legal/legal-contract-reviewer.md + hr/",
         "license": "MIT",
         "adapted": true,
         "review": "pending"
-      }
+      },
+      "file": "hr/hr-labor-law.md"
     },
     {
-      "id": "doc-office",
-      "name": "文档处理专家",
-      "domain": "doc",
+      "id": "coding-engineer",
+      "name": "软件工程师",
+      "domain": "coding",
       "role_tag": [
-        "文档",
-        "Word",
-        "Excel",
-        "PPT",
-        "PDF"
+        "工程",
+        "架构",
+        "实现",
+        "重构"
       ],
-      "when_to_use": "提取/改写/生成/汇总 Word、Excel、PPT、PDF 文件时",
+      "when_to_use": "架构设计、功能实现、调试排障与重构时",
       "trigger_keywords": [
-        "文档",
-        "Word",
-        "Excel",
-        "表格",
-        "PPT",
-        "PDF",
-        "提取",
-        "转换",
-        "汇总",
-        "批量"
+        "架构设计",
+        "功能实现",
+        "重构",
+        "调试",
+        "排障",
+        "性能优化",
+        "依赖",
+        "模块",
+        "接口设计"
       ],
-      "file": "doc/doc-office.md",
+      "source": {
+        "repo": "jnMetaCode/agency-agents-zh + VoltAgent/awesome-claude-code-subagents",
+        "license": "MIT",
+        "adapted": true
+      },
+      "file": "coding/coding-engineer.md"
+    },
+    {
+      "id": "coding-dsh-plugin",
+      "name": "DSH 插件工程师",
+      "domain": "coding",
+      "role_tag": [
+        "插件开发",
+        "DSH",
+        "Cordis",
+        "发布"
+      ],
+      "when_to_use": "开发或改造 DSH 插件（Cordis 插件模型、设置命名空间、systemPrompt 注入、回归与发布）时",
+      "trigger_keywords": [
+        "插件",
+        "DSH",
+        "Cordis",
+        "插件开发",
+        "设置命名空间",
+        "systemPrompt",
+        "注入",
+        "回归测试",
+        "发布",
+        "profile"
+      ],
       "source": {
         "origin": "self-authored",
+        "basis": "本机 dsh-experts / dsh-work-memory 源码 + DSH 官方文档 subsystems/system-prompt"
+      },
+      "file": "coding/coding-dsh-plugin.md"
+    },
+    {
+      "id": "coding-review",
+      "name": "代码审查与质量",
+      "domain": "coding",
+      "role_tag": [
+        "审查",
+        "质量",
+        "边界检查",
+        "发布自检"
+      ],
+      "when_to_use": "代码审查、边界与安全检查、发布前自检时",
+      "trigger_keywords": [
+        "代码审查",
+        "评审",
+        "边界检查",
+        "异常处理",
+        "回归",
+        "质量",
+        "发布自检",
+        "可维护性",
+        "安全审查"
+      ],
+      "source": {
+        "repo": "jnMetaCode/agency-agents-zh + VoltAgent/awesome-claude-code-subagents",
+        "license": "MIT",
+        "adapted": true
+      },
+      "file": "coding/coding-review.md"
+    },
+    {
+      "id": "finance-quant",
+      "name": "量化策略",
+      "domain": "finance",
+      "role_tag": [
+        "量化",
+        "策略",
+        "回测",
+        "风控"
+      ],
+      "when_to_use": "量化策略设计、回测、因子与风控时（A 股/国内期货口径）",
+      "trigger_keywords": [
+        "量化",
+        "策略",
+        "回测",
+        "因子",
+        "风控",
+        "仓位",
+        "止损",
+        "夏普",
+        "最大回撤",
+        "A股",
+        "期货",
+        "保证金",
+        "复权"
+      ],
+      "source": {
+        "repo": "jnMetaCode/agency-agents-zh + buildwithclaude-cn + 本库",
         "license": "MIT",
         "adapted": true,
-        "note": "与本集成体 dsh-doc-suite 的四个技能（office-word/office-excel/office-ppt/pdf-tools）精确对齐自撰"
-      }
+        "review": "pending"
+      },
+      "file": "finance/finance-quant.md"
     },
     {
-      "id": "doc-report-typeset",
-      "name": "报告与方案排版",
-      "domain": "doc",
+      "id": "finance-research",
+      "name": "投资研究",
+      "domain": "finance",
       "role_tag": [
-        "文档",
-        "排版",
-        "公文",
-        "报告"
+        "研究",
+        "投资",
+        "财报",
+        "宏观"
       ],
-      "when_to_use": "公文、报告、方案的中文规范排版与成文时",
+      "when_to_use": "公司/财报/宏观研究与投资论点构建时（标注数据日期与来源）",
       "trigger_keywords": [
-        "排版",
-        "公文",
-        "报告",
-        "格式",
-        "版式",
-        "字体",
-        "行距",
-        "红头",
-        "成文",
-        "GB/T9704"
+        "投资研究",
+        "财报",
+        "估值",
+        "宏观",
+        "行业",
+        "公司",
+        "基本面",
+        "论点",
+        "尽调",
+        "标的"
       ],
-      "file": "doc/doc-report-typeset.md",
       "source": {
-        "repo": "mizzlelover/gongwen-gbt9704-skill",
-        "path": "GB/T 9704-2012 公文排版技能",
+        "repo": "jnMetaCode/agency-agents-zh + awesome-subagents-cn",
         "license": "MIT",
-        "adapted": true
-      }
-    },
-    {
-      "id": "doc-ppt",
-      "name": "PPT 专家",
-      "domain": "doc",
-      "role_tag": [
-        "文档",
-        "PPT",
-        "演示",
-        "汇报"
-      ],
-      "when_to_use": "做汇报/提案幻灯片、梳理大纲与页面结构时",
-      "trigger_keywords": [
-        "PPT",
-        "幻灯片",
-        "演示",
-        "汇报",
-        "提案",
-        "大纲",
-        "母版",
-        "封面",
-        "路演"
-      ],
-      "file": "doc/doc-ppt.md",
-      "source": {
-        "repo": "ningzimu/codex-ppt-skill",
-        "path": "skills/ + AGENTS.md",
-        "license": "MIT",
-        "adapted": true
-      }
+        "adapted": true,
+        "review": "pending"
+      },
+      "file": "finance/finance-research.md"
     },
     {
       "id": "general-fact-check",
@@ -635,13 +487,143 @@
         "存疑",
         "不确定"
       ],
-      "file": "general/general-fact-check.md",
       "source": {
-        "repo": "SerhiiKorniienko/bullshit-detector",
-        "path": "skills/analysis/bullshit-detector/SKILL.md + RUBRIC.md",
+        "repo": "SerhiiKorniienko/bullshit-detector + jnMetaCode/agency-agents-zh + awesome-subagents-cn",
         "license": "MIT",
+        "adapted": true
+      },
+      "file": "general/general-fact-check.md"
+    },
+    {
+      "id": "general-typeset",
+      "name": "报告与方案排版",
+      "domain": "general",
+      "role_tag": [
+        "排版",
+        "公文",
+        "报告",
+        "成文"
+      ],
+      "when_to_use": "公文、报告、方案的中文规范排版与成文时",
+      "trigger_keywords": [
+        "排版",
+        "公文",
+        "报告",
+        "格式",
+        "版式",
+        "字体",
+        "行距",
+        "红头",
+        "成文",
+        "GB/T9704"
+      ],
+      "source": {
+        "repo": "mizzlelover/gongwen-gbt9704-skill + jnMetaCode/agency-agents-zh",
+        "license": "MIT",
+        "adapted": true
+      },
+      "file": "general/general-typeset.md"
+    },
+    {
+      "id": "general-office",
+      "name": "文档与表格处理",
+      "domain": "general",
+      "role_tag": [
+        "文档处理",
+        "办公文件",
+        "表格",
+        "转换"
+      ],
+      "when_to_use": "提取、改写、生成、重排或转换 Word / Excel / PPT / PDF 文件，以及办公文件批量处理与核对时",
+      "trigger_keywords": [
+        "文档",
+        "Word",
+        "Excel",
+        "表格",
+        "PPT",
+        "幻灯片",
+        "PDF",
+        "提取",
+        "转换",
+        "合并",
+        "批量",
+        "导出",
+        "公式",
+        "透视"
+      ],
+      "file": "general/general-office.md",
+      "source": {
+        "repo": "本库归档底本 + dsh-doc-suite 技能 + jnMetaCode/agency-agents-zh",
         "adapted": true,
-        "note": "英文改写为中文；6 级判定标尺与溯源规则保留"
+        "license": "MIT + self-authored"
+      }
+    },
+    {
+      "id": "general-slides",
+      "name": "演示与汇报设计",
+      "domain": "general",
+      "role_tag": [
+        "演示",
+        "汇报",
+        "幻灯片",
+        "演示设计"
+      ],
+      "when_to_use": "做汇报/提案幻灯片、梳理演示大纲与页面取舍时",
+      "trigger_keywords": [
+        "演示",
+        "汇报",
+        "幻灯片",
+        "提案",
+        "路演",
+        "大纲",
+        "页面",
+        "版式",
+        "讲稿",
+        "备注",
+        "母版"
+      ],
+      "file": "general/general-slides.md",
+      "source": {
+        "repo": "本库归档底本 doc-ppt.md + dsh-doc-suite 技能 + agency-agents-zh/design + awesome-subagents-cn",
+        "adapted": true,
+        "license": "MIT"
+      }
+    },
+    {
+      "id": "general-designer",
+      "name": "视觉与界面设计师",
+      "domain": "general",
+      "role_tag": [
+        "设计",
+        "视觉",
+        "版式",
+        "可读性"
+      ],
+      "when_to_use": "定视觉方向与配色字体、排布版式与信息层级、规范图表与图示、评审可读性与素材使用时",
+      "trigger_keywords": [
+        "设计",
+        "视觉",
+        "配色",
+        "字体",
+        "版式",
+        "图表",
+        "可视化",
+        "信息图",
+        "图示",
+        "层级",
+        "留白",
+        "一致性",
+        "素材",
+        "Logo",
+        "皮肤",
+        "界面",
+        "可读性"
+      ],
+      "file": "general/general-designer.md",
+      "source": {
+        "repo": "jnMetaCode/agency-agents-zh + awesome-subagents-cn",
+        "adapted": true,
+        "license": "MIT"
       }
     }
   ]

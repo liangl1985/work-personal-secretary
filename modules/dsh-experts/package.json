@@ -1,7 +1,7 @@
 {
   "name": "dsh-experts",
-  "version": "0.1.4",
-  "description": "DSH 专家库模块（work-personal-secretary 子模块）：按岗位关联的专家 persona 库——默认每轮注入 2 位（身份专家 + 至多一位按问题归属补位的对口专家；可调 1–3，越大会占 TOKEN），其余按需临时注入；派子代理时把 persona 内联进 prompt，使任务从对应专业角度被拆解。",
+  "version": "0.2.0",
+  "description": "DSH 专家库模块（work-personal-secretary 子模块）：按行业域组织的专家 persona 库——5 个行业域（infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融）+ 1 个通用职能域（general：核查/排版/文档/演示/设计），共 19 位。默认每轮注入按「问题归属」命中的对口专家（可调 1-3），默认只注入 L1 精简卡（约 0.4-0.5 千字符/位）；派子代理时用 expert_recall 取全文内联进 prompt。",
   "keywords": [
     "deepseek",
     "deepseek-harness",
@@ -11,9 +11,11 @@
     "persona",
     "prompt-library",
     "subagent",
-    "presales",
+    "infosec",
+    "accounting",
+    "coding",
     "finance",
-    "legal"
+    "hr"
   ],
   "type": "module",
   "main": "lib/index.js",
@@ -36,6 +38,7 @@
     "test:inject": "node scripts/injection-tier-test.mjs",
     "smoke": "node scripts/smoke-load.mjs",
     "coexist": "node scripts/coexist.mjs",
+    "card": "node scripts/card-preview.mjs",
     "check": "node --check lib/index.js && node --check lib/match.js && node --check lib/store.js && node --check lib/inject.js && node --check lib/settings.js && node --check lib/limits.js"
   },
   "engines": {

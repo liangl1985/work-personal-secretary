@@ -46,8 +46,8 @@ function test(label, fn) {
 }
 
 const experts = allExperts()
-const IDENTITY = findExpert('presales-ics-security')
-const HIT = findExpert('finance-tax')
+const IDENTITY = findExpert('infosec-ics-security')
+const HIT = findExpert('accounting-tax')
 const baseSel = [
   { entry: IDENTITY, score: 0.9, evidence: 1, reasons: ['岗位先验'] },
   { entry: HIT, score: 0.84, evidence: 1, reasons: ['关键词'] },
@@ -55,7 +55,7 @@ const baseSel = [
 const opt = (over = {}) => ({ banner: true, identityId: IDENTITY.id, ...over })
 
 // ---------- 1. 精简卡生成 ----------
-test('精简卡确定性：20 位 persona 同输入两次逐字相同且非空', () => {
+test('精简卡确定性：' + experts.length + ' 位 persona 同输入两次逐字相同且非空', () => {
   for (const e of experts) {
     const body = loadPersona(e)
     const a = buildPersonaCard(e, body)
@@ -246,7 +246,7 @@ function makeCtx() {
 
 test('注入回调：默认走精简卡；改设置后免重启生效（缓存键含 detail/budget）', () => {
   const ctx = makeCtx()
-  apply(ctx, { defaultDomain: 'presales', identityExpert: 'presales-ics-security' })
+  apply(ctx, { defaultDomain: 'infosec', identityExpert: 'infosec-ics-security' })
   const frame = { agent: { session: { header: { id: 'tier-session', cwd: 'C:\\workspace\\docs' } } }, text: '帮我看看这个' }
 
   const before = ctx._def.text(frame)
@@ -269,10 +269,10 @@ test('注入回调：默认走精简卡；改设置后免重启生效（缓存�
 
 // ---------- 10. 端到端体积（before/after） ----------
 test('端到端：3 个代表任务 auto 注入体积（before = 旧全文口径）', () => {
-  const cfg = { defaultDomain: 'presales', expertInjectMax: 2, expertSecondThreshold: 0.8, expertMinScore: 0.35 }
+  const cfg = { defaultDomain: 'infosec', expertInjectMax: 2, expertSecondThreshold: 0.8, expertMinScore: 0.35 }
   const tasks = ['写投标方案', '这份采购合同的钱怎么算、税怎么处理', '帮我看看这个']
   for (const t of tasks) {
-    const { selected } = selectExperts(experts, { text: t, defaultDomain: 'presales', branchDomain: null, identityId: IDENTITY.id }, cfg)
+    const { selected } = selectExperts(experts, { text: t, defaultDomain: 'infosec', branchDomain: null, identityId: IDENTITY.id }, cfg)
     const before = buildInjection(selected, { banner: true, identityId: IDENTITY.id, detail: 'full' })
     const after = buildInjection(selected, { banner: true, identityId: IDENTITY.id, detail: 'auto', budgetChars: INJECT_BUDGET_DEFAULT })
     results.push('       · ' + t + ' → [' + (selected.map((s) => s.entry.id).join(' + ') || '无') + ']  '

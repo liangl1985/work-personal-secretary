@@ -92,7 +92,7 @@ await t('experts 模块可加载；memory 模块按环境真加载或契约模�
 
 await t('先后 apply 到同一个 ctx，互不抛错', () => {
   disposers.push(applyMemory())
-  disposers.push(experts.apply(ctx, { defaultDomain: 'presales' }))
+  disposers.push(experts.apply(ctx, { defaultDomain: 'infosec' }))
 })
 
 await t('两个注入注册都在，且顺序为 专家 480 → 记忆 500', () => {

@@ -2,6 +2,79 @@
 
 本插件的版本历史。
 
+## 0.2.0 — 2026-09-14（域体系按行业重划 · 专家重建为 19 位）
+
+### 一、域体系重划：职能域 → 行业域
+
+- 旧 6 域（presales / aftersales / finance / legal / doc / general，本质是**职能**）重划为 **5 个行业域 + 1 个通用职能域**：
+  infosec 信息安全 · accounting 财务 · hr 人力资源 · coding 代码编程 · finance 金融 · general 通用职能。
+- **命名口径**：财务用 accounting、金融用 finance（原 finance 域内容迁往 accounting，腾出 finance 给金融）。
+- **配额**：行业域每域最多 4 位、最少 1 位；**general 为特例，上限 8**（跨行业职能自然聚集：核查 / 排版 / 文档 / 演示 / 设计）。
+- **id 前缀与域统一**：infosec-ics-security、accounting-tax、general-office 等。
+
+### 二、专家重建：20 位 → 19 位
+
+- 全部按 **5 轮优化**（起草 / 专业口径 / 卡契约 / 语言 / 精简去重）重写，每位 **至少 3 个不同来源交叉**；正文 1202–2024 字符，L1 卡 375–602 字符（方法条 clip 90）。
+- **新增 9 位**：hr-labor-law、coding-engineer、coding-dsh-plugin、coding-review、finance-quant、finance-research、general-office、general-slides、general-designer。
+- **硬退场 8 位**（归档于 backup/dsh-experts/retired-20260914）：presales-cyber-security、presales-gov-digital、aftersales-ics-support、aftersales-cyber-support、aftersales-pentest、finance-cashier、legal-civil、legal-criminal。
+- doc-office 与 doc-ppt 先随域重划退场，后按使用者需求从归档恢复为 general-office（文档与表格处理）与 general-slides（演示与汇报设计）。
+
+### 三、匹配与去重
+
+- **去重粒度由 domain 改为 role_tag[0]（职能键）**：域划粗为行业后，同一行业域内含多个职能（infosec 就有售前 / 销售 / 投标 / 测评四个），按域去重会把多视角锁成一位。现 19 个职能键两两不同，可同轮并存。
+- **补位污染修复**：补位比较此前用总分，导致"只沾岗位先验（evidence=0）"的专家被补进无关任务（实测"插件的设置命名空间怎么注册"会补出 infosec-ics-security）。现规则：基准有任务实证时，纯先验候选不补位。
+
+### 四、L1 卡契约（实测固化，写进 docs/handover.md 4.5 节）
+
+- 方法 **1-3 首句必须 ≤90 字符**（2026-09-14 由 60 放宽：太短会丢条件、产生偏差），且**不含超过 3 项枚举**（枚举下沉到方法 4-8）；
+- 交付段只取前 2 条、每条 ≤90 字；
+- 正文末尾来源标注**必须另起 ## 标题**，用 --- 分隔线会被 listItems 并入交付行；
+- 正文一律用**中文引号**（避免精确匹配失败）。
+
+### 五、设置变化
+
+- defaultDomain：presales → **infosec**；
+- identityExpert：presales-ics-security → **空**（身份由 work-memory 记忆承担，专家库不再重复常驻）；
+- expertInjectBudgetChars：1400 → **2000**（方法条 clip 由 60 放宽到 90，卡长涨到 375–602 后旧预算恰在临界线，稍大即降级丢掉命中专家）；
+- L1 卡方法条 clip：60 → **90**（方法首句标准同步放宽，避免太短丢条件）。
+
+### 六、卡友好结构（消除卡面截断）
+
+L1 卡只取「交付与自检」**前 2 条、每条 clip(90)**，长清单必然被截。全库按统一结构改写：
+
+- 「`## 交付与自检`」压成**两条各 ≤90 字的概括**（一条交付物、一条自检）；
+- 完整清单下沉到紧随其后的独立段 **`## 交付明细`**——**必须放在「`## 交付与自检`」之后**（解析器 `pick(['交付','自检'])` 取第一个命中标题，放前面会把明细当成交付段）；
+- 结果：**19/19 位 card-preview FAIL 0 · WARN 0**（此前 WARN 19）。
+
+### 七、开发者工具与质量门禁
+
+- **新增 `scripts/card-preview.mjs`**：L1 卡验收工具 —— `--all` 审计全库、单查 `"<正文>" <id> <name> [when]`、`CARD_SHOW=1` 打印卡面；判据分级 **FAIL**（方法 1-3 首句 >90 字符，或卡为空）/ **WARN**（交付段前 2 条 >90、卡长越出 500–620）；退出码 0/1 可接 CI；**不依赖宿主运行时**（缺 `@deepseek-ai/schemastery` 时自动降级）。
+- **测试全绿**：`regression` **32/32**（新增：file 真实存在 / 域配额（行业 ≤4、general ≤8、每域 ≥1、计数自洽）/ 职能键去重 / 同域不同职能可同轮并存 / 补位不污染 / `DOMAINS` 覆盖 index.json 实际域 / **review 域级断言**（高风险域必标、coding 与 general 不标））· `injection-tier-test` **16/16** · `smoke-load` **18/18** · `coexist` **7/7**。
+
+### 八、来源许可红线与平台口径
+
+- **`anthropics/skills` 是 Proprietary**（每个 skill 目录带 `LICENSE.txt`：© Anthropic, PBC，受其 Consumer / Commercial Terms 约束）——**只吸收方法要点（事实性知识 / 流程 / 判断规则），不复制其文本、代码或提示词原文，且不作为"改写来源"归因**；全库 5 处 Anthropic 归因已移除。对照：`anthropics/knowledge-work-plugins` 为 Apache-2.0，`agency-agents-zh` / `awesome-subagents-cn` / VoltAgent 系列为 MIT。
+- **本机文档工具是 WPS，不是 Microsoft Office**：persona 统一写 WPS（WPS 文字 / 表格 / 演示、WPS COM）；`.docx/.xlsx/.pptx` 走 python 库（快），旧格式（`.doc/.xls/.et/.wps`）与导出 PDF / 逐页出图走 **WPS COM**（慢、仅 Windows、须已装 WPS）；**WPS 的 COM 进程不会自动退出**，必须显式 Quit + 释放句柄（已进各文档类专家的自检条）。WPS COM ProgID = `KWPS.Application` / `KET.Application` / `KWPP.Application`（**只注册在 HKCU**，且 `dsh-doc-suite` 的 doctor 正是用 ProgID 实例化检测，不依赖安装路径）。
+- **`review` 判据改为域级**：`infosec` / `accounting` / `finance` / `hr` 全标 `pending`（共 11 位），`coding` / `general` 不标。
+
+### 九、发布前核对（「现实可用」标准，5 域 19 位）
+
+按 **A 工具可达性 / B 知识时效性 / C 边界正确性** 逐位核对，发现并修正 **19 条偏差**（A 类 1 + B 类 7 + 待核 2 + C 类 9），台账见 `docs/pre-release-audit.md`：
+
+- **A 类 1**：`general-typeset` 把未安装的 gongwen-skill 当执行工具链 → 改 `dsh-doc-suite`；
+- **B 类 7**：`hr-labor-law` 试用期工资上下限写反（第 19 条期限上限 / 第 20 条工资下限）· `infosec-ics-security` OPC UA 误列「原生缺认证加密」（改 OPC Classic，补「OPC UA 常被配成 None」）· `infosec-djbh` 判定规则改**符合率**（>60% 且 <90% 基本符合、<60% 不符合）· `accounting-accountant` 科目数 167 → **原指南 156 项 / 2024 汇编 171 个** · `finance-research` 港股改「先确认发行人编制基础」· `general-typeset` 行距 29 磅标为**实现参数非标准条文** · `general-office` 拆开：旧格式**读取/导出**走 WPS COM、**`.xls` 公式重算未实测**；
+- **待核 2**（按「不确定就写不确定」）：删「小企业准则 66 个科目」数字 → 「以附录科目表为准」；等保「三级增设安全管理中心」→ 「三级要求更严，具体差异以 GB/T 22239-2019 原文为准」；
+- **C 类 9**：权威源访问门槛（知网/万方需订阅、裁判文书网限缩）· A 股 T+1 / 国内期货 T+0 · 实名数据源（巨潮 / 披露易 / 统计局）· 来源补《住房公积金管理条例》· 递延所得税交叉指引 · patch「中性」限定为「不含个人路径与称呼」· 来源段分隔符 · 销售与售前职责边界 · 投标竞争定位场景。
+- **教训**：错误高度集中在「**精确数字与条款归属**」——具体数字要么实测 / 查原文，要么不写；拿不准的一律写「以某某原文为准」。
+
+### 十、遗留补齐（2026-09-14 收口）
+
+- **infosec 边界重叠改为双侧对称加注**：`infosec-ics-security` 角色段补「客户约束、决策链与商务推进由 `infosec-sales-engineer` 负责——技术选型口径由我出，商务承诺不由我下」；`infosec-sales-engineer` 方法 7 补场景限定「（现场口头交流；书面标书文本的竞争定位交投标侧）」，与 `infosec-bid-proposal` 方法 6 的「用于标书文本」对称。
+- **会计 4 位 + 金融 2 位补工具路径**：在 `## 交付明细` 末（**不进 L1 卡**、零卡面风险）补 `**工具路径**` 一条——`dsh-doc-suite` 的 `office-excel` 取数 / 重算 / 透视 + `office-word` 成文；统一 **WPS** 口径，旧格式 `.xls/.et` 走 WPS COM 较慢，并写明「**公式先重算再读数**」（避免读到旧缓存或空值）。
+- 补后复验：`card-preview --all` **FAIL 0 · WARN 0 · OK 19 · INFO 3** · `regression 32/0` · `injection-tier 16/0` · `smoke-load 18/0` · `coexist 7/0` · src ↔ profile 哈希一致。
+
+---
+
 ## 0.1.4 — 2026-09-14（匹配排序修复 + 提示词注入分级）
 
 ### 一、修「跨域单关键词任务被岗位域先验压过」（排序口径）
@@ -19,7 +92,7 @@
 **问题**：每轮把 persona **正文全文**注入 `systemPrompt.context`（默认 2 位，约 4.5–5.2KB 中文），叠加记忆快照后单轮固定开销约 8–9KB，纯属常驻成本。
 
 **修法**：
-- **L1 精简卡**（新默认）：由 persona 正文**确定性生成** —— 角色段首句（≤80 字）+ 工作方法前 3 条（每条 ≤60 字）+ 交付与自检前 2 条（每条 ≤90 字）+ `when_to_use` 一行；实测 **464–509 字符/位**，20/20 落在 400–700 目标区间。**不重写、不修改 `experts/**.md`**，取全文时内容一字不少。
+- **L1 精简卡**（新默认）：由 persona 正文**确定性生成** —— 角色段首句（≤80 字）+ 工作方法前 3 条（每条 ≤90 字，2026-09-14 由 60 放宽）+ 交付与自检前 2 条（每条 ≤90 字）+ `when_to_use` 一行；实测 **464–509 字符/位**，20/20 落在 400–700 目标区间。**不重写、不修改 `experts/**.md`**，取全文时内容一字不少。
 - **L0 目录**：未命中的专家不进上下文（既有行为），索引靠 `expert_recall` / `/expert list` 现取。
 - **L2 全文**：`/expert use`、`expert_recall`、派子代理内联 —— 一切照旧。
 - **新设置两项**（默认值三处一致：schema 默认 / `DEFAULTS` / `cordis.patch.yml` 部署层 base）：

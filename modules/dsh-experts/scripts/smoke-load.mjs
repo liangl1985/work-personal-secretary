@@ -64,7 +64,7 @@ function makeCtx() {
 }
 
 const ctx = makeCtx()
-const dispose = apply(ctx, { defaultDomain: 'presales' })
+const dispose = apply(ctx, { defaultDomain: 'infosec' })
 
 const session = { header: { id: 'smoke-session', cwd: 'C:\\workspace\\docs' } }
 const frame = (text) => ({ agent: { session }, text })
@@ -112,7 +112,7 @@ await t('注入回调：把上限调回 1 时，跨域专家不再占常驻上�
   // 默认值自 0.1.3 起是 2（身份专家 + 至多一位按问题归属补位的对口专家）；
   // 这里显式传 1，专门守住「调小上限即收敛为只有身份专家」这条行为。
   const ctx1 = makeCtx()
-  apply(ctx1, { defaultDomain: 'presales', expertInjectMax: 1 })
+  apply(ctx1, { defaultDomain: 'infosec', expertInjectMax: 1 })
   const last = captured.contexts[captured.contexts.length - 1]
   const out = last.text(frame('客户要做三级等保测评，定级备案怎么走'))
   assert.ok(out.includes('【身份视角·'), '缺身份专家')
@@ -122,7 +122,7 @@ await t('注入回调：把上限调回 1 时，跨域专家不再占常驻上�
 await t('/expert list 输出专家清单', async () => {
   const res = await captured.commands[0].handler({ rawInput: 'list', session: { agent: { session } } })
   assert.ok(res.text.includes('专家库'), '清单缺标题')
-  assert.ok(res.text.includes('presales-bid-proposal'), '清单缺专家 id')
+  assert.ok(res.text.includes('infosec-bid-proposal'), '清单缺专家 id')
 })
 
 await t('/expert status 输出四项配置状态', async () => {
@@ -138,11 +138,11 @@ await t('/expert why 展示打分依据', async () => {
 
 await t('/expert use 临时注入 → 注入回调切换；/expert off → 不再注入', async () => {
   const cmd = captured.commands[0]
-  const use = await cmd.handler({ rawInput: 'use legal-criminal', session: { agent: { session } } })
+  const use = await cmd.handler({ rawInput: 'use hr-labor-law', session: { agent: { session } } })
   assert.ok(use.text.includes('临时注入'), '临时注入未生效：' + use.text)
 
   const injected = captured.contexts[0].text(frame('随便问点什么'))
-  assert.ok(injected.includes('刑法'), '临时注入的 persona 未出现：' + injected.slice(0, 80))
+  assert.ok(injected.includes('劳动'), '临时注入的 persona 未出现：' + injected.slice(0, 80))
 
   await cmd.handler({ rawInput: 'off', session: { agent: { session } } })
   assert.equal(captured.contexts[0].text(frame('随便问点什么')), '', 'off 后不应再注入')
@@ -153,10 +153,10 @@ await t('/expert use 临时注入 → 注入回调切换；/expert off → 不�
 })
 
 await t('expert_recall 工具：按 id 取 persona 正文（返回结构化对象）', async () => {
-  const r = await captured.tools[0].execute({ id: 'legal-criminal' })
+  const r = await captured.tools[0].execute({ id: 'hr-labor-law' })
   assert.equal(r.ok, true)
   assert.equal(r.kind, 'persona')
-  assert.equal(r.id, 'legal-criminal')
+  assert.equal(r.id, 'hr-labor-law')
   assert.ok(String(r.text).includes('## 角色'), '未返回 persona 正文：' + String(r.text).slice(0, 80))
 })
 
@@ -194,7 +194,7 @@ await t('未知 id 给出明确提示而非抛错', async () => {
 
 await t('注入上限 2 时：跨域命中专家被补上（问题归属判断生效）', () => {
   const ctx2 = makeCtx()
-  apply(ctx2, { defaultDomain: 'presales', expertInjectMax: 2 })
+  apply(ctx2, { defaultDomain: 'infosec', expertInjectMax: 2 })
   const last = captured.contexts[captured.contexts.length - 1]
   const out = last.text(frame('客户要做三级等保测评，定级备案怎么走'))
   assert.ok(out.includes('【身份视角·'), '缺身份专家：' + out.slice(0, 120))

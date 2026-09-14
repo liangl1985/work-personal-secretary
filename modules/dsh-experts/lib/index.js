@@ -193,7 +193,7 @@ export function apply(ctx, config = {}) {
     description: '取出某位专家的 persona 正文（现取现用，不常驻上下文）。用于：派子代理时把 persona 内联进 subagent.prompt；或临时按某位专家的视角工作。不传 id 时按 query 关键词返回最匹配的专家。',
     // 官方参数 DSL：属性内 required: true（**不是** JSON Schema 的 properties/required 数组）
     parameters: {
-      id: { type: 'string', description: '专家 id（如 presales-bid-proposal）；省略则用 query 匹配' },
+      id: { type: 'string', description: '专家 id（如 infosec-bid-proposal）；省略则用 query 匹配' },
       query: { type: 'string', description: '任务描述或关键词，用于选出最匹配的专家' },
       list: { type: 'boolean', description: '仅列出可用专家清单（含域、一句话定位、激活状态）' },
     },
@@ -394,7 +394,7 @@ function setupText(c) {
     lines.push('  ' + d.id + ' —— ' + d.name + '（' + n + ' 位）：' + d.desc)
   }
   lines.push('')
-  lines.push('执行：/expert setup <域> [身份专家id]   例如 /expert setup presales presales-ics-security')
+  lines.push('执行：/expert setup <域> [身份专家id]   例如 /expert setup infosec infosec-ics-security')
   lines.push('  · 域 —— 你的岗位方向，决定打分先验（跨域专家仍可被命中）')
   lines.push('  · 身份专家 —— **常驻注入的唯一一位**；留空则取该域第一位')
   const id = identityExpertOf(c)

@@ -38,22 +38,34 @@ export const WEIGHTS = {
  * 目录名命中不了就返回 null（退化为只有岗位域与任务信号，不影响其余匹配）。
  */
 export const BRANCH_DOMAIN_HINTS = {
-  售前: 'presales',
-  投标: 'presales',
-  方案: 'presales',
-  客户: 'presales',
-  报价: 'presales',
-  财务: 'finance',
-  会计: 'finance',
-  税务: 'finance',
-  报表: 'finance',
-  发票: 'finance',
-  法务: 'legal',
-  合同: 'legal',
-  诉讼: 'legal',
-  文档: 'doc',
-  报告: 'doc',
-  排版: 'doc',
+  售前: 'infosec',
+  投标: 'infosec',
+  方案: 'infosec',
+  客户: 'infosec',
+  报价: 'infosec',
+  安全: 'infosec',
+  工控: 'infosec',
+  等保: 'infosec',
+  财务: 'accounting',
+  会计: 'accounting',
+  税务: 'accounting',
+  报表: 'accounting',
+  发票: 'accounting',
+  人力: 'hr',
+  招聘: 'hr',
+  绩效: 'hr',
+  代码: 'coding',
+  插件: 'coding',
+  仓库: 'coding',
+  投资: 'finance',
+  策略: 'finance',
+  量化: 'finance',
+  法务: 'general',
+  合同: 'general',
+  诉讼: 'general',
+  文档: 'general',
+  报告: 'general',
+  排版: 'general',
   工作: 'general',
   笔记: 'general',
   资料: 'general',
@@ -175,6 +187,9 @@ export function selectExperts(entries, ctx = {}, cfg = {}) {
 
   const selected = []
 
+  /** 去重粒度 = 职能键（role_tag[0]）；缺该字段时回落 domain（向后兼容） */
+  const funcKey = (e) => (Array.isArray(e?.role_tag) && e.role_tag[0]) ? String(e.role_tag[0]) : String(e?.domain || '')
+
   // 1) 身份专家恒选：常驻的唯一身份视角
   const idItem = identityId ? ranked.find((r) => String(r.entry.id).toLowerCase() === identityId) : null
   if (idItem) selected.push(idItem)
@@ -192,9 +207,11 @@ export function selectExperts(entries, ctx = {}, cfg = {}) {
       selected.push(item)
       continue
     }
-    if (selected.some((s) => s.entry.domain === item.entry.domain)) continue // 同域不叠加
+    if (selected.some((s) => funcKey(s.entry) === funcKey(item.entry))) continue // 同职能不叠加（域已划粗为行业）
 
     const ref = base || selected[0]
+    // 纯先验兜底不得补位：基准有实证时，只沾岗位先验（evidence=0）的候选与本轮任务无关
+    if (ref.evidence > 0 && item.evidence === 0) continue
     const byScore = item.score >= ref.score * threshold
     const byEvidence = ref.evidence > 0
       ? item.evidence >= ref.evidence * threshold

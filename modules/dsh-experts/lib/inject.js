@@ -15,7 +15,7 @@
  *     + 交付与自检前 2 条 + when_to_use 一行；带尾注「精简卡 · 全文用 expert_recall 取」；
  *   - **L2 全文**：`/expert use <id>`、`expert_recall`、派子代理内联 时使用（不变）。
  *
- * 每轮预算（expertInjectBudgetChars，默认 1400 字符）：超预算按序降级
+ * 每轮预算（expertInjectBudgetChars，默认 2000 字符）：超预算按序降级
  *   命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；连最低形态都放不下时硬截断，
  *   **任何降级与截断都会写明**（绝不静默超限）。
  *
@@ -53,11 +53,11 @@ export const MANUAL_NOTE = '（临时注入：仅本会话生效，不常驻上�
 /** 精简卡尾注（要求原样出现：「精简卡 · 全文用 expert_recall 取」） */
 export const CARD_NOTE = '精简卡 · 全文用 expert_recall 取'
 
-/** 精简卡生成参数（确定性：同输入同输出；长度上限保证一张卡约 400–700 字符） */
+/** 精简卡生成参数（确定性：同输入同输出；方法条 clip(90) × 3 + 交付条 clip(90) × 2 + 角色/适用，一张卡约 500-620 字符） */
 export const CARD_ROLE_MAX_CHARS = 80
 /** 角色首句过短时续接到此长度（信息量下限，仍记作「首句」） */
 export const CARD_ROLE_MIN_CHARS = 40
-export const CARD_METHOD_MAX_CHARS = 60
+export const CARD_METHOD_MAX_CHARS = 90
 export const CARD_METHOD_COUNT = 3
 export const CARD_DELIVERY_MAX_CHARS = 90
 export const CARD_DELIVERY_COUNT = 2
@@ -149,7 +149,7 @@ function clipPersona(entry, text) {
 
 /**
  * L1 精简卡：从 persona 正文**确定性**生成（同输入同输出）。
- * 角色段首句（≤80 字）+ 工作方法前 3 条（每条 ≤60 字）+ 交付与自检前 2 条（每条 ≤90 字）
+ * 角色段首句（≤80 字）+ 工作方法前 3 条（每条 ≤90 字）+ 交付与自检前 2 条（每条 ≤90 字）
  * + when_to_use 一行（≤80 字）。
  * 解析失败或段落缺失 → 回退「全文截断」并标注，**永不产出空块**。
  * @returns {string} 卡正文（不含标题与尾注；空串仅当正文为空）

@@ -40,7 +40,7 @@ export const SETTINGS_NS = 'experts'
 export const DEFAULTS = {
   expertsEnabled: true,
   injectOrder: 480,
-  defaultDomain: 'presales',
+  defaultDomain: 'infosec',
   identityExpert: '',
   enabledDomains: '',
   enabledExperts: '',
@@ -58,26 +58,26 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
   expertsEnabled: z.boolean().default(true)
     .description('专家库总开关（关闭后不注入任何 persona，专家工具与命令仍可用）'),
 
-  defaultDomain: z.string().default('presales')
-    .description('本人岗位默认域 —— 安装引导会问一次。取值：presales 售前 / aftersales 售后·技术支持 / finance 会计财务 / legal 法务 / doc 文档 / general 核查·通用。它决定任务优先从哪个专业角度被拆解（给会计岗同事用时改成 finance 即可，无需改代码）'),
+  defaultDomain: z.string().default('infosec')
+    .description('本人岗位默认域 —— 安装引导会问一次。取值：infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融 / general 通用职能。它决定任务优先从哪个专业角度被拆解（给会计岗同事用时改成 accounting 即可，无需改代码）'),
 
   identityExpert: z.string().default('')
-    .description('**常驻注入的唯一身份专家**（专家 id，如 presales-ics-security）；留空 = 自动取「本人岗位」域的第一位。它每轮都在场，代表使用者的默认身份视角；其余专家由「问题归属判断」决定是否临时补充或派子代理激活'),
+    .description('**常驻注入的唯一身份专家**（专家 id，如 infosec-ics-security）；留空 = 自动取「本人岗位」域的第一位。它每轮都在场，代表使用者的默认身份视角；其余专家由「问题归属判断」决定是否临时补充或派子代理激活'),
 
   enabledDomains: z.string().default('')
-    .description('把匹配范围**收窄**到这些域（逗号分隔，如 presales,legal）；留空 = 全部专家都参与匹配。「本人岗位」只作打分先验，不当白名单（否则跨域任务会命中不了本域之外的专家）'),
+    .description('把匹配范围**收窄**到这些域（逗号分隔，如 infosec,accounting）；留空 = 全部专家都参与匹配。「本人岗位」只作打分先验，不当白名单（否则跨域任务会命中不了本域之外的专家）'),
 
   enabledExperts: z.string().default('')
-    .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 presales-bid-proposal,finance-accountant）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 /expert use <id> 临时注入'),
+    .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 infosec-bid-proposal,accounting-tax）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 /expert use <id> 临时注入'),
 
   expertInjectMax: z.natural().default(2)
     .description('每轮最多注入几位专家：1 / 2（默认）/ 3。⚠️ 调成 2 或 3 会占用较多 TOKEN（每位 persona 约 1.3–1.8 千字，UTF-8 约 3.3–4.9KB），且只在分数接近且跨域时才补第 2/3 位'),
 
   expertInjectDetail: z.string().default('auto')
-    .description('每轮注入形态：auto（默认，按预算自动降级）/ card（全部精简卡）/ full（全文，保持旧行为）。⚠️ full 会把每位 persona 正文全文注入（1.8–2.6 千字符/位），单轮约 4.5–5.2KB；auto / card 只注入精简卡（角色首句 + 方法前 3 条 + 交付前 2 条 + 适用），单轮约 0.9–1.4 千字符，省约 3/4 TOKEN；取值非法时回落 auto'),
+    .description('每轮注入形态：auto（默认，按预算自动降级）/ card（全部精简卡）/ full（全文，保持旧行为）。⚠️ full 会把每位 persona 正文全文注入（1.8–2.6 千字符/位），单轮约 4.5–5.2KB；auto / card 只注入精简卡（角色首句 + 方法前 3 条 + 交付前 2 条 + 适用），单轮约 1.3–1.8 千字符，省约 2/3 TOKEN；取值非法时回落 auto'),
 
   expertInjectBudgetChars: z.natural().default(INJECT_BUDGET_DEFAULT)
-    .description('每轮专家注入的**字符预算**（默认 1400，约 0.9–1.2k TOKEN）：超预算按序降级 —— 命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；连最低形态都放不下则截断并标注（绝不静默超限）。调大＝视角更完整但更占 TOKEN；调小＝更省但卡片更薄（下限 200，上限 20000）'),
+    .description('每轮专家注入的**字符预算**（默认 2000，约 1.3–1.7k TOKEN）：超预算按序降级 —— 命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；连最低形态都放不下则截断并标注（绝不静默超限）。调大＝视角更完整但更占 TOKEN；调小＝更省但卡片更薄（下限 200，上限 20000）'),
 
   expertSecondThreshold: z.number().default(0.8)
     .description('第 2/3 位专家的门槛：其分数 ≥ 第 1 位 × 该值时才注入（默认 0.8；仅 expertInjectMax ≥ 2 时生效）'),
