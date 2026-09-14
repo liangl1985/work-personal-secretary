@@ -9,6 +9,7 @@
 - **`lib/install.js`**：`deployPetSkins()` 增加 `legacyDir` 入参与 `migrated[]` 结果字段，安装回显新增「已从旧址迁移 N 套」；`describePetSkins()` 一并展示。常量集中于 `lib/install.js` 与 `lib/basedeck.js`。
 - **`lib/basedeck.js`**：`PET_SKINS_SUBDIR` 指向新址（配置底座报告/创建的素材目录随之更新）。
 - **能力配置页**（`client/index.js`）：专家库小节新增 `expertInjectDetail`（下拉 auto / card / full）与 `expertInjectBudgetChars`（滑块 200–4000），中英文字典同步；`select` 渲染支持字段自带选项；`lib/settings-api.js` 的 `EXPERTS_CONFIG_FALLBACK` 补齐两键。
+- **性质口径**：新增第三种性质「**独立项目模块**」（安装器 `kind`、客户端 `nature: 'standalone'` + `natureKey()` 第三态、中英文案与品牌色徽章），`workspace-tokenpet` 由「第三方」改标；`dsh-mermaid` 保持「第三方」（整包引入）。上游版权 / MIT 许可 / 致谢表述不变。
 
 ### 验证（2026-09-14）
 

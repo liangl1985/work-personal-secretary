@@ -124,7 +124,7 @@ export const SUB_PLUGIN_IDS = [
   { id: 'dsh-doc-suite', label: '文档能力', kind: '自研' },
   { id: 'dsh-experts', label: '专家库', kind: '自研' },
   { id: 'dsh-mermaid', label: '思维链与图表', kind: '第三方' },
-  { id: 'workspace-tokenpet', label: '桌面形象', kind: '第三方' },
+  { id: 'workspace-tokenpet', label: '桌面形象', kind: '独立项目模块' },
 ]
 
 /** 五个 id 的字符串数组（查表 / 回显用） */

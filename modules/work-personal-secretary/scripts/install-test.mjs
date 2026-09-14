@@ -186,7 +186,8 @@ section('[1] SUB_PLUGIN_IDS：五个固定 id 与顺序')
 ok(SUB_PLUGIN_ID_LIST.length === 5, '共五个 id')
 ok(SUB_PLUGIN_ID_LIST.join(',') === 'dsh-work-memory,dsh-doc-suite,dsh-experts,dsh-mermaid,workspace-tokenpet', '顺序与契约一致')
 ok(SUB_PLUGIN_IDS.every((s) => s.label && s.kind), '每项都有中文 label 与 kind')
-ok(SUB_PLUGIN_IDS.every((s) => s.kind === '自研' || s.kind === '第三方'), 'kind 只取 自研 / 第三方')
+ok(SUB_PLUGIN_IDS.every((s) => s.kind === '自研' || s.kind === '独立项目模块' || s.kind === '第三方'),
+  'kind 只取 自研 / 独立项目模块 / 第三方')
 ok(SUB_PLUGINS.map((s) => s.name).join(',') === SUB_PLUGIN_ID_LIST.join(','), '与 lib/index.js 的 SUB_PLUGINS 一致')
 ok(SUB_PLUGIN_NAMES.join(',') === SUB_PLUGIN_ID_LIST.join(','), '与 lib/probe.js 的 SUB_PLUGIN_NAMES 一致')
 

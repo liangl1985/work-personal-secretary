@@ -113,7 +113,7 @@ window.__ModuleLoader__.load({
     /**
      * P2「安装子插件」：五项的**固定顺序**（客户端写死，与接口是否可达无关，
      * 保证加载中/出错时也能渲染骨架）。nameKey = 接口未给 name 时的中英文名兜底；
-     * nature = 性质兜底（self=自研 / third=第三方）。
+     * nature = 性质兜底（self=自研 / standalone=独立项目模块 / third=第三方）。
      */
     const INSTALL_ORDER = ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'workspace-tokenpet']
     const PLUGIN_META = {
@@ -121,7 +121,7 @@ window.__ModuleLoader__.load({
       'dsh-doc-suite': { nameKey: 'plugDocs', nature: 'self' },
       'dsh-experts': { nameKey: 'plugExperts', nature: 'self' },
       'dsh-mermaid': { nameKey: 'plugCharts', nature: 'third' },
-      'workspace-tokenpet': { nameKey: 'plugPet', nature: 'third' },
+      'workspace-tokenpet': { nameKey: 'plugPet', nature: 'standalone' },
     }
     /** 子插件状态 → 文案键 / 徽标样式 */
     const PLUG_STATUS_KEYS = {
@@ -288,6 +288,7 @@ window.__ModuleLoader__.load({
       colMode: '安装方式',
       notInstalled: '未安装',
       natureSelf: '自研',
+      natureStandalone: '独立项目模块',
       natureThird: '第三方',
       plugStatusUpToDate: '已是最新',
       plugStatusInstallable: '可安装',
@@ -717,6 +718,7 @@ window.__ModuleLoader__.load({
       colMode: 'Install mode',
       notInstalled: 'Not installed',
       natureSelf: 'First-party',
+      natureStandalone: 'Standalone module',
       natureThird: 'Third-party',
       plugStatusUpToDate: 'Up to date',
       plugStatusInstallable: 'Installable',
@@ -1363,12 +1365,17 @@ window.__ModuleLoader__.load({
       return ''
     }
 
-    /** 性质归一：self = 自研 / third = 第三方 / '' = 未知 */
+    /**
+     * 性质归一：self = 自研 / standalone = 独立项目模块 / third = 第三方 / '' = 未知。
+     * 「独立项目模块」= 自持源码、构建产物、文档与素材，但由上游项目独立化而来
+     * （上游版权、许可与致谢见该模块 LICENSE / NOTICE）—— 与"第三方整包引入"区分开。
+     */
     function natureKey(value) {
       const s = String(value === undefined || value === null ? '' : value).trim().toLowerCase()
       if (s === '') return ''
       if (s.indexOf('自研') >= 0 || s.indexOf('self') >= 0 || s.indexOf('first') >= 0
         || s.indexOf('bundled') >= 0 || s.indexOf('builtin') >= 0) return 'self'
+      if (s.indexOf('独立') >= 0 || s.indexOf('standalone') >= 0 || s.indexOf('independent') >= 0) return 'standalone'
       return 'third'
     }
 
@@ -2143,10 +2150,14 @@ window.__ModuleLoader__.load({
       const disabled = busy || locked || item.pickable !== true
       const natureText = item.nature === 'self'
         ? t('natureSelf')
-        : (item.nature === 'third' ? t('natureThird') : t('statusUnknown'))
+        : (item.nature === 'standalone'
+            ? t('natureStandalone')
+            : (item.nature === 'third' ? t('natureThird') : t('statusUnknown')))
       const natureStyle = item.nature === 'self'
         ? S.badgeOk
-        : (item.nature === 'third' ? S.badgeWarn : S.badgeSkip)
+        : (item.nature === 'standalone'
+            ? S.badgeBrand
+            : (item.nature === 'third' ? S.badgeWarn : S.badgeSkip))
       const nodes = [
         h('div', { key: 'head', style: S.rowHead }, [
           h('input', {

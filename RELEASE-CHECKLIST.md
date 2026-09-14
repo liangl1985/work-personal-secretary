@@ -106,6 +106,7 @@
 - [x] `package.json`：`bugs.url` 指向本仓库 issues、`repository.directory` = `modules/workspace-tokenpet`、`files` 不再含 `patches`
 - [x] **补丁形态已清除**：`patches/**`、`scripts/apply-customizations.*`、`scripts/upstream/**` 均不存在；`package.json` 无相关失效 scripts
 - [x] `cordis.patch.yml` 为**中性部署默认层**（不含个人路径 / 称呼），entry `id` / `name` = `workspace-tokenpet`
+- [x] **性质口径**：安装页性质新增「**独立项目模块**」（安装器 `kind`、客户端 `nature: 'standalone'`、`natureKey()` 识别「独立 / standalone / independent」，中英文案与品牌色徽章）——`workspace-tokenpet` 由「第三方」改标；`dsh-mermaid` 仍为「第三方」（整包引入）；上游版权、MIT 许可与致谢表述不变
 - [x] README 不再含「上游与基线 / 改造清单 / 补丁应用」三节；致谢独立成节
 
 ### 素材与数据目录
