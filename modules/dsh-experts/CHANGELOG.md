@@ -2,6 +2,26 @@
 
 本插件的版本历史。
 
+## 0.5.4 — 2026-09-16（测试修复：装载冒烟的 mock 误判参数形态，装到副本目录必失败）
+
+### 一、缺陷
+
+- **现象**：在 profile 安装副本目录（`~/.dsh/profiles/desktop/node_modules/dsh-experts`）里跑 `scripts/smoke-load.mjs` **必然失败**（exit=1，抛「parameters 必须用 DSL」）；同样的脚本在源码目录与 CI 却全绿。
+- **根因**：mock 的 `tools.register` 用「parameters 带顶层 `type` / `properties` 就当 JSON Schema」判错，而 `@deepseek-ai/dsh-tools` 的 `defineTool()` **本来就会把 DSL 转换成 JSON Schema**（`dsh-tools/lib/types/schema.js:293` `parameterSchemaSpecToJsonSchema`）：
+  - **defineTool 可用**（副本目录、真机）→ 送进来的是**转换后的 JSON Schema** → mock 误报；
+  - **defineTool 不可用**（源码目录、CI）→ 送进来的是**原始 DSL** → 恰好通过，问题被掩盖。
+- **影响面**：只影响「拿安装副本冒烟」这条路；**不影响真机与 CI**（真机的参数校验由宿主自己完成，不经过本 mock）。
+
+### 二、修复
+
+- `scripts/smoke-load.mjs` 顶部探测依赖是否可用（`hasDefineTool`），mock 校验改为**只在降级路径**（`!hasDefineTool`）才拦「顶层 type / properties」，并写明两条路径的形态差异。
+- 新增 1 条正向断言，把差异显式锁住：defineTool 可用 → `parameters.type === 'object'` 且有 `properties`；降级 → 保持原始 DSL、不带顶层 type / properties。
+
+### 三、验收
+
+- 源码目录（降级路径）：smoke-load **18 → 19 通过 / 0 失败**；
+- 五套合计 **103 通过 / 0 失败**（regression 48 · injection-tier 20 · capability 8 · coexist 8 · smoke-load 19）；
+- profile 副本目录（defineTool 可用）：同步后 smoke-load **19 通过 / 0 失败**（修复前 exit=1）。**本版不含行为变更**：`lib/**` 与 0.5.3 逐字节一致。
 ## 0.5.3 — 2026-09-16（修复：干活轮取人不按证据序，通用保底挤掉高证据域专家）
 
 ### 一、缺陷（真机实测发现）

@@ -12,6 +12,20 @@
 import assert from 'node:assert/strict'
 import { name, inject, apply } from '../lib/index.js'
 
+/**
+ * 参数形态随依赖可用性而变（2026-09-16 修 mock 误判时加的探测）：
+ *   · `@deepseek-ai/dsh-tools` 可用 → `lib/index.js` 的 defineTool() 会把 DSL
+ *     **转换成 JSON Schema** 再交给宿主（见 dsh-tools/lib/types/schema.js:293）；
+ *   · 不可用 → 走降级路径，把**原始 DSL 对象**直接送来。
+ * 下面的 mock 校验必须知道当前是哪条路径，否则会把 defineTool 的正常产出误判成「用了 JSON Schema」。
+ */
+let hasDefineTool = false
+try {
+  hasDefineTool = typeof (await import('@deepseek-ai/dsh-tools')).defineTool === 'function'
+} catch {
+  hasDefineTool = false
+}
+
 let pass = 0
 let fail = 0
 
@@ -52,14 +66,17 @@ function makeCtx() {
     },
     // 模拟官方 dsh-tools 的注册校验（真机在此抛错，2026-09-12 实际踩过）：
     //   TypeError: tool "x" must declare output { schema, render, presentationMeta? }
-    // 并校验参数必须用 DSL（属性内 required: true），不是 JSON Schema。
+    // 参数形态按**当前走的路径**判（2026-09-16 修）：
+    //   · defineTool 可用 → 送来的是它转换后的 JSON Schema，**合法**（原实现会在此误报）；
+    //   · defineTool 不可用（源码目录 / CI）→ 送来的是原始 DSL；若带了顶层 type / properties，
+    //     说明插件把 parameters 写成了 JSON Schema —— 这才是真机会拦的错误。
     tools: {
       register: (def) => {
         if (!def || typeof def.name !== 'string') throw new Error('tool 必须声明 name')
         if (!def.output || typeof def.output !== 'object' || !def.output.schema || typeof def.output.render !== 'function') {
           throw new Error('tool "' + (def && def.name) + '" must declare output { schema, render, presentationMeta? }')
         }
-        if (def.parameters && (def.parameters.type || def.parameters.properties)) {
+        if (!hasDefineTool && def.parameters && (def.parameters.type || def.parameters.properties)) {
           throw new Error('tool "' + def.name + '" 的 parameters 必须用 DSL（属性内 required: true），不是 JSON Schema')
         }
         captured.tools.push(def)
@@ -131,6 +148,19 @@ await t('注册 expert_recall 工具；不再注册命令（/expert 已于 0.3.0
   assert.equal(captured.tools.length, 1)
   assert.equal(captured.tools[0].name, 'expert_recall')
   assert.ok(!captured.commands.some((x) => x.name === 'expert'), '不应再注册 /expert 命令')
+})
+
+await t('expert_recall 参数形态随路径而定：defineTool 可用 = 转换后的 JSON Schema；降级 = 原始 DSL', () => {
+  const tool = captured.tools[0]
+  assert.equal(typeof tool.output.render, 'function', 'output.render 缺失')
+  if (hasDefineTool) {
+    assert.equal(tool.parameters?.type, 'object',
+      'defineTool 可用时 parameters 应是转换后的 JSON Schema（副本环境下这条曾误判失败）')
+    assert.ok(tool.parameters?.properties && Object.keys(tool.parameters.properties).length > 0, '未转换出 properties')
+  } else {
+    assert.ok(!tool.parameters?.type && !tool.parameters?.properties,
+      '降级路径应保留原始 DSL（属性内 required: true），不应带顶层 type / properties')
+  }
 })
 
 await t('设置命名空间注册（有 schemastery 时）或降级（无宿主依赖时）', () => {
