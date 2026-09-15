@@ -268,28 +268,54 @@ t('依赖可用时端到端：造样本 → 套样式 → 内容不变', () => {
   assert(r && r.status === 0, '公式未保留');
 });
 
-t('规格扩展：compact 已内置，compact 与 report 可加载且 extends 生效', () => {
+t('规格扩展：compact 内置 + 自定义层 extends 继承 / 深度覆盖 / 隔离 / 循环检测', () => {
   assert(fs.existsSync(path.join(mod, 'specs', 'compact.json')), 'specs/compact.json 不存在');
+  // 夹具自造：临时目录当自定义层（ss.USER_DIR 可运行时覆盖），
+  // 不读使用者真实 ~/.dsh/data/dsh-doc-suite/templates —— CI 干净环境与开发机结果一致。
   const chk = [
-    'import sys',
+    'import sys, json, pathlib, tempfile, shutil',
     'sys.path.insert(0, sys.argv[1])',
     'import style_spec as ss',
-    's = ss.load_spec("standard"); c = ss.load_spec("compact"); r = ss.load_spec("report")',
-    'ok = (c["word"]["styles"]["Normal"]["size_pt"] == 10.5',
-    '      and c["word"]["styles"]["Normal"]["line_spacing"] == 1.15',
-    '      and c["word"]["styles"]["Heading 1"]["size_pt"] == 14',
-    '      and c["word"]["page"]["margins_cm"]["top"] == 2.2',
-    '      and c["word"]["page"]["margins_cm"]["left"] == 2.0',
-    '      and c["colors"]["primary"] == "44546A"',
-    '      and r["word"]["styles"]["Heading 1"]["align"] == "left"',
-    '      and r["word"]["table"]["header"]["shading"] == "BDD7EE"',
-    '      and r["colors"]["primary"] == s["colors"]["primary"]',
-    '      and r["word"]["styles"]["Normal"]["size_pt"] == 12)',
-    'sys.exit(0 if ok else 1)',
+    'base = ss.load_spec("standard"); c = ss.load_spec("compact")',
+    'tmp = pathlib.Path(tempfile.mkdtemp(prefix="dsh-style-spec-"))',
+    'try:',
+    '    ss.USER_DIR = tmp',
+    '    demo = {"schema": "dsh-doc-suite/style-spec@1", "id": "demo-report", "extends": "standard",',
+    '            "colors": {"accent": "B45309"},',
+    '            "word": {"styles": {"Heading 1": {"align": "left"}},',
+    '                     "table": {"header": {"shading": "BDD7EE"}}}}',
+    '    (tmp / "demo-report.json").write_text(json.dumps(demo, ensure_ascii=False), encoding="utf-8")',
+    '    d = ss.load_spec("demo-report")',
+    '    (tmp / "loop-a.json").write_text(json.dumps({"id": "loop-a", "extends": "loop-b"}), encoding="utf-8")',
+    '    (tmp / "loop-b.json").write_text(json.dumps({"id": "loop-b", "extends": "loop-a"}), encoding="utf-8")',
+    '    cyc = False',
+    '    try:',
+    '        ss.load_spec("loop-a")',
+    '    except ss.SpecError:',
+    '        cyc = True',
+    '    std_after = ss.load_spec("standard")',
+    '    ok = (c["word"]["styles"]["Normal"]["size_pt"] == 10.5',
+    '          and c["word"]["styles"]["Normal"]["line_spacing"] == 1.15',
+    '          and c["word"]["styles"]["Heading 1"]["size_pt"] == 14',
+    '          and c["word"]["page"]["margins_cm"]["top"] == 2.2',
+    '          and c["word"]["page"]["margins_cm"]["left"] == 2.0',
+    '          and c["colors"]["primary"] == "44546A"',
+    '          and d["id"] == "demo-report"',
+    '          and d["colors"]["primary"] == base["colors"]["primary"]',
+    '          and d["word"]["styles"]["Normal"]["size_pt"] == 12',
+    '          and d["word"]["styles"]["Heading 1"]["align"] == "left"',
+    '          and d["word"]["table"]["header"]["shading"] == "BDD7EE"',
+    '          and d["colors"]["accent"] == "B45309"',
+    '          and std_after["word"]["styles"]["Heading 1"]["align"] == "center"',
+    '          and cyc)',
+    '    print("extends/override/isolation/cycle ok=" + str(ok))',
+    '    sys.exit(0 if ok else 1)',
+    'finally:',
+    '    shutil.rmtree(tmp, ignore_errors=True)',
   ].join('\n');
   const r = pyRun('-c', [chk, OFF]);
   if (!r) return 'skip';
-  assert(r.status === 0, 'compact/report 加载或 extends 继承不符: ' + (r.stdout + r.stderr).slice(0, 200));
+  assert(r.status === 0, 'compact/extends 继承或覆盖不符: ' + (r.stdout + r.stderr).slice(0, 200));
 });
 
 t('色板修正：文字色达标 + 装饰色保留', () => {
