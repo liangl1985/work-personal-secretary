@@ -23,6 +23,7 @@ description: 处理 Excel 表格（.xlsx/.xls/.et）：读取工作表与单元�
 | `merge` | `merge <out.xlsx> f1.xlsx f2.xlsx ... [--mode rows\|sheets]` | 输出在前，输入文件是位置参数 |
 | `recalc` | `recalc <file> [--sheet S] [--out out.xlsx]` | KET `CalculateFull`，之后 `read` 才能读到真值 |
 | `pivot` | `pivot <file> --source-range "表!A1:D7" --out <xlsx> [--rows 字段]... [--values 字段] [--dest-sheet 名]` | 源区**必须含表头且非空**；指向空区会 exit 4 并给出替代做法 |
+| `apply-style` | `apply-style <file> [--spec standard] [--sheet S] [--out out.xlsx] [--dry-run]` | **对已有 xlsx 套样式**（仿宋 小四12pt / 表头底纹+加粗+居中+冻结 / thin 边框 / 按**表头关键词**匹配数字格式与列宽 / A4 纵向缩放 1 页宽）；**值公式零改动断言**不通过则拒绝产出 |
 
 ## 常用命令
 
@@ -46,6 +47,9 @@ py -3 <DOC_SUITE_SCRIPTS>\office\excel_tool.py recalc "带公式.xlsx"
 
 :: 数据透视表（源区含表头，如 A1:D7）
 py -3 <DOC_SUITE_SCRIPTS>\office\excel_tool.py pivot "源.xlsx" --source-range "数据!A1:D7" --rows 地区 --values 金额 --out "透视.xlsx"
+
+:: 给已有表格「套样式」（表头底纹 D9E2F3 + 冻结首行 + 边框 + 按表头匹配数字格式）
+py -3 <DOC_SUITE_SCRIPTS>\office\excel_tool.py apply-style "选型表.xlsx"
 
 :: 图表（第一行作为系列名，第一列作为分类轴；--type line|bar|col|pie）
 py -3 <DOC_SUITE_SCRIPTS>\office\excel_tool.py chart "输入.xlsx" --range A1:D13 --type line --title "月度趋势" --out "带图.xlsx"

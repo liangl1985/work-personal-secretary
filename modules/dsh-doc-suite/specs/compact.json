@@ -1,0 +1,66 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "compact",
+  "name": "内部纪要",
+  "extends": "standard",
+  "mood": "简练、密排、不装饰",
+  "best_for": [
+    "内部备忘",
+    "会议纪要",
+    "任务清单",
+    "草稿"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-15",
+  "_note": "内部快件风格（39 号方案 2.3）。extends=standard，只写差异键。页边距收紧、行距 1.15、正文五号 10.5pt、标题层级降一档、表格中性浅灰细线、主色改灰蓝。",
+  "colors": {
+    "primary": "44546A",
+    "secondary": "5A6478",
+    "accent": "B45309",
+    "accent_decor": "ED7D31"
+  },
+  "word": {
+    "page": {
+      "margins_cm": {
+        "top": 2.2,
+        "bottom": 2.2,
+        "left": 2,
+        "right": 2
+      }
+    },
+    "styles": {
+      "Normal": {
+        "size_pt": 10.5,
+        "line_spacing": 1.15
+      },
+      "Heading 1": {
+        "size_pt": 14
+      },
+      "Heading 2": {
+        "size_pt": 12
+      },
+      "Heading 3": {
+        "size_pt": 10.5
+      }
+    },
+    "table": {
+      "header": {
+        "shading": "F2F2F2"
+      },
+      "borders": {
+        "size": 2,
+        "color": "BFBFBF"
+      }
+    },
+    "fonts": {}
+  },
+  "excel": {
+    "header": {
+      "shading": "F2F2F2"
+    },
+    "border": {
+      "style": "thin",
+      "color": "BFBFBF"
+    }
+  }
+}

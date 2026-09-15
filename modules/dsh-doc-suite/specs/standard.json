@@ -1,0 +1,398 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "standard",
+  "name": "标准商务",
+  "mood": "专业、克制、可信",
+  "best_for": [
+    "方案",
+    "报告",
+    "说明",
+    "对账",
+    "投标技术文件"
+  ],
+  "version": "1.2",
+  "updated": "2026-09-15",
+  "_note": "内置默认层。使用者自定义层放 ~/.dsh/data/dsh-doc-suite/templates/<id>.json，同名键深度覆盖本文件。v1.1 依据 36_投标文件格式画像（主人真实投标文件实测）：页面上下 3.17/左右 2.54、heading_1=14pt 黑体加粗、heading_2/3=12pt 黑体、新增 doc_title 角色与表格列对齐规则。",
+  "colors": {
+    "_note": "色板 v1.2（2026-09-15）：文字色与装饰色分离。accent / semantic.warn 用于文字与关键数据（对白底对比度均 >=4.5:1，WCAG 实测）；accent_decor / warn_decor 用于底纹/边框/图形等装饰场景，保留原亮色。依据 39_多套文档风格方案 的对比度实测。",
+    "primary": "1F4E79",
+    "secondary": "2E75B6",
+    "accent": "B45309",
+    "accent_decor": "ED7D31",
+    "neutral": {
+      "light": "F2F2F2",
+      "mid": "D9D9D9",
+      "gray": "808080",
+      "dark": "404040"
+    },
+    "semantic": {
+      "pass": "548235",
+      "risk": "C00000",
+      "warn": "8A6A00",
+      "warn_decor": "BF9000"
+    }
+  },
+  "roles": {
+    "_note": "文档角色识别配置（A2.1）。命名样式优先，编号模式兜底；doc_title 用启发式。",
+    "title_zone": 30,
+    "title_max_chars": 40,
+    "numbering": {
+      "heading_1": "N. 或 N、",
+      "heading_2": "N.M",
+      "heading_3": "（N）",
+      "heading_4": "A：/B:"
+    }
+  },
+  "word": {
+    "page": {
+      "size": "A4",
+      "orientation": "portrait",
+      "margins_cm": {
+        "top": 3.17,
+        "bottom": 3.17,
+        "left": 2.54,
+        "right": 2.54
+      }
+    },
+    "fonts": {
+      "body": {
+        "latin": "仿宋",
+        "ea": "仿宋"
+      },
+      "h1": {
+        "latin": "仿宋",
+        "ea": "仿宋"
+      },
+      "h2": {
+        "latin": "仿宋",
+        "ea": "仿宋"
+      },
+      "h3": {
+        "latin": "仿宋",
+        "ea": "仿宋"
+      },
+      "h4": {
+        "latin": "仿宋",
+        "ea": "仿宋"
+      },
+      "table": {
+        "latin": "仿宋",
+        "ea": "仿宋"
+      }
+    },
+    "doc_title": {
+      "_note": "封面大标题：居中加粗；字号阶梯可配（借 dsh-ppt 的场合元数据思路）。",
+      "align": "center",
+      "bold": true,
+      "sizes_pt": {
+        "cover": 36,
+        "subtitle": 22,
+        "project": 18,
+        "party": 16,
+        "code": 14
+      },
+      "default_size_pt": 18,
+      "latin": "仿宋",
+      "ea": "仿宋",
+      "space_before_pt": 0,
+      "space_after_pt": 12
+    },
+    "styles": {
+      "Normal": {
+        "font": "body",
+        "size_pt": 12,
+        "bold": false,
+        "align": "justify",
+        "line_spacing": 1.5,
+        "first_line_chars": 2,
+        "space_before_pt": 0,
+        "space_after_pt": 0,
+        "size_name": "小四"
+      },
+      "Heading 1": {
+        "font": "h1",
+        "size_pt": 15,
+        "bold": true,
+        "align": "center",
+        "line_spacing": 1.5,
+        "first_line_chars": 0,
+        "space_before_pt": 12,
+        "space_after_pt": 6,
+        "outline_level": 0,
+        "size_name": "小三"
+      },
+      "Heading 2": {
+        "font": "h2",
+        "size_pt": 14,
+        "bold": true,
+        "align": "left",
+        "line_spacing": 1.5,
+        "first_line_chars": 0,
+        "space_before_pt": 8,
+        "space_after_pt": 4,
+        "outline_level": 1,
+        "size_name": "四号"
+      },
+      "Heading 3": {
+        "font": "h3",
+        "size_pt": 12,
+        "bold": true,
+        "align": "left",
+        "line_spacing": 1.5,
+        "first_line_chars": 0,
+        "space_before_pt": 6,
+        "space_after_pt": 4,
+        "outline_level": 2,
+        "size_name": "小四"
+      },
+      "Heading 4": {
+        "font": "h1",
+        "size_pt": 12,
+        "bold": true,
+        "align": "left",
+        "line_spacing": 1.5,
+        "first_line_chars": 0,
+        "space_before_pt": 6,
+        "space_after_pt": 4,
+        "outline_level": 3,
+        "size_name": "小四"
+      }
+    },
+    "table": {
+      "style_name": "Table Grid",
+      "width_mode": "full",
+      "_width_note": "A2.2：full = 表格撑满版心且列宽按「表头 + 内容显示宽度」自适应（tblW=版心宽、tblLayout=fixed）；auto = 不改宽度。min/max_col_chars 为列宽上下限（显示宽度，全角算 2）。",
+      "min_col_chars": 4,
+      "max_col_chars": 40,
+      "header": {
+        "shading": "D9E2F3",
+        "bold": true,
+        "align": "center",
+        "valign": "center"
+      },
+      "body": {
+        "font": "table",
+        "size_pt": 10.5,
+        "align": "left",
+        "valign": "center"
+      },
+      "borders": {
+        "style": "single",
+        "size": 4,
+        "color": "808080"
+      },
+      "repeat_header": true,
+      "align_rules": {
+        "_note": "主人 2026-09-15：「标题、序号居中，其他右对齐」；纯文本列默认左对齐（长中文右对齐极难阅读），需一律右对齐时把 text_align_default 改成 right。",
+        "header_align": "center",
+        "serial_headers": [
+          "序号",
+          "编号",
+          "项次",
+          "No.",
+          "No"
+        ],
+        "serial_align": "center",
+        "numeric_headers": [
+          "数量",
+          "单价",
+          "价格",
+          "金额",
+          "总价",
+          "合计",
+          "小计",
+          "成本",
+          "报价",
+          "税额",
+          "税率",
+          "比率",
+          "比例",
+          "折扣"
+        ],
+        "numeric_align": "right",
+        "numeric_ratio": 0.6,
+        "text_align_default": "left"
+      }
+    },
+    "strip_run_font": true,
+    "apply_roles": true,
+    "allowed_fonts": [
+      "仿宋"
+    ],
+    "style_families": {
+      "body": {
+        "names": [
+          "Normal",
+          "Body Text",
+          "List Paragraph",
+          "List Bullet",
+          "List Number",
+          "List Continue",
+          "Table Grid",
+          "Normal Table",
+          "No Spacing",
+          "Plain Text",
+          "Table Text",
+          "List"
+        ],
+        "prefixes": [
+          "List"
+        ],
+        "font": "body"
+      },
+      "heading": {
+        "names": [
+          "Heading 1",
+          "Heading 2",
+          "Heading 3",
+          "Heading 4",
+          "Heading 5",
+          "Heading 6",
+          "Heading 7",
+          "Heading 8",
+          "Heading 9",
+          "Title",
+          "Subtitle"
+        ],
+        "prefixes": [
+          "Heading"
+        ],
+        "font": "h1"
+      }
+    },
+    "_note_a23": "allowed_fonts=全文（含表格）允许的东亚字体；style_families=文档实际存在但 styles 段未列出的样式按族统一字体。正文用「仿宋」而非「仿宋_GB2312」（后者多数机器未装、有回退风险，主人 2026-09-15 定）。",
+    "_note_font": "全文字体只允许「仿宋」一种（主人 2026-09-15）：英文/数字/汉字、正文与标题、表格与表头一律仿宋，rFonts 四属性(ascii/hAnsi/eastAsia/cs)全 = 仿宋；层级只靠字号+加粗+对齐区分；规格中 latin 键不再产生第二种字体；不做字体优先级/回退链。",
+    "_note_sizes": "字号以中文标识为准：小三=15pt、四号=14pt、小四=12pt；size_name 为人类可读标识，size_pt 为实现值。"
+  },
+  "excel": {
+    "font": {
+      "name": "仿宋",
+      "size": 12,
+      "size_name": "小四"
+    },
+    "header": {
+      "shading": "D9E2F3",
+      "bold": true,
+      "align": "center",
+      "valign": "center",
+      "freeze": "A2",
+      "row": 1
+    },
+    "border": {
+      "style": "thin",
+      "color": "808080",
+      "scope": "data"
+    },
+    "wrap": {
+      "auto_for_long_text": true,
+      "max_width_chars": 60
+    },
+    "column_width": {
+      "auto": true,
+      "min": 6,
+      "max": 60
+    },
+    "align_rules": {
+      "serial_headers": [
+        "序号",
+        "编号",
+        "项次",
+        "No.",
+        "No"
+      ],
+      "serial_align": "center",
+      "numeric_headers": [
+        "数量",
+        "单价",
+        "价格",
+        "金额",
+        "总价",
+        "合计",
+        "小计",
+        "成本",
+        "报价",
+        "税额",
+        "税率",
+        "比率",
+        "比例",
+        "折扣"
+      ],
+      "numeric_align": "right",
+      "numeric_ratio": 0.6,
+      "text_align_default": "left"
+    },
+    "column_rules": [
+      {
+        "header_contains": [
+          "序号",
+          "编号"
+        ],
+        "number_format": "0",
+        "width": 6
+      },
+      {
+        "header_contains": [
+          "数量",
+          "点数",
+          "台数"
+        ],
+        "number_format": "0",
+        "width": 8
+      },
+      {
+        "header_contains": [
+          "单价",
+          "价格"
+        ],
+        "number_format": "0.00",
+        "width": 12
+      },
+      {
+        "header_contains": [
+          "总价",
+          "金额",
+          "合计",
+          "小计",
+          "成本",
+          "报价"
+        ],
+        "number_format": "#,##0.00",
+        "width": 14
+      },
+      {
+        "header_contains": [
+          "比率",
+          "比例",
+          "折扣"
+        ],
+        "number_format": "0.0%",
+        "width": 10
+      },
+      {
+        "header_contains": [
+          "日期",
+          "时间"
+        ],
+        "number_format": "yyyy-mm-dd",
+        "width": 14
+      },
+      {
+        "header_contains": [
+          "备注",
+          "说明",
+          "参数",
+          "描述"
+        ],
+        "wrap": true,
+        "width": 42
+      }
+    ],
+    "print": {
+      "paper": "A4",
+      "orientation": "portrait",
+      "fit_to_width": 1,
+      "gridlines": false
+    },
+    "_note_font": "Excel 字体与 Word 统一：仿宋 小四(12pt)（主人 2026-09-15 定；原为宋体 11pt）"
+  }
+}

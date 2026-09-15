@@ -21,6 +21,8 @@ description: 处理 Word 文档（.docx/.doc/.wps）：提取全文与表格、�
 | `edit` | `edit <file> --replace "旧=新" [--replace "a=b"] [--out out.docx]` | `--replace` **必填**、可重复；不加 `--out` 则原地保存 |
 | `convert` | `convert <src> <dst>` | **两个都是位置参数**（没有 `--to`） |
 | `compare` | `compare A.docx B.docx --out-dir <目录> [--author 名] [--allow-tracked]` | `--out-dir` **必填**，产出 `diff.txt`+`diff.html`+`tracked.docx` |
+| `apply-style` | `apply-style <file> [--spec standard] [--out out.docx] [--dry-run]` | **对已有 docx 套版式**（页面/命名样式/字体四属性/行距 1.5/首行缩进 2 字符）；**内容零改动断言**不通过则拒绝产出、原文件不动 |
+| `table-style` | `table-style <file> [--spec standard] [--out out.docx] [--dry-run]` | 表格样式：表头底纹+加粗+居中、边框、跨页重复表头、表内字号（10.5pt） |
 
 ## 常用命令
 
@@ -39,6 +41,12 @@ py -3 <DOC_SUITE_SCRIPTS>\office\word_tool.py edit "输入.docx" --replace "旧�
 
 :: 导出 PDF（WPS COM，保真度高）
 py -3 <DOC_SUITE_SCRIPTS>\office\word_tool.py convert "输入.docx" "输出.pdf"
+
+:: 给已有方案/说明「套版式」（A4 + 页边距 上下3.17/左右2.54 + 全文仿宋 + 小三/四号/小四层级 + 四属性 eastAsia）
+py -3 <DOC_SUITE_SCRIPTS>\office\word_tool.py apply-style "方案.docx"
+
+:: 表格美化（表头底纹 D9E2F3 + 边框 + 跨页重复表头）
+py -3 <DOC_SUITE_SCRIPTS>\office\word_tool.py table-style "方案.docx"
 
 :: 文档比对：两版对照（红线修订，可直接用 Word/WPS 打开审阅）
 py -3 <DOC_SUITE_SCRIPTS>\office\word_tool.py compare "旧版.docx" "新版.docx" --out-dir "比对输出" --author 姓名

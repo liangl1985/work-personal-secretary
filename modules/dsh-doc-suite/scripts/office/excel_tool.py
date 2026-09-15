@@ -10,6 +10,8 @@
   py -3 excel_tool.py merge <out.xlsx> f1.xlsx f2.xlsx [--mode rows|sheets]
   py -3 excel_tool.py recalc <file> [--sheet S] [--out out.xlsx]        # WPS COM 重算公式并保存
   py -3 excel_tool.py pivot <file> --source-range "S!A1:D7" --out out.xlsx [--rows 产品] [--values 数量]
+  py -3 excel_tool.py apply-style <file> [--spec standard] [--sheet S] [--out out.xlsx] [--dry-run]
+                                                      # 对已有 xlsx 套样式；值/公式零改动断言不通过则拒绝产出
 
 参数形态（实测易踩）：除 --out/--dst/--outdir 外，输入全是**位置参数**；pivot 的
 --source-range 必须指向**含表头的真实区域**（指向空区会 exit 4 并给出替代做法，这是设计如此）。
@@ -467,6 +469,45 @@ def cmd_pivot(args):
     return 0
 
 
+def cmd_apply_style(args):
+    """对已有 xlsx 套样式（字体/表头/边框/数字格式/列宽/冻结/打印）；值公式零改动断言。"""
+    import style_spec
+    import excel_style
+
+    spec = style_spec.load_spec(args.spec)
+    style_spec.check_spec_supported(spec)
+    src = Path(args.file)
+    if not src.name.lower().endswith((".xlsx", ".xlsm")):
+        print(f"错误: apply-style 只支持 .xlsx/.xlsm（openpyxl）；{src.suffix} 旧格式请先 convert。", file=sys.stderr)
+        return 2
+    sheets = [args.sheet] if args.sheet else None
+    print(style_spec.describe_spec(spec))
+    if args.dry_run:
+        rep = excel_style.apply_excel_style(src, spec, None, dry_run=True, sheets=sheets)
+        print(f"[dry-run] 将处理 {len(rep['sheets'])} 张表、{rep['cells']} 个单元格；未写盘。")
+        for s in rep["sheets"]:
+            print(f"   [{s['sheet']}] {s['rows']}行×{s['cols']}列，按表头规则命中 {s['ruled_cols']} 列")
+        if rep["rich_parts"]:
+            print(f"   ⚠️ 检测到富部件 {', '.join(rep['rich_parts'])}：openpyxl 保存会丢弃，请谨慎就地改。")
+        return 0
+    try:
+        rep, final, bak = style_spec.commit_style(
+            src, args.out, lambda tmp: excel_style.apply_excel_style(src, spec, tmp, sheets=sheets), "style")
+    except style_spec.ContentChangedError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        print("提示: 已拒绝产出，原文件未改动。", file=sys.stderr)
+        return style_spec.ContentChangedError.exit_code
+    print(f"✅ 已套样式: {final}")
+    for s in rep["sheets"]:
+        print(f"   [{s['sheet']}] {s['rows']}行×{s['cols']}列，按表头规则命中 {s['ruled_cols']} 列")
+    if bak:
+        print(f"   原文件备份: {bak}")
+    if rep["rich_parts"]:
+        print(f"   ⚠️ 注意: 源文件含 {', '.join(rep['rich_parts'])}，openpyxl 保存会丢弃这些富部件。")
+    print("   值/公式零改动断言: 通过（逐表逐单元格比对，差异 0）")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Excel 工具")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -524,6 +565,14 @@ def main():
     p.add_argument("--values", metavar="字段", help="值字段（默认源区末列表头，求和）")
     p.add_argument("--dest-sheet", help="放置透视表的工作表名（默认新建 透视表）")
     p.set_defaults(fn=cmd_pivot)
+
+    p = sub.add_parser("apply-style", help="对已有 xlsx 套样式（字体/表头/边框/数字格式/列宽/冻结/打印；值公式零改动）")
+    p.add_argument("file")
+    p.add_argument("--spec", default=None, help="规格 id 或 JSON 路径（默认 standard）")
+    p.add_argument("--sheet", help="只处理该工作表（默认全部）")
+    p.add_argument("--out", help="输出文件（默认就地改 + 备份 .bak-style-<时间戳>）")
+    p.add_argument("--dry-run", action="store_true", help="只报告不写盘")
+    p.set_defaults(fn=cmd_apply_style)
 
     args = parser.parse_args()
     cli_guard.check_inputs(args)

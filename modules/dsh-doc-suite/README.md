@@ -6,14 +6,60 @@
 
 | 格式 | 范围 | 关键能力 |
 |---|---|---|
-| **Word** | 处理 + **比对** | 读取（全文/表格/样式，含"带修订文档拒绝裸读"保护）、生成、编辑、转 PDF；**比对**：文本 diff + HTML 对照 + **可用 Word/WPS 打开的"红线修订版"**（字符级） |
-| **Excel** | 处理 | 读写、公式写入、**重算读值**（KET `CalculateFull`）、**数据透视**、条件格式、图表、合并、批量 |
+| **Word** | 处理 + **比对** + **套样式** | 读取（全文/表格/样式，含"带修订文档拒绝裸读"保护）、生成、编辑、转 PDF；**比对**：文本 diff + HTML 对照 + **可用 Word/WPS 打开的"红线修订版"**（字符级）；**套样式**：对**已有** docx 一键套版式（`apply-style` / `table-style`，见「一之二」节） |
+| **Excel** | 处理 + **套样式** | 读写、公式写入、**重算读值**（KET `CalculateFull`）、**数据透视**、条件格式、图表、合并、批量；**套样式**：对**已有** xlsx 一键套样式（`apply-style`，见「一之二」节） |
 | **PPT** | **制作 + 排版** | 生成、模板/母版/版式套用、占位符填充、EMU 级坐标与字号、图表/表格/图片、演讲者备注、批量生成；**排版上限取决于模板预制程度** |
 | **PDF** | **只读精确提取**（附少量组装） | 文字、表格（**带 bbox**）、图片、书签/元数据；合并 / 拆分 / 页面转图 / 图片合成 PDF；**旋转页/合并单元格/扫描件主动告警**（不做版式编辑、不做本地 OCR；`ocr` 子命令已退役，只打印退役说明并 exit 0） |
 
 > **子命令速查**：每个格式的完整子命令、参数形态（位置参数 vs 选项）与易错点，见 `skills/<对应技能>/SKILL.md` 的「子命令速查」表。
 > **技能清单（4 个 DSH 原生技能）**：`office-word`（Word 处理 + 比对）、`office-excel`（Excel 处理）、`office-ppt`（PPT 制作 + 排版）、`pdf-tools`（PDF 只读提取 + 合并/拆分/图片合成）。
 > 三个高频坑先记住：`convert <src> <dst>`（**没有** `--to`）、`ppt images <src> <outdir>`（**没有** `--out-dir`）、`merge/make` 的**输出参数在前**。
+
+## 一之二、样式能力（A 线：给【已有文件】套样式）
+
+> 三个子命令，**对已有文件生效**（不改内容、只改版式）—— 这是与其他"生成新文件"工具的核心区别。
+
+| 命令 | 作用 |
+|---|---|
+| `word_tool.py apply-style <docx> [--spec standard|compact|<路径>] [--out X] [--dry-run]` | 对已有 Word 套版式：页面 / 命名样式 / **段落角色识别** / 字体四属性 / 行距 / 缩进 |
+| `word_tool.py table-style <docx> [同上]` | 表格：表头底纹+加粗+居中、边框、**跨页重复表头**、**宽度撑满版心 + 列宽自适应**、列对齐 |
+| `excel_tool.py apply-style <xlsx> [--sheet S] [--out X] [--dry-run]` | 对已有 Excel 套样式：字体 / 表头底纹+冻结 / 边框 / 数字格式 / 列宽 / 打印设置 / 列对齐 |
+
+**退出码（三命令一致）**：`0` 成功 ｜ `2` 输入或规格错误 ｜ **`3` = 内容发生变化 → 已拒绝产出、原文件未改动**
+
+> `exit 3` 是**安全拦截**而非失败：落盘前逐段（Word）/ 逐单元格含公式原文（Excel）比对，**任何差异即拒绝写入**（先写临时文件，断言通过才原子就位）。缺省就地修改并生成 `.bak-style-<时间戳>` 备份。
+
+### 默认规范（`standard`）速览
+
+> **数值一律以 `specs/standard.json` 为准**（下表只是摘要；完整展示用 `spec_sync.py` 生成，勿以本文为准）。`compact`（内部纪要）与之的差异见 `specs/compact.json`。
+
+| 项 | 值 |
+|---|---|
+| 字体 | **全文统一「仿宋」** —— 英文 / 数字 / 汉字 / 正文 / 标题 / 表格**同一种**；`w:rFonts` 四属性（ascii/hAnsi/eastAsia/cs）**全设**；**不做优先级 / 回退链**；白名单（`allowed_fonts`）外字体**拒绝产出** |
+| 页面 | A4 纵向；页边距 **上下 3.17 / 左右 2.54 cm** |
+| 一级标题 | **小三 15pt** 加粗 居中 |
+| 二级标题 | **四号 14pt** 加粗 左对齐 |
+| 三级 / 四级标题 | **小四 12pt** 加粗 左对齐 |
+| 正文 | **小四 12pt**、两端对齐、**首行缩进 2 字符**、行距 1.5 |
+| 表格 | 撑满版心（`tblLayout=fixed`）· 表头底纹 `D9E2F3` + 加粗 + 居中 · 表内 10.5pt · 边框 single 4pt `#808080` · **跨页重复表头** · 列对齐＝表头居中 / 序号列居中 / **数值列右** / 文本列左 |
+| 色板 | 主 `#1F4E79` · 辅 `#2E75B6` · 强调**文字** `#B45309`（装饰 `#ED7D31`）· 语义 绿 `#548235` / 红 `#C00000` / 注意**文字** `#8A6A00`（装饰 `#BF9000`） |
+
+**两层规格**：内置 `specs/*.json`（`standard` 标准商务 / `compact` 内部纪要）← **使用者自定义层** `~/.dsh/data/dsh-doc-suite/templates/<id>.json`（同名键深度覆盖；单位 / 个人口径放这一层，**不进发布件**）。派生风格可用 `extends` 只写差异键。
+
+### 改规格的标准流程（`spec_sync.py`）
+
+```powershell
+# 1) 改 specs/standard.json（或 compact.json / 自定义层）
+# 2) 一条命令：校验 + 同步 profile 运行副本（SHA256）+ 生成规格展示 Markdown
+py -3 scripts/spec_sync.py --doc-out <规格展示.md>
+
+# 其他用法
+py -3 scripts/spec_sync.py --check            # 只校验、不写盘（CI 用）
+py -3 scripts/spec_sync.py --no-sync          # 不同步 profile
+py -3 scripts/spec_sync.py --spec standard    # 只处理指定风格
+```
+
+> `spec_sync.py` 退出码：**0** 成功 / **2** 规格或输入错误 / **3** 同步后发现哈希不一致。它**零新增依赖**，且**不含任何使用者私有路径**（展示文档输出由 `--doc-out` 指定，缺省打印到标准输出）。
 
 ## 二、硬前置（安装前必须满足）
 
@@ -72,7 +118,7 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 | 5 | PPT 排版 | **无动画 API、页码无 API**，整体排版靠模板预制；**缩字号已提供 `autofit` 子命令**（Pillow 自研测量，中文友好）。**不用** python-pptx 的 `fit_text()`：它按空格断词，对中文不可用（实测抛 `TypeError: cannot unpack non-iterable NoneType`） |
 | 6 | Excel | `recalc` 对 `.xls` 旧格式未实测；`pivot` 不做小计行识别（源区域含"合计"行会被当行项目） |
 | 7 | ~~技能里的脚本路径~~ **已解决（2026-09-12）** | `skills/*/SKILL.md` 已改用占位符 `<DOC_SUITE_SCRIPTS>`，不再含作者机器绝对路径；解析方式 = `py -3 doctor.py --emit-skill-paths` |
-| 8 | **脚本存在两份副本** | 模块内 `scripts/` 与工作区 `<workspace>/scripts/`（技能历史上指向后者）。**二者必须同步**；对外分发只认模块内那份。建议后续由集成包统一提供，工作区不再保留副本 |
+| 8 | ~~脚本存在两份副本~~ **已解决（2026-09-15）** | 工作区遗留的 doc-suite 脚本副本（`office/`、`pdf/`、`cli_guard.py`）**已删除**；**唯一源 = 模块内 `scripts/`**（工作区只保留技能文档副本，与模块 `skills/` 同步）。路径解析一律以 `py -3 doctor.py --emit-skill-paths` 为准 |
 | 9 | 非原生格式"尽力而为" | `word read` / `excel read` 对非 docx/xlsx 文件会回落 WPS COM 读取（读到内容即成功），`ppt read` 则会失败（python-pptx 抛 `PackageNotFoundError`，经 `cli_guard` 转为中文单行错误 + exit 2）；三种行为不完全一致，属有意保留（WPS 能读 .txt/.csv 这类纯文本） |
 
 ## 六、许可与归属

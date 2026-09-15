@@ -8,6 +8,11 @@
   py -3 word_tool.py convert <src> <dst>              # 导出 PDF 等（WPS COM）
   py -3 word_tool.py compare A.docx B.docx --out-dir out [--author 名]
                                                       # 比对：diff.txt + diff.html + tracked.docx
+  py -3 word_tool.py apply-style <file> [--spec standard] [--out out.docx] [--dry-run]
+                                                      # 对已有 docx 套版式（页面/命名样式/字体四属性；
+                                                      #  内容零改动断言不通过则拒绝产出、原文件不动）
+  py -3 word_tool.py table-style <file> [--spec standard] [--out out.docx] [--dry-run]
+                                                      # 表格样式：表头底纹/边框/跨页重复表头/表内字号
 
 参数形态（实测易踩）：read/info/edit 的文件、convert 的 <src> <dst>、compare 的 A/B 全是
 **位置参数**；compare 的 --out-dir 是**必填**。
@@ -455,6 +460,85 @@ def cmd_compare(args):
     return 0
 
 
+def _print_roles(rep, prefix=""):
+    """打印角色识别报告（可回溯）：各角色计数 + 原文层级纠正 + 样本。"""
+    r = rep.get("roles")
+    if not r:
+        return
+    counts = r.get("counts") or {}
+    order = ["doc_title", "heading_1", "heading_2", "heading_3", "heading_4", "body", "toc"]
+    parts = [f"{k}={counts[k]}" for k in order if k in counts]
+    parts += [f"{k}={counts[k]}" for k in sorted(counts) if k not in order]
+    print(f"{prefix}角色识别: " + "、".join(parts) + f"（赋/改命名样式 {r.get('styled', 0)} 段）")
+    corrected = r.get("corrected") or []
+    if corrected:
+        print(f"{prefix}⚠️  纠正原文层级标记 {len(corrected)} 处（以编号模式为准）：")
+        for c in corrected[:10]:
+            print(f"{prefix}    段{c['para']}: {c['via']}　「{c['text']}」")
+    for s in (r.get("samples") or [])[:8]:
+        print(f"{prefix}    样本 段{s['para']} → {s['role']}（{s['via']}）「{s['text']}」")
+
+
+def cmd_apply_style(args):
+    """对已有 docx 套版式（页面 + 命名样式 + 字体四属性）；内容零改动断言不通过则拒绝产出。"""
+    import style_spec
+    import word_style
+
+    spec = style_spec.load_spec(args.spec)
+    style_spec.check_spec_supported(spec)
+    src = Path(args.file)
+    print(style_spec.describe_spec(spec))
+    if args.dry_run:
+        rep = word_style.apply_word_style(src, spec, None, dry_run=True)
+        print(f"[dry-run] 将套命名样式 {len(rep['styles'])} 个（{', '.join(rep['styles'])}）、"
+              f"页面 {rep['page']} 节、清理 run 级字体 {rep['runs_stripped']} 处；未写盘。")
+        _print_roles(rep, "  ")
+        return 0
+    try:
+        rep, final, bak = style_spec.commit_style(
+            src, args.out, lambda tmp: word_style.apply_word_style(src, spec, tmp), "style")
+    except style_spec.ContentChangedError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        print("提示: 已拒绝产出，原文件未改动。请检查该文档是否有工具无法安全保留的结构。", file=sys.stderr)
+        return style_spec.ContentChangedError.exit_code
+    print(f"✅ 已套版式: {final}")
+    print(f"   命名样式 {len(rep['styles'])} 个（{', '.join(rep['styles'])}）｜页面 {rep['page']} 节｜"
+          f"清理 run 级字体 {rep['runs_stripped']} 处")
+    _print_roles(rep, "   ")
+    if bak:
+        print(f"   原文件备份: {bak}")
+    print("   内容零改动断言: 通过（逐段 + 逐表格单元格比对，差异 0）")
+    return 0
+
+
+def cmd_table_style(args):
+    """表格样式：表头底纹/加粗/居中 + 边框 + 跨页重复表头 + 表内字号。"""
+    import style_spec
+    import word_style
+
+    spec = style_spec.load_spec(args.spec)
+    style_spec.check_spec_supported(spec)
+    src = Path(args.file)
+    print(style_spec.describe_spec(spec))
+    if args.dry_run:
+        rep = word_style.apply_word_table_style(src, spec, None, dry_run=True)
+        print(f"[dry-run] 将处理 {rep['tables']} 张表（表头 {rep['header_cells']} 格 / 正文 {rep['body_cells']} 格）；未写盘。")
+        return 0
+    try:
+        rep, final, bak = style_spec.commit_style(
+            src, args.out, lambda tmp: word_style.apply_word_table_style(src, spec, tmp), "tstyle")
+    except style_spec.ContentChangedError as exc:
+        print(f"错误: {exc}", file=sys.stderr)
+        print("提示: 已拒绝产出，原文件未改动。", file=sys.stderr)
+        return style_spec.ContentChangedError.exit_code
+    print(f"✅ 已套表格样式: {final}")
+    print(f"   表格 {rep['tables']} 张（表头 {rep['header_cells']} 格 / 正文 {rep['body_cells']} 格）")
+    if bak:
+        print(f"   原文件备份: {bak}")
+    print("   内容零改动断言: 通过（逐段 + 逐表格单元格比对，差异 0）")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Word 文档工具")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -492,6 +576,20 @@ def main():
     p.add_argument("--author", default=None, help="修订作者名（默认系统用户名）")
     p.add_argument("--allow-tracked", action="store_true", help="输入含修订标记时仍继续（默认拒绝）")
     p.set_defaults(fn=cmd_compare)
+
+    p = sub.add_parser("apply-style", help="对已有 docx 套版式（页面/命名样式/字体四属性；内容零改动断言）")
+    p.add_argument("file")
+    p.add_argument("--spec", default=None, help="规格 id 或 JSON 路径（默认 standard）")
+    p.add_argument("--out", help="输出文件（默认就地改 + 备份 .bak-style-<时间戳>）")
+    p.add_argument("--dry-run", action="store_true", help="只报告不写盘")
+    p.set_defaults(fn=cmd_apply_style)
+
+    p = sub.add_parser("table-style", help="表格样式（表头底纹/加粗/居中、边框、跨页重复表头；内容零改动）")
+    p.add_argument("file")
+    p.add_argument("--spec", default=None, help="规格 id 或 JSON 路径（默认 standard）")
+    p.add_argument("--out")
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(fn=cmd_table_style)
 
     args = parser.parse_args()
     cli_guard.check_inputs(args)
