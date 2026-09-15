@@ -47,7 +47,7 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-experts
 | **coding** 代码编程 | 3 | `coding-engineer` 工程 · `coding-dsh-plugin` 插件开发 · `coding-review` 审查 |
 | **finance** 金融 | 2 | `finance-quant` 量化 · `finance-research` 研究 |
 | **hr** 人力资源 | 1 | `hr-labor-law` 人力资源 |
-| **general** 通用职能 | 5 | `general-fact-check` 核查 · `general-typeset` 排版 · `general-office` 文档处理 · `general-slides` 演示 · `general-designer` 设计 |
+| **general** 通用职能 | 5 | `general-fact-check` 核查 · `general-typeset` 排版与表述 · `general-office` 文档处理 · `general-slides` 演示 · `general-designer` 设计 |
 
 **去重粒度 = `role_tag[0]`（职能键）**：域按行业划粗后，同一域含多个职能（infosec 就有售前 / 销售 / 投标 / 测评四个），按域去重会把多视角锁成一位；现 19 个职能键两两不同，可同轮并存（例："工控项目要过等保，还要投标" → `infosec-bid-proposal` + `infosec-djbh`）。
 

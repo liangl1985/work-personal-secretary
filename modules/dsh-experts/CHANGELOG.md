@@ -2,6 +2,17 @@
 
 本插件的版本历史。
 
+## 0.3.3 — 2026-09-15（general-typeset 重定位：从公文手册改为文字表述卡）
+
+- **背景**：主人判断该卡「用处不大」。实测其 **2930 字中约 1400 字是公文细则与工具细节**（GB/T 9704 纸型版心字号页码、层次序数字体、WPS COM/ProgID、Markdown→公文协议），而本机日常交付走内部材料档（`standard` / `compact`），公文那档几乎不触发；同时**全库无一位专家管「中文文字表述」**（全库检索「表述／润色／措辞／语体／病句」命中皆为他类语境）。
+- **定位**：改为**成文的两件事** —— 怎么排（文种、风格、交付形态判断，压成指针）＋ 怎么写（文字表述质量）。**id 与 name 不变**（按主人要求），`role_tag` 由 `[排版,公文,报告,成文]` 改为 `[排版,报告,成文,表述]`，`when_to_use` 与 `trigger_keywords` 同步换轨（细则词 `字体/行距/红头/GB/T9704/格式` 删除，换成表述类 17 词）。
+- **删**：GB/T 9704 细则数字 · 层次序数字体 · Markdown→公文受控协议（`govdoc` 未落地，属空承诺）· WPS COM 进程与 ProgID（与 `general-office` 重复）· 交付明细里的「版式核验」「要素核验」两张公文细则表。
+- **留＋增**：文种与语体判断、改前体检（T4）、风格选型（T3 压成指针，真相源 `specs/*.json` 的 `best_for`）、修订留痕、边界诚实；新增 **术语与简称词表、句式与删冗、AI 味治理（含中文特有模板腔与万能句）、数字单位标点国标（GB/T 15834 / 15835 / GB 3100）、称谓与承诺分级、常见病句、审阅方法（大文件别通读）、改稿力度三档（校／润／重写）、投标与方案语境、改写对照示例**。
+- **来源**：Strunk《The Elements of Style》（公共领域）· Wikipedia《Signs of AI Writing》（CC BY-SA，**仅取分类要点、未复制原文**）· awesome-claude-code-subagents 的 `ai-writing-auditor` 与 `content-quality-editor`（MIT）· op7418/Humanizer-zh 与 gitliuyun De-AI-Prompt-Enhancer（MIT）· jnMetaCode/agency-agents-zh（MIT）· 自撰底本 doc-report-typeset.md。
+- **体量**：2930 → **2808** 字（去空白），仍在 900–3000。
+- **边界（卡内逐条写明）**：文件生成导出转换 → `general-office`；事实真假 → `general-fact-check`；视觉 → `general-designer`；演示结构 → `general-slides`；写什么与怎么组织 → `infosec-bid-proposal`。
+- **验收**：regression **46/0** · injection-tier **16/0** · capability **8/0**；命中复测 —— 润色／术语／标点／校对／行文／版式均命中本卡；「Word 字体」任务**不再**命中本卡（噪声消除）；投标任务仍归 `infosec-bid-proposal`。
+
 ## 0.3.2 — 2026-09-15（A3 落地后回填 T3 交付形态判定表）
 
 - **背景**：0.3.1 时 dsh-doc-suite 尚为 **0.1.7**、只有 `standard` 一套规格，卡内如实标注「compact / report / govdoc 尚未落地」。A3 任务并行完成后已升 **0.1.8**（`standard` v1.2 色板修正 + 内置 `compact.json` + 自定义层 `report.json`），据此回填。

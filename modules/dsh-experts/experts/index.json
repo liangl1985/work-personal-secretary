@@ -368,6 +368,7 @@
       ],
       "source": {
         "origin": "self-authored",
+        "license": "self-authored",
         "basis": "本机 dsh-experts / dsh-work-memory 源码 + DSH 官方文档 subsystems/system-prompt"
       },
       "file": "coding/coding-dsh-plugin.md"
@@ -503,26 +504,33 @@
       "domain": "general",
       "role_tag": [
         "排版",
-        "公文",
         "报告",
-        "成文"
+        "成文",
+        "表述"
       ],
-      "when_to_use": "公文、报告、方案的中文规范排版与成文时",
+      "when_to_use": "中文正式材料的成文与表述：定文种语体、统一术语与称谓、治 AI 味、改稿润色与交付核验时",
       "trigger_keywords": [
         "排版",
-        "公文",
         "报告",
-        "格式",
         "版式",
-        "字体",
-        "行距",
-        "红头",
         "成文",
-        "GB/T9704"
+        "公文",
+        "表述",
+        "润色",
+        "措辞",
+        "行文",
+        "语体",
+        "术语",
+        "用词",
+        "改写",
+        "病句",
+        "标点",
+        "校对",
+        "文风"
       ],
       "source": {
-        "repo": "mizzlelover/gongwen-gbt9704-skill + jnMetaCode/agency-agents-zh",
-        "license": "MIT",
+        "repo": "自撰底本 doc-report-typeset.md + softaworks/agent-toolkit(writing-clearly-and-concisely：内含 Strunk《The Elements of Style》[PD] 与 Wikipedia《Signs of AI Writing》[CC BY-SA，仅取要点]) + VoltAgent/awesome-claude-code-subagents(ai-writing-auditor/content-quality-editor) + op7418/Humanizer-zh + jnMetaCode/agency-agents-zh",
+        "license": "MIT + Public Domain + CC BY-SA",
         "adapted": true
       },
       "file": "general/general-typeset.md"

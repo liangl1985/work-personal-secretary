@@ -22,7 +22,9 @@ dsh-experts — 第三方来源与许可声明（THIRD-PARTY NOTICES）
 2.  VoltAgent/awesome-claude-code-subagents
     categories/08-business-product/sales-engineer.md、
     categories/04-quality-security/code-reviewer.md、
-    categories/10-research-analysis/search-specialist.md
+    categories/10-research-analysis/search-specialist.md、
+    categories/04-quality-security/ai-writing-auditor.md、
+    categories/08-business-product/content-quality-editor.md（后两项 2026-09-15 用于 general-typeset）
 3.  Masriyan/Claude-Code-CyberSecurity-Skill
     skills/18-ot-ics-security/SKILL.md
 4.  daemon-blockint-tech/Agentic-Enteprises-Skill
@@ -44,9 +46,14 @@ dsh-experts — 第三方来源与许可声明（THIRD-PARTY NOTICES）
 12. buildwithclaude-cn（经 awesome-subagents-cn 收录）
     plugins/all-agents/agents/ 下的 crypto-analyst.md、crypto-risk-manager.md、ui-ux-designer.md
 13. softaworks/agent-toolkit
-    skills/marp-slide/SKILL.md
+    skills/marp-slide/SKILL.md、
+    skills/writing-clearly-and-concisely/（SKILL.md 与 references，内含 Strunk《The Elements of Style》
+    整理与 Wikipedia《Signs of AI Writing》清单，2026-09-15 用于 general-typeset）
 14. SerhiiKorniienko/bullshit-detector
     skills/analysis/bullshit-detector/SKILL.md、RUBRIC.md
+15. op7418/Humanizer-zh（中文去 AI 味原始提示词集）
+    与 gitliuyun/De-AI-Prompt-Enhancer-Writer-Booster-SKILL（其升级收录版）
+    → 用于 general-typeset 的中文 AI 痕迹治理、标点预算与保真改写原则（2026-09-15 新增）
 
 --------------------------------------------------------------------------------
 二、Apache License 2.0 来源
@@ -69,7 +76,19 @@ dsh-experts — 第三方来源与许可声明（THIRD-PARTY NOTICES）
     对应写法均为本模块自撰。
 
 --------------------------------------------------------------------------------
-四、本集成体自撰 / 本机素材（不假称来自上游）
+四、公共领域与 CC BY-SA 来源（2026-09-15 新增，用于 general-typeset）
+--------------------------------------------------------------------------------
+-   **Strunk, William Jr.《The Elements of Style》（1918）—— 公共领域（Public Domain）**
+    取其写作原则要点：主动语态、肯定式陈述、具体语言、删冗词、相关词靠近、强调置句尾。
+    无许可义务。
+    **载体**：上述两份均经 `softaworks/agent-toolkit` 的 writing-clearly-and-concisely 技能整理后参考。
+-   **Wikipedia《Signs of AI Writing》（CC BY-SA 4.0）**
+    取其**事实性分类要点**（意义膨胀、否定式平行、三项式罗列、模糊归因、粗体与破折号滥用等），
+    **未复制其任何原文表达**，属对思想／方法的使用，不构成衍生作品。
+    用法边界与 Proprietary 节同口径：只吸收通用方法要点，不复制文本。
+
+--------------------------------------------------------------------------------
+五、本集成体自撰 / 本机素材（不假称来自上游）
 --------------------------------------------------------------------------------
 1.  coding-dsh-plugin —— 依**本机真实源码与官方文档**自撰
     （dsh-experts / dsh-work-memory 的 lib/*.js、cordis.patch.yml、package.json、
@@ -77,21 +96,26 @@ dsh-experts — 第三方来源与许可声明（THIRD-PARTY NOTICES）
 2.  general-office —— 以**本库归档底本**（doc-office.md）为骨架，对齐本机 dsh-doc-suite
     四技能（office-word / office-excel / office-ppt / pdf-tools）自撰
 3.  general-slides —— 以**本库归档底本**（doc-ppt.md）为骨架自撰
+3b. general-typeset —— 以**本库归档底本**（doc-report-typeset.md）为骨架自撰；2026-09-15 重定位为
+    中文文字表述卡（细则与工具段移交 dsh-doc-suite 技能与 general-office）
 4.  WPS 平台资料（docs 与研究目录）—— 本机实测（WPS Office 12.1.0.28043、COM ProgID、
     dsh-doc-suite doctor 自检），非第三方内容
 
 --------------------------------------------------------------------------------
-五、许可义务
+六、许可义务
 --------------------------------------------------------------------------------
 -   MIT：随发布件保留版权声明与许可文本（本文件即声明；各上游 LICENSE 原文见其仓库）。
 -   Apache-2.0：保留版权、许可与 NOTICE 声明，并标注被修改之处（本模块均已改写，
     详见 index.json 的 source.adapted）。
+-   公共领域（Strunk《The Elements of Style》）：无许可义务。
+-   CC BY-SA 4.0（Wikipedia《Signs of AI Writing》）：**仅取事实性分类要点、未复制原文表达**，
+    不构成衍生作品，故不触发 ShareAlike；已在 `experts/index.json` 的 source 注明来源与用法。
 -   Proprietary（anthropics/skills）：**不作为改写来源**，仅在方法层面参考通用实践；
     不随发布件复制其任何文本、代码或提示词。
 -   若某条目的 source 缺失或标注不确定，**该条目不随发布件分发**，仅供本机使用。
 
 --------------------------------------------------------------------------------
-六、复核标注（review）
+七、复核标注（review）
 --------------------------------------------------------------------------------
 experts/index.json 中 **11 位**标 `source.review: "pending"`，判据为**域级**（不逐 id）：
 
