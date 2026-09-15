@@ -22,9 +22,9 @@ import { fileURLToPath } from 'node:url'
 import { allExperts, findExpert, loadPersona } from '../lib/store.js'
 import { selectExperts } from '../lib/match.js'
 import { apply } from '../lib/index.js'
-import { buildInjection, buildPersonaBlock, buildPersonaCard, parsePersonaSections, CARD_NOTE, PERSONA_MAX_CHARS, PATH_HINT } from '../lib/inject.js'
+import { buildInjection, buildPersonaBlock, buildPersonaCard, parsePersonaSections, CARD_NOTE, PERSONA_MAX_CHARS, PATH_HINT, PHASE_OPENING, PHASE_WORKING } from '../lib/inject.js'
 import { DEFAULTS } from '../lib/settings.js'
-import { clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, INJECT_BUDGET_MIN, INJECT_BUDGET_MAX, SKILL_BUDGET_DEFAULT, SKILL_BUDGET_MAX } from '../lib/limits.js'
+import { clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, INJECT_BUDGET_MIN, INJECT_BUDGET_MAX, SKILL_BUDGET_DEFAULT, SKILL_BUDGET_MAX, clampFullHitMax, FULL_HIT_MAX_DEFAULT } from '../lib/limits.js'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const PATH_LEN = PATH_HINT.length + 2
@@ -126,51 +126,49 @@ test('精简卡尾注：identity / match / manual 三语义都标明取全文方
   }
 })
 
-// ---------- 4. 三态 ----------
-test('三态：full = 全文 / card = 全精简卡 / auto = 按预算降级', () => {
+// ---------- 4. 会话阶段两态（2026-09-16 注入机制重构） ----------
+// 口径：首轮全景（命中专家全给精简卡）→ 干活轮（身份专家恒给卡 + 判定要干活的给全文，其余本轮不注入）。
+// 旧的 mixed → card → card-core 降级链与「未注入：xxx」注记已整体删除。
+const opening = (over = {}) => opt({ detail: 'auto', phase: PHASE_OPENING, ...over })
+const working = (ids, over = {}) => opt({ detail: 'auto', phase: PHASE_WORKING, workerIds: ids, ...over })
+
+test('首轮全景：命中专家全部给精简卡（一个不裁、不出现全文、无降级注记）', () => {
+  const out = buildInjection(baseSel, opening({ budgetChars: INJECT_BUDGET_DEFAULT }))
+  assert.ok(out.includes('【身份视角·') && out.includes('【本轮命中·'), '首轮应带两块标题')
+  assert.ok(!out.includes('## 工作方法'), '首轮不该出现正文全文')
+  assert.ok(out.includes(CARD_NOTE), '首轮应为精简卡')
+  assert.ok(!out.includes('已降级') && !out.includes('未注入：'), '新版不再有降级/丢弃注记')
+})
+
+test('干活轮：workerIds 给全文、身份专家恒给卡、其余本轮不注入（且无「未注入」注记）', () => {
+  const out = buildInjection(baseSel, working([HIT.id]))
+  assert.ok(out.includes('## 工作方法'), '干活者应给全文')
+  assert.ok(out.includes('【本轮命中·' + HIT.name + '】'), '干活者块在场')
+  assert.ok(out.includes('【身份视角·'), '身份专家恒给卡（在场）')
+  assert.ok(!out.includes('未注入：'), '不得出现「未注入」注记（不是丢弃）')
+  const onlyIdentity = buildInjection(baseSel, working([]))
+  assert.ok(onlyIdentity.includes('【身份视角·'), '无人达标时身份专家仍在场（给卡）')
+  assert.ok(!onlyIdentity.includes('【本轮命中·'), '无人达标 → 命中专家本轮不注入')
+  const noIdentity = buildInjection(baseSel, opt({ detail: 'auto', phase: PHASE_WORKING, workerIds: [], identityId: null }))
+  assert.equal(noIdentity, '', '无身份专家且无人达标 → 本轮不注入 persona')
+})
+
+test('full / card 仍是全局形态开关（不受会话阶段影响）', () => {
   const full = buildInjection(baseSel, opt({ detail: 'full' }))
   assert.ok(full.includes('## 角色') && full.includes('## 工作方法'), 'full 未注入正文全文')
-
   const card = buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_DEFAULT }))
   assert.ok(!card.includes('## '), 'card 不应出现正文标题')
-  assert.ok(card.includes('【身份视角·') && card.includes('【本轮命中·'), 'card 应含两张卡')
+  assert.ok(card.includes('【身份视角·') && card.includes('【本轮命中·'), 'card 应含两块')
   assert.ok(card.includes(CARD_NOTE), 'card 缺精简卡尾注')
-  assert.ok(!card.includes('已降为精简卡'), 'card 起点即精简卡，不该出现降级注记')
-
-  const auto = buildInjection(baseSel, opt({ detail: 'auto', budgetChars: INJECT_BUDGET_DEFAULT }))
-  assert.ok(!auto.includes('## 工作方法'), 'auto 默认预算下不应出现命中专家全文')
-  assert.ok(auto.includes(CARD_NOTE), 'auto 默认预算下命中专家应为精简卡（卡尾注）')
-  // 口径（2026-09-14 读稿调整）：默认形态下「命中专家用卡」是预期，不再每轮加"已降级"提示；
-  // 只有真的丢专家（card-core）或硬截断才标注 —— 由下面两条降级用例覆盖。
-  assert.ok(!auto.includes('已降为精简卡'), '默认形态不再输出降级提示（避免刷屏）')
-  assert.ok(!auto.includes('未注入：'), '未丢专家时不该写未注入')
 })
 
-// ---------- 5. 预算降级顺序 ----------
-test('auto 第 0 级：预算足够（5000 字符）时命中专家给全文', () => {
-  const out = buildInjection(baseSel, opt({ detail: 'auto', budgetChars: 5000 }))
-  assert.ok(out.includes('## 工作方法'), '预算足够时应给命中专家全文')
-  assert.ok(out.includes('【身份视角·') && out.includes('【本轮命中·'), '缺块标题')
-  assert.ok(!out.includes('已降为精简卡'), '未降级不应出现降级注记')
-})
-
-test('auto 第 2 级：预算只够身份卡时丢弃命中专家并写明未注入', () => {
-  const cardChars = blockChars(buildInjection(baseSel, opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX })))
-  const coreChars = blockChars(buildInjection([baseSel[0]], opt({ detail: 'card', budgetChars: INJECT_BUDGET_MAX })))
-  assert.ok(cardChars > coreChars + 100, '两卡与单卡长度差过小，无法构造中间预算')
-  const out = buildInjection(baseSel, opt({ detail: 'auto', budgetChars: coreChars + 40 }))
-  assert.ok(out.includes('【身份视角·'), '缺身份卡')
-  assert.ok(!out.includes('【本轮命中·'), '应已丢弃命中专家')
-  assert.ok(out.includes('仅保留身份专家精简卡'), '未标注降级到最低级')
-  assert.ok(out.includes('未注入：' + HIT.name), '未写明被丢弃的专家')
-})
-
-test('auto 兜底：连最低形态都放不下 → 硬截断并标注（绝不静默超限）', () => {
-  const out = buildInjection(baseSel, opt({ detail: 'auto', budgetChars: INJECT_BUDGET_MIN }))
-  assert.ok(out.includes('已截断'), '未标注截断')
+test('安全红线：full 形态超上限也截断并标注（任何形态都不得突破 20000）', () => {
+  const out = buildInjection(baseSel, opt({ detail: 'full', budgetChars: INJECT_BUDGET_MIN }))
+  assert.ok(out.includes('已截断'), 'full 超上限未截断')
   assert.ok(out.includes('expert_recall'), '截断标注未给出取全文方式')
   assert.ok(out.length < INJECT_BUDGET_MIN + PATH_LEN + 200, '截断未生效：' + out.length)
 })
+
 
 // ---------- 6. full 与旧行为等价 ----------
 test('full 模式与旧 HEAD 行为逐字等价（手工复现旧 buildInjection 逻辑）', () => {
@@ -214,7 +212,17 @@ test('默认值三处一致：schema default / settings DEFAULTS / cordis.patch.
   assert.equal(DEFAULTS.expertInjectBudgetChars, schemaBudget, 'DEFAULTS 与 schema 的预算默认值不一致')
   assert.equal(DEFAULTS.expertInjectBudgetChars, Number(patchBudget[1]), 'patch base 与 schema 的预算默认值不一致')
   assert.equal(INJECT_BUDGET_DEFAULT, schemaBudget, 'limits 常量与 schema 引用不一致')
-  results.push('       （三处一致：detail = ' + DEFAULTS.expertInjectDetail + '，budget = ' + DEFAULTS.expertInjectBudgetChars + '）')
+
+  // 干活轮位数（2026-09-16 新增）：schema / DEFAULTS / patch base 三处一致
+  assert.ok(/expertFullHitMax:\s*z\.natural\(\)\.default\(FULL_HIT_MAX_DEFAULT\)/.test(settingsSrc),
+    'schema 未用 FULL_HIT_MAX_DEFAULT 作为全文位数默认值')
+  const patchHitMax = /expertFullHitMax:\s*(\d+)/.exec(patchSrc)
+  assert.ok(patchHitMax, 'cordis.patch.yml base 未声明 expertFullHitMax')
+  assert.equal(DEFAULTS.expertFullHitMax, Number(patchHitMax[1]), 'patch base 与 DEFAULTS 的全文位数不一致')
+  assert.equal(DEFAULTS.expertFullHitMax, FULL_HIT_MAX_DEFAULT, 'DEFAULTS 与 limits 常量不一致')
+
+  results.push('       （三处一致：detail = ' + DEFAULTS.expertInjectDetail + '，budget = ' + DEFAULTS.expertInjectBudgetChars
+    + '，全文位数 = ' + DEFAULTS.expertFullHitMax + '）')
 })
 
 // ---------- 8. 归一化 ----------
@@ -232,6 +240,11 @@ test('归一化：预算 clamp 与注入形态回落', () => {
   assert.equal(clampSkillBudget(-1), SKILL_BUDGET_DEFAULT)
   assert.equal(clampSkillBudget('x'), SKILL_BUDGET_DEFAULT)
   assert.equal(clampSkillBudget(9e9), SKILL_BUDGET_MAX)
+  // 干活轮位数归一化（2026-09-16 新增）
+  assert.equal(clampFullHitMax(2), 2)
+  assert.equal(clampFullHitMax(0), 0)
+  assert.equal(clampFullHitMax(-1), FULL_HIT_MAX_DEFAULT)
+  assert.equal(clampFullHitMax(9e9), 4)
 })
 
 // ---------- 9. 注入回调：设置热更与缓存键 ----------
@@ -287,17 +300,24 @@ test('注入回调：默认走精简卡；改设置后免重启生效（缓存�
 })
 
 // ---------- 10. 端到端体积（before/after） ----------
-test('端到端：3 个代表任务 auto 注入体积（before = 旧全文口径）', () => {
-  const cfg = { defaultDomain: 'infosec', expertInjectMax: 2, expertSecondThreshold: 0.8, expertMinScore: 0.35 }
-  const tasks = ['写投标方案', '这份采购合同的钱怎么算、税怎么处理', '帮我看看这个']
+test('端到端：3 个代表任务「首轮全景 / 干活轮」两态体积（对照 = 旧全全文口径）', () => {
+  const cfg = { defaultDomain: 'infosec', expertInjectMax: 4, expertSecondThreshold: 0.3 }
+  const tasks = [
+    '写投标方案',
+    '这份采购合同的钱怎么算、税怎么处理',
+    '我需要制作一份给电厂的解决方案，电厂需要对 DCS 和 NCS 进行网络安全建设，等级为等保三级',
+  ]
   for (const t of tasks) {
     const { selected } = selectExperts(experts, { text: t, defaultDomain: 'infosec', branchDomain: null, identityId: IDENTITY.id }, cfg)
     const before = buildInjection(selected, { banner: true, identityId: IDENTITY.id, detail: 'full' })
-    const after = buildInjection(selected, { banner: true, identityId: IDENTITY.id, detail: 'auto', budgetChars: INJECT_BUDGET_DEFAULT })
-    results.push('       · ' + t + ' → [' + (selected.map((s) => s.entry.id).join(' + ') || '无') + ']  '
-      + before.length + ' → ' + after.length + ' 字符（≈ ' + Math.round(before.length * 0.6) + '→' + Math.round(after.length * 0.6) + ' token）')
-    assert.ok(blockChars(after) <= INJECT_BUDGET_DEFAULT + 120, '降级后仍超预算：' + blockChars(after))
-    assert.ok(after.length <= before.length, 'after 不应比 before 更长')
+    const open = buildInjection(selected, { banner: true, identityId: IDENTITY.id, detail: 'auto', phase: PHASE_OPENING, budgetChars: INJECT_BUDGET_DEFAULT })
+    const workers = selected.slice(0, FULL_HIT_MAX_DEFAULT).map((s) => s.entry.id)
+    const work = buildInjection(selected, { banner: true, identityId: IDENTITY.id, detail: 'auto', phase: PHASE_WORKING, workerIds: workers, budgetChars: INJECT_BUDGET_DEFAULT })
+    results.push('       · ' + t.slice(0, 20) + ' → [' + (selected.map((s) => s.entry.id).join(' + ') || '无') + ']'
+      + '  首轮全景 ' + open.length + ' · 干活轮 ' + work.length + ' · 全全文 ' + before.length + ' 字符')
+    assert.ok(blockChars(open) <= INJECT_BUDGET_DEFAULT, '首轮全景超上限：' + blockChars(open))
+    assert.ok(blockChars(work) <= INJECT_BUDGET_DEFAULT, '干活轮超上限：' + blockChars(work))
+    assert.ok(open.length <= before.length, '首轮不应比全全文更长')
   }
 })
 

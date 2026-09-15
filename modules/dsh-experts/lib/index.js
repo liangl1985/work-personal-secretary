@@ -4,7 +4,8 @@
  * 定位：把"临场手写专家人设"变成"按需调用现成专家定义"。
  * 子代理工具只有 description / prompt，没有"专家类型"入参 —— 所以本模块做两件事：
  *   1. **按需注入**（`ctx.systemPrompt.context`）：每轮按「任务实证 + 岗位先验」双赛道打分，
- *      默认上限**写死 4**（实测命中通常 1–2 位，4 是留余量），未注入的专家走临时注入，绝不全部加载；
+ *      上限**写死 4**（实测命中通常 1–2 位，4 是留余量）；注入分**会话阶段**两态 ——
+ *      首轮全景（命中专家全部给精简卡）+ 干活轮（判定要干活的给全文），绝不全部加载；
  *   2. **现取现用**（`expert_recall` 工具 + `/expert` 命令）：派子代理时把 persona 内联进
  *      `subagent.prompt`，或临时切换视角。
  *
@@ -18,10 +19,9 @@
 import { installSettings } from './settings.js'
 import { DOMAINS, activeExperts, allExperts, allPersonas, allSkills, findExpert, groupByDomain, splitList, identityExpertOf } from './store.js'
 import { selectExperts } from './match.js'
-import { buildInjection, buildCatalog, buildManualInjection } from './inject.js'
+import { buildInjection, buildCatalog, buildManualInjection, PHASE_OPENING, PHASE_WORKING } from './inject.js'
 import { loadDiscipline, resolveMemoryRoot, formatDiscipline } from './discipline.js'
 import { createSkillSource, routeCapabilities } from './capability.js'
-import { COST_PERSONA_CARD } from './limits.js'
 
 /**
  * 官方工具辅助 `defineTool`（宿主运行时 `@deepseek-ai/dsh-tools` 提供）。
@@ -239,6 +239,10 @@ export function apply(ctx, config = {}) {
   // apply 级闭包，多会话交替时**互相顶掉**（每次会话切换都重算，缓存命中率退化）；
   // 内容本身不会错配（缓存键含选中集合与设置，不同键必然重算），所以这是性能与时序问题。
   const injectCache = new Map()
+  // 会话首轮状态（2026-09-16 注入机制重构）：sid → 1，表示本会话已经给过「首轮全景卡」。
+  // 只有**真的注入了 persona** 才算开过场（零命中不消耗首轮）；容量上限防长期泄漏。
+  const openedSessions = new Map()
+  const OPENED_MAX = 200
   {
     disposers.push(ctx.systemPrompt.context({
       name: 'dsh-experts:persona',
@@ -263,9 +267,15 @@ export function apply(ctx, config = {}) {
           },
           c,
         )
-        // 成本装填（design-v2 第 6 节）：persona 侧也按成本常量守门 —— 预算放不下就不塞多位
-        const maxByCost = Math.max(1, Math.floor(Number(c.expertInjectBudgetChars) / COST_PERSONA_CARD))
-        if (selected.length > maxByCost) selected.length = maxByCost
+        // 会话阶段（2026-09-16 注入机制重构）：本会话首次命中 → **首轮全景**（命中专家全部给精简卡）；
+        // 之后每轮，按本轮证据**从大到小**取「最大 + 次大」共 expertFullHitMax 位（默认 2，并列取任意两位）
+        // 给**全文**，其余本轮不注入 —— 这不是「丢弃」：没轮到干活的专家只是本轮不需要，
+        // 目录段（L0）每轮可见、expert_recall 随时可取；预算不再触发降级，只作上限。
+        // selectExperts 的排序键已是「证据 → 分数 → 索引顺序」，故取前 N 位即「最大 + 次大」。
+        const isOpening = !openedSessions.has(sid)
+        const workers = isOpening ? [] : selected.slice(0, Math.max(0, Number(c.expertFullHitMax)))
+        const personaSelected = (!isOpening && workers.length === 0) ? [] : selected
+        const workerIds = workers.map((s) => s.entry.id)
 
         // 能力层（层 3）：技能指针 —— 独立于 persona 命中，按强信号 + 自己的预算守门
         skillSource.refresh(skillsCtx, session?.header?.cwd)
@@ -288,21 +298,29 @@ export function apply(ctx, config = {}) {
           : '\n（专家库还没确认本人岗位，当前按 ' + c.defaultDomain + ' 处理：到 设置 → 插件 → experts 填「本人岗位默认域」即可，之后不再提示）'
         // 缓存键：选中集合与分数之外，**注入形态与预算也参与** —— 否则改设置后
         // 同一选中集合会命中旧文本（形态/预算变了但内容未变，缓存必须失效）
-        const key = selected.map((s) => s.entry.id + ':' + s.score).join('|')
+        const key = personaSelected.map((s) => s.entry.id + ':' + s.score).join('|')
           + '|id:' + (identity?.id || '-')
+          + '|ph:' + (isOpening ? 'o' : 'w') + ':' + workerIds.join(',')
           + '|d:' + c.expertInjectDetail + '|b:' + c.expertInjectBudgetChars
           + '|cap:' + capLines.join(',')
           + (setupHint ? '|hint' : '')
         const cached = injectCache.get(sid)
         if (cached && cached.key === key) return cached.text // 内容未变 → 返回上次文本（保持缓存稳定）
-        const selectedText = selected.length > 0
-          ? buildInjection(selected, {
+        const selectedText = personaSelected.length > 0
+          ? buildInjection(personaSelected, {
               banner: c.expertShowBanner,
               identityId: identity?.id || '',
               detail: c.expertInjectDetail,
+              phase: isOpening ? PHASE_OPENING : PHASE_WORKING,
+              workerIds,
               budgetChars: c.expertInjectBudgetChars,
             })
           : ''
+        // 首轮全景：只有**真的注入了 persona**才算开过场（后续轮才可能进入「干活轮」）
+        if (isOpening && personaSelected.length > 0) {
+          openedSessions.set(sid, 1)
+          if (openedSessions.size > OPENED_MAX) openedSessions.delete(openedSessions.keys().next().value)
+        }
         const text = selectedText + capText + setupHint
         injectCache.set(sid, { key, text })
         return text

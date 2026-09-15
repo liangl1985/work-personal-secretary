@@ -17,7 +17,7 @@ export const INJECT_MAX_DEFAULT = 4
 /**
  * 注入上限归一化（2026-09-14 批二：expertInjectMax 降级为 **persona 软上限**）：
  *   - 0 → 0（不限：交由字符预算与分数阈值守门；技能指针不占该配额）；
- *   - 非法 / 负数 → 默认 2；
+ *   - 非法 / 负数 → 默认 4；
  *   - 1..4 → 原值；超过硬边界 → clamp 到 4（绝不静默超限）。
  */
 export function clampInjectMax(value, fallback = INJECT_MAX_DEFAULT) {
@@ -29,9 +29,9 @@ export function clampInjectMax(value, fallback = INJECT_MAX_DEFAULT) {
 
 /**
  * 装填成本常量（字符，2026-09-14 批二口径）：把「按个数配额」换成「按成本装填」。
- *   - persona 精简卡：实测 383–562 字符，取 500 作估算常量；
+ *   - persona 精简卡：实测 500–609 字符，取 500 作估算常量；
  *   - skill 指针行：「【工具·office-ppt】演示文稿读写 / 导出 / 逐页出图 · skill 加载」约 100 字符。
- * 仅用于**预算规划与降级判定**，不改变实际渲染文本（绝不按常量裁剪正文）。
+ * 仅用于**预算规划**，不改变实际渲染文本（绝不按常量裁剪正文）。
  */
 export const COST_PERSONA_CARD = 500
 export const COST_SKILL_LINE = 100
@@ -58,19 +58,24 @@ export function clampUnit(value, fallback) {
 }
 
 /**
- * 每轮专家注入的**字符预算**默认值（产品口径 2026-09-14 定）。
+ * 每轮专家注入的**字符上限**（2026-09-16 随注入机制重构：2800 → **15000**，按**最大可能消费**定档）。
  *
- * 为什么是 2800（2026-09-15 由 2000 上调，按 **4 位最坏消费**定）：上限写死 4 后实测
- * ① 当前最坏 4 位（编码 601 + 工控售前 595 + 销售 588 + 设计 583 = 2367）+ banner ≈ **2543**；
- * ② 理论最坏（单卡到 card-preview 目标上限 620）4×620 + banner ≈ **2656**。
- * 预算 2000 时 4 位会降级成「只留第一位（729 字符）」——「上限 4」形同虚设；
- * 2600 虽覆盖当前最坏（余 57）但**不够理论最坏**，故按最坏 + 余量取 2800。
- * 注意：预算只是**上限**，命中 1 位时仍只注入 1 位 —— 成本随命中数按需增长，不是恒定增加。
- * 约合 1.7–2.2k token（中文 1 字符 ≈ 0.6–0.7 token）。
+ * 新机制**不再按预算降级**，而是按**会话阶段**分两态（见 inject.js 的 PHASE_*）：
+ *   - **首轮全景**：命中专家**全部**给精简卡 —— 4 位最坏实测 2431 + 处理路径 104 ≈ **2535**；
+ *   - **干活轮**：按证据取**最大 + 次大**共 `expertFullHitMax` 位（默认 2、硬边界 4）给**全文**。
+ *
+ * 定档按**配置允许的最大组合**（使用者 2026-09-16 定：「需要按最大预算去设定」）：
+ *   单篇全文上限 `PERSONA_MAX_CHARS = 3600` × 位数硬边界 `FULL_HIT_MAX_HARD = 4` = **14400**，
+ *   加每篇块头/尾注（约 60–80）× 4 ≈ 300，再加处理路径 104 与块间分隔 ≈ 150 → **≈ 14850**。
+ * 取 **15000** —— 任何允许的配置组合都落在上限内，不会误触发截断。
+ *
+ * 本值只是**期望上限**；超出不再降级、只截断并标注。真正的**安全红线**是
+ * INJECT_BUDGET_MAX = 20000（2026-09-15 使用者定：「20000 是一个保护值」）——
+ * 任何形态（含 full）都不得突破。
  */
-export const INJECT_BUDGET_DEFAULT = 2800
+export const INJECT_BUDGET_DEFAULT = 15000
 
-/** 预算硬边界：过小会把专家卡压到不可读，过大等于放弃降级（设置在界外时 clamp） */
+/** 预算硬边界：过小会把专家卡压到不可读，过大等于放弃兜底（设置在界外时 clamp） */
 export const INJECT_BUDGET_MIN = 200
 export const INJECT_BUDGET_MAX = 20000
 
@@ -82,11 +87,13 @@ export function clampBudget(value, fallback = INJECT_BUDGET_DEFAULT) {
 }
 
 /**
- * 注入形态（expertInjectDetail）：
- *   - auto（默认）—— 先试「身份精简卡 + 命中专家全文」，超预算按序降级：
- *     命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；
- *   - card —— 全部精简卡（起点即精简卡，仍受预算约束）；
- *   - full —— 全文注入，保持旧行为（不做预算降级，只受 PERSONA_MAX_CHARS 截断）。
+ * 注入形态（`expertInjectDetail`，2026-09-16 重构后口径）：
+ *   - **auto（默认）** —— 按**会话阶段**分两态：
+ *     ① 首轮全景：命中专家**全部**给精简卡（不裁人）；
+ *     ② 干活轮：**按证据排序取「最大 + 次大」共 expertFullHitMax 位（默认 2）给全文**，
+ *        其余本轮不注入（目录段仍每轮可见，需要时 expert_recall 现取）；
+ *   - card —— 全部精简卡（全局形态开关）；
+ *   - full —— 全文注入（旧行为逃生舱；同样受 INJECT_BUDGET_MAX 红线兜底）。
  */
 export const DETAIL_MODES = ['auto', 'card', 'full']
 
@@ -94,4 +101,20 @@ export const DETAIL_MODES = ['auto', 'card', 'full']
 export function normalizeDetail(value, fallback = 'auto') {
   const v = String(value ?? '').trim().toLowerCase()
   return DETAIL_MODES.includes(v) ? v : fallback
+}
+
+/**
+ * 干活轮给**全文**的位数（2026-09-16 使用者定：「最相关的两人全文」——
+ * 即按本轮任务证据取**最大值与次大值**，并列时取任意两位；**不设固定证据门槛**）。
+ */
+export const FULL_HIT_MAX_DEFAULT = 2
+
+/** 全文位数的硬边界（再大就等于放弃「干活轮」的省 token 本意） */
+export const FULL_HIT_MAX_HARD = 4
+
+/** 全文位数归一化：非法/负数回落默认；超硬边界 clamp */
+export function clampFullHitMax(value, fallback = FULL_HIT_MAX_DEFAULT) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n < 0) return fallback
+  return Math.min(FULL_HIT_MAX_HARD, Math.floor(n))
 }

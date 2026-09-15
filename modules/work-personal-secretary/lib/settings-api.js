@@ -64,7 +64,8 @@ export const EXPERTS_CONFIG_FALLBACK = {
   identityExpert: '',
   expertInjectMax: 4,
   expertInjectDetail: 'auto',
-  expertInjectBudgetChars: 2800,
+  expertInjectBudgetChars: 15000,
+  expertFullHitMax: 2,
   expertSecondThreshold: 0.3,
 }
 

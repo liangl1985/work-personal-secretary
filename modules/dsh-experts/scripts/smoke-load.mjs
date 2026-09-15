@@ -213,7 +213,7 @@ await t('能力层：宿主 skills 可用时注入「可用能力·指针」行�
   assert.ok(!quiet.includes('【可用能力·指针】'), '无关任务不该注入指针：' + quiet.slice(0, 160))
 })
 
-await t('多会话隔离：注入缓存按 sessionId 分槽（互不顶掉）', () => {
+await t('多会话隔离：注入缓存按 sessionId 分槽 + 首轮/干活轮两态（2026-09-16）', () => {
   const def = firstPersonaDef()
   const sessA = { header: { id: 'sess-A', cwd: 'C:\\workspace\\docs' } }
   const sessB = { header: { id: 'sess-B', cwd: 'C:\\workspace\\docs' } }
@@ -221,9 +221,14 @@ await t('多会话隔离：注入缓存按 sessionId 分槽（互不顶掉）', 
   const a1 = def.text({ agent: { session: sessA }, text: ask })
   const b1 = def.text({ agent: { session: sessB }, text: ask })
   const a2 = def.text({ agent: { session: sessA }, text: ask })
+  const a3 = def.text({ agent: { session: sessA }, text: ask })
   assert.ok(a1.includes('【本轮命中·'), 'A 会话应命中等保测评专家：' + a1.slice(0, 80))
-  assert.equal(b1, a1, '两个会话同任务应得到相同注入（各自命中缓存）')
-  assert.equal(a2, a1, 'A 会话重复取应命中自身缓存（逐字一致）')
+  assert.equal(b1, a1, '两个会话的**首轮**应相同（各自开首轮 → 命中专家全景卡）')
+  assert.ok(!a1.includes('## 工作方法'), '首轮应为精简卡（不该是全文）')
+  // 新机制：同一会话第二次起进入「干活轮」，与首轮不同属**预期**（形态随会话阶段变）；
+  // 但同一阶段内重复取必须逐字一致 —— 缓存按 sessionId 分槽、键含 phase 与 workerIds。
+  assert.notEqual(a2, a1, '首轮之后应进入干活轮（形态随会话阶段变化）')
+  assert.equal(a3, a2, '同一会话同一阶段重复取应逐字一致（命中自身缓存）')
 })
 
 await t('任务文本链路：agent/inbox/claimed 接住本轮输入 → 命中卡注入（2026-09-14 修复）', () => {

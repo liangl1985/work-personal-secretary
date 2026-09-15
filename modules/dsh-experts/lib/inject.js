@@ -9,15 +9,18 @@
  *   <L1 精简卡（默认，约 0.4–0.7 千字符）或 L2 全文>
  *   （身份视角：常驻…）
  *
- * 三级口径（产品口径 2026-09-14 定）：
- *   - **L0 目录**：默认不注入正文；索引靠 expert_recall / `/expert list` 可见；
+ * 三级口径（2026-09-16 注入机制重构后）：
+ *   - **L0 目录**：`systemPrompt.section` 稳定段，列出各域成员与可用能力（不占注入预算）；
  *   - **L1 精简卡**（本文件 buildPersonaCard，确定性生成）：角色段首句 + 工作方法前 3 条
  *     + 交付与自检前 2 条 + when_to_use 一行；带尾注「精简卡 · 全文用 expert_recall 取」；
- *   - **L2 全文**：`/expert use <id>`、`expert_recall`、派子代理内联 时使用（不变）。
+ *   - **L2 全文**：干活轮按需注入，或用 `expert_recall` 现取 / 派子代理时内联进 prompt。
  *
- * 每轮预算（expertInjectBudgetChars，默认 2000 字符）：超预算按序降级
- *   命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；连最低形态都放不下时硬截断，
- *   **任何降级与截断都会写明**（绝不静默超限）。
+ * 每轮注入按**会话阶段**分两态（见 PHASE_*）：
+ *   - **首轮全景（opening）**：本会话首次命中 → 命中专家**全部**给精简卡（一个不裁）；
+ *   - **干活轮（working）**：后续轮 → 按证据取「最大 + 次大」共 `expertFullHitMax` 位（默认 2）
+ *     给**全文**；身份专家恒给卡；其余本轮不注入（不设固定证据门槛）。
+ * `expertInjectBudgetChars`（默认 15000，按最大可能消费定档）只作**上限**：超出即截断并标注（绝不静默超限）；
+ * INJECT_BUDGET_MAX = 20000 是任何形态（含 full）都不得突破的安全红线。
  *
  * 硬约束：精简卡只从 persona 正文**确定性解析**得出，不重写、不修改 experts/**.md；
  * 解析失败/段落缺失时回退「全文截断」，**永不产出空块**。
@@ -32,10 +35,11 @@ export { INJECT_BUDGET_DEFAULT }
 
 /**
  * 单条 persona 正文的字符上限（超出截断并标注，绝不静默丢弃）。
- * 取 3000 是因为实测 20 位 persona 为 1250–1730 字（非空白），留足余量；
- * 截断只在有人手工写入超长 persona 时才会触发。
+ * 2026-09-16 由 3000 提到 **3600**：回归的体量口径是「去空白 900–3000」（最长为
+ * general-office / general-typeset，去空白 2977/2991），而**含空白**最长到 3245 ——
+ * 按含空白 3000 截断会把这两位的全文削掉一截，使「干活轮给全文」名不副实。
  */
-export const PERSONA_MAX_CHARS = 3000
+export const PERSONA_MAX_CHARS = 3600
 
 /** 每轮注入开头的处理路径提示（让"先判断归属再决定处理方式"成为显式流程） */
 export const PATH_HINT = '【处理路径】先用下方身份视角判断问题归属：命中专家 → 按该专家视角处理'
@@ -212,112 +216,74 @@ export function buildPersonaBlock(entry, body, { banner = true, kind = 'match', 
   return [head, rendered, note || defaultNote].filter(Boolean).join('\n')
 }
 
-/** 身份/保底项：只留身份专家（没有身份专家时留第一位） */
-function coreItems(items) {
-  const identity = items.find((it) => it.isIdentity)
-  if (identity) return [identity]
-  return items.length > 0 ? [items[0]] : []
-}
-
-/** 渲染一个降级级别（mode: 'full' | 'card' | 'mixed'；mixed = 身份卡 + 命中全文） */
-function renderLevel(list, mode, banner) {
-  const blocks = []
-  for (const it of list) {
-    const detail = mode === 'mixed' ? (it.isIdentity ? 'card' : 'full') : mode
-    blocks.push(buildPersonaBlock(it.entry, it.body, {
-      banner,
-      kind: it.isIdentity ? 'identity' : 'match',
-      detail,
-    }))
-  }
-  return blocks.filter(Boolean).join('\n\n')
-}
+/**
+ * 会话阶段（2026-09-16 注入机制重构，使用者定）：
+ *   - opening：本会话**首次命中** → 命中专家**全部**给精简卡（候选全景，一个不裁）；
+ *   - working：后续轮判定确实要某位专家干活 → 只给这些专家**全文**，其余本轮不注入。
+ */
+export const PHASE_OPENING = 'opening'
+export const PHASE_WORKING = 'working'
 
 /**
- * 选形态 + 按预算降级（绝不静默）。
- * @returns {{ text:string, notes:string[] }}
+ * 选形态 —— **不再有降级链**（2026-09-16 重构：mixed → card → card-core 三级链与
+ * 「未注入：xxx」注记整体删除）。逐项决定形态：
+ *
+ *   - **首轮全景（opening）**：命中专家**全部**给精简卡（4 位最坏实测 2535 字符，结构性装得下）；
+ *   - **干活轮（working）**：身份专家恒给卡（常驻视角、与本轮任务无关）+ 判定要干活的
+ *     workerIds 给**全文**（最相关的 1–2 位）；其余本轮不注入 ——
+ *     这不是「丢弃」：没轮到干活的专家只是本轮不需要，目录段仍每轮可见、expert_recall 随时可取；
+ *   - 设置值 `card` / `full` 是全局形态开关（全部卡 / 全部全文）。
+ *
+ * 预算只作**上限**：超出即截断并标注（INJECT_BUDGET_MAX = 20000 是任何形态都不得突破的安全红线）。
  */
-function planInjection(items, { detail, budget, banner }) {
-  const core = coreItems(items)
-  let levels
-  if (detail === 'full') {
-    levels = [{ tag: 'full', mode: 'full', list: items }]
-  } else if (detail === 'card') {
-    levels = [
-      { tag: 'card', mode: 'card', list: items },
-      { tag: 'card-core', mode: 'card', list: core },
-    ]
-  } else {
-    levels = [
-      { tag: 'mixed', mode: 'mixed', list: items },
-      { tag: 'card', mode: 'card', list: items },
-      { tag: 'card-core', mode: 'card', list: core },
-    ]
+function planInjection(items, { detail, phase, workerIds, budget, banner }) {
+  const want = new Set((workerIds || []).map((x) => String(x).toLowerCase()))
+  const blocks = []
+  for (const it of items) {
+    const id = String(it.entry.id).toLowerCase()
+    let mode = null
+    if (detail === 'full') mode = 'full'
+    else if (detail === 'card') mode = 'card'
+    else if (phase === PHASE_WORKING) {
+      if (it.isIdentity) mode = 'card'          // 身份专家恒给卡（常驻视角，与本轮任务无关）
+      else if (want.has(id)) mode = 'full'      // 确实要它干活 → 全文
+      // 其余：本轮不注入（不是丢弃）
+    } else mode = 'card'                        // auto + 首轮全景
+    if (!mode) continue
+    const block = buildPersonaBlock(it.entry, it.body, {
+      banner,
+      kind: it.isIdentity ? 'identity' : 'match',
+      detail: mode,
+    })
+    if (block) blocks.push(block)
   }
-  // 同一 (mode, 成员) 的级别只留一个（例如只有身份专家时 mixed 与 card 同文）
-  const seen = new Set()
-  const uniq = []
-  for (const lv of levels) {
-    const sig = lv.mode + '|' + lv.list.map((it) => it.entry.id).join(',')
-    if (seen.has(sig)) continue
-    seen.add(sig)
-    uniq.push(lv)
+  if (blocks.length === 0) return { text: '', notes: [] }
+
+  const text0 = blocks.join('\n\n')
+  if (text0.length > budget) {
+    // 旧口径是「超预算按序降级」；新口径**只截断并标注**（降级链已删）—— 绝不静默超限
+    const note = '…（已截断：本轮注入 ' + text0.length + ' 字符，超出上限 ' + budget
+      + ' · 全文用 expert_recall 取）'
+    return { text: text0.slice(0, Math.max(0, budget - note.length)) + note, notes: [] }
   }
-
-  let chosen = null
-  let chosenIndex = -1
-  for (let i = 0; i < uniq.length; i++) {
-    const lv = uniq[i]
-    const text = renderLevel(lv.list, lv.mode, banner)
-    if (!text) continue
-    const fits = detail === 'full' || text.length <= budget
-    chosen = { lv, text }
-    chosenIndex = i
-    if (fits) break
-  }
-  if (!chosen) return { text: '', notes: [] }
-
-  const notes = []
-  const injectedIds = new Set(chosen.lv.list.map((it) => it.entry.id))
-  const dropped = items.filter((it) => !injectedIds.has(it.entry.id))
-  let text = chosen.text
-  let truncated = false
-
-  if (detail !== 'full' && text.length > budget) {
-    // 连最低形态都放不下 → 硬截断（标注写在截断处，绝不静默超限）
-    const note = '（本轮预算 ' + budget + ' 字符：已截断 · 全文用 expert_recall 取）'
-    const keep = Math.max(0, budget - note.length)
-    text = text.slice(0, keep) + '…' + note
-    truncated = true
-  }
-
-  if (detail !== 'full' && !truncated && chosenIndex > 0) {
-    // 口径（2026-09-14 读稿调整）：auto/card 下「命中专家用精简卡」是**默认预期**，
-    // 卡尾注已写明取全文方式，不再每轮再加一行"已降级"提示（避免刷屏）；
-    // 只有真的**丢掉了专家**（card-core）或**硬截断**时才提示。
-    if (chosen.lv.tag === 'card-core') {
-      notes.push('（本轮预算 ' + budget + ' 字符：仅保留身份专家精简卡'
-        + (dropped.length > 0 ? '；本轮未注入：' + dropped.map((it) => it.entry.name).join('、') : '')
-        + ' · 全文用 expert_recall 取）')
-    }
-  }
-
-  return { text, notes }
+  return { text: text0, notes: [] }
 }
 
 /**
  * 组装本轮的专家注入文本（对外契约不变：banner / withPathHint 语义与旧版一致）。
  * @param {Array<{entry:object, score:number, evidence:number, reasons:string[]}>} selected - selectExperts() 的结果
- * @param {object} opts - { banner, identityId, withPathHint, detail, budgetChars }
- *   detail：'auto'（按预算降级，产品默认）/ 'card'（全精简卡）/ 'full'（全文，旧行为）；
+ * @param {object} opts - { banner, identityId, withPathHint, detail, phase, workerIds, budgetChars }
+ *   detail：'auto'（产品默认，按**会话阶段**分两态）/ 'card'（全精简卡）/ 'full'（全文，旧行为）；
+ *   phase：auto 下使用 —— 'opening' 首轮全景（全卡）/ 'working' 干活轮（workerIds 给全文）；
  *   **不传 detail 时回落 'full'** —— 旧调用方（只传 banner/identityId）与旧版逐字等价；
  *   产品默认形态 expertInjectDetail='auto' 由设置层保证，index.js 每轮显式传入。
- * @returns {string} 注入文本（空串 = 本轮不注入）
  */
 export function buildInjection(selected, opts = {}) {
   const identityId = String(opts.identityId || '').toLowerCase()
   const banner = opts.banner !== false
   const detail = normalizeDetail(opts.detail, 'full')
+  const phase = opts.phase === PHASE_WORKING ? PHASE_WORKING : PHASE_OPENING
+  const workerIds = Array.isArray(opts.workerIds) ? opts.workerIds.map((x) => String(x)) : []
   const budget = clampBudget(opts.budgetChars)
   const items = []
   for (const item of selected || []) {
@@ -331,7 +297,7 @@ export function buildInjection(selected, opts = {}) {
   }
   if (items.length === 0) return ''
 
-  const plan = planInjection(items, { detail, budget, banner })
+  const plan = planInjection(items, { detail, phase, workerIds, budget, banner })
   if (!plan.text) return ''
   const head = (banner && opts.withPathHint !== false) ? PATH_HINT + '\n\n' : ''
   const tail = plan.notes.length > 0 ? '\n' + plan.notes.join('\n') : ''
@@ -345,8 +311,8 @@ export function buildManualInjection(entry, { banner = true } = {}) {
   return buildPersonaBlock(entry, body, { banner, kind: 'manual', detail: 'full' })
 }
 
-/** 目录段字符上限（design-v2：独立小预算，建议不超过 400 字符；超出截断并标注） */
-export const CATALOG_MAX_CHARS = 400
+/** 目录段字符上限（2026-09-16 由 400 提到 **1000**：需容纳「命中不足可额外补 1 名专家」的权限说明，并为专家与能力条目增长留余量；超出截断并标注） */
+export const CATALOG_MAX_CHARS = 1000
 
 /**
  * 专家库目录段（走 systemPrompt.section，**稳定通道**）。
@@ -360,7 +326,7 @@ export const CATALOG_MAX_CHARS = 400
  * @returns {string} 目录段文本（空串 = 不注入）
  */
 export function buildCatalog({ domains = [], personas = [], skills = [] } = {}) {
-  const lines = ['【专家库·目录】先判断问题归属，命中则按该专家视角处理；派子代理时用 expert_recall 取全文。']
+  const lines = ['【专家库·目录】先判断问题归属，命中则按该专家视角处理；命中不足时可额外补 1 名专家（expert_recall 取全文），派子代理时内联 persona。']
   for (const d of domains) {
     const names = personas
       .filter((p) => p && p.domain === d.id)

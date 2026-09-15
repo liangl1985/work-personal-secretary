@@ -39,6 +39,8 @@
 - [x] 打包白名单（`files`）覆盖 lib / client / scripts / skills / experts / cordis.patch.yml / CHANGELOG / LICENSE / NOTICE / README
 - [x] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
 - [x] **仓库根 `NOTICE` 存在**（聚合索引：随包内容与各模块版本 / 20 位 persona 来源与许可 / `review: pending` 免责 / 未随包分发清单）
+- [x] **命中评估资产（2026-09-16 新增）**：`hit-distribution.mjs`（命中位数分布 + 目标核对，`--file` 可切到 `hit-corpus-real.json` 真实语料）、  `hit-false-positive.mjs`（负样本假命中检测，105 条，>2 条即非零退出）；语料 `hit-corpus.json`(180) / `hit-corpus-real.json`(30) / `hit-negative.json`(105)
+  实测：真实语料 2+3 = 60% · 4 位 = 20% · 负样本 93.3% 干净。
 - [x] **CI 覆盖范围核对（2026-09-13 P5）**：语法自检已覆盖全量 `*.js` / `*.mjs`（含本体 `lib/settings-api.js`）；回归 / 装载冒烟 / 共存契约分别由 `*/scripts/regression.mjs`、`*/scripts/smoke-load.mjs`、`*/scripts/coexist.mjs` 覆盖；
       **本体四套自测**（`probe-test.mjs` 136 · `install-test.mjs` 200 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
 - [x] **补入 CI 后首轮即暴露并修掉测试自身的平台缺陷**：`probe-test.mjs` 的 `/fix` 白名单断言未锁定 `platform`，在 Linux runner 上走「非 Windows 平台无 winget」分支（**9 项失败**）→ 锁定 `platform: 'win32'`、`pythonDeps` 真跑断言容忍「解释器在、pip 不可用」的降级形态、`maskUserPath` 断言做分隔符归一化，并**新增 2 条非 Windows 平台分支正向断言**（不再依赖宿主恰好是 Windows）；本机 win32 **136/136** · 伪装 linux **133/133** · CI `e4943c7` Node 22/24 双版本 **success**
@@ -89,7 +91,7 @@
 - [x] `expertInjectMax` **写死 4**（2026-09-15 主人定：设置页不再提供该项，`settings.js` DEFAULTS = 4 / schema default = 4 / `cordis.patch.yml` base = 4 **三处一致**）；`lib/limits.js` 的 `INJECT_MAX_HARD = 4` 为硬边界（越界 clamp 到 4，绝不静默超限）
 - [x] `expertSecondThreshold`（默认 **0.3**，2026-09-15 由 0.8 调为 0.3）确实约束域专家第 2/3 位——其**任务证据** ≥ 第 1 位 × 该值才补位（0.3.0 起为纯证据比较；通用型专家另走 `expertGeneralMinEvidence` 绝对门槛）
 - [x] **`expertMinScore` 已于 0.3.0 移除**（零命中不注入落地后无任何代码路径使用）
-- [x] 设置项齐全且默认值正确（共 **18 项**，dsh-experts 0.4.0 schema 全量）：`expertsEnabled` / `expertCatalogEnabled` / `disciplineEnabled` / `disciplineMemoryDir` / `defaultDomain` / `identityExpert` / `enabledDomains` / `enabledExperts` / `expertInjectMax`（**写死 4，设置页不提供该项**）/ `expertSecondThreshold` / `expertGeneralMax` / `expertGeneralMinEvidence` / `skillInjectEnabled` / `skillBudgetChars` / `expertInjectDetail` / `expertInjectBudgetChars` / `expertShowBanner` / `expertSetupDone`（0.4.0 新增 `expertGeneralMax` / `expertGeneralMinEvidence` 两键，16 → 18；`expertSetupDone` 由安装引导自动写入）
+- [x] 设置项齐全且默认值正确（共 **19 项**，dsh-experts 0.5.1 schema 全量）：`expertsEnabled` / `expertCatalogEnabled` / `disciplineEnabled` / `disciplineMemoryDir` / `defaultDomain` / `identityExpert` / `enabledDomains` / `enabledExperts` / `expertInjectMax`（**写死 4，设置页不提供该项**）/ `expertSecondThreshold` / `expertGeneralMax` / `expertGeneralMinEvidence` / `skillInjectEnabled` / `skillBudgetChars` / `expertInjectDetail` / `expertInjectBudgetChars` / `expertShowBanner` / `expertSetupDone`（0.4.0 新增 `expertGeneralMax` / `expertGeneralMinEvidence` 两键，16 → 18；`expertSetupDone` 由安装引导自动写入）
 - [x] 注入块标题：默认 **【处理路径】+【本轮命中·…】**（0.3.0 身份退场后不再有常驻【身份视角·…】；`identityExpert` 显式配置时才会出现）
 
 ## 三点七、桌面形象模块（workspace-tokenpet，2026-09-14 独立化）

@@ -1,0 +1,1451 @@
+[
+  {
+    "id": "infosec-01",
+    "mod": "infosec",
+    "text": "华东某电厂两台600MW机组的DCS和SIS网络要做安全防护改造，先按Purdue分层出一份分区隔离方案，标注哪些措施需要停机。",
+    "expect": [
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-02",
+    "mod": "infosec",
+    "text": "变电站监控系统要过等保三级，帮我理一下IEC 62443里SL2的要求和等保条款怎么对应。",
+    "expect": [
+      "infosec-djbh",
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-03",
+    "mod": "infosec",
+    "text": "苏州燃机项目的招标文件拿到了，先帮我把评分细则拆成评分点分析表，标清客观分和主观分的比例。",
+    "expect": [
+      "infosec-bid-proposal"
+    ]
+  },
+  {
+    "id": "infosec-04",
+    "mod": "infosec",
+    "text": "客户问等保2.0三级对工控系统具体有哪些要求，帮我整理一份GB/T 22239里相关条款的清单。",
+    "expect": [
+      "infosec-djbh"
+    ]
+  },
+  {
+    "id": "infosec-05",
+    "mod": "infosec",
+    "text": "明天去电厂做技术交流，帮我准备一页纸的产品选型和POC测试方案，客户最担心影响生产。",
+    "expect": [
+      "infosec-sales-engineer"
+    ]
+  },
+  {
+    "id": "infosec-06",
+    "mod": "infosec",
+    "text": "石化厂DCS和SCADA现在是一条VLAN打通的，帮我设计工业DMZ和跨区管道控制方案。",
+    "expect": [
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-07",
+    "mod": "infosec",
+    "text": "这份技术标还有三天截标，你先帮我写执行摘要和逐条应答表，偏离项要单独列出来。",
+    "expect": [
+      "infosec-bid-proposal"
+    ]
+  },
+  {
+    "id": "infosec-08",
+    "mod": "infosec",
+    "text": "某水厂工控系统的定级备案材料被退回了，帮我看差距在哪，重新出一份整改清单。",
+    "expect": [
+      "infosec-djbh"
+    ]
+  },
+  {
+    "id": "infosec-09",
+    "mod": "infosec",
+    "text": "调度数据网横向隔离装置选型要一起考虑纵向加密认证，帮我出个设备清单和部署方案。",
+    "expect": [
+      "infosec-sales-engineer",
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-10",
+    "mod": "infosec",
+    "text": "客户说上次勒索病毒把HMI全黑了，帮我准备一段回应话术和对应的防护能力清单。",
+    "expect": [
+      "infosec-sales-engineer"
+    ]
+  },
+  {
+    "id": "infosec-11",
+    "mod": "infosec",
+    "text": "这次竞争对手报的是别家的工业防火墙，帮我做个竞争定位分析，找出我们的差异化得分点。",
+    "expect": [
+      "infosec-bid-proposal"
+    ]
+  },
+  {
+    "id": "infosec-12",
+    "mod": "infosec",
+    "text": "新能源场站集控中心和升压站之间的通信要做安全加固，方案里写清实施窗口和不影响功率调节的措施。",
+    "expect": [
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-13",
+    "mod": "infosec",
+    "text": "等保差距分析做完了，帮我把整改项按必须改和建议改分开，再估算每项的工期和停机影响。",
+    "expect": [
+      "infosec-djbh",
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-14",
+    "mod": "infosec",
+    "text": "帮我给这个火电厂做一份Purdue分层的资产拓扑清单模板，要含型号、固件、协议和责任人字段。",
+    "expect": [
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-15",
+    "mod": "infosec",
+    "text": "技术标里的产品清单要和报价对得上，帮我核一遍有没有前后不一致的地方。",
+    "expect": [
+      "infosec-bid-proposal"
+    ]
+  },
+  {
+    "id": "infosec-16",
+    "mod": "infosec",
+    "text": "下周三去拜访客户，帮我准备客户决策链地图和需求确认清单，重点问检修窗口能不能旁路部署。",
+    "expect": [
+      "infosec-sales-engineer"
+    ]
+  },
+  {
+    "id": "infosec-17",
+    "mod": "infosec",
+    "text": "这个工控系统的等保复测快到期了，帮我把上次的整改项列出来逐条确认现在是否闭环。",
+    "expect": [
+      "infosec-djbh"
+    ]
+  },
+  {
+    "id": "infosec-18",
+    "mod": "infosec",
+    "text": "客户要求方案里加一节合规映射矩阵，把NCS要求、等保和IEC 62443一起对上。",
+    "expect": [
+      "infosec-ics-security",
+      "infosec-djbh"
+    ]
+  },
+  {
+    "id": "infosec-19",
+    "mod": "infosec",
+    "text": "帮我写一份工控安全投标自检清单，重点是废标风险项：资质、签章、保证金、密封。",
+    "expect": [
+      "infosec-bid-proposal"
+    ]
+  },
+  {
+    "id": "infosec-20",
+    "mod": "infosec",
+    "text": "帮我把GB/T 22239三级里安全区域边界那部分逐条对照客户现状，给出符合性判断。",
+    "expect": [
+      "infosec-djbh"
+    ]
+  },
+  {
+    "id": "infosec-21",
+    "mod": "infosec",
+    "text": "这条产线用的是老S7-300，不能停，帮我想个旁路部署的防护方案，要标清回退办法。",
+    "expect": [
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-22",
+    "mod": "infosec",
+    "text": "客户问我方工控防火墙和友商的区别，帮我做个对比表，做不到的功能要如实写。",
+    "expect": [
+      "infosec-sales-engineer"
+    ]
+  },
+  {
+    "id": "infosec-23",
+    "mod": "infosec",
+    "text": "帮我梳理三到五条得分主线，每条都要是甲方痛点加我方差异化加可核实证据。",
+    "expect": [
+      "infosec-bid-proposal"
+    ]
+  },
+  {
+    "id": "infosec-24",
+    "mod": "infosec",
+    "text": "客户是市政污水厂，工控系统要不要定级、定几级，帮我理一下定级依据和备案流程。",
+    "expect": [
+      "infosec-djbh"
+    ]
+  },
+  {
+    "id": "infosec-25",
+    "mod": "infosec",
+    "text": "钢厂高炉的PLC网络想做微隔离，先帮我评估哪些区域能分、哪些动了会有联锁风险。",
+    "expect": [
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-26",
+    "mod": "infosec",
+    "text": "投标文件写完了，帮我把全文的空洞形容词删掉，案例和数据都要能核实。",
+    "expect": [
+      "infosec-bid-proposal"
+    ]
+  },
+  {
+    "id": "infosec-27",
+    "mod": "infosec",
+    "text": "帮我出一份分期路线建议，第一期做不影响生产的措施，第二期再安排需要停机窗口的部分。",
+    "expect": [
+      "infosec-ics-security"
+    ]
+  },
+  {
+    "id": "infosec-28",
+    "mod": "infosec",
+    "text": "这次POC得写清不影响生产的测试方式和回退方案，客户才肯签字，帮我拟一份。",
+    "expect": [
+      "infosec-sales-engineer"
+    ]
+  },
+  {
+    "id": "infosec-29",
+    "mod": "infosec",
+    "text": "帮我看看这份劳动合同里的试用期和竞业限制条款有没有问题。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "infosec-30",
+    "mod": "infosec",
+    "text": "周末想去郊区露营，帮我查下这两天天气怎么样。",
+    "expect": [],
+    "noise": true,
+    "note": "真噪声句：任何专家都不应命中"
+  },
+  {
+    "id": "accounting-01",
+    "mod": "accounting",
+    "text": "客户要开13个点的专票，帮我把报价单里的含税价拆成不含税和税额，再出一份开票明细表。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-02",
+    "mod": "accounting",
+    "text": "这个月有几张进项发票还没认证，帮我看看哪些能抵扣、哪些要做进项转出，列个台账。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-03",
+    "mod": "accounting",
+    "text": "小规模那家子公司季度销售额快到三十万了，帮我算下超了要交多少增值税，顺便给个控税建议。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-04",
+    "mod": "accounting",
+    "text": "供应商开的是普通发票，这批采购的税款能不能直接进成本，帮我按现行规定给个明确口径。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-05",
+    "mod": "accounting",
+    "text": "这单是设备加服务打包卖的，帮我判一下算混合销售还是兼营，按什么税率开票。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-06",
+    "mod": "accounting",
+    "text": "去年汇算清缴的税会差异台账要补一下，业务招待费和研发加计扣除都得重新过一遍。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-07",
+    "mod": "accounting",
+    "text": "客户要求合同签了就先开票再付款，这样确认收入的时间点和涉税风险帮我理一下。",
+    "expect": [
+      "accounting-tax",
+      "accounting-accountant"
+    ]
+  },
+  {
+    "id": "accounting-08",
+    "mod": "accounting",
+    "text": "我出差住宿和机票的进项税能不能抵，帮我按现行规定理一遍，再写个报销口径说明。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-09",
+    "mod": "accounting",
+    "text": "帮我核对下这季度申报表上的销售额和开票系统里的数据对不对得上，差了要找出原因。",
+    "expect": [
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-10",
+    "mod": "accounting",
+    "text": "项目上个月采购的这批服务器帮我做笔固定资产入账，折旧按三年直线法计提。",
+    "expect": [
+      "accounting-accountant"
+    ]
+  },
+  {
+    "id": "accounting-11",
+    "mod": "accounting",
+    "text": "这笔客户预付款先挂合同负债，等验收单到了再转收入，帮我做两张凭证。",
+    "expect": [
+      "accounting-accountant"
+    ]
+  },
+  {
+    "id": "accounting-12",
+    "mod": "accounting",
+    "text": "这个月月结，帮我做下试算平衡，看看有没有借贷不平或者科目方向挂错的。",
+    "expect": [
+      "accounting-accountant"
+    ]
+  },
+  {
+    "id": "accounting-13",
+    "mod": "accounting",
+    "text": "研发人员的工资要归集到研发支出，帮我看看哪些能资本化、哪些费用化，依据是什么。",
+    "expect": [
+      "accounting-accountant",
+      "accounting-tax"
+    ]
+  },
+  {
+    "id": "accounting-14",
+    "mod": "accounting",
+    "text": "把这批差旅报销单录成凭证，摘要写清谁去哪个项目、办了什么事、花了多少钱。",
+    "expect": [
+      "accounting-accountant"
+    ]
+  },
+  {
+    "id": "accounting-15",
+    "mod": "accounting",
+    "text": "客户尾款拖了快半年了，这笔应收账款要不要计提坏账，比例按什么标准定。",
+    "expect": [
+      "accounting-accountant"
+    ]
+  },
+  {
+    "id": "accounting-16",
+    "mod": "accounting",
+    "text": "公司新租的办公室按新租赁准则入账，帮我算下使用权资产和租赁负债的金额。",
+    "expect": [
+      "accounting-accountant"
+    ]
+  },
+  {
+    "id": "accounting-17",
+    "mod": "accounting",
+    "text": "三张表帮我勾稽一下，看看现金流量表和资产负债表、利润表能不能对上。",
+    "expect": [
+      "accounting-accountant",
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-18",
+    "mod": "accounting",
+    "text": "上半年实际数和年初预算差得有点多，帮我做份差异分析，看主要是哪些驱动因素。",
+    "expect": [
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-19",
+    "mod": "accounting",
+    "text": "这个项目的毛利从预估的百分之四十掉到二十八了，帮我按量和价拆一下原因。",
+    "expect": [
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-20",
+    "mod": "accounting",
+    "text": "帮我把三条产品线的收入和成本拉个表，看哪条线净利贡献最大，再给个资源倾斜建议。",
+    "expect": [
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-21",
+    "mod": "accounting",
+    "text": "公司现金流最近有点紧，帮我做个未来半年的滚动资金预测。",
+    "expect": [
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-22",
+    "mod": "accounting",
+    "text": "人力成本比去年同期涨了两成，帮我拆到人数、人均和职级结构上看看。",
+    "expect": [
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-23",
+    "mod": "accounting",
+    "text": "经营分析会的材料帮我把数核一遍，重大差异都要有量化说明和原因。",
+    "expect": [
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-24",
+    "mod": "accounting",
+    "text": "销售费用超预算了，帮我看看超在哪些项目、是一次性还是常态，能不能压一压。",
+    "expect": [
+      "accounting-analyst"
+    ]
+  },
+  {
+    "id": "accounting-25",
+    "mod": "accounting",
+    "text": "帮我把现在的费用报销流程梳一遍，看哪些环节内控上有漏洞，再出个整改方案。",
+    "expect": [
+      "accounting-compliance"
+    ]
+  },
+  {
+    "id": "accounting-26",
+    "mod": "accounting",
+    "text": "集团要做内控自评，帮我按采购和付款两个流程把自评表填了，缺的证据列个清单。",
+    "expect": [
+      "accounting-compliance"
+    ]
+  },
+  {
+    "id": "accounting-27",
+    "mod": "accounting",
+    "text": "上次费用抽查有几张单子附件不全，帮我写份整改方案和整改时间表。",
+    "expect": [
+      "accounting-compliance"
+    ]
+  },
+  {
+    "id": "accounting-28",
+    "mod": "accounting",
+    "text": "把这份投标文件的页眉页脚统一一下，目录也重新生成一份。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "accounting-29",
+    "mod": "accounting",
+    "text": "下周三下午的客户拜访帮我订个会议室，顺便提醒我带上样机资料。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "accounting-30",
+    "mod": "accounting",
+    "text": "工控防火墙的并发连接数平时写方案里给多少比较合适？",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "hr-01",
+    "mod": "hr",
+    "text": "公司要新招一名售前工程师，帮我把招聘启事里的任职要求和薪酬区间拟一下，顺带说说录用通知书要注意什么。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-02",
+    "mod": "hr",
+    "text": "面试完那个应届生我打算录用了，实习期和毕业后签劳动合同怎么衔接，你给我理个时间线。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-03",
+    "mod": "hr",
+    "text": "新来的销售还在试用期，表现不太行，能不能直接辞退，需要提前多久说、要不要给补偿？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-04",
+    "mod": "hr",
+    "text": "试用期工资我们按转正后的七成发，这样合不合规，麻烦把法条和调整后的方案一起给我。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-05",
+    "mod": "hr",
+    "text": "员工试用期想延长两个月，合同里当初没写这一条，能不能补签协议，风险在哪。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-06",
+    "mod": "hr",
+    "text": "想把一名老员工从技术岗调到售前岗，工资也降一档，员工不同意的话我们能不能单方面调？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-07",
+    "mod": "hr",
+    "text": "公司要统一调岗调薪，帮我看看通知书怎么写才不留漏洞，顺便列一下需要员工签字确认的材料。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-08",
+    "mod": "hr",
+    "text": "售前经常出差加班，加班费到底怎么算，工作日和周末的倍数一样吗，给我算个例子看看。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-09",
+    "mod": "hr",
+    "text": "我们想申请综合计算工时制，需要什么条件、走什么审批，顺便写份说明材料给我。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-10",
+    "mod": "hr",
+    "text": "员工长期加班到晚上十点，打卡记录能当证据吗，离职以后还能不能追讨加班费？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-11",
+    "mod": "hr",
+    "text": "年假没休完公司能不能作废，折算成工资又是怎么算的，帮我列个计算口径。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-12",
+    "mod": "hr",
+    "text": "女员工产假和哺乳假的天数以及工资由谁发，北京这边具体怎么执行，帮我整理一份说明。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-13",
+    "mod": "hr",
+    "text": "公司要裁掉一名干了三年的员工，经济补偿怎么算，要不要提前一个月书面通知？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-14",
+    "mod": "hr",
+    "text": "员工严重违反考勤制度，我们想辞退但不给补偿，需要哪些证据和流程，帮我出个风险清单。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-15",
+    "mod": "hr",
+    "text": "员工自己提了离职又反悔不走，公司已经批准了算不算数，这种情况该怎么处理？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-16",
+    "mod": "hr",
+    "text": "协商解除劳动合同的协议怎么写，补偿金额和支付时间怎么约定才稳妥，给我一份模板。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-17",
+    "mod": "hr",
+    "text": "违法解除的赔偿金是二倍吗，跟经济补偿怎么区分，帮我算一下干了四年半大概是多少。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-18",
+    "mod": "hr",
+    "text": "给核心研发签竞业限制协议，期限两年、补偿按月发，这样约定有效吗，帮我审一遍条款。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-19",
+    "mod": "hr",
+    "text": "员工离职后去了竞争对手那边，我们能主张违约金吗，是不是得先付竞业补偿？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-20",
+    "mod": "hr",
+    "text": "竞业限制补偿公司一直拖着没发，员工是不是就可以不遵守了，我们这边还有补救办法吗？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-21",
+    "mod": "hr",
+    "text": "员工出差路上出了交通事故，算不算工伤，认定的流程和时限是怎样的。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-22",
+    "mod": "hr",
+    "text": "工伤停工留薪期的工资怎么发，伤残等级出来以后赔偿由谁承担，帮我理一份口径说明。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-23",
+    "mod": "hr",
+    "text": "员工入职当月社保什么时候开始交，试用期不交社保行不行，北京的口径帮我确认一下。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-24",
+    "mod": "hr",
+    "text": "公积金基数和社保基数不一致会有问题吗，补缴要走什么流程，给我一份操作清单。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-25",
+    "mod": "hr",
+    "text": "员工手册里的考勤和奖惩条款，要走什么程序才有效，帮我列一下公示和签收的留痕要求。",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-26",
+    "mod": "hr",
+    "text": "员工申请劳动仲裁了，时效从什么时候开始算，我们公司这边要怎么准备答辩和证据？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-27",
+    "mod": "hr",
+    "text": "员工离职要开离职证明，我们能在上面写离职原因吗，他不配合交接能不能扣最后一个月工资？",
+    "expect": [
+      "hr-labor-law"
+    ]
+  },
+  {
+    "id": "hr-28",
+    "mod": "hr",
+    "text": "这份客户采购合同你帮我看看付款条款，验收节点和账期对我们有没有风险，能改的话给个改法。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "hr-29",
+    "mod": "hr",
+    "text": "帮我把明天客户交流的PPT提纲整理出来，重点讲等保三级在我们厂区怎么落地。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "hr-30",
+    "mod": "hr",
+    "text": "中午帮我点份不辣的简餐，下午三点提醒我去趟财务。",
+    "expect": [],
+    "noise": true,
+    "note": "真噪声句：任何专家都不应命中"
+  },
+  {
+    "id": "coding-01",
+    "mod": "coding",
+    "text": "策略代码里那个均线回测脚本跑得太慢，帮我把循环改成向量化，顺便看看有没有内存泄漏。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-02",
+    "mod": "coding",
+    "text": "帮我把 E:\\lina\\策略代码 里的数据拉取模块重构成可替换的数据源接口，改完给我一份改动说明。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-03",
+    "mod": "coding",
+    "text": "这个 Python 脚本读 CSV 老是报编码错误，先帮我定位原因再给修好的版本。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-04",
+    "mod": "coding",
+    "text": "我给知识库写的那个入库脚本在批量处理时偶尔丢文件，排查一下是不是并发写的问题。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-05",
+    "mod": "coding",
+    "text": "帮我把现有的行情数据管道加上断点续跑和失败重试，别每次都从头拉一遍。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-06",
+    "mod": "coding",
+    "text": "策略代码里有两份重复的回测逻辑，帮我合并成一个公共模块，不要改变现有调用方式。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-07",
+    "mod": "coding",
+    "text": "这段代码依赖的 pandas 版本太老，帮我把依赖升到能用的版本并跑通现有测试。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-08",
+    "mod": "coding",
+    "text": "帮我看下这个定时任务为什么凌晨会重复执行两次，给个修复方案和原因说明。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-09",
+    "mod": "coding",
+    "text": "我想给策略代码加个命令行入口，支持指定时间区间和标的，实现完告诉我怎么运行。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-10",
+    "mod": "coding",
+    "text": "这个日志文件太大了，帮我写个脚本按日期切分，并把超过三十天的部分压缩掉。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-11",
+    "mod": "coding",
+    "text": "帮我把策略代码里的配置项从硬编码改成配置文件，并保持默认值和现在完全一致。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-12",
+    "mod": "coding",
+    "text": "现有模块耦合太厉害，帮我理一下调用关系，再给一个可以分步落地的重构方案。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-13",
+    "mod": "coding",
+    "text": "帮我写个小工具，把多份 Excel 持仓表合并成一份，字段不一致的要先对齐。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-14",
+    "mod": "coding",
+    "text": "这个接口返回的 JSON 结构变了，帮我适配解析逻辑，并补上失败时的兜底。",
+    "expect": [
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-15",
+    "mod": "coding",
+    "text": "帮我写个 DSH 插件，在每轮对话开头注入今天的日期和待办，走稳定段注入就行。",
+    "expect": [
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-16",
+    "mod": "coding",
+    "text": "我给专家库插件加了个设置项，但面板里读不到值，帮我看看 register 和 get 哪里写错了。",
+    "expect": [
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-17",
+    "mod": "coding",
+    "text": "帮我把 work-memory 插件的回归脚本补全，覆盖冷热切换和归档那几个场景。",
+    "expect": [
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-18",
+    "mod": "coding",
+    "text": "这个插件改完要能热更和回退，帮我检查 inject 声明和默认值三处是否一致。",
+    "expect": [
+      "coding-dsh-plugin",
+      "coding-review"
+    ]
+  },
+  {
+    "id": "coding-19",
+    "mod": "coding",
+    "text": "帮我给插件加一个 systemPrompt 注入，内容随轮次变化，没有内容时就注入空串。",
+    "expect": [
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-20",
+    "mod": "coding",
+    "text": "插件升级后旧配置读不出来，帮我写一份升级和 install --force 的迁移步骤。",
+    "expect": [
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-21",
+    "mod": "coding",
+    "text": "帮我把插件里散落的配置读取改成原生设置服务的命名空间，别自己读配置文件。",
+    "expect": [
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-22",
+    "mod": "coding",
+    "text": "我想给插件加一个新命令，同时要更新 README 和发布检查清单，你来定实现方案。",
+    "expect": [
+      "coding-dsh-plugin",
+      "coding-engineer"
+    ]
+  },
+  {
+    "id": "coding-23",
+    "mod": "coding",
+    "text": "DSH 插件打包时漏了 cordis.patch.yml，帮我核对发布物清单并补上安装说明。",
+    "expect": [
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-24",
+    "mod": "coding",
+    "text": "帮我把这份策略代码提交前审一遍，重点看边界处理和异常，阻塞项要指到具体行。",
+    "expect": [
+      "coding-review"
+    ]
+  },
+  {
+    "id": "coding-25",
+    "mod": "coding",
+    "text": "这个插件的发布自检帮我走一遍，生成物和源码是否一致也要一起确认。",
+    "expect": [
+      "coding-review",
+      "coding-dsh-plugin"
+    ]
+  },
+  {
+    "id": "coding-26",
+    "mod": "coding",
+    "text": "帮我审查这段数据拉取代码，看看有没有没关的文件句柄或者网络超时没处理。",
+    "expect": [
+      "coding-review"
+    ]
+  },
+  {
+    "id": "coding-27",
+    "mod": "coding",
+    "text": "我改完的补丁你帮我过一下，会不会破坏现有的插件共存和回滚路径。",
+    "expect": [
+      "coding-review"
+    ]
+  },
+  {
+    "id": "coding-28",
+    "mod": "coding",
+    "text": "代码里这段异常捕获太宽了，帮我梳理哪些该吞哪些该抛，并给修改建议。",
+    "expect": [
+      "coding-review"
+    ]
+  },
+  {
+    "id": "coding-29",
+    "mod": "coding",
+    "text": "帮我把这份投标文件的技术方案章节排版一下，目录和页码对不上。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "coding-30",
+    "mod": "coding",
+    "text": "今天下午的评审会帮我订个会议室，顺便提醒我提前十分钟出发。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "finance-01",
+    "mod": "finance",
+    "text": "帮我看看贵州茅台最新三季报，把营收增速、毛利率和经营性现金流拉一张三年对比表，标好来源和日期。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-02",
+    "mod": "finance",
+    "text": "把宁德时代近三年年报从巨潮资讯网下下来，提取营收和净利润，做一张五年增长表，注明口径。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-03",
+    "mod": "finance",
+    "text": "腾讯控股现在估值贵不贵？拿 PE、PB 和自由现金流收益率跟过去五年分位数比一下，给个区间。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-04",
+    "mod": "finance",
+    "text": "把这份新能源行业研究的核心论点压成三句话，每句后面附上会推翻它的具体数据或事件。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-05",
+    "mod": "finance",
+    "text": "帮我查 2024 年光伏组件价格走势，要国家统计局和行业协会口径，每个数字都注明来源和日期。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-06",
+    "mod": "finance",
+    "text": "比亚迪业绩说明会的记录帮我整理一下，重点看管理层对明年销量和毛利率的指引。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-07",
+    "mod": "finance",
+    "text": "我想建个港股高股息观察池，先按股息率和派息稳定性筛一批，筛选口径说清楚。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-08",
+    "mod": "finance",
+    "text": "帮我核对这篇研报里 2023 年归母净利润，跟年报原文对一遍，对不上的地方标出来。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-09",
+    "mod": "finance",
+    "text": "写一份中国平安的估值区间分析，逐项列出假设，看多和看空的理由要同等严谨。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-10",
+    "mod": "finance",
+    "text": "昨天记的美联储降息对 A 股影响的笔记，帮我补最新数据，事实、推断和未知分开标。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-11",
+    "mod": "finance",
+    "text": "把这几家白酒公司的毛利率、净利率和 ROE 做成时序对比表，口径差异单独注明。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-12",
+    "mod": "finance",
+    "text": "看看这家公司公告里的定增方案，募资用途、发行价格和摊薄比例分别是多少。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-13",
+    "mod": "finance",
+    "text": "这篇半导体设备国产化的研究笔记，帮我找找反面证据，尤其是不支持国产替代加速的数据。",
+    "expect": [
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-14",
+    "mod": "finance",
+    "text": "写个双均线策略，A 股 T+1 口径，手续费印花税滑点都算进去，回测看最大回撤和夏普。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-15",
+    "mod": "finance",
+    "text": "这个动量因子回测夏普有 2.5，帮我逐项排查未来函数、幸存者偏差和参数过拟合。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-16",
+    "mod": "finance",
+    "text": "把中证 500 成分股近五年数据拉下来跑多因子模型，样本内外分开看，别选择性展示。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-17",
+    "mod": "finance",
+    "text": "检查上次写的网格策略代码，看有没有拿当日收盘价决定当日买入这种未来函数。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-18",
+    "mod": "finance",
+    "text": "这策略样本外掉得厉害，帮我做参数敏感性，评估一下过拟合的可能。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-19",
+    "mod": "finance",
+    "text": "给策略加止损和风控模块，单笔最大亏损控制在 2% 以内，失效条件写清楚。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-20",
+    "mod": "finance",
+    "text": "把策略净值曲线和沪深 300 基准画一起，再出一张最大回撤、夏普的风险指标表。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-21",
+    "mod": "finance",
+    "text": "想验证一个反转因子，先帮我把规则写成可证伪的形式，进出场和失效条件各一句话。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-22",
+    "mod": "finance",
+    "text": "回测里期货那段按合约乘数和保证金重算，别用理想成本，无法成交的情形也要建进去。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-23",
+    "mod": "finance",
+    "text": "把策略说明书补全，数据源、快照日期、代码说明和局限都要有，指标实测不挑好看的。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-24",
+    "mod": "finance",
+    "text": "看看回测里停牌和退市的样本是不是缺了，这直接影响结果可信度。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-25",
+    "mod": "finance",
+    "text": "帮我把这个因子的 IC 和分层收益跑出来，再跟已有因子做相关性，避免重复暴露。",
+    "expect": [
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-26",
+    "mod": "finance",
+    "text": "这个策略从研究到落地帮我走一遍：先把交易规则和数据来源写清，再出回测报告和风险指标表。",
+    "expect": [
+      "finance-quant",
+      "finance-research"
+    ]
+  },
+  {
+    "id": "finance-27",
+    "mod": "finance",
+    "text": "把年报里的财务指标提出来做因子，提取时同步标注数据日期和口径来源。",
+    "expect": [
+      "finance-research",
+      "finance-quant"
+    ]
+  },
+  {
+    "id": "finance-28",
+    "mod": "finance",
+    "text": "帮我把上个月的报销单整理下，按项目分类做成 Excel，金额合计别算错。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "finance-29",
+    "mod": "finance",
+    "text": "明天北京天气怎么样，出门要不要带伞，顺便看下限行尾号是几。",
+    "expect": [],
+    "noise": true,
+    "note": "真噪声句：任何专家都不应命中"
+  },
+  {
+    "id": "finance-30",
+    "mod": "finance",
+    "text": "工控安全方案的报价帮我核一下含税总价，顺便看看有没有漏项。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "general-01",
+    "mod": "general",
+    "text": "把这个月要投的几个项目整理成一张 Excel，按截止日期排个序，把还要补材料的行标出来。",
+    "expect": [
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-02",
+    "mod": "general",
+    "text": "客户发来的那份 PDF 产品彩页，帮我把里面的技术参数提出来，做成一张参数对照表。",
+    "expect": [
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-03",
+    "mod": "general",
+    "text": "这三份 Word 方案帮我合并成一份，标题样式统一成标题一到标题三，页码从正文重新开始。",
+    "expect": [
+      "general-office",
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-04",
+    "mod": "general",
+    "text": "这个 xlsx 里的报价公式全乱了，帮我把单价乘数量那段重算一遍，再核一下合计对不对。",
+    "expect": [
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-05",
+    "mod": "general",
+    "text": "明天要发给客户，帮我把这份 pptx 转成 PDF，再把每页导成图片，我好在微信里发。",
+    "expect": [
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-06",
+    "mod": "general",
+    "text": "这些扫描件是客户的旧资料，帮我把里头的表格数据抠出来，一条条录进 Excel。",
+    "expect": [
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-07",
+    "mod": "general",
+    "text": "我自己改过一版 docx，你读一下跟源文件比，把改动的地方标成红线修订给我。",
+    "expect": [
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-08",
+    "mod": "general",
+    "text": "帮我把这份 Word 里的“装置”全部统一改成“设备”，顺手检查有没有错别字和用错的标点。",
+    "expect": [
+      "general-office",
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-09",
+    "mod": "general",
+    "text": "这两个表按客户名称做个 VLOOKUP 合并，对不上的那几条单独列一张表给我看。",
+    "expect": [
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-10",
+    "mod": "general",
+    "text": "这份方案初稿读起来一股 AI 味，空话和翻译腔太多，帮我改一遍，语气按对外正式材料来。",
+    "expect": [
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-11",
+    "mod": "general",
+    "text": "标书里的术语前后不一致，一会儿说平台一会儿说系统，帮我统一起来，再出一张术语表。",
+    "expect": [
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-12",
+    "mod": "general",
+    "text": "帮我把这份方案通篇捋一遍语体和称谓，简称第一次出现要给全称，后面统一用同一个说法。",
+    "expect": [
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-13",
+    "mod": "general",
+    "text": "这份汇报材料标点和数字格式有点乱，帮我按公文规范校一遍，把改动逐条列个清单。",
+    "expect": [
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-14",
+    "mod": "general",
+    "text": "业主催着要一版内部讨论稿，帮我把这几天口头梳理的要点整理成文，别写得太花哨。",
+    "expect": [
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-15",
+    "mod": "general",
+    "text": "帮我把这段方案描述精简一下，一句一个主张，长句拆开，别用“进行了……的操作”这种被动。",
+    "expect": [
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-16",
+    "mod": "general",
+    "text": "下周要去客户那儿做技术交流，帮我把方案拆成一套二十页的演示大纲，先把叙事线搭出来。",
+    "expect": [
+      "general-slides"
+    ]
+  },
+  {
+    "id": "general-17",
+    "mod": "general",
+    "text": "这份 PPT 逻辑有点乱，帮我重排一下页面顺序，按现状、问题、方案、价值重新组织。",
+    "expect": [
+      "general-slides"
+    ]
+  },
+  {
+    "id": "general-18",
+    "mod": "general",
+    "text": "帮我把这套演示套上公司母版，配色和字体统一，页脚加上项目名和日期。",
+    "expect": [
+      "general-slides",
+      "general-office",
+      "general-designer"
+    ]
+  },
+  {
+    "id": "general-19",
+    "mod": "general",
+    "text": "汇报只有半小时，帮我把这八十页压到二十五页，重点留业绩和方案亮点。",
+    "expect": [
+      "general-slides",
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-20",
+    "mod": "general",
+    "text": "方案里引用的这份标准条款，帮我核一下原文是不是这么写的，把出处和链接留下来。",
+    "expect": [
+      "general-fact-check",
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-21",
+    "mod": "general",
+    "text": "客户质疑我们写的“国内首套”，帮我查证这个说法站不站得住，找权威来源支撑。",
+    "expect": [
+      "general-fact-check"
+    ]
+  },
+  {
+    "id": "general-22",
+    "mod": "general",
+    "text": "这份材料里几个数据对不上，帮我逐条核对来源，标清楚哪些能查实、哪些只能待确认。",
+    "expect": [
+      "general-fact-check",
+      "general-office"
+    ]
+  },
+  {
+    "id": "general-23",
+    "mod": "general",
+    "text": "帮我核一下这段引用的政策文件名和发布时间，别写错了闹笑话。",
+    "expect": [
+      "general-fact-check"
+    ]
+  },
+  {
+    "id": "general-24",
+    "mod": "general",
+    "text": "这几项行业数据出处不明，帮我找一手来源交叉验证一下，同一来源的别重复计数。",
+    "expect": [
+      "general-fact-check"
+    ]
+  },
+  {
+    "id": "general-25",
+    "mod": "general",
+    "text": "这份方案的封面和内页版式层级太乱，帮我定个视觉方向，把标题和正文的对比拉开。",
+    "expect": [
+      "general-designer"
+    ]
+  },
+  {
+    "id": "general-26",
+    "mod": "general",
+    "text": "帮我给这套汇报定个配色和字体搭配，工控安全行业，要稳重，不能太花。",
+    "expect": [
+      "general-designer",
+      "general-slides"
+    ]
+  },
+  {
+    "id": "general-27",
+    "mod": "general",
+    "text": "方案里的图表样式五花八门，帮我统一一套图表规范，一图一结论，配色跟着主题走。",
+    "expect": [
+      "general-designer",
+      "general-typeset"
+    ]
+  },
+  {
+    "id": "general-28",
+    "mod": "general",
+    "text": "帮我把这个项目的毛利率和成本结构算一下，看看报价还有多少空间。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "general-29",
+    "mod": "general",
+    "text": "这段 Python 脚本跑得有点慢，帮我改成异步的，顺便看看哪里还能优化。",
+    "expect": [],
+    "note": "跨域用例：expect 未标注完整（原按本域视角留空），不参与 missing 统计"
+  },
+  {
+    "id": "general-30",
+    "mod": "general",
+    "text": "今天先不干正事了，陪我随便聊两句，说说你最近都在想什么。",
+    "expect": [],
+    "noise": true,
+    "note": "真噪声句：任何专家都不应命中"
+  }
+]

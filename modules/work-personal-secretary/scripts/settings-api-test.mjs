@@ -15,7 +15,7 @@
  *   [9] GET /experts/preview：真实子插件打分（契约 §六.1 三级等保用例 + max=1↔2 因果对照）
  *  [10] 预览文本上限 2000：超长截断并标记 truncated
  *  [11] 路由注册口径：installApi 的 exact 数不变（既有测试不破），P4 精确路由独立补注册
- *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 18）+ 默认值 1→2 与注入分级落点
+ *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 19）+ 默认值 1→2 与注入分级落点
  *  [13] 真实环境只读快照首尾比对（证明本次开发未写入真实设置文件 / 工作区 / 子插件源码）
  *
  * 隔离红线（本测试的全部保证）：
@@ -145,6 +145,7 @@ const EXP_SCHEMA = {
         expertInjectMax: 14,
         expertInjectDetail: 17,
         expertInjectBudgetChars: 18,
+        expertFullHitMax: 20,
         expertSecondThreshold: 15,
       },
     },
@@ -154,7 +155,8 @@ const EXP_SCHEMA = {
     14: { type: 'number', meta: { default: 2, description: '每轮最多注入几位专家' } },
     15: { type: 'number', meta: { default: 0.8, description: '' } },
     17: { type: 'string', meta: { default: 'auto', description: '注入形态：auto / card / full' } },
-    18: { type: 'number', meta: { default: 2000, description: '每轮注入字符预算' } },
+    18: { type: 'number', meta: { default: 15000, description: '每轮注入字符上限' } },
+    20: { type: 'number', meta: { default: 2, description: '干活轮全文位数' } },
   },
 }
 
@@ -183,6 +185,7 @@ function makeMockSettings(options = {}) {
         expertInjectMax: 2,
         expertInjectDetail: 'auto',
         expertInjectBudgetChars: 2000,
+        expertFullHitMax: 2,
         expertSecondThreshold: 0.8,
       }, options.expertsValue || {}),
     },
@@ -563,7 +566,7 @@ function countSchemaKeys(file) {
 const wmSettingsFile = join(MODULES_DIR, 'dsh-work-memory', 'lib', 'settings.js')
 const expSettingsFile = join(MODULES_DIR, 'dsh-experts', 'lib', 'settings.js')
 ok(countSchemaKeys(wmSettingsFile) === 24, 'work-memory schema 24 键（契约 §一）')
-ok(countSchemaKeys(expSettingsFile) === 18, 'experts schema 18 键（0.3.x 目录段/纪律块/能力层四项 + 0.4.0 通用专家配额与绝对门槛两键）')
+ok(countSchemaKeys(expSettingsFile) === 19, 'experts schema 19 键（0.3.x 四项 + 0.4.0 通用专家两键 + 0.5.0 干活轮位数一键）')
 const expSrc = readFileSync(expSettingsFile, 'utf8')
 ok(/defaultDomain: 'infosec',/.test(expSrc), "DEFAULTS.defaultDomain = 'infosec'（0.3.x 域重划：presales → infosec，settings.js:46）")
 ok(/identityExpert: '',/.test(expSrc), "DEFAULTS.identityExpert = ''（身份退场：留空 = 不常驻，settings.js:47）")

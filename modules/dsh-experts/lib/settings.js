@@ -5,18 +5,19 @@
  * 用户覆盖层由设置页「插件」分区写入（免重启，带 revision 栅栏），
  * 插件侧只读解析后的深冻结快照，并可 watch 已提交变更。
  *
- * 四项口径（产品口径 2026-09-12 定）：
- *   ① 默认注入 2 位，可调 1 或 3，>1 时设置页明确提示「占用较多 TOKEN」；
- *   ② 岗位关联（defaultDomain）安装引导问一次 —— 决定任务从哪个专业角度拆解；
- *   ③ 全局激活集合（enabledDomains / enabledExperts）决定谁参与自动匹配；
- *   ④ 未激活/未注入的专家走临时注入（/expert use、expert_recall），不常驻上下文。
+ * 注入口径（2026-09-16 重构后）：
+ *   ① 按**会话阶段**分两态：首轮全景（命中专家全给精简卡）→ 干活轮（判定要干活的给全文）；
+ *   ② 注入位数上限**写死 4**（expertInjectMax，设置页不提供该项）；
+ *   ③ 岗位关联（defaultDomain）只作同证据时的排序先验，不决定是否注入；
+ *   ④ 全局激活集合（enabledDomains / enabledExperts）决定谁参与自动匹配；
+ *   ⑤ 未注入的专家走临时注入（expert_recall），不常驻上下文；零命中则一位都不注入。
  *
  * @module dsh-experts/settings
  */
 
-import { INJECT_MAX_HARD, clampInjectMax, clampUnit, clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, SKILL_BUDGET_DEFAULT } from './limits.js'
+import { INJECT_MAX_HARD, clampInjectMax, clampUnit, clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, SKILL_BUDGET_DEFAULT, clampFullHitMax, FULL_HIT_MAX_DEFAULT } from './limits.js'
 
-export { INJECT_MAX_HARD, clampInjectMax, clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, SKILL_BUDGET_DEFAULT }
+export { INJECT_MAX_HARD, clampInjectMax, clampBudget, clampSkillBudget, normalizeDetail, INJECT_BUDGET_DEFAULT, SKILL_BUDGET_DEFAULT, clampFullHitMax, FULL_HIT_MAX_DEFAULT }
 
 /**
  * schemastery 是宿主运行时依赖（peerDependencies）。这里用**动态导入降级**：
@@ -52,6 +53,7 @@ export const DEFAULTS = {
   skillBudgetChars: SKILL_BUDGET_DEFAULT,
   expertInjectDetail: 'auto',
   expertInjectBudgetChars: INJECT_BUDGET_DEFAULT,
+  expertFullHitMax: FULL_HIT_MAX_DEFAULT,
   expertSecondThreshold: 0.3,
   expertGeneralMax: 1,
   expertGeneralMinEvidence: 0.2,
@@ -95,10 +97,13 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
     .description('能力层指针的字符预算（默认 300，约 3 条）：只放指针不放做法原文；0 = 不注入指针（等同只关能力层注入，persona 不受影响）'),
 
   expertInjectDetail: z.string().default('auto')
-    .description('每轮注入形态：auto（默认，按预算自动降级）/ card（全部精简卡）/ full（全文，保持旧行为）。⚠️ full 会把每位 persona 正文全文注入（1.8–2.6 千字符/位），单轮约 4.5–5.2KB；auto / card 只注入精简卡（角色首句 + 方法前 3 条 + 交付前 2 条 + 适用），单轮约 1.3–1.8 千字符，省约 2/3 TOKEN；取值非法时回落 auto'),
+    .description('每轮注入形态：**auto**（默认，按会话阶段分两态 —— 首轮全景给全部命中专家的精简卡；后续判定要干活的专家给全文，其余本轮不注入）/ **card**（全部精简卡）/ **full**（全文，旧行为逃生舱）。⚠️ full 会把每位 persona 正文全文注入（约 1.7–3.2 千字符/位）；auto 常态只花 4 位卡 ≈2535 字符（≈1.6k TOKEN），干活轮 1–2 位全节约 2–6.5 千字符。取值非法时回落 auto'),
 
   expertInjectBudgetChars: z.natural().default(INJECT_BUDGET_DEFAULT)
-    .description('每轮专家注入的**字符预算**（默认 2000，约 1.3–1.7k TOKEN）：超预算按序降级 —— 命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；连最低形态都放不下则截断并标注（绝不静默超限）。调大＝视角更完整但更占 TOKEN；调小＝更省但卡片更薄（下限 200，上限 20000）'),
+    .description('每轮专家注入的**字符上限**（默认 15000，按**最大可能消费**定档：单篇全文上限 3600 × 位数硬边界 4 + 块头尾注与处理路径 ≈ 14850）。只作上限，**不再降级** —— 超出即截断并标注（绝不静默超限）。调小＝更省但会截断；真正的**安全红线**是 20000（任何形态含 full 都不得突破）'),
+
+  expertFullHitMax: z.natural().default(FULL_HIT_MAX_DEFAULT)
+    .description('干活轮给**全文**的位数（默认 2）：按本轮任务证据取**最大 + 次大**（并列取任意两位，**不设固定门槛**）；硬边界 4。1 位更省，4 位最全'),
 
   expertSecondThreshold: z.number().default(0.3)
     .description('**域专家**的第 2/3 位门槛：其关键词证据 ≥ 本轮最强证据 × 该值时才注入（默认 0.3；仅 expertInjectMax ≥ 2 时生效）。注意这是**相对门槛** —— 第一名证据越强、后面越难进；实测 0.8 时 70% 的任务只能命中 1 位，故 2026-09-15 调为 0.3'),
@@ -135,6 +140,8 @@ function toConfig(resolved) {
   cfg.expertInjectDetail = normalizeDetail(cfg.expertInjectDetail, DEFAULTS.expertInjectDetail)
   cfg.expertInjectBudgetChars = clampBudget(cfg.expertInjectBudgetChars, DEFAULTS.expertInjectBudgetChars)
   cfg.skillBudgetChars = clampSkillBudget(cfg.skillBudgetChars, DEFAULTS.skillBudgetChars)
+  // 干活轮给全文的位数（2026-09-16 新增）
+  cfg.expertFullHitMax = clampFullHitMax(cfg.expertFullHitMax, DEFAULTS.expertFullHitMax)
   const th = clampUnit(cfg.expertSecondThreshold, DEFAULTS.expertSecondThreshold)
   cfg.expertSecondThreshold = th > 0 ? th : DEFAULTS.expertSecondThreshold
   // 通用型专家的独立配额与绝对门槛（2026-09-15 新增）
