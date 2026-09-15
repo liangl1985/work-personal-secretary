@@ -39,8 +39,8 @@
 - [x] 打包白名单（`files`）覆盖 lib / client / scripts / skills / experts / cordis.patch.yml / CHANGELOG / LICENSE / NOTICE / README
 - [x] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
 - [x] **仓库根 `NOTICE` 存在**（聚合索引：随包内容与各模块版本 / 20 位 persona 来源与许可 / `review: pending` 免责 / 未随包分发清单）
-- [x] **命中评估资产（2026-09-16 新增）**：`hit-distribution.mjs`（命中位数分布 + 目标核对，`--file` 可切到 `hit-corpus-real.json` 真实语料）、  `hit-false-positive.mjs`（负样本假命中检测，105 条，>2 条即非零退出）；语料 `hit-corpus.json`(180) / `hit-corpus-real.json`(30) / `hit-negative.json`(105) / `hit-corpus-clean10.json`(10，2026-09-16 重建版：原「干净版 10 条」文本未落盘，按同域覆盖 + 中性措辞重建，供复现)
-  实测：真实语料 2+3 = 60% · 4 位 = 20% · 负样本 93.3% 干净。
+- [x] **命中评估资产（2026-09-16 新增，同日移除）**：`hit-distribution.mjs` / `hit-false-positive.mjs` 与语料 `hit-corpus.json`(180) / `hit-corpus-real.json`(30) / `hit-negative.json`(105) / `hit-corpus-clean10.json`(10) —— 为「命中位数分布调优」而建；**2026-09-16 收尾时使用者决定移除**（专家库不再做大调整，评估门禁以五套回归为准），文件已从源码与 profile 副本删除。
+  实测存档：真实语料 2+3 = 60% · 4 位 = 20% · 负样本 93.3% 干净；历史结论见 `记忆/02_分析笔记/49_专家库命中分布调优（180 条语料）.md` 与 `50_专家库真机验收（10 条子任务）.md`。
 - [x] **CI 覆盖范围核对（2026-09-13 P5）**：语法自检已覆盖全量 `*.js` / `*.mjs`（含本体 `lib/settings-api.js`）；回归 / 装载冒烟 / 共存契约分别由 `*/scripts/regression.mjs`、`*/scripts/smoke-load.mjs`、`*/scripts/coexist.mjs` 覆盖；
       **本体四套自测**（`probe-test.mjs` 136 · `install-test.mjs` 200 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
 - [x] **真机生效配置比对（2026-09-16 新增，事故沉淀）**：发布/同步后必须比对**真机实际生效值**的三处来源 —— ① `~/.dsh/settings.yaml` 的**用户覆盖层** ② profile 的 `cordis.patch.yml`（部署 base 层）③ 代码 `DEFAULTS` / schema 默认值。**优先级是 用户覆盖层 > profile patch > schema 默认**，前两者任一残留都会**静默压过**代码里的新默认。

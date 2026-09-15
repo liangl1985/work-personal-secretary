@@ -2,6 +2,13 @@
 
 本插件的版本历史。
 
+## 0.5.6 — 2026-09-16（收尾清理：移除为调优而建的命中评估资产）
+
+- **决定（使用者 2026-09-16）**：专家库不再做大调整，移除评估类资产 —— `scripts/hit-distribution.mjs`、`scripts/hit-false-positive.mjs`，以及语料 `hit-corpus.json`(180) / `hit-corpus-real.json`(30) / `hit-negative.json`(105) / `hit-corpus-clean10.json`(10)。
+- **保留**：五套回归门禁（`regression` / `injection-tier-test` / `capability-test` / `coexist` / `smoke-load`）与两个开发辅助（`card-preview.mjs` 卡片预览、`skill-index.mjs` 能力索引）。
+- **历史结论已存档**：报告 49（180 条语料调优）与报告 50（真机验收、三处缺陷修复与复验）；`RELEASE-CHECKLIST.md` 对应条目改标「同日移除」。
+- 同步清理了工作区 `.dsh/tmp` 的一次性调试产物（14 个脚本/输出 + 7 个调试目录）。
+- **本版不含行为变更**：`lib/**` 与 0.5.5 逐字节一致；五套回归 **103 通过 / 0 失败**。
 ## 0.5.5 — 2026-09-16（评估口径：撤销「0/1 位 ≤15%」目标）
 
 ### 一、决定（使用者 2026-09-16）
