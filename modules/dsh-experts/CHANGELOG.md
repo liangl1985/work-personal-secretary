@@ -2,6 +2,34 @@
 
 本插件的版本历史。
 
+## 0.3.2 — 2026-09-15（A3 落地后回填 T3 交付形态判定表）
+
+- **背景**：0.3.1 时 dsh-doc-suite 尚为 **0.1.7**、只有 `standard` 一套规格，卡内如实标注「compact / report / govdoc 尚未落地」。A3 任务并行完成后已升 **0.1.8**（`standard` v1.2 色板修正 + 内置 `compact.json` + 自定义层 `report.json`），据此回填。
+- **general-typeset**：T3 表回填为实际状态 —— 备忘 / 纪要 / 草稿 → **compact（内部纪要）**；汇报 / 总结 / 复盘 → **report（汇报报告·自定义层）**；报审 / 公文 → govdoc **仍挂待办**。
+- **general-office**：核对后无同类保守表述，未改。
+- **体量**：回填同时净减字数（typeset 2978 → **2930**，去空白字符），仍在 900–3000 内。
+- **验收**：regression **46/0** · card-preview **19 位 FAIL 0 WARN 0** · injection-tier 16/0 · capability 8/0 · smoke-load 18/0 · coexist 8/0。
+
+## 0.3.1 — 2026-09-15（文档能力对接：A 组专家卡吸收样式能力）
+
+### 一、general-office（文档与表格处理）
+
+- 工作方法新增一条：**套样式走内置命令、不手写逐段调格式；退出码 3 是安全拦截不是失败**（对应 dsh-doc-suite 的 `apply-style` / `table-style` 与「内容零改动断言」）。
+- 交付明细新增 **产出物核验清单模板（T7）**：能打开 / 内容零改动 / 公式未失效 / 表格未撑破版心 / 字体未回落 / 层级与编号齐全 / 可回滚。
+
+### 二、general-typeset（报告与方案排版）
+
+- 交付明细新增 **交付形态判定表（T3）**：按场合选风格、选不出用默认 `standard`；未落地风格（compact / report / govdoc）如实标注「尚未落地」。
+- 交付明细新增 **改前基线体检清单（T4）**：层级与编号 / 手工直接格式 / 表格合并超宽 / 页面是否保留 / 图表受影响 / 原件先备份。
+
+### 三、体量约束（回归驱动，记录过程）
+
+- 首次改动后 `regression` 报 **typeset 3795 字 / office 4024 字，超 3000 上限**；据此三轮精简（命令速查改为技能文档指针、清单压成一行、去掉重复方法条），最终 **typeset 3219 / office 3271**（card-preview 字符口径），regression 恢复全绿。
+
+### 四、验收
+
+- regression **46/0** · card-preview **19 位 FAIL 0 WARN 0** · injection-tier **16/0** · capability **8/0** · smoke-load **18/0** · coexist **8/0**。
+
 ## 0.3.0 — 2026-09-14（命中链路修复 · 打分简化 · 移除 /expert 命令）
 
 ### 一、命中链路修复（本版核心）

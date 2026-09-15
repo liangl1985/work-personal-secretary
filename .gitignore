@@ -19,3 +19,6 @@ __pycache__/
 *.lock
 .DS_Store
 Thumbs.db
+
+# 专家库过程文档（design-v2 / handover / optlog-* / pre-release-audit）不入库（2026-09-14 主人定）
+modules/dsh-experts/docs/
