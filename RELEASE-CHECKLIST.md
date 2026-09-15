@@ -80,16 +80,16 @@
 - [x] **默认一位都不常驻**（0.3.0 身份退场）：`identityExpert` **留空 = 不注入**（身份由 work-memory 记忆承担）；显式填写才常驻一位——发布件不得写成"默认常驻身份专家"
 - [x] 其余专家按**问题归属判断**补位：命中单一 → 按该专家视角原生处理；**跨领域/需独立作业 → 派子代理**（`expert_recall` 取 persona 后**内联进 `subagent.prompt`**）；未命中 → **原生处理**（宁缺勿滥，不硬套视角）
 - [x] **匹配排序修复（0.1.4）**：排序改为「显式指定 > 任务实证 > 总分 > index 顺序」，`expertMinScore` 只卡零实证候选 —— 实测「这份采购合同的钱怎么算、税怎么处理」由投标策略师改为命中法务，上限 2 且无身份专家时「法务 + 会计」同时选中
-- [x] **提示词注入分级（0.1.4）**：默认形态 `auto` 只注入**精简卡**（464–509 字符/位）；`expertInjectDetail`（auto / card / full，**full 可回退旧行为**）与 `expertInjectBudgetChars`（默认 1400，超预算按序降级并标注）；`expert_recall` 与派子代理仍取全文；实测单轮 3674 → 1218 字符
+- [x] **提示词注入分级（0.1.4）**：默认形态 `auto` 只注入**精简卡**（464–509 字符/位）；`expertInjectDetail`（auto / card / full，**full 可回退旧行为**）与 `expertInjectBudgetChars`（0.1.4 时默认 1400，0.3.x 起默认 **2000**，超预算按序降级并标注）；`expert_recall` 与派子代理仍取全文；实测单轮 3674 → 1218 字符
 - [x] `enabledDomains` / `enabledExperts` 只**收窄**"参与自动匹配"的集合，不改变上述流程
 - [x] 敏感行业（军工/商密/烟草/数据安全）仍**主上下文直接做、不派子代理**（与第一节红线一致）
 
 ### 注入上限与 TOKEN 提示
 
-- [x] `expertInjectMax` 默认 **2**、可调 1 / 3（硬上限 3）；**>1 时设置页必须提示占用较多 TOKEN**
-- [x] `expertSecondThreshold`（默认 0.8）确实约束第二位——其**任务证据** ≥ 第 1 位 × 该值才补位（0.3.0 起为纯证据比较）
+- [x] `expertInjectMax` **写死 4**（2026-09-15 主人定：设置页不再提供该项，`settings.js` DEFAULTS = 4 / schema default = 4 / `cordis.patch.yml` base = 4 **三处一致**）；`lib/limits.js` 的 `INJECT_MAX_HARD = 4` 为硬边界（越界 clamp 到 4，绝不静默超限）
+- [x] `expertSecondThreshold`（默认 **0.3**，2026-09-15 由 0.8 调为 0.3）确实约束域专家第 2/3 位——其**任务证据** ≥ 第 1 位 × 该值才补位（0.3.0 起为纯证据比较；通用型专家另走 `expertGeneralMinEvidence` 绝对门槛）
 - [x] **`expertMinScore` 已于 0.3.0 移除**（零命中不注入落地后无任何代码路径使用）
-- [x] 设置项齐全且默认值正确（共 **16 项**）：`expertsEnabled` / `defaultDomain` / `identityExpert` / `enabledDomains` / `enabledExperts` / `expertInjectMax` / `expertSecondThreshold` / `expertShowBanner` / `expertCatalogEnabled` / `disciplineEnabled` / `disciplineMemoryDir` / `skillInjectEnabled` / `skillBudgetChars` / `expertInjectDetail` / `expertInjectBudgetChars` / `expertSetupDone`（另有一项 `expertSetupDone` 安装引导完成标记，由引导自动写入）
+- [x] 设置项齐全且默认值正确（共 **18 项**，dsh-experts 0.4.0 schema 全量）：`expertsEnabled` / `expertCatalogEnabled` / `disciplineEnabled` / `disciplineMemoryDir` / `defaultDomain` / `identityExpert` / `enabledDomains` / `enabledExperts` / `expertInjectMax`（**写死 4，设置页不提供该项**）/ `expertSecondThreshold` / `expertGeneralMax` / `expertGeneralMinEvidence` / `skillInjectEnabled` / `skillBudgetChars` / `expertInjectDetail` / `expertInjectBudgetChars` / `expertShowBanner` / `expertSetupDone`（0.4.0 新增 `expertGeneralMax` / `expertGeneralMinEvidence` 两键，16 → 18；`expertSetupDone` 由安装引导自动写入）
 - [x] 注入块标题：默认 **【处理路径】+【本轮命中·…】**（0.3.0 身份退场后不再有常驻【身份视角·…】；`identityExpert` 显式配置时才会出现）
 
 ## 三点七、桌面形象模块（workspace-tokenpet，2026-09-14 独立化）

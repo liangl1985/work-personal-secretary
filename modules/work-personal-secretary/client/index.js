@@ -174,11 +174,11 @@ window.__ModuleLoader__.load({
     ]
     /** 工作岗位域下拉（值作为 overrides.defaultDomain 上报；文案随 locale 走） */
     const DOMAIN_OPTIONS = [
-      ['presales', 'initDomainPresales'],
-      ['aftersales', 'initDomainAftersales'],
+      ['infosec', 'initDomainInfosec'],
+      ['accounting', 'initDomainAccounting'],
+      ['hr', 'initDomainHr'],
+      ['coding', 'initDomainCoding'],
       ['finance', 'initDomainFinance'],
-      ['legal', 'initDomainLegal'],
-      ['doc', 'initDomainDoc'],
       ['general', 'initDomainGeneral'],
     ]
 
@@ -366,12 +366,12 @@ window.__ModuleLoader__.load({
       initFieldMemoryDirHint: '留空 = 默认',
       initFieldObsidianDir: 'Obsidian 库目录',
       initFieldObsidianDirHint: '留空将把记忆镜像到 <工作区>/work-memory（可在设置页随时改）',
-      initDomainPresales: '售前',
-      initDomainAftersales: '售后·技术支持',
-      initDomainFinance: '会计财务',
-      initDomainLegal: '法务',
-      initDomainDoc: '文档',
-      initDomainGeneral: '核查·通用',
+      initDomainInfosec: '信息安全',
+      initDomainAccounting: '财务',
+      initDomainHr: '人力资源',
+      initDomainCoding: '代码编程',
+      initDomainFinance: '金融',
+      initDomainGeneral: '通用职能',
       initDomainPlaceholder: '请选择…',
       initDomainRequired: '请先选择你的工作方向',
       initBrowse: '浏览…',
@@ -478,7 +478,6 @@ window.__ModuleLoader__.load({
       cfgGroupOther: '其它设置项',
       cfgOn: '开',
       cfgOff: '关',
-      cfgInjectMaxWarn: '注入 2–3 位会占用较多 TOKEN（每位 persona 约 3.3–4.9KB）。',
       cfgRevision: '版本 r{n}',
       cfgAppliedLive: '改动免重启生效',
 
@@ -496,11 +495,11 @@ window.__ModuleLoader__.load({
       cfgMemGDirsHint: '记忆库根目录与 Obsidian 镜像目录；留空取默认',
 
       cfgGroupExperts: '专家库',
-      cfgExpertsLead: '岗位专家库（dsh-experts）。常驻注入的只有一位身份专家，其余由「问题归属判断」决定是否补位。',
+      cfgExpertsLead: '岗位专家库（dsh-experts）。默认一位都不常驻（身份由 work-memory 记忆承担）；其余由「问题归属判断」决定是否补位，注入上限写死 4。',
       cfgExpGCore: '专家与匹配范围',
       cfgExpGCoreHint: '身份专家、岗位域与参与自动匹配的范围',
       cfgExpGThreshold: '注入阈值与形态',
-      cfgExpGThresholdHint: '决定每轮注入几位、注入多完整（精简卡还是全文）、字符预算与最低分',
+      cfgExpGThresholdHint: '决定每轮注入几位、注入多完整（精简卡还是全文）、字符预算与通用专家门槛',
       cfgExpPreview: '实时预览',
       cfgExpPreviewHint: '输入一段任务文本，按当前阈值试算注入名单与打分理由（只读，不产生写入）',
       cfgExpPreviewPlaceholder: '例如：这份合同的付款节点与税务怎么处理？',
@@ -509,7 +508,7 @@ window.__ModuleLoader__.load({
       cfgExpPreviewEmpty: '输入任务文本后点「试算」。',
       cfgExpPreviewReason: '判定理由',
       cfgExpPreviewSelected: '注入名单',
-      cfgExpPreviewNone: '没有专家达到最低分：本轮按通用助手处理（宁缺勿滥）。',
+      cfgExpPreviewNone: '没有专家命中关键词：本轮按通用助手处理（宁缺勿滥）。',
       cfgExpPreviewConfig: '试算所用阈值',
       cfgExpPreviewColId: '专家',
       cfgExpPreviewColDomain: '域',
@@ -605,24 +604,34 @@ window.__ModuleLoader__.load({
       cfgFDefaultDomain: '本人岗位域',
       cfgHDefaultDomain: '决定任务优先从哪个专业角度拆解，也是身份专家的兜底来源',
       cfgFIdentityExpert: '身份专家',
-      cfgHIdentityExpert: '常驻注入的唯一身份专家 id（如 presales-ics-security）；留空 = 取岗位域第一位',
+      cfgHIdentityExpert: '常驻注入的唯一身份专家 id（如 infosec-ics-security）；留空 = 不常驻（身份由 work-memory 记忆承担）',
       cfgFEnabledDomains: '匹配范围·域',
-      cfgHEnabledDomains: '逗号分隔（如 presales,legal）；留空 = 全部专家参与匹配',
+      cfgHEnabledDomains: '逗号分隔（如 infosec,accounting）；留空 = 全部专家参与匹配',
       cfgFEnabledExperts: '匹配范围·专家',
       cfgHEnabledExperts: 'id 逗号分隔；留空 = 不收窄。范围外仍可用 /expert use 临时注入',
-      cfgFExpertInjectMax: '每轮最多注入几位',
-      cfgHExpertInjectMax: '默认 2：身份专家 + 至多 1 位按问题归属补位的对口专家；3 位会占更多 TOKEN',
+      cfgFExpertCatalogEnabled: '专家库目录段',
+      cfgHExpertCatalogEnabled: '列出六域成员与可用能力，供模型判断问题归属；稳定段，不占每轮注入预算',
+      cfgFDisciplineEnabled: '交付层纪律块',
+      cfgHDisciplineEnabled: '从项目记忆读【纪律块 v1】，每轮注入、不随专家裁剪丢弃',
+      cfgFDisciplineMemoryDir: '纪律块记忆库根',
+      cfgHDisciplineMemoryDir: '留空 = 取记忆库设置里的 memoryDir，再退到 $DSH_HOME/memories/work-memory',
       cfgFExpertInjectDetail: '注入形态',
       cfgHExpertInjectDetail: 'auto（默认，按预算自动降级）/ card（全部精简卡）/ full（全文，旧行为，单轮约 4.5–5.2KB）',
       cfgFExpertInjectBudgetChars: '每轮注入预算（字符）',
-      cfgHExpertInjectBudgetChars: '默认 1400。超预算按序降级：命中全文 → 命中精简卡 → 只留身份卡；越小越省 TOKEN',
+      cfgHExpertInjectBudgetChars: '默认 2000。超预算按序降级：命中全文 → 命中精简卡 → 只留身份卡；越小越省 TOKEN',
       cfgDetailAuto: 'auto（按预算自动降级）',
       cfgDetailCard: 'card（全部精简卡）',
       cfgDetailFull: 'full（全文，旧行为）',
       cfgFExpertSecondThreshold: '第 2/3 位门槛',
       cfgHExpertSecondThreshold: '其分数 ≥ 第 1 位 × 该值时才注入（仅注入上限 ≥ 2 时生效）',
-      cfgFExpertMinScore: '最低注入分',
-      cfgHExpertMinScore: '低于此分不注入 —— 短任务/无专业信号时保持通用助手行为',
+      cfgFExpertGeneralMax: '通用专家配额',
+      cfgHExpertGeneralMax: '通用型专家（核查/排版/文档/演示/设计）的独立配额，默认 1；0 = 不保底',
+      cfgFExpertGeneralMinEvidence: '通用专家门槛',
+      cfgHExpertGeneralMinEvidence: '通用型专家的绝对门槛：关键词证据 ≥ 该值即可入选（默认 0.2 = 命中 1 词）',
+      cfgFSkillInjectEnabled: '能力层指针',
+      cfgHSkillInjectEnabled: '识别到技能就注入一行「去哪拿」的指针；不占 expertInjectMax 配额',
+      cfgFSkillBudgetChars: '能力层预算（字符）',
+      cfgHSkillBudgetChars: '默认 300（约 3 条指针）；0 = 不注入指针，persona 不受影响',
       cfgFExpertShowBanner: '显示「当前专家视角」',
       cfgHExpertShowBanner: '注入时显示本轮用的是哪位专家',
       cfgFExpertSetupDone: '安装引导已完成',
@@ -813,12 +822,12 @@ window.__ModuleLoader__.load({
       initFieldMemoryDirHint: 'Empty = default',
       initFieldObsidianDir: 'Obsidian vault directory',
       initFieldObsidianDirHint: 'If empty, memory is mirrored to <workspace>/work-memory (changeable later in settings).',
-      initDomainPresales: 'Presales',
-      initDomainAftersales: 'After-sales & support',
-      initDomainFinance: 'Accounting & finance',
-      initDomainLegal: 'Legal',
-      initDomainDoc: 'Documents',
-      initDomainGeneral: 'Verification & general',
+      initDomainInfosec: 'Information security',
+      initDomainAccounting: 'Accounting',
+      initDomainHr: 'HR',
+      initDomainCoding: 'Coding',
+      initDomainFinance: 'Finance',
+      initDomainGeneral: 'General functions',
       initDomainPlaceholder: 'Select…',
       initDomainRequired: 'Choose your job domain first',
       initBrowse: 'Browse…',
@@ -922,7 +931,6 @@ window.__ModuleLoader__.load({
       cfgGroupOther: 'Other settings',
       cfgOn: 'on',
       cfgOff: 'off',
-      cfgInjectMaxWarn: 'Injecting 2–3 experts uses more tokens (about 3.3–4.9KB each).',
       cfgRevision: 'revision r{n}',
       cfgAppliedLive: 'applies without a restart',
 
@@ -940,11 +948,11 @@ window.__ModuleLoader__.load({
       cfgMemGDirsHint: 'Memory root and the Obsidian mirror directory; empty uses defaults',
 
       cfgGroupExperts: 'Experts',
-      cfgExpertsLead: 'Domain expert library (dsh-experts). Only one identity expert is resident; the rest join when the task calls for them.',
+      cfgExpertsLead: 'Domain expert library (dsh-experts). Nobody is resident by default (identity comes from work-memory); experts join when the task calls for them, with the cap hard-wired to 4.',
       cfgExpGCore: 'Experts & match scope',
       cfgExpGCoreHint: 'Identity expert, job domain and the domains/experts that may match automatically',
       cfgExpGThreshold: 'Injection limits & detail',
-      cfgExpGThresholdHint: 'How many experts are injected, how detailed (card or full), the character budget, and the minimum score',
+      cfgExpGThresholdHint: 'How many experts are injected, how detailed (card or full), the character budget, and general-expert cutoffs',
       cfgExpPreview: 'Live preview',
       cfgExpPreviewHint: 'Type a task and preview the injected roster with scoring reasons (read-only, nothing is written)',
       cfgExpPreviewPlaceholder: 'e.g. How should the payment milestones and taxes of this contract be handled?',
@@ -953,7 +961,7 @@ window.__ModuleLoader__.load({
       cfgExpPreviewEmpty: 'Type a task, then press Preview.',
       cfgExpPreviewReason: 'Decision',
       cfgExpPreviewSelected: 'Injected roster',
-      cfgExpPreviewNone: 'No expert reached the minimum score: this turn stays with the general assistant.',
+      cfgExpPreviewNone: 'No expert matched a keyword: this turn stays with the general assistant.',
       cfgExpPreviewConfig: 'Thresholds used',
       cfgExpPreviewColId: 'Expert',
       cfgExpPreviewColDomain: 'Domain',
@@ -1049,24 +1057,34 @@ window.__ModuleLoader__.load({
       cfgFDefaultDomain: 'Job domain',
       cfgHDefaultDomain: 'Decides which perspective leads the breakdown; also the fallback source of the identity expert',
       cfgFIdentityExpert: 'Identity expert',
-      cfgHIdentityExpert: 'Id of the single resident expert (e.g. presales-ics-security); empty = first expert of the job domain',
+      cfgHIdentityExpert: 'Id of the single resident expert (e.g. infosec-ics-security); empty = none resident (identity comes from work-memory)',
       cfgFEnabledDomains: 'Match scope · domains',
-      cfgHEnabledDomains: 'Comma separated (e.g. presales,legal); empty = every expert may match',
+      cfgHEnabledDomains: 'Comma separated (e.g. infosec,accounting); empty = every expert may match',
       cfgFEnabledExperts: 'Match scope · experts',
       cfgHEnabledExperts: 'Comma separated ids; empty = no narrowing. Experts outside the scope can still be injected with /expert use',
-      cfgFExpertInjectMax: 'Experts per turn',
-      cfgHExpertInjectMax: 'Default 2: the identity expert plus at most one task-matched expert; 3 costs more tokens',
+      cfgFExpertCatalogEnabled: 'Expert catalog block',
+      cfgHExpertCatalogEnabled: 'Lists the six domains and available capabilities so the model can route the task; a stable block that does not consume the injection budget',
+      cfgFDisciplineEnabled: 'Delivery discipline block',
+      cfgHDisciplineEnabled: 'Reads [discipline block v1] from project memory and injects it every turn, never trimmed by expert selection',
+      cfgFDisciplineMemoryDir: 'Discipline memory root',
+      cfgHDisciplineMemoryDir: 'Empty = take memoryDir from the memory settings',
       cfgFExpertInjectDetail: 'Injection detail',
       cfgHExpertInjectDetail: 'auto (default, budget-driven) / card (compact cards only) / full (full personas, about 4.5–5.2 KB per turn)',
       cfgFExpertInjectBudgetChars: 'Injection budget (characters)',
-      cfgHExpertInjectBudgetChars: 'Default 1400. Over budget it degrades in order: full persona → compact card → identity card only; smaller saves tokens',
+      cfgHExpertInjectBudgetChars: 'Default 2000. Over budget it degrades in order: full persona → compact card → identity card only; smaller saves tokens',
       cfgDetailAuto: 'auto (budget-driven)',
       cfgDetailCard: 'card (compact cards only)',
       cfgDetailFull: 'full (full personas)',
       cfgFExpertSecondThreshold: '2nd/3rd cutoff',
       cfgHExpertSecondThreshold: 'A candidate needs score ≥ top score × this value (only with a limit of 2 or more)',
-      cfgFExpertMinScore: 'Minimum score',
-      cfgHExpertMinScore: 'Below this nothing is injected — short or generic tasks stay with the general assistant',
+      cfgFExpertGeneralMax: 'General expert quota',
+      cfgHExpertGeneralMax: 'Separate quota for general experts (fact-check / typesetting / office / slides / design), default 1; 0 = no reserved seat',
+      cfgFExpertGeneralMinEvidence: 'General expert cutoff',
+      cfgHExpertGeneralMinEvidence: 'Absolute evidence cutoff for general experts: keyword evidence ≥ this value qualifies (default 0.2 = one keyword)',
+      cfgFSkillInjectEnabled: 'Capability pointers',
+      cfgHSkillInjectEnabled: 'Injects one "where to get it" pointer line per matched skill; does not count against expertInjectMax',
+      cfgFSkillBudgetChars: 'Capability budget (chars)',
+      cfgHSkillBudgetChars: 'Default 300 (about three pointer lines); 0 = inject no pointers, personas unaffected',
       cfgFExpertShowBanner: 'Show the current expert perspective',
       cfgHExpertShowBanner: 'Shows which expert is in use for this turn',
       cfgFExpertSetupDone: 'Setup wizard finished',
@@ -3271,21 +3289,30 @@ window.__ModuleLoader__.load({
       dailyAutoLog: { type: 'bool' },
       memoryDir: { type: 'str' },
       obsidianSyncDir: { type: 'str' },
-      // 专家库（schema 全量；阈值三项带滑块）
+      // 专家库（dsh-experts 0.4.0 schema 全量 18 键；injectOrder 只在部署层 base）
       expertsEnabled: { type: 'bool' },
       injectOrder: { type: 'num' },
+      expertCatalogEnabled: { type: 'bool' },
+      disciplineEnabled: { type: 'bool' },
+      disciplineMemoryDir: { type: 'str' },
       defaultDomain: { type: 'select' },
       identityExpert: { type: 'str' },
       enabledDomains: { type: 'str' },
       enabledExperts: { type: 'str' },
-      expertInjectMax: { type: 'slider', min: 1, max: 3, step: 1 },
+      // expertInjectMax（2026-09-15 起**写死 4、设置页不再提供该项**）：meta 保留但不列入
+      // CFG_EXPERT_GROUPS —— renderNsCard 会跳过「有 meta 但未归组」的键；若连 meta 一起删，
+      // 它反而会落进「接口多出来的键」兜底组被渲染出来（见 renderNsCard 的 extra 逻辑）。
+      expertInjectMax: { type: 'slider', min: 1, max: 4, step: 1 },
       expertInjectDetail: {
         type: 'select',
         options: [['auto', 'cfgDetailAuto'], ['card', 'cfgDetailCard'], ['full', 'cfgDetailFull']],
       },
       expertInjectBudgetChars: { type: 'slider', min: 200, max: 4000, step: 100 },
       expertSecondThreshold: { type: 'slider', min: 0, max: 1, step: 0.05 },
-      expertMinScore: { type: 'slider', min: 0, max: 1, step: 0.05 },
+      expertGeneralMax: { type: 'num' },
+      expertGeneralMinEvidence: { type: 'slider', min: 0, max: 1, step: 0.05 },
+      skillInjectEnabled: { type: 'bool' },
+      skillBudgetChars: { type: 'slider', min: 0, max: 2000, step: 100 },
       expertShowBanner: { type: 'bool' },
       expertSetupDone: { type: 'bool' },
     }
@@ -3316,17 +3343,19 @@ window.__ModuleLoader__.load({
       },
     ]
 
-    /** 专家库：范围与阈值两小节（阈值三项渲染成滑块） */
+    /** 专家库：范围 / 注入阈值与预算两小节（阈值与预算渲染成滑块） */
     const CFG_EXPERT_GROUPS = [
       {
         id: 'core', titleKey: 'cfgExpGCore', hintKey: 'cfgExpGCoreHint',
-        keys: ['expertsEnabled', 'defaultDomain', 'identityExpert', 'enabledDomains',
+        keys: ['expertsEnabled', 'expertCatalogEnabled', 'disciplineEnabled', 'disciplineMemoryDir',
+          'defaultDomain', 'identityExpert', 'enabledDomains',
           'enabledExperts', 'injectOrder', 'expertShowBanner', 'expertSetupDone'],
       },
       {
         id: 'threshold', titleKey: 'cfgExpGThreshold', hintKey: 'cfgExpGThresholdHint', slider: true,
-        keys: ['expertInjectMax', 'expertInjectDetail', 'expertInjectBudgetChars',
-          'expertSecondThreshold', 'expertMinScore'],
+        keys: ['expertInjectDetail', 'expertInjectBudgetChars',
+          'expertSecondThreshold', 'expertGeneralMax', 'expertGeneralMinEvidence',
+          'skillInjectEnabled', 'skillBudgetChars'],
       },
     ]
 
@@ -3700,10 +3729,7 @@ window.__ModuleLoader__.load({
         .map((key) => ConfigFieldRow({ t: t, nsKey: nsKey, nsState: nsState, drafts: drafts, key: key, handlers: handlers }))
         .filter(Boolean)
       if (!rows.length) return null
-      // 注入 2–3 位专家会明显多占 TOKEN（契约第六节拍板时的已知代价）→ 就地在阈值组提示
-      if (def.slider && Number(cfgDisplayValue(nsState, drafts, 'expertInjectMax')) > 1) {
-        rows.push(h('div', { key: 'warn', style: S.warnLine }, t('cfgInjectMaxWarn')))
-      }
+      // 注入上限自 2026-09-15 起写死 4（设置页不提供该项），原「>1 提示 TOKEN 代价」的就地提示随之移除
       return h('div', { key: 'sec-' + def.id, style: S.cfgSection }, [
         h('div', { key: 't', style: S.cfgSectionTitle }, [
           t(def.titleKey),
@@ -3789,7 +3815,7 @@ window.__ModuleLoader__.load({
           conf ? h('div', { key: 'cf', style: S.actionNote }, t('cfgExpPreviewConfig') + '：'
             + 'expertInjectMax=' + String(conf.expertInjectMax) + ' · '
             + 'expertSecondThreshold=' + String(conf.expertSecondThreshold) + ' · '
-            + 'expertMinScore=' + String(conf.expertMinScore)) : null,
+            + 'expertInjectBudgetChars=' + String(conf.expertInjectBudgetChars)) : null,
         ]))
       }
       return h('div', { key: 'pv', style: S.cfgPreviewBox }, nodes)

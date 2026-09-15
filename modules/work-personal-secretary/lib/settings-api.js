@@ -51,17 +51,21 @@ export const MAX_WRITE_OPS = 64
 export const SCALAR_TYPES = ['string', 'number', 'boolean', 'const']
 
 /**
- * dsh-experts 设置项的兜底值（settings 服务不可用时使用）。
- * 出处：modules/dsh-experts/lib/settings.js 的 DEFAULTS（expertInjectMax 默认 2 —— 契约 §六.1 甲案）。
+ * dsh-experts 设置项的**服务端兜底值**（settings 服务不可用时用于 /experts/preview 打分）。
+ * 出处：modules/dsh-experts/lib/settings.js 的 DEFAULTS（0.4.0 口径，2026-09-15 核对）。
+ *
+ * 说明：**这不是设置页镜像**。设置页已不提供 `expertInjectMax`（写死 4），但这里必须保留它 ——
+ * 该值会被原样交给 `selectExperts`；缺键时 match.js 的兜底是 `Math.max(1, …)` → **1 位**，
+ * 会让「settings 服务不可用」降级预览与真实注入不一致。故保留并与插件 DEFAULTS 对齐为 4。
+ * `expertMinScore` 已于 dsh-experts 0.3.0 删除（零命中不注入落地后无路径使用），故一并移除。
  */
 export const EXPERTS_CONFIG_FALLBACK = {
-  defaultDomain: 'presales',
+  defaultDomain: 'infosec',
   identityExpert: '',
-  expertInjectMax: 2,
+  expertInjectMax: 4,
   expertInjectDetail: 'auto',
-  expertInjectBudgetChars: 1400,
-  expertSecondThreshold: 0.8,
-  expertMinScore: 0.35,
+  expertInjectBudgetChars: 2600,
+  expertSecondThreshold: 0.3,
 }
 
 // ───────────────────────────── schema 归一化（契约 §4.1 fields） ─────────────────────────────
@@ -544,7 +548,7 @@ export function createSettingsApi(ctx, deps = {}) {
         config: {
           expertInjectMax: cfg.expertInjectMax,
           expertSecondThreshold: cfg.expertSecondThreshold,
-          expertMinScore: cfg.expertMinScore,
+          expertInjectBudgetChars: cfg.expertInjectBudgetChars,
         },
         source: loaded.source,
         text: text,

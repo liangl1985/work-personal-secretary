@@ -824,7 +824,7 @@ ok(findButtons(iTree).filter((b) => label(b) === '不使用镜像').length === 1
   && findButtons(iTree).filter((b) => label(b) === '<工作区>/00_全局记忆').length === 1
   && findButtons(iTree).filter((b) => label(b) === '<工作区>/work-memory').length === 1, 'Obsidian 库目录三个候选齐全（不使用镜像 / 00_全局记忆 / work-memory）')
 const domText = findSelects(iTree).length > 0 ? collect(findSelects(iTree)[0], []).join(' | ') : ''
-ok(['售前', '售后·技术支持', '会计财务', '法务', '文档', '核查·通用'].every((x) => domText.includes(x)), '工作岗位域下拉六项齐全')
+ok(['信息安全', '财务', '人力资源', '代码编程', '金融', '通用职能'].every((x) => domText.includes(x)), '工作岗位域下拉六项齐全（dsh-experts 0.3.x 域重划后的 5 行业域 + 1 通用职能域）')
 ok(findSelects(iTree)[0].props.value === '', '工作岗位域不默认预选（初始 value 为空）')
 ok(domText.indexOf('请选择') >= 0, '工作岗位域下拉首项为占位「请选择…」')
 ok(itext.includes('请先选择你的工作方向'), '未选岗位域时给出提示「请先选择你的工作方向」')
@@ -888,11 +888,11 @@ hasBtn(iTree, '返回修改')[0].props.onClick()
 hookCursor = 0
 effectQueue = []
 iTree = expand(reg.render({ initialTab: 'init' }))
-findSelects(iTree)[0].props.onChange({ target: { value: 'presales' } })
+findSelects(iTree)[0].props.onChange({ target: { value: 'infosec' } })
 hookCursor = 0
 effectQueue = []
 iTree = expand(reg.render({ initialTab: 'init' }))
-ok(findSelects(iTree)[0].props.value === 'presales', '选择工作岗位域后下拉值生效')
+ok(findSelects(iTree)[0].props.value === 'infosec', '选择工作岗位域后下拉值生效')
 ok(hasBtn(iTree, '检查并预览').length === 1, '回到段 1 后可重新「检查并预览」')
 hasBtn(iTree, '检查并预览')[0].props.onClick()
 await tick(50)
@@ -923,7 +923,7 @@ ok(String(postIds) === String(['dirs', 'memorySeed', 'skills', 'settings', 'agen
 ok(postCalls.every((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/basedeck'), '每次写入都命中 /work-personal-secretary/api/basedeck')
 ok(postCalls.every((c) => JSON.parse(String(c.body)).dryRun === false), '每次写入 body 都带 dryRun:false（真写，不是试运行）')
 const ov = JSON.parse(String(postCalls[0].body)).overrides || {}
-ok(ov.workspace === 'C:/work/space' && ov.defaultDomain === 'presales'
+ok(ov.workspace === 'C:/work/space' && ov.defaultDomain === 'infosec'
   && ov.identityExpert === '' && ov.memoryDir === '' && ov.obsidianSyncDir === '', 'overrides 携带表单五项（workspace / defaultDomain / identityExpert / memoryDir / obsidianSyncDir）')
 
 hookCursor = 0
@@ -956,7 +956,7 @@ await tick(50)
 hookCursor = 0
 effectQueue = []
 let badTree = expand(reg.render({ initialTab: 'init' }))
-findSelects(badTree)[0].props.onChange({ target: { value: 'presales' } })
+findSelects(badTree)[0].props.onChange({ target: { value: 'infosec' } })
 hookCursor = 0
 effectQueue = []
 badTree = expand(reg.render({ initialTab: 'init' }))
@@ -997,7 +997,7 @@ await tick(50)
 hookCursor = 0
 effectQueue = []
 let noneTree = expand(reg.render({ initialTab: 'init' }))
-findSelects(noneTree)[0].props.onChange({ target: { value: 'presales' } })
+findSelects(noneTree)[0].props.onChange({ target: { value: 'infosec' } })
 hookCursor = 0
 effectQueue = []
 noneTree = expand(reg.render({ initialTab: 'init' }))
@@ -1044,7 +1044,7 @@ await tick(50)
 hookCursor = 0
 effectQueue = []
 let stTree = expand(reg.render({ initialTab: 'init' }))
-findSelects(stTree)[0].props.onChange({ target: { value: 'presales' } })
+findSelects(stTree)[0].props.onChange({ target: { value: 'infosec' } })
 hookCursor = 0
 effectQueue = []
 stTree = expand(reg.render({ initialTab: 'init' }))
@@ -1280,7 +1280,7 @@ ok(findInputs(pkTree)[2].props.value === 'D:/mine/vault'
 
 // 显式关闭 → 提交上报哨兵 __none__
 findButtons(pkTree).filter((b) => label(b) === '不使用镜像')[0].props.onClick()
-findSelects(pkTree)[0].props.onChange({ target: { value: 'presales' } })
+findSelects(pkTree)[0].props.onChange({ target: { value: 'infosec' } })
 hookCursor = 0
 effectQueue = []
 pkTree = expand(pickReg.render({ initialTab: 'init' }))
@@ -1485,12 +1485,16 @@ const CFG_MEM_DEFAULTS = {
 }
 /** 用户层覆盖两项（用于「已覆盖」标记 / unset / 恢复默认断言） */
 const CFG_MEM_USER0 = { snapshotMaxChars: 6000, backupDir: 'D:/bak' }
-/** experts 10 键（= settings schema 全量；expertInjectMax 默认值按契约第六节已拍板为 2）。
+/** experts **18 键**（= dsh-experts 0.4.0 的 settings schema 全量；口径 2026-09-15 核对）。
+ * expertInjectMax 已写死 4（设置页不提供该项，故断言它不出现在渲染结果里）。
  * 注意：injectOrder 只在部署层 base（不在 schema），宿主 describe() 不会返回它，故 mock 也不含它。 */
 const CFG_EXP_DEFAULTS = {
-  expertsEnabled: true, defaultDomain: 'presales', identityExpert: '',
-  enabledDomains: '', enabledExperts: '', expertInjectMax: 2, expertSecondThreshold: 0.8,
-  expertMinScore: 0.35, expertShowBanner: true, expertSetupDone: false,
+  expertsEnabled: true, defaultDomain: 'infosec', identityExpert: '',
+  enabledDomains: '', enabledExperts: '', expertInjectMax: 4, expertSecondThreshold: 0.3,
+  expertShowBanner: true, expertSetupDone: false,
+  expertCatalogEnabled: true, disciplineEnabled: true, disciplineMemoryDir: '',
+  skillInjectEnabled: true, skillBudgetChars: 300, expertInjectDetail: 'auto',
+  expertInjectBudgetChars: 2000, expertGeneralMax: 1, expertGeneralMinEvidence: 0.2,
 }
 const cfgTypeOf = (v) => (typeof v === 'boolean' ? 'boolean' : (typeof v === 'number' ? 'number' : 'string'))
 const cfgFieldsOf = (defaults) => Object.keys(defaults).map((k) => ({
@@ -1528,11 +1532,11 @@ const cfgNamespaces = () => {
 const CFG_PREVIEW_PAYLOAD = {
   ok: true, reason: 'identity+1',
   ranked: [
-    { id: 'presales-ics-security', domain: 'presales', score: 0.9, evidence: 0.9, reasons: ['身份专家'] },
-    { id: 'aftersales-djbh', domain: 'aftersales', score: 0.7, evidence: 0.7, reasons: ['关键词·等保'] },
+    { id: 'infosec-ics-security', domain: 'infosec', score: 0.9, evidence: 0.9, reasons: ['身份专家'] },
+    { id: 'infosec-djbh', domain: 'infosec', score: 0.7, evidence: 0.7, reasons: ['关键词·等保'] },
   ],
-  selected: ['presales-ics-security', 'aftersales-djbh'],
-  config: { expertInjectMax: 2, expertSecondThreshold: 0.8, expertMinScore: 0.35 },
+  selected: ['infosec-ics-security', 'infosec-djbh'],
+  config: { expertInjectMax: 4, expertSecondThreshold: 0.3, expertInjectBudgetChars: 2000 },
 }
 const cfgFetch = async (url, opts) => {
   const u = String(url)
@@ -1626,20 +1630,20 @@ ok(cfUnsetBtns.filter((b) => b.props.disabled !== true).length === 2, '只有用
 
 // 切到专家库标签：只渲染专家库
 await cfSwitchTo('experts')
-ok(cfText.includes('最低注入分') && !cfText.includes('快照字符上限'), '切到专家库后只渲染专家库（记忆库字段不再出现）')
+ok(cfText.includes('注入形态') && !cfText.includes('快照字符上限'), '切到专家库后只渲染专家库（记忆库字段不再出现）')
 const cfUnsetExp = findByAttr(cfTree, 'data-cfg-action', 'unset')
-ok(cfUnsetExp.length === 10, '专家库 10 个设置项各有「清除覆盖」（实测 ' + cfUnsetExp.length + '）')
+ok(cfUnsetExp.length === 17, '专家库 17 个设置项各有「清除覆盖」（schema 18 键 − expertInjectMax（设置页已移除，实测 ' + cfUnsetExp.length + '））')
 const cfRanges = findAll(cfTree, (x) => x.type === 'input' && x.props && x.props.type === 'range', [])
-ok(cfRanges.length === 3, '专家库三个阈值渲染为滑块（实测 ' + cfRanges.length + '）')
-const cfInjectMax = findByAttr(cfTree, 'data-cfg-key', 'expertInjectMax').filter((x) => x.type === 'input')[0]
-ok(cfInjectMax && Number(cfInjectMax.props.min) === 1 && Number(cfInjectMax.props.max) === 3, 'expertInjectMax 滑块范围 1–3')
-ok(cfText.includes('占用较多 TOKEN'), '注入上限 > 1 时就地提示 TOKEN 代价（契约第六节）')
+ok(cfRanges.length === 4, '专家库四个阈值/预算渲染为滑块（实测 ' + cfRanges.length + '）')
+ok(findByAttr(cfTree, 'data-cfg-key', 'expertInjectMax').length === 0,
+  'expertInjectMax 已从设置页移除（写死 4，不再渲染任何控件；实测 '
+  + findByAttr(cfTree, 'data-cfg-key', 'expertInjectMax').length + '）')
 const cfSelects = findSelects(cfTree)
-ok(cfSelects.length === 1, 'defaultDomain 渲染为下拉（实测 ' + cfSelects.length + '）')
+ok(cfSelects.length === 2, 'defaultDomain 与 expertInjectDetail 各渲染为下拉（实测 ' + cfSelects.length + '）')
 const cfSelectText = collect(cfSelects[0], []).join(' | ')
-ok(['售前', '售后·技术支持', '会计财务', '法务', '文档', '核查·通用'].every((x) => cfSelectText.includes(x)),
+ok(['信息安全', '财务', '人力资源', '代码编程', '金融', '通用职能'].every((x) => cfSelectText.includes(x)),
   '岗位域下拉六项带中文标签')
-ok(cfSelects[0].props.value === 'presales', '岗位域下拉回显当前值')
+ok(cfSelects[0].props.value === 'infosec', '岗位域下拉回显当前值')
 const cfIdent = findByAttr(cfTree, 'data-cfg-key', 'identityExpert').filter((x) => x.type === 'input')[0]
 ok(cfIdent && cfIdent.props.type === 'text', 'identityExpert 用输入框（非下拉）')
 
@@ -1766,12 +1770,12 @@ hookCursor = 0
 effectQueue = []
 cfTree = expand(reg.render({ initialTab: 'config' }))
 cfText = collect(cfTree, []).join(' | ')
-ok(cfText.includes('presales-ics-security') && cfText.includes('aftersales-djbh'), '渲染注入名单（两位专家）')
+ok(cfText.includes('infosec-ics-security') && cfText.includes('infosec-djbh'), '渲染注入名单（两位专家）')
 ok(cfText.includes('0.9') && cfText.includes('0.7'), '渲染每位 score')
 ok(cfText.includes('关键词·等保') && cfText.includes('身份专家'), '渲染每位 reasons')
 ok(cfText.includes('identity+1'), '渲染判定理由 reason')
-ok(cfText.includes('expertInjectMax=2') && cfText.includes('expertSecondThreshold=0.8') && cfText.includes('expertMinScore=0.35'),
-  '渲染试算所用三项阈值')
+ok(cfText.includes('expertInjectMax=4') && cfText.includes('expertSecondThreshold=0.3') && cfText.includes('expertInjectBudgetChars=2000'),
+  '渲染试算所用三项阈值（expertInjectMax 只读回显；expertMinScore 已于 0.3.0 删除）')
 
 // ── 段 8a：降级 —— 子插件未安装（宿主给 installed:false 占位条目） ──
 cfgExpertMode = 'placeholder'
