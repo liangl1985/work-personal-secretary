@@ -34,6 +34,6 @@
         skillInjectEnabled: true # 能力层指针（工具/技能）：从任务识别技能，只注入「去哪拿」的指针行；不占 expertInjectMax 配额
         skillBudgetChars: 300    # 能力层指针字符预算（约 3 条）；0 = 不注入指针
         expertInjectDetail: 'auto' # 注入形态：auto（默认，按预算降级：命中全文→命中精简卡→只留第一位精简卡）/ card（全精简卡）/ full（全文，旧行为）
-        expertInjectBudgetChars: 2600 # 每轮专家注入字符预算（2026-09-15 由 2000 上调：4 位精简卡 ≈2363 字符，2000 会把「上限 4」降级成 1 位）≈1.7–2.2k TOKEN；预算只是上限，命中少时不多花
+        expertInjectBudgetChars: 2800 # 每轮专家注入字符预算（2026-09-15 由 2000 上调：4 位精简卡 ≈2363 字符，2000 会把「上限 4」降级成 1 位）≈1.7–2.2k TOKEN；预算只是上限，命中少时不多花
         expertShowBanner: true    # 注入时显示「当前专家视角」标识
         expertSetupDone: false    # 安装引导是否已问过本人岗位

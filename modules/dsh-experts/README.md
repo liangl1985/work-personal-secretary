@@ -129,7 +129,7 @@ L1 卡只取「交付与自检」**前 2 条、每条 clip(90)**，所以每位�
 | `skillInjectEnabled` | `true` | 是否注入**能力层指针**（工具/技能）：识别到技能就注入一行指针；不占 `expertInjectMax` 配额，也不受 `enabledDomains` 收窄 |
 | `skillBudgetChars` | `300` | 能力层指针字符预算（约 3 条）；`0` = 不注入指针（persona 不受影响） |
 | `expertInjectDetail` | `auto` | 注入形态：`auto`（默认，按预算降级）/ `card`（全部精简卡）/ `full`（**全文，旧行为**，单轮约 4.5–5.2KB，可一键回退） |
-| `expertInjectBudgetChars` | `2600` | 每轮专家注入字符预算（2026-09-15 由 2000 上调：4 位精简卡 ≈2363 字符，2000 会把「上限 4」降级成 1 位）≈1.7–2.2k TOKEN；**预算只是上限**，命中少时不多花；下限 200 / 上限 20000 |
+| `expertInjectBudgetChars` | `2800` | 每轮专家注入字符预算（2026-09-15 由 2000 上调：4 位精简卡 ≈2363 字符，2000 会把「上限 4」降级成 1 位）≈1.7–2.2k TOKEN；**预算只是上限**，命中少时不多花；下限 200 / 上限 20000 |
 | `expertShowBanner` | `true` | 注入时显示「当前专家视角」标识 |
 | `disciplineEnabled` | `true` | 是否注入**交付层·纪律块**（`context`，order 481）：从项目记忆读 `【纪律块 v1】`，每轮注入、不随裁剪丢弃 |
 | `disciplineMemoryDir` | 空 | 纪律块的记忆库根；留空 = 取 work-memory 设置里的 `memoryDir`，再退 `$DSH_HOME/memories/work-memory`（**只读，绝不写记忆**） |
