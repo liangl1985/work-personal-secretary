@@ -15,7 +15,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
-from doc_roles import classify_paragraph, resolve_column_align
+from doc_roles import classify_paragraph, detect_numbering_scheme, resolve_column_align
 from style_spec import assert_content_unchanged, word_snapshot
 
 _ALIGN = {
@@ -253,6 +253,7 @@ _ROLE_TO_STYLE = {
     "heading_2": "Heading 2",
     "heading_3": "Heading 3",
     "heading_4": "Heading 4",
+    "heading_5": "Heading 5",
 }
 
 
@@ -317,9 +318,12 @@ def _apply_roles(doc, spec: dict, wspec: dict) -> dict:
     corrected: list = []
     styled = 0
 
+    # 文档级编号体系（2026-09-15 加）：整篇按同一口径判层级 —— 公文体「一、/（一）/1./（1）」
+    # 与数字点体系「1/1.1/1.1.1」里，「1、」的层级不同，逐段猜会判错。
+    scheme = detect_numbering_scheme([p.text or "" for p in paras])
     decided = []
     for i, p in enumerate(paras):
-        decided.append((i, p, classify_paragraph(p, i, total, spec)))
+        decided.append((i, p, classify_paragraph(p, i, total, spec, scheme)))
 
     for i, p, info in decided:
         role = info["role"]
@@ -345,7 +349,7 @@ def _apply_roles(doc, spec: dict, wspec: dict) -> dict:
             if len(samples) < 15:
                 samples.append({"para": i, "role": role, "via": info["reason"], "text": (p.text or "")[:40]})
 
-    return {"counts": counts, "styled": styled, "samples": samples, "corrected": corrected}
+    return {"counts": counts, "styled": styled, "samples": samples, "corrected": corrected, "scheme": scheme}
 
 
 # ------------------------------------------------------------------ apply-style

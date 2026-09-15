@@ -10,7 +10,7 @@
     "对账",
     "投标技术文件"
   ],
-  "version": "1.2",
+  "version": "1.3",
   "updated": "2026-09-15",
   "_note": "内置默认层。使用者自定义层放 ~/.dsh/data/dsh-doc-suite/templates/<id>.json，同名键深度覆盖本文件。v1.1 依据 36_投标文件格式画像（主人真实投标文件实测）：页面上下 3.17/左右 2.54、heading_1=14pt 黑体加粗、heading_2/3=12pt 黑体、新增 doc_title 角色与表格列对齐规则。",
   "colors": {
@@ -156,6 +156,19 @@
         "space_after_pt": 4,
         "outline_level": 3,
         "size_name": "小四"
+      },
+      "Heading 5": {
+        "font": "h1",
+        "size_pt": 10.5,
+        "bold": true,
+        "align": "left",
+        "line_spacing": 1.5,
+        "first_line_chars": 0,
+        "space_before_pt": 4,
+        "space_after_pt": 4,
+        "outline_level": 4,
+        "size_name": "五号",
+        "_note": "2026-09-15 新增：主人最多用到 5 级标题；字号下探一档到五号，仍加粗、左对齐、参与大纲级别。"
       }
     },
     "table": {

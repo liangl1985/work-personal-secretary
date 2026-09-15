@@ -236,7 +236,8 @@ t('Python 侧可加载规格（需解释器）', () => {
   const r = pyRun('-c', ['import style_spec,sys; s=style_spec.load_spec(None); sys.stdout.write(s["id"]+"|"+str(len(s["word"]["styles"])))']);
   if (!r) return 'skip';
   if (r.status !== 0) return 'skip';
-  assert(/^standard\|5$/.test((r.stdout || '').trim()), 'load_spec 返回异常: ' + (r.stdout || r.stderr));
+  // 2026-09-15：styles 由 5 个增至 6 个（新增 Heading 5，支持 5 级标题）
+  assert(/^standard\|6$/.test((r.stdout || '').trim()), 'load_spec 返回异常: ' + (r.stdout || r.stderr));
 });
 
 t('依赖可用时端到端：造样本 → 套样式 → 内容不变', () => {
@@ -320,6 +321,60 @@ t('规格扩展：compact 内置 + 自定义层 extends 继承 / 深度覆盖 / 
   const r = pyRun('-c', [chk, OFF]);
   if (!r) return 'skip';
   assert(r.status === 0, 'compact/extends 继承或覆盖不符: ' + (r.stdout + r.stderr).slice(0, 200));
+});
+
+t('A2.4 编号层级：1 / 1.1 / 1.2.1 / 1.2.3.4 / 1.2.3.4.5 → h1..h5，正文编号句不误升', () => {
+  // 2026-09-15 修：原实现把 1.1.2 一律压成 heading_2，且把正文「（1）…」误升为标题
+  const chk = [
+    'import sys',
+    'sys.path.insert(0, sys.argv[1])',
+    'from doc_roles import number_role as nr',
+    'cases = [',
+    "  ('1 项目概述', 'heading_1'),",
+    "  ('1.1 建设背景', 'heading_2'),",
+    "  ('1.2.1 安全通信网络', 'heading_3'),",
+    "  ('1.2.3.4 某控制点', 'heading_4'),",
+    "  ('1.2.3.4.5 五级标题', 'heading_5'),",
+    "  ('1.2.3.4.5.6 六级封顶', 'heading_5'),",
+    "  ('（1）安全通信网络', 'heading_3'),",
+    "  ('（一）系统概述', 'heading_2'),",
+    "  ('一、项目概述', 'heading_1'),",
+    "  ('A：技术参数', 'heading_4'),",
+    "  ('1、全面安全风险评估', 'heading_1'),",
+    "  ('2020.08.21 修订', None),",
+    "  ('2020年08月', None),",
+    "  ('（1）本项目按等保三级建设，需在实施窗口内完成。', None),",
+    "  ('（1）本方案采用分区隔离与边界防护相结合的方式，覆盖八个安全域', None),",
+    ']',
+    'bad = [(t, nr(t), e) for t, e in cases if nr(t) != e]',
+    'print("ok" if not bad else "FAIL " + repr(bad))',
+    'sys.exit(0 if not bad else 1)',
+  ].join('\n');
+  const r = pyRun('-c', [chk, OFF]);
+  if (!r) return 'skip';
+  assert(r.status === 0, '编号层级判定不符: ' + (r.stdout + r.stderr).slice(0, 200));
+});
+
+t('A2.4 Markdown 解析：1–5 级标题与 **加粗**（星号不落盘）', () => {
+  const chk = [
+    'import sys',
+    'sys.path.insert(0, sys.argv[1])',
+    'from docx import Document',
+    'import word_tool',
+    'd = Document()',
+    'word_tool.md_to_docx(d, "# 一\\n## 二\\n### 三\\n#### 四\\n##### 五\\n正文含 **加粗** 与普通字\\n")',
+    'ps = [p for p in d.paragraphs if p.text.strip()]',
+    'styles = [p.style.name for p in ps[:5]]',
+    'want = ["Heading %d" % i for i in range(1, 6)]',
+    'body = ps[5]',
+    'bold_runs = [r.text for r in body.runs if r.bold]',
+    'ok = (styles == want and bold_runs == ["加粗"] and "**" not in body.text)',
+    'print("ok" if ok else "FAIL styles=%r bold=%r text=%r" % (styles, bold_runs, body.text))',
+    'sys.exit(0 if ok else 1)',
+  ].join('\n');
+  const r = pyRun('-c', [chk, OFF]);
+  if (!r) return 'skip';
+  assert(r.status === 0, 'md 解析不符: ' + (r.stdout + r.stderr).slice(0, 200));
 });
 
 t('色板修正：文字色达标 + 装饰色保留', () => {

@@ -74,6 +74,7 @@ def read_docx(path):
             "heading 2": "## ",
             "heading 3": "### ",
             "heading 4": "#### ",
+            "heading 5": "##### ",
         }.get(style, "")
         out.append(prefix + text)
     for ti, table in enumerate(doc.tables, 1):
@@ -121,6 +122,35 @@ def _flush_table(doc, buf):
     buf.clear()
 
 
+# Markdown 行内标记（2026-09-15 修：此前只认到 3 级标题、且 `**加粗**` 会把星号写进文档）
+_MD_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+_MD_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+
+
+def _strip_md(text: str) -> str:
+    """去掉行内标记（标题里不落 `**`）。"""
+    return _MD_BOLD_RE.sub(r"\1", text or "").strip()
+
+
+def _add_text_runs(para, text: str) -> None:
+    """把含 `**加粗**` 的文本写入段落：按标记切 run，星号不落盘，并逐个设 eastAsia。"""
+    text = text or ""
+    pos = 0
+    for m in _MD_BOLD_RE.finditer(text):
+        if m.start() > pos:
+            r = para.add_run(text[pos:m.start()])
+            _set_east_asia(r._element.get_or_add_rPr())
+        r = para.add_run(m.group(1))
+        r.bold = True
+        _set_east_asia(r._element.get_or_add_rPr())
+        pos = m.end()
+    if pos < len(text):
+        r = para.add_run(text[pos:])
+        _set_east_asia(r._element.get_or_add_rPr())
+    if not text:
+        para.add_run("")
+
+
 def md_to_docx(doc, text):
     from docx.shared import Pt
 
@@ -139,20 +169,19 @@ def md_to_docx(doc, text):
             continue
         _flush_table(doc, buf)
         s = line.strip()
-        if s.startswith("### "):
-            doc.add_heading(s[4:].strip(), level=3)
-        elif s.startswith("## "):
-            doc.add_heading(s[3:].strip(), level=2)
-        elif s.startswith("# "):
-            doc.add_heading(s[2:].strip(), level=1)
+        m = _MD_HEADING_RE.match(s)
+        if m:
+            # 支持 1–6 级标题（主人 2026-09-15：最多用到 5 级；6 级及以上按模板可容）
+            doc.add_heading(_strip_md(m.group(2)), level=min(len(m.group(1)), 6))
         elif re.match(r"^[-*]\s+", s):
-            doc.add_paragraph(re.sub(r"^[-*]\s+", "", s), style="List Bullet")
+            para = doc.add_paragraph(style="List Bullet")
+            _add_text_runs(para, re.sub(r"^[-*]\s+", "", s))
         elif re.match(r"^\d+[.、]\s+", s):
-            doc.add_paragraph(re.sub(r"^\d+[.、]\s+", "", s), style="List Number")
+            para = doc.add_paragraph(style="List Number")
+            _add_text_runs(para, re.sub(r"^\d+[.、]\s+", "", s))
         else:
-            para = doc.add_paragraph(s)
-            for run in para.runs:
-                _set_east_asia(run._element.get_or_add_rPr())
+            para = doc.add_paragraph()
+            _add_text_runs(para, s)
     _flush_table(doc, buf)
 
 
