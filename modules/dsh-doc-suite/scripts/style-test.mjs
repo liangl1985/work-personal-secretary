@@ -1,6 +1,7 @@
 // A 线样式能力回归（零依赖；可在 CI 直接跑，缺 Python 库时自动 SKIP）
 // 覆盖：规格契约 + 实现关键点 + Python 侧加载 + （有依赖时）端到端套样式
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +9,10 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const mod = path.resolve(here, '..');
 const OFF = path.join(mod, 'scripts', 'office');
-const TMP = path.join(process.env.TEMP || process.env.TMPDIR || '/tmp', 'dsh-style-test');
+// 夹具目录：每次都建一次性临时目录（mkdtemp 保证唯一），进程退出时统一清理 ——
+// 不再固定写到 <tmpdir>/dsh-style-test 而残留（2026-09-15 修正：此前会累积 f.docx.bak-style-* 等）。
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-style-test-'));
+process.on('exit', () => { try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* WPS 可能仍持句柄，忽略 */ } });
 
 let pass = 0, fail = 0, skip = 0;
 const ok = (n) => { console.log('  ✅ ' + n); pass++; };
