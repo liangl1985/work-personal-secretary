@@ -22,6 +22,10 @@
 - **本体同步**：能力配置页新增两键（形态下拉 + 预算滑块）、`EXPERTS_CONFIG_FALLBACK` 补齐、`settings-api-test.mjs` 对齐 12 键。
 - **门禁**：experts 回归 27/27 · 注入分级 16/16 · 装载冒烟 18/18 · 共存 7/7；本体五套 settings-api 109 · install 200 · probe 136 · basedeck 179 · smoke 337，全部 0 失败；`node --check` 全量 57 文件 0 失败。
 
+### 本体自测契约对齐（2026-09-15 · dsh-experts 0.3.x）
+
+CI「集成体本体自测」在 `settings-api-test.mjs` 停红（103 / **6 失败**）：6 条断言仍按 0.2.x 契约写（旧 6 域 id、已删的 `expertMinScore`、身份专家恒选、schema 12 键）。**只改测试夹具与断言、不动产品逻辑**，对齐 0.3.2 口径后 **112 / 0**；本体五套 + experts 四套 + work-memory 回归全绿。本体侧 `EXPERTS_CONFIG_FALLBACK` 与能力配置页的 0.2.x 口径**不在本次范围**，另挂待办。详见 `modules/work-personal-secretary/CHANGELOG.md` 的「契约对齐（2026-09-15）」小节。
+
 ## v1.0.0 — 2026-09-13（正式版第一版）
 
 集成体从"记忆插件"演进为**面向通用工作者的工作秘书集成体**，本版为第一次正式发布。

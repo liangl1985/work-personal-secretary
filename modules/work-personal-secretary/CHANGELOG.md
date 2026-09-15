@@ -19,6 +19,16 @@
 - `modules/dsh-experts/scripts/regression.mjs` 27/0 · `injection-tier-test.mjs` 16/0 · `smoke-load.mjs` 18/0 · `coexist.mjs` 7/0
 - `node --check` 覆盖全部改动的 JS；全模块 JS 语法自检通过（57 文件 0 失败）
 
+### 契约对齐（2026-09-15 · dsh-experts 0.3.x）
+
+CI「集成体本体自测」在 `scripts/settings-api-test.mjs` 停红（103 通过 / **6 失败**）：这 6 条断言仍是 dsh-experts **0.2.x** 口径 —— 旧 6 域（`presales`/`aftersales`）已重划为 5 个行业域 + 1 个通用职能域，打分 v3 删 `expertMinScore`、岗位先验降为「同证据时的排序」，身份退场（`identityExpert` 留空 = 不常驻）。**本次只改测试夹具与断言，不动任何产品逻辑。**
+
+- **[9] 打分预览**：身份专家 id `presales-ics-security` → `infosec-ics-security`；命中专家 `aftersales-djbh`（0.7）→ `infosec-djbh` **0.95**（＝岗位域 0.35 + 关键词 0.6，打分 v3 实测）；`max=1↔2` 因果对照用有效 id 重放（`max=2` → `identity+1`，`max=1` → `identity+0`）；新增「身份留空 → 只注入关键词命中的 `infosec-djbh`（`top1`）」一条，锁住 0.3.0 的**身份退场 + 零命中不注入**。
+- **[9] 夹具**：`EXP_SCHEMA` 与 mock 值对齐 0.3.2（`defaultDomain` `presales` → `infosec`、`expertInjectBudgetChars` 1400 → 2000、移除 0.3.0 已删除的 `expertMinScore`）；`config` 断言只核对仍在生效的 `expertInjectMax` / `expertSecondThreshold`。
+- **[12] 静态核对**：experts schema 键数断言 **12 → 16**（目录段 / 纪律块 / 能力层指针四项已入 schema）；新增 `DEFAULTS.defaultDomain = 'infosec'`、`DEFAULTS.identityExpert = ''` 两条锚点；`limits.js` 的 clamp 断言由「正则匹配源码」改为**动态 import 行为刻度**（`0=不限` / 负数回落默认 2 / 硬上限 3）。
+- **验证（2026-09-15 · 本机）**：`settings-api-test.mjs` **112 通过 / 0 失败**；本体五套（probe 136 · install 244 · basedeck · settings-api 112 · smoke 337）全 0 失败；experts 回归 46/0 · 注入分级 16/16 · 能力层 8/0 · 装载冒烟 18/18 · 共存 8/0；work-memory 回归 83/0；`node --check` 全量 JS 0 失败。
+- **本次未修正（另挂待办）**：本体侧仍留 0.2.x 口径 —— `lib/settings-api.js` 的 `EXPERTS_CONFIG_FALLBACK`（`defaultDomain: 'presales'`、`expertInjectBudgetChars: 1400`、已废弃的 `expertMinScore: 0.35`）、能力配置页 `client/index.js`（岗位域下拉仍是旧 6 域、schema 镜像含 `expertMinScore`、提示文案写「默认 1400」「如 presales-ics-security」）与 `smoke-load.mjs` / `basedeck-test.mjs` 夹具里的旧 id。属「能力配置页契约对齐」单独一单，不在本次 CI 修复范围。
+
 ### 未执行（硬边界）
 
 - 不 `git commit` / `git push`；不改本机 profile（`~/.dsh/profiles/desktop/` 的 `package.json` 与 `node_modules` 一律不动）。

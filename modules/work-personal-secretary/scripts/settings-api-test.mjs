@@ -15,14 +15,14 @@
  *   [9] GET /experts/preview：真实子插件打分（契约 §六.1 三级等保用例 + max=1↔2 因果对照）
  *  [10] 预览文本上限 2000：超长截断并标记 truncated
  *  [11] 路由注册口径：installApi 的 exact 数不变（既有测试不破），P4 精确路由独立补注册
- *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 12）+ 默认值 1→2 与注入分级落点
+ *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 16）+ 默认值 1→2 与注入分级落点
  *  [13] 真实环境只读快照首尾比对（证明本次开发未写入真实设置文件 / 工作区 / 子插件源码）
  *
  * 隔离红线（本测试的全部保证）：
  *   - 所有候选路径（profile / 仓库 / 模块）都指向 os.tmpdir() 下自建的**夹具**；
  *   - 夹具内允许真写真验（假仓库 / 假 profile 目录），写前用 assertInsideTmp() 复核仍在临时根内；
  *   - 真实 settings.yaml / 工作区 / 子插件源码只做 statSync / readdirSync **只读快照**首尾比对，绝不写入；
- *   - 预览用例动态 import 真实 dsh-experts 的 match.js / store.js —— 只读，不产生任何写入。
+ *   - 预览用例与 [12] 刻度检查动态 import 真实 dsh-experts 的 match.js / store.js / limits.js —— 只读，不产生任何写入。
  */
 import {
   existsSync,
@@ -35,7 +35,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 
 import { API_PATHS, API_ROOT, installApi, installSettingsExactRoutes } from '../lib/api.js'
@@ -131,7 +131,7 @@ const WM_SCHEMA = {
   },
 }
 
-/** experts 的 schema 摘要 */
+/** experts 的 schema 摘要（口径对齐 dsh-experts 0.3.2：defaultDomain 域重划 presales→infosec，expertMinScore 已移除） */
 const EXP_SCHEMA = {
   uid: 10,
   refs: {
@@ -146,17 +146,15 @@ const EXP_SCHEMA = {
         expertInjectDetail: 17,
         expertInjectBudgetChars: 18,
         expertSecondThreshold: 15,
-        expertMinScore: 16,
       },
     },
     11: { type: 'boolean', meta: { default: true, description: '专家库总开关' } },
-    12: { type: 'string', meta: { default: 'presales', description: '本人岗位默认域' } },
+    12: { type: 'string', meta: { default: 'infosec', description: '本人岗位默认域' } },
     13: { type: 'string', meta: { default: '', description: '常驻身份专家 id' } },
     14: { type: 'number', meta: { default: 2, description: '每轮最多注入几位专家' } },
     15: { type: 'number', meta: { default: 0.8, description: '' } },
-    16: { type: 'number', meta: { default: 0.35, description: '' } },
     17: { type: 'string', meta: { default: 'auto', description: '注入形态：auto / card / full' } },
-    18: { type: 'number', meta: { default: 1400, description: '每轮注入字符预算' } },
+    18: { type: 'number', meta: { default: 2000, description: '每轮注入字符预算' } },
   },
 }
 
@@ -180,13 +178,12 @@ function makeMockSettings(options = {}) {
       },
       experts: Object.assign({
         expertsEnabled: true,
-        defaultDomain: 'presales',
+        defaultDomain: 'infosec',
         identityExpert: '',
         expertInjectMax: 2,
         expertInjectDetail: 'auto',
-        expertInjectBudgetChars: 1400,
+        expertInjectBudgetChars: 2000,
         expertSecondThreshold: 0.8,
-        expertMinScore: 0.35,
       }, options.expertsValue || {}),
     },
   }
@@ -483,34 +480,44 @@ ok(weird.status === 400 && weird.body.ok === false && weird.body.error === 'ns-n
 const notFound = await callPrefix(ctx1, 'GET', '/settings/nope')
 ok(notFound.status === 404, '未知子路径交回既有 404 逻辑（不吞掉）')
 
-section('[9] GET /experts/preview：真实子插件打分（契约 §六.1 三级等保用例）')
+section('[9] GET /experts/preview：真实子插件打分（契约 §六.1 三级等保用例，口径对齐 dsh-experts 0.3.2）')
 const ID_TEXT = '客户要做三级等保测评，定级备案怎么走'
-const expMax2 = makeMockSettings({ expertsValue: { expertInjectMax: 2, identityExpert: 'presales-ics-security' } })
+const PREVIEW_DEPS = { platform: 'win32', repoRoot: '', moduleDir: MODULE_DIR, profileDir: FAKE_PROFILE, env: {}, commonCandidates: [] }
+const expMax2 = makeMockSettings({ expertsValue: { expertInjectMax: 2, identityExpert: 'infosec-ics-security' } })
 const ctxExp2 = makeMockCtx(expMax2.settings)
-installApi(ctxExp2, { platform: 'win32', repoRoot: '', moduleDir: MODULE_DIR, profileDir: FAKE_PROFILE, env: {}, commonCandidates: [] })
+installApi(ctxExp2, PREVIEW_DEPS)
 const prev2 = await callPrefix(ctxExp2, 'GET', '/experts/preview?text=' + encodeURIComponent(ID_TEXT))
 ok(prev2.status === 200 && prev2.body.ok === true, '真实子插件打分可用（动态 import match.js）')
-ok(prev2.body.selected.join(',') === 'presales-ics-security,aftersales-djbh',
-  'max=2：身份专家 + 等保测评专家（0.7）都进入注入名单（契约 §六.1 验收项）')
-const djbh = (prev2.body.ranked || []).filter((x) => x.id === 'aftersales-djbh')[0]
-ok(djbh && djbh.score === 0.7 && djbh.domain === 'aftersales', 'aftersales-djbh 得分 0.7（与契约实测一致）')
+ok(prev2.body.selected.join(',') === 'infosec-ics-security,infosec-djbh',
+  'max=2：身份专家 + 等保测评专家都进入注入名单（契约 §六.1 验收项；0.3.x 域重划后的 id）')
+const djbh = (prev2.body.ranked || []).filter((x) => x.id === 'infosec-djbh')[0]
+ok(djbh && djbh.score === 0.95 && djbh.evidence === 0.6 && djbh.domain === 'infosec',
+  'infosec-djbh 得分 0.95＝岗位域 0.35 + 关键词 0.6（打分 v3 实测口径）')
 ok(prev2.body.ranked.length >= 10, 'ranked 返回完整排行榜')
 ok(prev2.body.ranked.every((x) => typeof x.id === 'string' && typeof x.domain === 'string'
   && typeof x.score === 'number' && typeof x.evidence === 'number' && Array.isArray(x.reasons)),
   'ranked 五字段形状符合契约 §4.3')
 ok(typeof prev2.body.reason === 'string' && prev2.body.reason.indexOf('identity') === 0, 'reason 标出「身份专家 + N」')
-ok(prev2.body.config.expertInjectMax === 2 && prev2.body.config.expertSecondThreshold === 0.8 && prev2.body.config.expertMinScore === 0.35,
-  'config 三阈值从 experts ns 解析值透出')
+ok(prev2.body.config.expertInjectMax === 2 && prev2.body.config.expertSecondThreshold === 0.8,
+  'config 两项生效阈值从 experts ns 解析值透出（0.3.x 已无 expertMinScore）')
 ok(prev2.body.source === 'repo' || prev2.body.source === 'bundled' || prev2.body.source === 'profile',
   'source 只给枚举（不外发路径）')
 ok(prev2.body.text === ID_TEXT && prev2.body.truncated === false, '短文本原样回显且 truncated=false')
 
-const expMax1 = makeMockSettings({ expertsValue: { expertInjectMax: 1, identityExpert: 'presales-ics-security' } })
+// 身份退场（0.3.0）：identityExpert 留空 = 不常驻身份专家；零命中专家一律不进注入名单
+const expNoId = makeMockSettings()
+const ctxNoId = makeMockCtx(expNoId.settings)
+installApi(ctxNoId, PREVIEW_DEPS)
+const prevNoId = await callPrefix(ctxNoId, 'GET', '/experts/preview?text=' + encodeURIComponent(ID_TEXT))
+ok(prevNoId.body.selected.join(',') === 'infosec-djbh' && prevNoId.body.reason === 'top1',
+  '身份留空 → 仅注入关键词命中的 infosec-djbh（0.3.x 身份退场 + 零命中不注入）')
+
+const expMax1 = makeMockSettings({ expertsValue: { expertInjectMax: 1, identityExpert: 'infosec-ics-security' } })
 const ctxExp1 = makeMockCtx(expMax1.settings)
-installApi(ctxExp1, { platform: 'win32', repoRoot: '', moduleDir: MODULE_DIR, profileDir: FAKE_PROFILE, env: {}, commonCandidates: [] })
+installApi(ctxExp1, PREVIEW_DEPS)
 const prev1 = await callPrefix(ctxExp1, 'GET', '/experts/preview?text=' + encodeURIComponent(ID_TEXT))
-ok(prev1.body.selected.join(',') === 'presales-ics-security',
-  'max=1：身份专家独占唯一名额，0.7 分的对口专家被挤掉（契约 §六.1 的因果归因）')
+ok(prev1.body.selected.join(',') === 'infosec-ics-security',
+  'max=1：身份专家独占唯一名额，命中专家被挤掉（契约 §六.1 的因果归因）')
 
 const prevEmpty = await callPrefix(ctxExp2, 'GET', '/experts/preview')
 ok(prevEmpty.status === 200 && prevEmpty.body.ok === true && prevEmpty.body.text === '', '空 text 也能预览（不报错）')
@@ -556,12 +563,16 @@ function countSchemaKeys(file) {
 const wmSettingsFile = join(MODULES_DIR, 'dsh-work-memory', 'lib', 'settings.js')
 const expSettingsFile = join(MODULES_DIR, 'dsh-experts', 'lib', 'settings.js')
 ok(countSchemaKeys(wmSettingsFile) === 24, 'work-memory schema 24 键（契约 §一）')
-ok(countSchemaKeys(expSettingsFile) === 12, 'experts schema 12 键（契约 §一 + 注入分级两项）')
+ok(countSchemaKeys(expSettingsFile) === 16, 'experts schema 16 键（0.3.x：目录段 / 纪律块 / 能力层指针四项已入 schema）')
 const expSrc = readFileSync(expSettingsFile, 'utf8')
-ok(/expertInjectMax: 2,/.test(expSrc), 'DEFAULTS.expertInjectMax = 2（契约 §六.1 甲案，settings.js:47）')
-ok(/expertInjectMax: z\.natural\(\)\.default\(2\)/.test(expSrc), 'schema 默认值 = 2（settings.js:71）')
-ok(/if \(!Number\.isFinite\(n\) \|\| n < 1\) return 1/.test(readFileSync(join(MODULES_DIR, 'dsh-experts', 'lib', 'limits.js'), 'utf8')),
-  'limits.js 的 clamp 下限 1 保持不变（只改默认值，不改边界）')
+ok(/defaultDomain: 'infosec',/.test(expSrc), "DEFAULTS.defaultDomain = 'infosec'（0.3.x 域重划：presales → infosec，settings.js:46）")
+ok(/identityExpert: '',/.test(expSrc), "DEFAULTS.identityExpert = ''（身份退场：留空 = 不常驻，settings.js:47）")
+ok(/expertInjectMax: 2,/.test(expSrc), 'DEFAULTS.expertInjectMax = 2（契约 §六.1 甲案，settings.js:50）')
+ok(/expertInjectMax: z\.natural\(\)\.default\(2\)/.test(expSrc), 'schema 默认值 = 2（settings.js:86）')
+// limits.js 无外部依赖：直接动态 import 做行为刻度（比正则匹配源码更稳），边界口径 = 0 不限 / 负数回落 / 硬上限 3
+const expLimits = await import(pathToFileURL(join(MODULES_DIR, 'dsh-experts', 'lib', 'limits.js')).href)
+ok(expLimits.clampInjectMax(0) === 0 && expLimits.clampInjectMax(-1) === 2 && expLimits.clampInjectMax(9) === 3,
+  'limits.js clampInjectMax：0=不限 / 负数回落默认 2 / 硬上限 3（0.3.x 边界；本模块不复制该逻辑）')
 ok(/backupDir: null/.test(readFileSync(wmSettingsFile, 'utf8')), 'work-memory settings.js 只读兼容（未被本次改动触碰）')
 
 section('[13] 真实环境只读快照首尾比对')
