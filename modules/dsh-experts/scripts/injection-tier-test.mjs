@@ -249,11 +249,12 @@ test('归一化：预算 clamp 与注入形态回落', () => {
 
 // ---------- 9. 注入回调：设置热更与缓存键 ----------
 function makeCtx() {
-  const ctx = { _def: null, _defs: [], _scope: null }
+  const ctx = { _def: null, _defs: [], _sections: [], _scope: null, _ns: null }
   const watchers = []
   ctx.logger = { debug() {}, info() {}, warn() {} }
   ctx.settings = {
     register(ns, schema, opts) {
+      ctx._ns = ns
       let current = { ...(opts?.base || {}) }
       ctx._scope = {
         get: () => current,
@@ -273,6 +274,14 @@ function makeCtx() {
   }
   ctx.tools = { register: () => () => {} }
   ctx.commands = { register: () => () => {} }
+  return ctx
+}
+
+/** 同 makeCtx，但额外 mock systemPrompt.section（用于通道分流断言）；
+ *  默认 makeCtx 不带 section —— 顺带覆盖「宿主无 section 时降级」这条路径。 */
+function makeCtxWithSection() {
+  const ctx = makeCtx()
+  ctx.systemPrompt.section = (def) => { ctx._sections.push(def); return () => {} }
   return ctx
 }
 
@@ -319,6 +328,46 @@ test('端到端：3 个代表任务「首轮全景 / 干活轮」两态体积（
     assert.ok(blockChars(work) <= INJECT_BUDGET_DEFAULT, '干活轮超上限：' + blockChars(work))
     assert.ok(open.length <= before.length, '首轮不应比全全文更长')
   }
+})
+
+// ---------- 10. 通道分流（2026-09-16 补：本次重构最易回归的点） ----------
+test('通道分流：目录段走 section（order 10150），persona/纪律块走 context（480/481）', () => {
+  const ctx = makeCtxWithSection()
+  apply(ctx, {})
+  assert.equal(ctx._sections.length, 1, '目录段未注册到 section')
+  assert.equal(ctx._sections[0].name, 'dsh-experts:catalog')
+  assert.equal(ctx._sections[0].order, 10150)
+  assert.ok(!ctx._defs.some((d) => d.name === 'dsh-experts:catalog'), '目录段误入 context')
+  const persona = ctx._defs.find((d) => d.name === 'dsh-experts:persona')
+  const delivery = ctx._defs.find((d) => d.name === 'dsh-experts:delivery')
+  assert.equal(persona && persona.order, 480, 'persona 段 order 应为 480')
+  assert.equal(delivery && delivery.order, 481, '纪律块 order 应为 481')
+  // 本环境可能无 @deepseek-ai/schemastery → installSettings 降级、不注册设置命名空间（这是预期行为）
+  if (ctx._scope) assert.equal(ctx._ns, 'experts', '设置命名空间应为 experts')
+  else results.push('       （本环境无 schemastery：跳过命名空间断言，仅校验通道分流）')
+})
+
+test('宿主无 systemPrompt.section：不抛异常，仅 context 生效', () => {
+  const ctx = makeCtx()
+  assert.doesNotThrow(() => apply(ctx, {}))
+  assert.equal(ctx._sections.length, 0)
+  assert.ok(ctx._defs.some((d) => d.name === 'dsh-experts:persona'), 'persona 段应仍注册')
+})
+
+test('总开关关闭：section 与 context 回调都返回空串', () => {
+  const ctx = makeCtxWithSection()
+  apply(ctx, { expertsEnabled: false })
+  const frame = { agent: { session: { header: { id: 'off-1' } } }, text: '写一份电厂方案' }
+  assert.equal(ctx._sections[0].text(), '', 'section 未返回空串')
+  for (const d of ctx._defs) assert.equal(d.text(frame), '', d.name + ' 未返回空串')
+})
+
+test('纪律块目录不可读：返回可读说明而非抛错', () => {
+  const ctx = makeCtxWithSection()
+  apply(ctx, { disciplineEnabled: true, disciplineMemoryDir: 'Z:\\no-such-dir-xyz' })
+  const delivery = ctx._defs.find((d) => d.name === 'dsh-experts:delivery')
+  assert.ok(delivery, '纪律块未注册')
+  assert.doesNotThrow(() => delivery.text({ agent: { session: { header: { id: 'd-1' } } }, text: '' }))
 })
 
 console.log('\ndsh-experts 注入分级测试 · ' + (pass + fail) + ' 项\n' + results.join('\n'))

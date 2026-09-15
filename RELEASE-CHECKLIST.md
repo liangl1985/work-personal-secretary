@@ -39,10 +39,14 @@
 - [x] 打包白名单（`files`）覆盖 lib / client / scripts / skills / experts / cordis.patch.yml / CHANGELOG / LICENSE / NOTICE / README
 - [x] `CHANGELOG.md` 记录本次变更（含破坏性变更与迁移说明）
 - [x] **仓库根 `NOTICE` 存在**（聚合索引：随包内容与各模块版本 / 20 位 persona 来源与许可 / `review: pending` 免责 / 未随包分发清单）
-- [x] **命中评估资产（2026-09-16 新增）**：`hit-distribution.mjs`（命中位数分布 + 目标核对，`--file` 可切到 `hit-corpus-real.json` 真实语料）、  `hit-false-positive.mjs`（负样本假命中检测，105 条，>2 条即非零退出）；语料 `hit-corpus.json`(180) / `hit-corpus-real.json`(30) / `hit-negative.json`(105)
+- [x] **命中评估资产（2026-09-16 新增）**：`hit-distribution.mjs`（命中位数分布 + 目标核对，`--file` 可切到 `hit-corpus-real.json` 真实语料）、  `hit-false-positive.mjs`（负样本假命中检测，105 条，>2 条即非零退出）；语料 `hit-corpus.json`(180) / `hit-corpus-real.json`(30) / `hit-negative.json`(105) / `hit-corpus-clean10.json`(10，2026-09-16 重建版：原「干净版 10 条」文本未落盘，按同域覆盖 + 中性措辞重建，供复现)
   实测：真实语料 2+3 = 60% · 4 位 = 20% · 负样本 93.3% 干净。
 - [x] **CI 覆盖范围核对（2026-09-13 P5）**：语法自检已覆盖全量 `*.js` / `*.mjs`（含本体 `lib/settings-api.js`）；回归 / 装载冒烟 / 共存契约分别由 `*/scripts/regression.mjs`、`*/scripts/smoke-load.mjs`、`*/scripts/coexist.mjs` 覆盖；
       **本体四套自测**（`probe-test.mjs` 136 · `install-test.mjs` 200 · `basedeck-test.mjs` 179 · `settings-api-test.mjs` 109）原先**漏在 CI 范围之外**，本次新增 `*/scripts/*-test.mjs` 步骤纳入
+- [x] **真机生效配置比对（2026-09-16 新增，事故沉淀）**：发布/同步后必须比对**真机实际生效值**的三处来源 —— ① `~/.dsh/settings.yaml` 的**用户覆盖层** ② profile 的 `cordis.patch.yml`（部署 base 层）③ 代码 `DEFAULTS` / schema 默认值。**优先级是 用户覆盖层 > profile patch > schema 默认**，前两者任一残留都会**静默压过**代码里的新默认。
+  - 背景：`dsh-experts` 0.4.0 把 `expertSecondThreshold` 代码默认由 **0.8 调为 0.3**，但真机用户覆盖层里那行 `0.8` 从未删过 ⇒ **该调整连续两个版本未在真机生效**（2026-09-16 干净版验收时发现，已删行并复测：30 条真实语料 2+3 位由 46.7% 升至 60%、4 位由 6.7% 升至 20%）。
+  - 自检做法：读 `~/.dsh/settings.yaml` 逐键比对（本次用 `read` 工具直接读；PowerShell 侧注意 `-Encoding utf8` 会写 BOM，见坑②），差异**不以「代码已改」为由放过**。
+  - 附注：`@deepseek-ai/dsh-settings-file` 默认 `watch: true`（chokidar），**手改 settings.yaml 免重启**、热发布；已知限制是 watcher 漏事件要等下一个信号，异常时重启一次兜底。
 - [x] **补入 CI 后首轮即暴露并修掉测试自身的平台缺陷**：`probe-test.mjs` 的 `/fix` 白名单断言未锁定 `platform`，在 Linux runner 上走「非 Windows 平台无 winget」分支（**9 项失败**）→ 锁定 `platform: 'win32'`、`pythonDeps` 真跑断言容忍「解释器在、pip 不可用」的降级形态、`maskUserPath` 断言做分隔符归一化，并**新增 2 条非 Windows 平台分支正向断言**（不再依赖宿主恰好是 Windows）；本机 win32 **136/136** · 伪装 linux **133/133** · CI `e4943c7` Node 22/24 双版本 **success**
 
 ## 三点五、文档模块硬前置与路径（2026-09-12 增）
