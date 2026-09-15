@@ -19,12 +19,18 @@
  * @module dsh-experts/match
  */
 
+import { INJECT_MAX_HARD } from './limits.js'
+
 /** 各信号权重（score 归一到 0–1；evidence 只由关键词产生） */
 export const WEIGHTS = {
-  domain: 0.35,       // 命中本人岗位默认域 —— 只影响同证据时的排序，不再决定是否注入
+  domain: 0.35,       // **域专家**：命中本人岗位默认域
+  general: 0.15,      // **通用型专家**：恒定通用先验（方法层，对任何任务都可能有用）—— 2026-09-15 新增
   keywordEach: 0.2,   // 每个触发关键词命中
   keywordCap: 0.6,    // 关键词合计上限（3 个词封顶）
 }
+
+/** 通用职能域（与行业域分开评分、分开配额） */
+export const GENERAL_DOMAIN = 'general'
 
 /** 取触发关键词命中的列表（中文短词直接 includes，无需分词） */
 export function keywordHits(entry, text) {
@@ -44,7 +50,13 @@ export function scoreEntry(entry, ctx = {}) {
   let score = 0
   let evidence = 0
 
-  if (ctx.defaultDomain && entry.domain === ctx.defaultDomain) {
+  // 2026-09-15：**通用型专家与域专家分开评分** ——
+  //   域专家只有命中本人岗位域才拿先验（0.35）；
+  //   通用型专家没有岗位域，改拿恒定通用先验（0.15），否则在 defaultDomain=infosec 下永远吃亏。
+  if (String(entry?.domain || '') === GENERAL_DOMAIN) {
+    score += WEIGHTS.general
+    reasons.push('通用职能·' + GENERAL_DOMAIN)
+  } else if (ctx.defaultDomain && entry.domain === ctx.defaultDomain) {
     score += WEIGHTS.domain
     reasons.push('岗位域·' + entry.domain)
   }
@@ -89,7 +101,7 @@ export function rankExperts(entries, ctx = {}) {
  *     目录段 + 模型自判 + expert_recall 承担（design-v2：宁缺勿滥）；
  *   - **身份专家可选常驻**：仅当显式配置 identityExpert 时恒选（留空 = 不常驻）；
  *   - **第二位**：按职能键（role_tag[0]）去重，证据须达到
- *     expertSecondThreshold × 本轮最强证据；上限 expertInjectMax（0 = 不限，其余 clamp 1–3）。
+ *     expertSecondThreshold × 本轮最强证据；上限 expertInjectMax（0 = 不限，其余 clamp 1–4，硬上限见 limits.js）。
  *
  * @param {Array<object>} entries - 参与匹配的专家
  * @param {object} ctx - 打分上下文（含 identityId）
@@ -101,39 +113,62 @@ export function selectExperts(entries, ctx = {}, cfg = {}) {
   const rawMax = Number(cfg.expertInjectMax)
   const max = (Number.isFinite(rawMax) && rawMax === 0)
     ? Number.POSITIVE_INFINITY
-    : Math.min(3, Math.max(1, Number.isFinite(rawMax) ? Math.floor(rawMax) : 1))
-  const threshold = Number.isFinite(Number(cfg.expertSecondThreshold)) ? Number(cfg.expertSecondThreshold) : 0.8
+    : Math.min(INJECT_MAX_HARD, Math.max(1, Number.isFinite(rawMax) ? Math.floor(rawMax) : 1))
+  // 兜底值须与 settings.js 的 DEFAULTS 一致（2026-09-15：0.8 → 0.3 —— 相对门槛设高会把第 2/3 位挡在外面）
+  const threshold = Number.isFinite(Number(cfg.expertSecondThreshold)) ? Number(cfg.expertSecondThreshold) : 0.3
   const identityId = String(ctx.identityId || '').toLowerCase()
+  // 通用型专家的**独立配额**（默认保底 1 位）与**独立绝对门槛**（默认 evidence ≥ 0.2 = 命中 1 个关键词）
+  const rawGen = Number(cfg.expertGeneralMax)
+  const generalQuota = Number.isFinite(rawGen) && rawGen >= 0 ? Math.floor(rawGen) : 1
+  const rawGenMin = Number(cfg.expertGeneralMinEvidence)
+  const generalMinEvidence = Number.isFinite(rawGenMin) && rawGenMin >= 0 ? rawGenMin : 0.2
 
   const selected = []
 
   /** 去重粒度 = 职能键（role_tag[0]）；缺该字段时回落 domain（向后兼容） */
   const funcKey = (e) => (Array.isArray(e?.role_tag) && e.role_tag[0]) ? String(e.role_tag[0]) : String(e?.domain || '')
+  const isGeneral = (it) => String(it.entry?.domain || '') === GENERAL_DOMAIN
 
   // 0) 身份专家恒选（仅当显式配置了 identityExpert）
   const idItem = identityId ? ranked.find((r) => String(r.entry.id).toLowerCase() === identityId) : null
   if (idItem) selected.push(idItem)
 
-  // 1) 按任务实证选人
   const base = ranked[0] || null
-  for (const item of ranked) {
+  // 零命中不注入（宁缺勿滥）：连一位有实证的候选都没有时，通用先验也不单独触发
+  if (!base || base.evidence <= 0) {
+    return { selected, ranked, reason: ranked.length === 0 ? 'no-experts' : 'no-evidence' }
+  }
+
+  const pushable = (it) => it.evidence > 0
+    && !selected.some((s) => s.entry.id === it.entry.id)
+    && !selected.some((s) => funcKey(s.entry) === funcKey(it.entry))
+  const push = (it) => { selected.push(it) }
+
+  // **双赛道**（2026-09-15）：域专家按「相对门槛」（最强证据 × exponentSecondThreshold）比；
+  // 通用型专家按「独立绝对门槛」比 —— 两者的证据分布天然不同（通用词更泛、证据更低），
+  // 用同一把尺会让通用专家永远补不进来（实测：defaultDomain=infosec 时它连 0.35 的岗位先验都拿不到）。
+  const domPool = ranked.filter((it) => pushable(it) && !isGeneral(it) && it.evidence >= base.evidence * threshold)
+  const genPool = ranked.filter((it) => pushable(it) && isGeneral(it) && it.evidence >= generalMinEvidence)
+
+  // 1) 通用赛道**保底**占位（先占 quota，保证「方法层」在场；上限内）
+  let genPicked = 0
+  for (const it of genPool) {
+    if (selected.length >= max || genPicked >= generalQuota) break
+    if (pushable(it)) { push(it); genPicked += 1 }
+  }
+  // 2) 域赛道填满剩余名额
+  for (const it of domPool) {
     if (selected.length >= max) break
-    if (idItem && item.entry.id === idItem.entry.id) continue
-    // ranked 已按 evidence 降序：遇到没有实证的候选即可停止（其后全为 0）
-    if (item.evidence === 0) break
-    if (selected.length === 0) {
-      selected.push(item)
-      continue
-    }
-    if (selected.some((s) => funcKey(s.entry) === funcKey(item.entry))) continue // 同职能不叠加
-    const ref = base || selected[0]
-    if (ref.evidence <= 0) break
-    if (item.evidence < ref.evidence * threshold) continue
-    selected.push(item)
+    if (pushable(it)) push(it)
+  }
+  // 3) 域专家不足时，通用专家再补（吃满上限，避免空位浪费）
+  for (const it of genPool) {
+    if (selected.length >= max) break
+    if (pushable(it)) push(it)
   }
 
   const reason = selected.length === 0
-    ? (ranked.length === 0 ? 'no-experts' : 'no-evidence')
+    ? 'no-evidence'
     : (idItem ? 'identity+' + (selected.length - 1) : 'top' + selected.length)
 
   return { selected, ranked, reason }

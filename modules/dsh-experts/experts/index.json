@@ -30,7 +30,17 @@
         "石化",
         "智能制造",
         "分区",
-        "管道"
+        "管道",
+        "NCS",
+        "电厂",
+        "发电厂",
+        "火电",
+        "水电",
+        "新能源",
+        "电力监控",
+        "二次系统",
+        "机组",
+        "变电站"
       ],
       "source": {
         "repo": "daemon-blockint-tech/Agentic-Enteprises-Skill + Masriyan/Claude-Code-CyberSecurity-Skill + nxl801/copilot-industrial-test-system",
@@ -99,7 +109,14 @@
         "废标",
         "偏离",
         "述标",
-        "评标"
+        "评标",
+        "解决方案",
+        "方案设计",
+        "方案编写",
+        "方案制作",
+        "写方案",
+        "产品清单",
+        "选型"
       ],
       "source": {
         "repo": "jnMetaCode/agency-agents-zh",

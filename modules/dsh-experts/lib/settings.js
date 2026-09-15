@@ -52,7 +52,9 @@ export const DEFAULTS = {
   skillBudgetChars: SKILL_BUDGET_DEFAULT,
   expertInjectDetail: 'auto',
   expertInjectBudgetChars: INJECT_BUDGET_DEFAULT,
-  expertSecondThreshold: 0.8,
+  expertSecondThreshold: 0.3,
+  expertGeneralMax: 1,
+  expertGeneralMinEvidence: 0.2,
   expertShowBanner: true,
   expertSetupDone: false,
 }
@@ -98,8 +100,14 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
   expertInjectBudgetChars: z.natural().default(INJECT_BUDGET_DEFAULT)
     .description('每轮专家注入的**字符预算**（默认 2000，约 1.3–1.7k TOKEN）：超预算按序降级 —— 命中专家全文 → 命中专家精简卡 → 只留身份专家精简卡；连最低形态都放不下则截断并标注（绝不静默超限）。调大＝视角更完整但更占 TOKEN；调小＝更省但卡片更薄（下限 200，上限 20000）'),
 
-  expertSecondThreshold: z.number().default(0.8)
-    .description('第 2/3 位专家的门槛：其分数 ≥ 第 1 位 × 该值时才注入（默认 0.8；仅 expertInjectMax ≥ 2 时生效）'),
+  expertSecondThreshold: z.number().default(0.3)
+    .description('**域专家**的第 2/3 位门槛：其关键词证据 ≥ 本轮最强证据 × 该值时才注入（默认 0.3；仅 expertInjectMax ≥ 2 时生效）。注意这是**相对门槛** —— 第一名证据越强、后面越难进；实测 0.8 时 70% 的任务只能命中 1 位，故 2026-09-15 调为 0.3'),
+
+  expertGeneralMax: z.natural().default(1)
+    .description('**通用型专家**（核查 / 排版 / 文档 / 演示 / 设计）的独立配额，默认 1。2026-09-15 起通用专家与行业域专家**分开评分、分开门槛**（域专家走上面的相对门槛，通用专家走下面的绝对门槛）—— 否则通用专家在本机 defaultDomain=infosec 下拿不到岗位先验，会被结构性挤掉。设 0 = 不保底'),
+
+  expertGeneralMinEvidence: z.number().default(0.2)
+    .description('**通用型专家**的绝对门槛：关键词证据 ≥ 该值即可入选（默认 0.2 = 命中 1 个关键词）。通用专家的触发词更泛、证据天然更低，用域专家的相对门槛会让它们永远补不进来'),
 
 
   expertShowBanner: z.boolean().default(true)
@@ -129,6 +137,10 @@ function toConfig(resolved) {
   cfg.skillBudgetChars = clampSkillBudget(cfg.skillBudgetChars, DEFAULTS.skillBudgetChars)
   const th = clampUnit(cfg.expertSecondThreshold, DEFAULTS.expertSecondThreshold)
   cfg.expertSecondThreshold = th > 0 ? th : DEFAULTS.expertSecondThreshold
+  // 通用型专家的独立配额与绝对门槛（2026-09-15 新增）
+  const gm = Number(cfg.expertGeneralMax)
+  cfg.expertGeneralMax = Number.isFinite(gm) && gm >= 0 ? Math.floor(gm) : DEFAULTS.expertGeneralMax
+  cfg.expertGeneralMinEvidence = clampUnit(cfg.expertGeneralMinEvidence, DEFAULTS.expertGeneralMinEvidence)
   cfg.enabledDomains = String(cfg.enabledDomains ?? '').trim()
   cfg.enabledExperts = String(cfg.enabledExperts ?? '').trim()
   cfg.defaultDomain = String(cfg.defaultDomain ?? '').trim() || DEFAULTS.defaultDomain

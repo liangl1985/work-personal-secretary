@@ -7,7 +7,7 @@
 # **设置页**改（免重启），或在该 profile 的 cordis.patch.yml 里按 id 覆盖；不要改这里。
 #
 # 需求口径（2026-09-12 定）的四条规则在 config 注释里写明，便于交付时一眼看懂：
-#   ① 默认注入 2 位（expertInjectMax: 2），可调 1 或 3 —— 调大时设置页会提示"占用较多 TOKEN"；
+#   ① 默认注入 2 位（expertInjectMax: 2），可调 1–4（2026-09-15 上限由 3 放宽到 4）—— 调大时设置页会提示"占用较多 TOKEN"；
 #   ② 岗位关联（defaultDomain）只作**同证据时的排序先验**（平手时本域优先），不再决定是否注入；
 #   ③ enabledDomains / enabledExperts 是可选的**收窄**（默认全量参与匹配 —— 若拿岗位当白名单，
 #      跨域任务就命中不了本域之外的专家，例如"客户要做三级等保测评"会被本域售前挡住）；
@@ -27,7 +27,10 @@
         identityExpert: ''        # 可选常驻的身份专家（id）；**留空 = 不常驻**（身份由 work-memory 记忆承担）
         enabledDomains: ''        # 把匹配范围收窄到这些域（逗号分隔）；留空 = 全量参与（岗位只作排序先验）
         enabledExperts: ''        # 把匹配范围收窄到这些专家 id（逗号分隔）；留空 = 不收窄
-        expertInjectMax: 2        # persona 软上限：0 = 不限（由预算守门）/ 1 / 2（默认）/ 3 —— >1 会占用较多 TOKEN
+        expertInjectMax: 2        # persona 软上限：0 = 不限（由预算守门）/ 1 / 2（默认）/ 3 / 4 —— >1 会占用较多 TOKEN
+        expertSecondThreshold: 0.3 # **域专家**第 2/3 位的相对门槛（证据 ≥ 最强 × 该值）；2026-09-15 由 0.8 调为 0.3（0.8 时实测 70% 任务只命中 1 位）
+        expertGeneralMax: 1       # **通用型专家**（核查/排版/文档/演示/设计）的独立配额与绝对门槛 —— 与域专家分开评分
+        expertGeneralMinEvidence: 0.2
         skillInjectEnabled: true # 能力层指针（工具/技能）：从任务识别技能，只注入「去哪拿」的指针行；不占 expertInjectMax 配额
         skillBudgetChars: 300    # 能力层指针字符预算（约 3 条）；0 = 不注入指针
         expertInjectDetail: 'auto' # 注入形态：auto（默认，按预算降级：命中全文→命中精简卡→只留第一位精简卡）/ card（全精简卡）/ full（全文，旧行为）

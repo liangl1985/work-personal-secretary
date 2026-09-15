@@ -8,8 +8,8 @@
  * @module dsh-experts/limits
  */
 
-/** 每轮注入上限的硬边界：设置页填超范围时按此 clamp（产品口径 2026-09-12 定的上限 3） */
-export const INJECT_MAX_HARD = 3
+/** 每轮注入上限的硬边界：设置页填超范围时按此 clamp（产品口径 2026-09-12 定为 3；2026-09-15 本机试验放宽到 4，用于「2 位 vs 4 位」对照测试，**尚未同步远端**） */
+export const INJECT_MAX_HARD = 4
 
 /** persona 注入上限的默认值（0 = 不限，由预算与阈值守门） */
 export const INJECT_MAX_DEFAULT = 2
@@ -18,7 +18,7 @@ export const INJECT_MAX_DEFAULT = 2
  * 注入上限归一化（2026-09-14 批二：expertInjectMax 降级为 **persona 软上限**）：
  *   - 0 → 0（不限：交由字符预算与分数阈值守门；技能指针不占该配额）；
  *   - 非法 / 负数 → 默认 2；
- *   - 1..3 → 原值；超过硬边界 → clamp 到 3（绝不静默超限）。
+ *   - 1..4 → 原值；超过硬边界 → clamp 到 4（绝不静默超限）。
  */
 export function clampInjectMax(value, fallback = INJECT_MAX_DEFAULT) {
   const n = Number(value)

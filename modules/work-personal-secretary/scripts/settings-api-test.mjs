@@ -15,7 +15,7 @@
  *   [9] GET /experts/preview：真实子插件打分（契约 §六.1 三级等保用例 + max=1↔2 因果对照）
  *  [10] 预览文本上限 2000：超长截断并标记 truncated
  *  [11] 路由注册口径：installApi 的 exact 数不变（既有测试不破），P4 精确路由独立补注册
- *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 16）+ 默认值 1→2 与注入分级落点
+ *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 18）+ 默认值 1→2 与注入分级落点
  *  [13] 真实环境只读快照首尾比对（证明本次开发未写入真实设置文件 / 工作区 / 子插件源码）
  *
  * 隔离红线（本测试的全部保证）：
@@ -563,16 +563,16 @@ function countSchemaKeys(file) {
 const wmSettingsFile = join(MODULES_DIR, 'dsh-work-memory', 'lib', 'settings.js')
 const expSettingsFile = join(MODULES_DIR, 'dsh-experts', 'lib', 'settings.js')
 ok(countSchemaKeys(wmSettingsFile) === 24, 'work-memory schema 24 键（契约 §一）')
-ok(countSchemaKeys(expSettingsFile) === 16, 'experts schema 16 键（0.3.x：目录段 / 纪律块 / 能力层指针四项已入 schema）')
+ok(countSchemaKeys(expSettingsFile) === 18, 'experts schema 18 键（0.3.x 目录段/纪律块/能力层四项 + 0.4.0 通用专家配额与绝对门槛两键）')
 const expSrc = readFileSync(expSettingsFile, 'utf8')
 ok(/defaultDomain: 'infosec',/.test(expSrc), "DEFAULTS.defaultDomain = 'infosec'（0.3.x 域重划：presales → infosec，settings.js:46）")
 ok(/identityExpert: '',/.test(expSrc), "DEFAULTS.identityExpert = ''（身份退场：留空 = 不常驻，settings.js:47）")
 ok(/expertInjectMax: 2,/.test(expSrc), 'DEFAULTS.expertInjectMax = 2（契约 §六.1 甲案，settings.js:50）')
 ok(/expertInjectMax: z\.natural\(\)\.default\(2\)/.test(expSrc), 'schema 默认值 = 2（settings.js:86）')
-// limits.js 无外部依赖：直接动态 import 做行为刻度（比正则匹配源码更稳），边界口径 = 0 不限 / 负数回落 / 硬上限 3
+// limits.js 无外部依赖：直接动态 import 做行为刻度（比正则匹配源码更稳），边界口径 = 0 不限 / 负数回落 / 硬上限 4
 const expLimits = await import(pathToFileURL(join(MODULES_DIR, 'dsh-experts', 'lib', 'limits.js')).href)
-ok(expLimits.clampInjectMax(0) === 0 && expLimits.clampInjectMax(-1) === 2 && expLimits.clampInjectMax(9) === 3,
-  'limits.js clampInjectMax：0=不限 / 负数回落默认 2 / 硬上限 3（0.3.x 边界；本模块不复制该逻辑）')
+ok(expLimits.clampInjectMax(0) === 0 && expLimits.clampInjectMax(-1) === 2 && expLimits.clampInjectMax(9) === 4,
+  'limits.js clampInjectMax：0=不限 / 负数回落默认 2 / 硬上限 4（2026-09-15 本机放宽，用于 2 位 vs 4 位对照；本模块不复制该逻辑）')
 ok(/backupDir: null/.test(readFileSync(wmSettingsFile, 'utf8')), 'work-memory settings.js 只读兼容（未被本次改动触碰）')
 
 section('[13] 真实环境只读快照首尾比对')
