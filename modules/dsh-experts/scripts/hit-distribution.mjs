@@ -2,7 +2,9 @@
 /**
  * dsh-experts 命中位数分布评估（关键词 ↔ 选取关系）
  *
- * 目标（使用者 2026-09-16 定）：**2 位与 3 位为常态**（合计 ≥55%）· **4 位占比 20–30%** · 0/1 位 ≤15%。
+ * 目标（使用者 2026-09-16 定）：**2 位与 3 位为常态**（合计 ≥55%）· **4 位占比 20–30%**。
+ * 注：原「0/1 位 ≤15%」这一目标**已于 2026-09-16 由使用者撤销**（与真实任务结构冲突，见报告 49 第五节）；
+ *     0+1 位仍照常统计显示，但**不再作为判据**、不参与退出码。
  * 用法：node scripts/hit-distribution.mjs [--detail] [--file <语料.json>]（默认读同目录 hit-corpus.json；真实语料可传 --file hit-corpus-real.json）
  */
 import { readFileSync } from 'node:fs'
@@ -51,11 +53,10 @@ console.log('')
 console.log('目标核对：')
 console.log('  2+3 位 = ' + pct(mid) + '%  ' + (pct(mid) >= 55 ? '✅' : '❌') + ' （目标 ≥55%）')
 console.log('  4 位   = ' + pct(four) + '%  ' + (pct(four) >= 20 && pct(four) <= 30 ? '✅' : '❌') + ' （目标 20–30%）')
-console.log('  0+1 位 = ' + pct(low) + '%  ' + (pct(low) <= 15 ? '✅' : '❌') + ' （目标 ≤15%）')
 if (showDetail) {
   console.log('')
   console.log('明细：')
   for (const r of rows) console.log('  [' + r.n + '] ' + r.item.id + ' ' + r.item.text.slice(0, 26) + ' → ' + (r.ids.join(' + ') || '无'))
 }
-const ok = pct(mid) >= 55 && pct(four) >= 20 && pct(four) <= 30 && pct(low) <= 15
+const ok = pct(mid) >= 55 && pct(four) >= 20 && pct(four) <= 30
 process.exitCode = ok ? 0 : 1
