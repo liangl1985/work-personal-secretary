@@ -18,7 +18,7 @@
 
 import { installSettings } from './settings.js'
 import { DOMAINS, activeExperts, allExperts, allPersonas, allSkills, findExpert, groupByDomain, splitList, identityExpertOf } from './store.js'
-import { selectExperts } from './match.js'
+import { selectExperts, pickWorkers } from './match.js'
 import { buildInjection, buildCatalog, buildManualInjection, PHASE_OPENING, PHASE_WORKING } from './inject.js'
 import { loadDiscipline, resolveMemoryRoot, formatDiscipline } from './discipline.js'
 import { createSkillSource, routeCapabilities } from './capability.js'
@@ -258,7 +258,7 @@ export function apply(ctx, config = {}) {
         if (pool.length === 0) return ''
         // 身份专家：常驻注入的唯一一位（切合使用者身份）；其余按问题归属补充
         const identity = identityExpertOf(c)
-        const { selected } = selectExperts(
+        const { selected, ranked } = selectExperts(
           pool,
           {
             text: taskText,
@@ -271,9 +271,12 @@ export function apply(ctx, config = {}) {
         // 之后每轮，按本轮证据**从大到小**取「最大 + 次大」共 expertFullHitMax 位（默认 2，并列取任意两位）
         // 给**全文**，其余本轮不注入 —— 这不是「丢弃」：没轮到干活的专家只是本轮不需要，
         // 目录段（L0）每轮可见、expert_recall 随时可取；预算不再触发降级，只作上限。
-        // selectExperts 的排序键已是「证据 → 分数 → 索引顺序」，故取前 N 位即「最大 + 次大」。
+        // ⚠️ 不能直接 `selected.slice(0, N)`（2026-09-16 修正）：`selected` 是**构造顺序** ——
+        // 「身份专家 → 通用赛道保底占位 → 域专家」，通用型专家被保底机制先 push，常落在 selected[0]，
+        // 直接切片会让它**恒定占掉一个全文名额**（真机实测：干活轮给了 typeset 0.2 + ics-security 0.4，
+        // 而证据 0.4 的 bid-proposal 被挤出）。证据序在 **ranked** 里，故按它取（见 pickWorkers）。
         const isOpening = !openedSessions.has(sid)
-        const workers = isOpening ? [] : selected.slice(0, Math.max(0, Number(c.expertFullHitMax)))
+        const workers = isOpening ? [] : pickWorkers(selected, ranked, c.expertFullHitMax)
         const personaSelected = (!isOpening && workers.length === 0) ? [] : selected
         const workerIds = workers.map((s) => s.entry.id)
 

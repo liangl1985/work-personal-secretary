@@ -173,3 +173,29 @@ export function selectExperts(entries, ctx = {}, cfg = {}) {
 
   return { selected, ranked, reason }
 }
+
+/**
+ * 干活轮「给全文」的选取（2026-09-16 修正）。
+ *
+ * **不能用 `selected.slice(0, n)`**：`selected` 是**构造顺序** ——
+ * 「身份专家 → 通用赛道保底占位 → 域专家」，通用型专家被保底机制**先 push**，
+ * 因此常落在 `selected[0]`；直接切片会让它**恒定占掉一个全文名额**，把证据更高的域专家挤出去
+ * （真机实测：干活轮给了 general-typeset 0.2 + infosec-ics-security 0.4，
+ * 而并列最高、证据 0.4 的 infosec-bid-proposal 被挤出）。
+ * 证据序在 `ranked`（证据降序 → 分数降序 → 索引顺序）里，故按它的次序取前 `max` 位，
+ * 兑现「按本轮任务证据取最大 + 次大」的口径。
+ *
+ * @param {Array<{entry:object,evidence:number,score:number}>} selected - selectExperts 的选中集合（构造顺序）
+ * @param {Array<{entry:object}>} ranked - selectExperts 的全量排序（证据降序）
+ * @param {number} max - 给全文的位数（expertFullHitMax）
+ * @returns {Array} 按证据降序排好的前 max 位；不改动入参，max ≤ 0 或空集合返回 []
+ */
+export function pickWorkers(selected, ranked, max) {
+  const n = Math.max(0, Math.floor(Number(max) || 0))
+  if (n === 0 || !Array.isArray(selected) || selected.length === 0) return []
+  const order = new Map((Array.isArray(ranked) ? ranked : []).map((it, i) => [it?.entry?.id, i]))
+  const fallback = Number.MAX_SAFE_INTEGER
+  return [...selected]
+    .sort((a, b) => (order.get(a?.entry?.id) ?? fallback) - (order.get(b?.entry?.id) ?? fallback))
+    .slice(0, n)
+}

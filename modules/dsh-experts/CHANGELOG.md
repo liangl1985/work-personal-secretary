@@ -2,6 +2,34 @@
 
 本插件的版本历史。
 
+## 0.5.3 — 2026-09-16（修复：干活轮取人不按证据序，通用保底挤掉高证据域专家）
+
+### 一、缺陷（真机实测发现）
+
+- **现象**：任务「写一份工控安全产品的投标方案，评分点和竞争定位都考虑进去」→ 首轮全景 4 张精简卡正常，**干活轮给全文的却是** `general-typeset`（证据 0.2）+ `infosec-ics-security`（0.4），而**并列最高、证据同为 0.4 的 `infosec-bid-proposal` 被挤出**。
+- **根因（两处叠加）**：
+  1. `lib/match.js` 里 `selected` 是**构造顺序** ——「身份专家 → **通用赛道保底占位** → 域专家」；通用型专家被保底机制**先 push**，因此落在 `selected[0]`。「证据降序」只作用于另一个数组 `ranked`。
+  2. `lib/index.js` 的 `workers = selected.slice(0, expertFullHitMax)` 取的是 `selected` 前 N 位，其注释断言「selectExperts 的排序键已是证据→分数→索引，取前 N 即最大+次大」—— **这个假设不成立**。
+- **影响**：只要通用型专家本轮证据 ≥ 0.2（绝对门槛），它就**恒定占掉干活轮一个全文名额**，把证据更高的域专家挤出去 —— 与使用者定的「最相关的两人全文」口径不符。
+
+### 二、修复
+
+- `lib/match.js` 新增导出 **`pickWorkers(selected, ranked, max)`**：按 `ranked`（证据降序 → 分数降序 → 索引顺序）的次序，从 `selected` 中取前 `max` 位。不改动入参顺序；`max ≤ 0` 或空集合返回 `[]`；`ranked` 缺项时按末尾处理、不抛错。
+- `lib/index.js`：解构出 `ranked`，改为 `const workers = isOpening ? [] : pickWorkers(selected, ranked, c.expertFullHitMax)`；原注释里的错误假设就地改正，并写明真机证据。
+
+### 三、效果（本机复算，同一任务）
+
+| 口径 | 结果 |
+|---|---|
+| `selected`（构造顺序） | general-typeset(0.2) + ics-security(0.4) + bid-proposal(0.4) + sales-engineer(0.2) |
+| `ranked`（证据序） | ics-security(0.4) + bid-proposal(0.4) + sales-engineer(0.2) + general-typeset(0.2) |
+| **修复前** workers | general-typeset + ics-security |
+| **修复后** workers | **ics-security + bid-proposal** |
+
+### 四、回归
+
+- `scripts/regression.mjs` 新增 **2 条**用例：① 反例构造（通用保底在 `selected[0]`）直接锁死缺陷，含 `max=0` / `max=1` / 空集合 / `ranked` 缺项 / 不改动入参等边界；② 真实任务下断言「workers = 证据最大的 n 位，且不含通用专家」。**46 → 48 通过**。
+- 五套合计 **102 通过 / 0 失败**（regression 48 · injection-tier 20 · capability 8 · coexist 8 · smoke-load 18）。
 ## 0.5.2 — 2026-09-16（测试与评估资产补齐 · 真机阈值漂移修复）
 
 **本版不含行为变更**：`lib/**` 与 0.5.1 逐字节一致（`git diff` 可证），只补测试与评估资产，并记录一次真机配置漂移的排查结论。

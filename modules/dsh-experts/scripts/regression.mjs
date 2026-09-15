@@ -22,7 +22,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { DOMAINS, EXPERTS_ROOT, allExperts, allPersonas, allSkills, findSkill, kindOf, findExpert, activeExperts, loadPersona, splitList, domainById, identityExpertOf } from '../lib/store.js'
-import { selectExperts, rankExperts, WEIGHTS } from '../lib/match.js'
+import { selectExperts, rankExperts, pickWorkers, WEIGHTS } from '../lib/match.js'
 import { clampInjectMax, clampUnit, INJECT_MAX_HARD, INJECT_MAX_DEFAULT, COST_PERSONA_CARD, COST_SKILL_LINE } from '../lib/limits.js'
 import { buildInjection, buildPersonaBlock, buildPersonaCard, PERSONA_MAX_CHARS, buildCatalog, CATALOG_MAX_CHARS } from '../lib/inject.js'
 import { parseDiscipline, formatDiscipline, DISCIPLINE_MARK } from '../lib/discipline.js'
@@ -318,6 +318,37 @@ test('跨域 Top-2：上限 2 且两位证据接近时补第二位；两位须�
   assert.ok(b.evidence >= a.evidence * 0.8 || b.score >= a.score * 0.8, '第二位未达门槛')
   assert.ok(ids.includes('hr-labor-law'), '缺劳动法专家：' + ids.join(','))
   assert.ok(ids.includes('accounting-tax'), '缺税务专家：' + ids.join(','))
+})
+
+test('干活轮取人（2026-09-16 修正）：按证据序取「最大 + 次大」，通用保底占位不得挤掉高证据域专家', () => {
+  // 反例构造：通用专家被「保底占位」先 push（match.js 第 1 步），落在 selected[0]；
+  // 旧实现 selected.slice(0, 2) 会把它算进全文名额 —— 这正是真机抓到的缺陷。
+  const mk = (id, domain, evidence) => ({ entry: { id, domain }, evidence, score: evidence })
+  const selected = [mk('general-typeset', 'general', 0.2), mk('infosec-ics-security', 'infosec', 0.4), mk('infosec-bid-proposal', 'infosec', 0.4)]
+  const ranked = [mk('infosec-ics-security', 'infosec', 0.4), mk('infosec-bid-proposal', 'infosec', 0.4), mk('general-typeset', 'general', 0.2)]
+  assert.deepEqual(selected.slice(0, 2).map((s) => s.entry.id), ['general-typeset', 'infosec-ics-security'],
+    '前提不成立：selected 应是构造顺序（通用保底在前）')
+  assert.deepEqual(pickWorkers(selected, ranked, 2).map((s) => s.entry.id), ['infosec-ics-security', 'infosec-bid-proposal'])
+  assert.equal(selected[0].entry.id, 'general-typeset', 'pickWorkers 不得改动入参顺序')
+  assert.deepEqual(pickWorkers(selected, ranked, 0).map((s) => s.entry.id), [])
+  assert.deepEqual(pickWorkers(selected, ranked, 1).map((s) => s.entry.id), ['infosec-ics-security'])
+  assert.deepEqual(pickWorkers([], ranked, 2).map((s) => s.entry.id), [])
+  assert.deepEqual(pickWorkers([mk('orphan', 'infosec', 0.2)], ranked, 1).map((s) => s.entry.id), ['orphan'],
+    'ranked 里缺项时不得抛错，应仍返回该位')
+})
+
+test('干活轮取人：真实任务下 = 证据最大的 n 位（不受通用赛道保底影响）', () => {
+  const { selected, ranked } = selectExperts(experts,
+    ctx({ text: '帮我写一份工控安全产品的投标方案，把评分点和竞争定位都考虑进去。' }),
+    cfg({ expertInjectMax: 4, expertSecondThreshold: 0.3 }))
+  assert.ok(selected.length >= 2, '本用例需至少命中 2 位，实际：' + selected.map((s) => s.entry.id).join(','))
+  assert.equal(selected[0].entry.domain, GENERAL_DOMAIN,
+    '前提：通用专家被保底占位排在最前（实际：' + selected.map((s) => s.entry.id).join(',') + '）')
+  const workers = pickWorkers(selected, ranked, 2)
+  const byEvidence = [...selected].sort((a, b) => b.evidence - a.evidence).slice(0, 2).map((s) => s.entry.id).sort()
+  assert.deepEqual(workers.map((s) => s.entry.id).sort(), byEvidence, '干活轮取到的不是证据最大的两位')
+  assert.ok(workers.every((s) => s.entry.domain !== GENERAL_DOMAIN),
+    '通用专家不应占走全文名额：' + workers.map((s) => s.entry.id).join(','))
 })
 
 test('去重粒度 = 职能键 role_tag[0]：同职能不叠加', () => {
