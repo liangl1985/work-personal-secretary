@@ -4,7 +4,7 @@
  * 快照（活动日志过滤）、子代理门控（在可解析 dsh-tools 的环境下）。
  * 零外部依赖可跑核心部分；门控部分在 DSH 安装环境自动启用。
  */
-import { mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, rmdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname } from 'node:path'
@@ -16,6 +16,27 @@ let pass = 0, fail = 0
 function check(name, cond) {
   if (cond) { pass++; console.log('  ✅', name) }
   else { fail++; console.log('  ❌', name) }
+}
+
+/**
+ * 删掉 `dir` 之后，把它**自己新建的空父目录链**一并删掉（逐级向上、只删空目录）。
+ * @param {string} dir 已经被删掉的那个目录（从它的父目录开始往上看）
+ * @param {string} stopAt 到此为止（**不含**）：绝不删除 stopAt 本身
+ * 规则：目录存在 **且为空** 才删；遇到非空、不存在、到顶或到达 stopAt 立即停手。
+ * 为什么不能直接 `rmSync(dir, { recursive: true })` 删父目录：那会连非空目录一起端掉（可能含别的插件数据）。
+ */
+function pruneEmptyDirsAbove(dir, stopAt) {
+  let cur = dirname(dir)
+  for (let i = 0; i < 16; i++) {
+    if (!cur || cur === stopAt) return
+    let names = []
+    try { names = readdirSync(cur) } catch (e) { return }
+    if (names.length > 0) return
+    try { rmdirSync(cur) } catch (e) { return }
+    const up = dirname(cur)
+    if (!up || up === cur) return
+    cur = up
+  }
 }
 
 // ---------- 1. 存储层 ----------
@@ -210,11 +231,19 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   mkdirSync(bkRoot, { recursive: true })
   writeFileSync(join(bkRoot, 'MEMORY.md'), '[id:deadbeef0001] [2026-09-11] [tag:常规] 备份空值用例\n', 'utf8')
   const defaultBackupBefore = existsSync(defaultBackupDir())
+  // <base>/data/dsh-work-memory：本用例可能顺手建出来的父目录；<base>/data 是**清理的停手线**（下面是别的插件数据）
+  const backupParent = dirname(defaultBackupDir())
+  const backupParentBefore = existsSync(backupParent)
+  const stopAt = dirname(backupParent)
   const rNull = backupMemory(bkRoot, { backupDir: null, keep: 999 })
   // 当天备份已存在时返回 skipped（此时无 dir 字段）；两种结果都说明 null 没把默认目录顶掉
   check('机制：backupDir=null 不抛错且指向默认目录', rNull.ok === true && (rNull.skipped === true || String(rNull.dir || '').startsWith(defaultBackupDir())))
   if (rNull.ok && rNull.dir) rmSync(rNull.dir, { recursive: true, force: true }) // 清理当天目录
-  if (!defaultBackupBefore) rmSync(defaultBackupDir(), { recursive: true, force: true }) // 本用例若新建了默认父目录，一并清掉，别在用户 home 留空目录
+  if (!defaultBackupBefore) {
+    rmSync(defaultBackupDir(), { recursive: true, force: true }) // 本用例若新建了默认备份目录，清掉
+    pruneEmptyDirsAbove(defaultBackupDir(), stopAt) // 再逐级删掉**本次新建且已空**的父目录（<base>/data/dsh-work-memory）；到 <base>/data 停手
+  }
+  check('机制：默认备份目录不留空壳（父目录已随之清理）', defaultBackupBefore || backupParentBefore || !existsSync(backupParent))
   rmSync(bkRoot, { recursive: true, force: true })
 }
 
