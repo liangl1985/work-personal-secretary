@@ -1,6 +1,6 @@
 {
   "name": "dsh-doc-suite",
-  "version": "0.7.8",
+  "version": "0.7.9",
   "description": "DSH 文档能力模块（work-personal-secretary 子模块）：Word / Excel / PPT / PDF 四格式处理 —— 处理·比对·重算·制作排版·只读精确提取。需 Python >= 3.10 与 WPS Office（COM）。",
   "keywords": [
     "deepseek",

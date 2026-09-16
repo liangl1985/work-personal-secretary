@@ -1,11 +1,11 @@
 ---
 name: media-gen
-description: 为演示文稿生成图形素材：ARK（火山引擎方舟）生图、mermaid 图示本地渲染，以及 mermaid 运行时的安装与迁移。当需要配图/概念插图/装饰图、流程图与架构图，或需要安装 mermaid 运行时时使用。
+description: 为文档与演示生成图形素材：ARK（火山引擎方舟）生图、mermaid 图示本地渲染。当需要配图/概念插图/装饰图、流程图与架构图时使用（含 mermaid 运行时安装与迁移的指引）。
 ---
 
 # 媒体素材生成（media-gen）
 
-> 定位：**PPT（B 线）的图形元素供给端**。策略是「**图形元素优先尝试生图，失败自动回退代码矢量绘制**」；
+> 定位：**文档与演示的图形元素供给端**（PPT / Word 方案 / 报告通用）。策略是「**图形元素优先尝试生图，失败自动回退代码矢量绘制**」；
 > 图示走**本机渲染**，不出网。
 
 | 需求 | 工具 | 是否出网 |
@@ -27,7 +27,7 @@ description: 为演示文稿生成图形素材：ARK（火山引擎方舟）生�
 
 ### 设置项在哪儿（避免找错地方）
 
-- 生图 / 生视频的开关、模型、尺寸、密钥都在 **DSH 原生设置**：**设置 → 插件 → `dsh-doc-suite`**（命名空间 `dsh-doc-suite`，键路径 `media*（扁平顶层键）`）；改动**免重启生效**
+- 生图 / 生视频的开关、模型、尺寸、密钥都在 **DSH 原生设置**：**设置 → 插件 → `dsh-doc-suite`**（命名空间 `dsh-doc-suite`，键为**扁平顶层键**，如 `mediaImageEnabled` / `mediaArkApiKey`）；集成体「文档能力」页渲染同一组；改动**免重启生效**
 - 集成体的「**文档能力**」页**只放自检面板**（Python / 依赖 / WPS / 技能落盘），**不渲染插件设置项** —— 在那里找不到生图设置是正常的
 - 自查是否注册成功：跑 `/doc-doctor`，末尾媒体摘要会显示「设置命名空间 dsh-doc-suite 已注册 / 不可用」
 
@@ -95,19 +95,14 @@ py -3 <DOC_SUITE_SCRIPTS>\media\gen_diagram.py render "架构.mmd" "架构.svg" 
 **坑**：`.mmd` 文件**禁 BOM**（用 Python/Node 写，PowerShell 会带 BOM → mmdc 挂在 JSON.parse）；
 mermaid-cli 需要一个浏览器：本机用 **Edge**（`puppeteer.json` 指向它），主版本不匹配时会渲染失败（`exit 4`）。
 
-## 三、安装 / 迁移 mermaid 运行时
+## 三、安装 / 迁移 mermaid 运行时（一条命令）
 
 ```powershell
-# 体检（Node / npm / Edge / 运行时；默认只报告不安装）
-powershell -ExecutionPolicy Bypass -File <DOC_SUITE_SCRIPTS>\media\setup_mermaid.ps1
-# 在标准位置安装（不下载 Chromium，用本机 Edge）
 powershell -ExecutionPolicy Bypass -File <DOC_SUITE_SCRIPTS>\media\setup_mermaid.ps1 -Install
-# 把别处已有的运行时迁到标准位置
-powershell -ExecutionPolicy Bypass -File <DOC_SUITE_SCRIPTS>\media\setup_mermaid.ps1 -MoveFrom "D:\某处\mermaid"
 ```
 
-**为什么不进插件包**：`@mermaid-js/mermaid-cli` 与 `puppeteer` **不写进 `dependencies`、不进 ``files` 白名单** ——
-puppeteer 的 postinstall 可能下载 Chromium，网络失败会**连累整个插件装不上**。安装命令里固定带 `PUPPETEER_SKIP_DOWNLOAD=1`。
+- 不带参数 = **只体检**（Node / npm / Edge / 运行时，不安装）；`-MoveFrom <目录>` = 把已有的运行时迁到标准位置
+- 固定**不下载 Chromium**（用本机 Edge）；运行时**不进插件包**（不写 `dependencies` / `files`）—— 理由与细节见脚本头注释
 
 ## 四、Edge 大版本升级后图示失效的处置
 
