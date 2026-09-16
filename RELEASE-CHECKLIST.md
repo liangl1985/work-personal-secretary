@@ -1,5 +1,7 @@
 # 发布检查清单（work-personal-secretary）
 
+> ⛔ **本次不适用**：`v1.1.3` 及 `1.2.0` 经主人 2026-09-17 裁定**不发布**（原因见根 `/CHANGELOG.md` 的 1.1.3 段与 `modules/work-personal-secretary/CHANGELOG.md`）。本清单保留给**下一次真正发布**时使用；本次不做逐项打勾。
+
 > 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
 >
 > 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.3、`workspace-tokenpet` v1.0.0（**独立项目模块**）；四者已实装本机 desktop（桌宠模块本机尚需按 1.0.0 迁移步骤换 id：卸载旧 id → 安装新 id → 确认素材目录）。
