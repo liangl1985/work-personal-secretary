@@ -25,12 +25,18 @@
  *   GET  /work-personal-secretary/guide —— 安装引导页（text/html；正文来自 defaults/install.zh-CN.md）
  *   GET  /work-personal-secretary/help  —— 使用说明页（text/html；正文来自 defaults/use.zh-CN.md）
  *
- * 路由注册口径（P4 起）：
- *   - 上述三条走本文件的 **prefix** handler（浏览器载体 / Web GUI 的根相对 fetch 命中它），
- *     **不并入 API_PATHS** —— 既有 7 条精确路由的集合与顺序一字不动；
- *   - 桌面载体需要的**精确路由**已有实现（见文件末尾 installSettingsExactRoutes），但**默认不接线**：
- *     probe-test 断言「installApi 的 exact 集合 === API_PATHS」且「apply 的路由总数 === API_PATHS.length + 1」，
- *     一接线这两条就会红。启用前须先确认并同步放宽该断言（详见该函数文档）。
+ * 路由注册口径（1.1.3 起 · 桌面外壳已接线）：
+ *   - 所有 JSON 路由都经本文件的 **prefix** handler 分发（浏览器载体 / Web GUI 的根相对 fetch 命中它）；
+ *   - 桌面载体的 fetch 桥（合成 origin http://dsh.internal）**只认精确路由**，因此 prefix 之外另注册 exact：
+ *       API_PATHS（7）            /check /fix /fix-all /plugins /install /install-all /basedeck
+ *       PAGE_PATHS（2，另一前缀） /work-personal-secretary/guide、/help
+ *       CORE_API_EXACT_PATHS（5） /preflight /identity /identity/save /domain/list /domain/generate
+ *       SETTINGS_API_PATHS（3）   /settings /settings/write /experts/preview
+ *     → **exact 共 17 条**；加 1 条 prefix，`apply()` 注册的**路由总数 = 18**。
+ *   - 前 14 条在本函数内注册（handler 是本地闭包）；P4 三条由文件末尾的 installSettingsExactRoutes
+ *     注册，并在 lib/index.js 的 apply 里**已接线**（1.1.3 起按产品决策方案 A）。
+ *   - 既有 7 条精确路由的集合与顺序一字不动；四条测试断言（probe-test / settings-api-test /
+ *     basedeck-test / install-test）已同步为上述完整集合的**相等比较**，未放宽为 includes / >=。
  *
  * 安全红线（本文件是唯一会执行安装动作的地方）：
  * 1. id 必须命中服务端白名单表 → 映射到**固定命令 + 固定参数数组**；
@@ -107,6 +113,14 @@ export const API_PATHS = ['/check', '/fix', '/fix-all', '/plugins', '/install', 
  */
 export const PAGE_ROOT = '/work-personal-secretary'
 export const PAGE_PATHS = ['/guide', '/help']
+
+/**
+ * 1.1.3 新增 JSON 路由的**精确路径**（桌面载体的 fetch 桥只认精确路由）。
+ * 它们的 handler 是 installApi 的闭包（依赖探针 / settingsApi / currentMemoryDir），
+ * 所以在 installApi 内与 API_PATHS、PAGE_PATHS 一起注册；不含 P4 三条
+ * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
+ */
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate']
 
 /**
  * 两个网页的**单一真相源**映射（T9）：页面正文只来自 defaults 下的 md，
@@ -1089,6 +1103,16 @@ export function installApi(ctx, deps = {}) {
       ctx.logger?.warn?.('work-personal-secretary: 随包网页路由注册失败 ' + p + '：' + (err && err.message ? err.message : err))
     }
   }
+
+  // ── 1.1.3 新增 JSON 路由的精确注册（桌面载体 fetch 桥只认精确路由） ──
+  // 与上面 7 条 API 精确路由共用同一个 handler（它就是 prefix handler，按 sub 分发）。
+  for (const p of CORE_API_EXACT_PATHS) {
+    try {
+      disposers.push(ctx.webServer.register({ kind: 'exact', path: API_ROOT + p, handler: handler }))
+    } catch (err) {
+      ctx.logger?.warn?.('work-personal-secretary: 新增 JSON 路由精确注册失败 ' + p + '：' + (err && err.message ? err.message : err))
+    }
+  }
   return () => {
     for (const d of disposers) {
       try { d() } catch (e) { /* best-effort */ }
@@ -1099,18 +1123,19 @@ export function installApi(ctx, deps = {}) {
 /**
  * P4 能力配置页的**精确路由**（桌面载体的 fetch 桥只认精确路由）。
  *
- * ⚠️ **当前未被 index.js 调用（默认不接线）** —— 这是刻意的取舍，不是遗漏：
- *   既有测试把路由集合锁死了两条口径：
- *     ① `scripts/probe-test.mjs:372-374` —— `installApi` 的 exact 集合必须 === API_PATHS（7 条）；
- *     ② `scripts/probe-test.mjs:497` —— `apply()` 注册的路由**总数**必须 === API_PATHS.length + 1（1 prefix + 7 exact）。
- *   ② 是「总数」断言：无论把 P4 的三条 exact 加在 installApi 还是 index.js 的 apply 里，都会让它变红。
- *   两条都属于本次任务「既有测试零回归」的硬约束，故三条路由一律经 **prefix** 分发
- *   （浏览器载体 / Web GUI 的根相对 fetch 已命中；见 client/index.js 的 requestJsonFull）。
+ * ✅ **已接线**：由 lib/index.js 的 apply 调用（1.1.3 起接线，方案 A：桌面外壳也要能调）。
+ *   此前默认不接线，是因为既有测试把路由集合锁死了两条口径
+ *   （`installApi` 的 exact 集合 === API_PATHS；`apply()` 的路由总数 === API_PATHS.length + 1）。
+ *   本次连同四条断言一起改掉（probe-test / settings-api-test / basedeck-test / install-test），
+ *   断言仍**逐条列出完整路径集合并用相等比较**，不放宽为 includes / >=。
  *
- *   若确认桌面外壳（http://dsh.internal 合成 origin）必须走精确路由，启用步骤为：
- *     1) 在 lib/index.js 的 apply 里调用本函数；
- *     2) 同步把 probe-test 第 497 行断言改为 `API_PATHS.length + 1 + SETTINGS_API_PATHS.length`。
- *   本函数已由 scripts/settings-api-test.mjs 的 [11] 段单测覆盖，接线即可用。
+ * 当前**精确路由集合（共 17 条）**与路由总数：
+ *   API_PATHS（7）            /check /fix /fix-all /plugins /install /install-all /basedeck
+ *   PAGE_PATHS（2，另一前缀） /work-personal-secretary/guide、/help
+ *   CORE_API_EXACT_PATHS（5） /preflight /identity /identity/save /domain/list /domain/generate
+ *   SETTINGS_API_PATHS（3）   /settings /settings/write /experts/preview（**本函数**注册）
+ *   → 17 exact + 1 prefix = `apply()` 注册**总数 18 条**。
+ *   本函数另由 scripts/settings-api-test.mjs 的 [11] 段单测覆盖。
  *
  * @param {object} ctx cordis context（需 webServer）
  * @param {object} [deps] 与 installApi 同名参数：repoRoot / profileDir / env / moduleDir / commonCandidates

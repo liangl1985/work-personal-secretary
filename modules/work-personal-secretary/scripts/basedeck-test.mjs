@@ -68,7 +68,7 @@ import {
   safeWorkspaceParam,
   sha256Text,
 } from '../lib/basedeck.js'
-import { API_PATHS, API_ROOT, PAGE_PATHS, PAGE_ROOT, installApi } from '../lib/api.js'
+import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi } from '../lib/api.js'
 import { isSameOrNested, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
 
@@ -608,8 +608,8 @@ installApi(ctx, {
   dshHome: routeHome,
 })
 ok(ctx.routes.filter((r) => r.kind === 'prefix').length === 1, 'prefix 路由已注册')
-ok(ctx.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length,
-  'exact 路由逐条注册（API ' + API_PATHS.length + ' 条 + 随包网页 ' + PAGE_PATHS.length + ' 条）')
+ok(ctx.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length,
+  'exact 路由逐条注册（API ' + API_PATHS.length + ' 条 + 随包网页 ' + PAGE_PATHS.length + ' 条 + 新增 JSON ' + CORE_API_EXACT_PATHS.length + ' 条）')
 const handler = prefixHandler(ctx)
 async function call(method, sub, body, headers) {
   const res = makeRes()
@@ -934,7 +934,7 @@ installApi(ctx13, {
   env: {}, now: FIXED_NOW, dshHome: home13,
   probeOptions: { skip: ['host', 'node', 'python', 'pythonDeps', 'wps', 'obsidian', 'subPlugins'] },
 })
-ok(ctx13.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length, 'exact = API_PATHS + 两个随包网页')
+ok(ctx13.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length, 'exact = API_PATHS + 随包网页 + 新增 JSON 五条')
 const h13 = (ctx13.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
 async function call13(method, sub, body, headers) {
   const res = makeRes()

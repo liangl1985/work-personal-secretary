@@ -14,7 +14,10 @@
  * 官方 settings 服务的 describe（白名单裁剪），写入走 mutate（ns/path 白名单 + revision 栅栏，
  * dryRun 默认 true），专家阈值预览动态加载子插件 match.js。
  * 三条路由经 installApi 的 **prefix** 路由分发（浏览器载体 / Web GUI 已覆盖）；
- * 桌面载体的精确路由实现（installSettingsExactRoutes）**当前未接线** —— 原因见 lib/api.js 里该函数的说明。
+ * 桌面载体（合成 origin）的 fetch 桥只认精确路由，故 1.1.3 起**已接线**（按产品决策方案 A）：
+ * installApi 内注册 API_PATHS + PAGE_PATHS + CORE_API_EXACT_PATHS（共 14 条 exact），
+ * 本文件再调用 installSettingsExactRoutes 补上 P4 三条（SETTINGS_API_PATHS），
+ * 合计 17 条 exact + 1 条 prefix = **18 条路由**（见 lib/api.js 的「路由注册口径」）。
  *
  * 设计约束（沿用集成体纪律）：
  * - **零运行时依赖**（只用 node 内置模块），宿主 peer 缺失时不影响加载；
@@ -27,7 +30,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { installApi } from './api.js'
+import { installApi, installSettingsExactRoutes } from './api.js'
 import { runProbes } from './probe.js'
 import { installSettings } from './settings.js'
 
@@ -89,6 +92,18 @@ export function apply(ctx, config = {}) {
       + (err && err.message ? err.message : err))
   }
 
+  // ---- P4 能力配置页的三条**精确路由**：桌面载体 fetch 桥只认精确路由，这里接线 ----
+  // 与 installApi 的 14 条 exact 合计 17 条 exact（+1 prefix = 18）。无 webServer 时同样降级。
+  let disposeExact = null
+  try {
+    disposeExact = installSettingsExactRoutes(ctx, {
+      repoRoot: config && typeof config.repoRoot === 'string' ? config.repoRoot : '',
+    })
+  } catch (err) {
+    ctx.logger?.warn?.('work-personal-secretary: 能力配置页精确路由接线失败（能力配置页在桌面载体下可能不可用）：'
+      + (err && err.message ? err.message : err))
+  }
+
   // 可选：启动时做一次只读环境探测并写日志（cordis.patch.yml 的 selfCheckOnStartup，默认关闭）
   if (config && config.selfCheckOnStartup) {
     void runProbes().then((report) => {
@@ -101,5 +116,6 @@ export function apply(ctx, config = {}) {
 
   return () => {
     try { if (disposeApi) disposeApi() } catch (e) { /* best-effort */ }
+    try { if (disposeExact) disposeExact() } catch (e) { /* best-effort */ }
   }
 }

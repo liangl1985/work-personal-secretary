@@ -46,7 +46,8 @@ import {
   pipInstallArgv,
 } from '../lib/probe.js'
 
-import { API_ROOT, API_PATHS, PAGE_PATHS, PAGE_ROOT, resolveFixCommand, resolveFixAllPlan, installApi } from '../lib/api.js'
+import { API_ROOT, API_PATHS, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, resolveFixCommand, resolveFixAllPlan, installApi } from '../lib/api.js'
+import { SETTINGS_API_PATHS } from '../lib/settings-api.js'
 
 import { SUB_PLUGINS, readVersion, apply as applyHost, inject as hostInject } from '../lib/index.js'
 
@@ -385,10 +386,14 @@ installApi(ctx, {
 const handler = prefixHandler(ctx)
 ok(typeof handler === 'function', 'prefix 路由已注册：' + API_ROOT)
 const exacts = ctx.routes.filter((r) => r.kind === 'exact').map((r) => r.path).sort()
-// 1.1.3：exact 集合 = API_PATHS（API 前缀下）+ PAGE_PATHS（/work-personal-secretary 下，两个随包网页）
-const expectedExacts = API_PATHS.map((p) => API_ROOT + p).concat(PAGE_PATHS.map((p) => PAGE_ROOT + p)).sort()
+// 1.1.3：exact 集合 = API_PATHS（API 前缀下）+ CORE_API_EXACT_PATHS（1.1.3 新增 JSON 路由，同一前缀）
+//          + PAGE_PATHS（/work-personal-secretary 下，两个随包网页）——集合全等，不是 includes / >=
+const expectedExacts = API_PATHS.map((p) => API_ROOT + p)
+  .concat(CORE_API_EXACT_PATHS.map((p) => API_ROOT + p))
+  .concat(PAGE_PATHS.map((p) => PAGE_ROOT + p))
+  .sort()
 ok(exacts.join(',') === expectedExacts.join(','),
-  'exact 路由 = API_PATHS 七条 + 随包网页两条：' + exacts.join(', '))
+  'exact 路由 = API 七条 + 新增 JSON 五条 + 随包网页两条（共 ' + expectedExacts.length + ' 条）：' + exacts.join(', '))
 
 const resCheck = makeRes()
 await handler(makeReq({ method: 'GET', url: API_ROOT + '/check' }), resCheck)
@@ -511,8 +516,11 @@ section('[6b] 宿主半 apply（有 / 无 webServer）')
 ok(hostInject.indexOf('settings') >= 0 && hostInject.indexOf('webServer') >= 0, 'inject 含 settings + webServer：' + hostInject.join(', '))
 const ctxHost = makeMockCtx()
 const disposeHost = applyHost(ctxHost, {})
-ok(ctxHost.routes.length === API_PATHS.length + PAGE_PATHS.length + 1 && typeof disposeHost === 'function',
-  'apply 注册 1 prefix + ' + API_PATHS.length + ' API exact + ' + PAGE_PATHS.length + ' 页面 exact 并返回 disposer（' + ctxHost.routes.length + ' 条）')
+// apply 注册总数 = 1 prefix + API_PATHS + PAGE_PATHS + CORE_API_EXACT_PATHS + SETTINGS_API_PATHS（P4 三条已接线）
+const EXPECTED_EXACT_TOTAL = API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length + SETTINGS_API_PATHS.length
+ok(ctxHost.routes.length === EXPECTED_EXACT_TOTAL + 1 && typeof disposeHost === 'function',
+  'apply 注册 1 prefix + ' + EXPECTED_EXACT_TOTAL + ' exact（API ' + API_PATHS.length + ' + 新增 JSON ' + CORE_API_EXACT_PATHS.length
+  + ' + 页面 ' + PAGE_PATHS.length + ' + P4 ' + SETTINGS_API_PATHS.length + '）并返回 disposer（' + ctxHost.routes.length + ' 条）')
 let disposeErr = null
 try { disposeHost() } catch (e) { disposeErr = e }
 ok(disposeErr === null, 'disposer 可安全调用')

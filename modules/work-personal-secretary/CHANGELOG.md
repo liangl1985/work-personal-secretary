@@ -17,11 +17,12 @@
 - **随包说明网页**：`GET /work-personal-secretary/guide`（安装引导）与 `/help`（使用说明）直出 HTML；正文与 `defaults/install.zh-CN.md`、`defaults/use.zh-CN.md` **单一真相源**（同一份 md 也写入 `PROJECTS/工作秘书.md` 的前两条）。新增 `?embed=1` 片段形态（无 html / head / body，样式作用域到 `.wps-doc`），供设置页页内展开；不带 `embed` 仍是完整文档。
 - **行为变更（调用方注意）**：`GET/POST /work-personal-secretary/api/basedeck` 的 `items` 由 **5 项变为 7 项**（末尾追加 `memoryDeck` / `knowledgeDeck`，既有五项顺序不变）；**不带 `ids` 的缺省调用现在会写 7 项**（旧行为只写 5 项）。若调用方依赖旧缺省集合，请显式传 `ids`。
 - **同版审查返工**：身份写入的「其余条目逐字未变」校验不再恒真（改为区间切片 + 逐字节比对）；写记忆库目录的路径统一取 `.work-memory.lock`（含既有记忆种子写回）；所有落盘路径统一走写目标护栏（拒绝用户主目录 / 非绝对路径 / 不可写 / 同名文件占用）；`GET /identity` 补只读同源守卫并把可读范围限制为配置的记忆库目录或其子路径；临时文件加随机后缀；`md.js` 拒绝 protocol-relative；同步锁等待上限收紧到 1 秒并新增异步锁（等待时让出事件循环）。
+- **桌面外壳兼容**：新增的 5 条 JSON 路由与 P4 三条能力配置路由已注册为**精确路由**（exact），桌面载体（合成 origin）的 fetch 桥下不再 404；精确路由集合 17 条 + 1 条 prefix。属内部接线，接口路径与响应体均未变。
 
 ### 验证
 
 - `node --check` **17 个文件 0 失败**
-- `scripts/smoke-load.mjs` **412 通过 / 0 失败** · `scripts/probe-test.mjs` **142 / 0** · `scripts/install-test.mjs` **244 / 0** · `scripts/basedeck-test.mjs` **263 / 0** · `scripts/settings-api-test.mjs` **112 / 0** · `scripts/identity-test.mjs` **64 / 0**（本版新增） · `scripts/defaults-test.mjs` **49 / 0**（本版新增，含随包说明的敏感过滤自检）
+- `scripts/smoke-load.mjs` **426 通过 / 0 失败** · `scripts/probe-test.mjs` **142 / 0** · `scripts/install-test.mjs` **244 / 0** · `scripts/basedeck-test.mjs` **263 / 0** · `scripts/settings-api-test.mjs` **112 / 0** · `scripts/identity-test.mjs` **64 / 0**（本版新增） · `scripts/defaults-test.mjs` **49 / 0**（本版新增，含随包说明的敏感过滤自检）
 - 安装到 profile 后需**重启 DSH** 才加载宿主侧改动；客户端改动刷新页面即可。
 
 > 注记：本段**之下**仍保留 `## 1.2.0 — 未发布` 段，版本脉络（1.2.0 未发布 vs 1.1.3 本次发布）待主人裁定；未裁定前本版按 1.1.3 发布。

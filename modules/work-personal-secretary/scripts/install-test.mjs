@@ -58,7 +58,7 @@ import {
   describePetSkins,
 } from '../lib/install.js'
 
-import { API_ROOT, API_PATHS, PAGE_PATHS, installApi } from '../lib/api.js'
+import { API_ROOT, API_PATHS, CORE_API_EXACT_PATHS, PAGE_PATHS, installApi } from '../lib/api.js'
 import { SUB_PLUGINS, apply as applyHost } from '../lib/index.js'
 import { SUB_PLUGIN_NAMES, maskUserPath } from '../lib/probe.js'
 
@@ -451,7 +451,7 @@ installApi(ctx, {
 })
 ok(ctx.routes.filter((r) => r.kind === 'prefix').length === 1, 'prefix 路由已注册')
 ok(API_PATHS.join(',') === '/check,/fix,/fix-all,/plugins,/install,/install-all,/basedeck', 'API_PATHS 含三条新路由与配置底座路由')
-ok(ctx.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length, 'exact 路由逐条注册（API ' + API_PATHS.length + ' 条 + 随包网页 ' + PAGE_PATHS.length + ' 条）')
+ok(ctx.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length, 'exact 路由逐条注册（API ' + API_PATHS.length + ' 条 + 随包网页 ' + PAGE_PATHS.length + ' 条 + 新增 JSON ' + CORE_API_EXACT_PATHS.length + ' 条）')
 const handler = prefixHandler(ctx)
 
 async function call(method, sub, body, headers) {
