@@ -1973,12 +1973,23 @@ const OK_PLUGINS = {
 }
 // 说明页取的是**完整文档**（宿主 renderPage 的形态：DOCTYPE + head/title + 自带 <style>），
 // 客户端把这份 HTML 写入独立新窗口（不再让浏览器导航受保护地址，也不会注入设置页 DOM）
-const DOC_HELP = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>工作秘书 · 使用说明</title><style>.wps-doc{color:#111}</style></head><body><article class="wps-doc"><h1>工作秘书 · 使用说明</h1><p>本页由插件自带（不是外链）</p></article></body></html>'
+// 说明页 = 插件目录里预先做好的 HTML 文件：客户端只调 POST /open-doc，由宿主用系统默认程序打开；
+// /docs 给出两个文件的存在性与路径（只读，可选能力）
+const DOCS_PAYLOAD = {
+  ok: true,
+  items: [
+    { doc: 'guide', path: 'C:/plugins/work-personal-secretary/doc/guide.html', exists: true },
+    { doc: 'help', path: 'C:/plugins/work-personal-secretary/doc/help.html', exists: true },
+  ],
+}
 const htmlRes = (html) => ({ ok: true, status: 200, text: async () => html, json: async () => { throw new Error('not json') } })
 const allOkFetch = async (url, opts) => {
   const u = String(url)
   calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
-  if (u.indexOf('/guide') >= 0 || u.indexOf('/help') >= 0) return htmlRes(DOC_HELP)
+  if (u.indexOf('/open-doc') >= 0) {
+    return jsonRes({ ok: true, doc: 'help', path: 'C:/plugins/work-personal-secretary/doc/help.html', command: 'open help.html' })
+  }
+  if (u.indexOf('/docs') >= 0) return jsonRes(DOCS_PAYLOAD)
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
   if (u.indexOf('/plugins') >= 0) return jsonRes(OK_PLUGINS)
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
@@ -2022,13 +2033,7 @@ const readyBtn = findButtons(nTree).filter((b) => label(b) === '环境已就绪'
 ok(Boolean(readyBtn) && readyBtn.props.disabled === true, '依赖组 + 子插件组全正常 → 主按钮置灰（「环境已就绪」）')
 ok(nText.includes('6/6 正常') && nText.includes('5/5 已装'), '分组徽标：环境依赖 6/6 正常 · 子插件 5/5 已装')
 
-// 说明页：客户端取回 HTML 写入独立新窗口（两种载体与三态失败在 [16] 段详测）
-const opened13 = []
-let wrote13 = ''
-win.open = () => {
-  opened13.push(1)
-  return { opener: null, close() {}, document: { open() {}, close() {}, write(h) { wrote13 = String(h) } } }
-}
+// 说明页：交给宿主打开插件目录里的 HTML 文件（各分支在 [16] 段详测）
 const helpBtn = findButtons(nTree).filter((b) => label(b) === '使用说明')[0]
 ok(Boolean(helpBtn), '「使用说明」按钮存在且可点')
 calls.length = 0
@@ -2038,10 +2043,12 @@ hookCursor = 0
 effectQueue = []
 nTree = expand(reg.render({ initialTab: 'install' }))
 nText = collect(nTree, []).join(' | ')
-ok(opened13.length === 1, '点击后先开一个空白新窗口（window.open("", "_blank")）')
-ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/help'), '同源取回 HTML（合成基址 /help）')
-ok(wrote13 === DOC_HELP, '取回的完整文档被 document.write 写入新窗口')
-ok(String(src).indexOf('dangerouslySetInnerHTML') < 0, '不往设置页注入 HTML（只写新窗口文档）')
+const openDocCalls13 = calls.filter((c) => c.method === 'POST' && c.url.indexOf('/open-doc') >= 0)
+ok(openDocCalls13.length === 1 && String(openDocCalls13[0].body) === JSON.stringify({ doc: 'help' }),
+  '点击「使用说明」→ POST /open-doc { doc: "help" }（实测 ' + String(openDocCalls13[0] && openDocCalls13[0].body) + '）')
+ok(nText.indexOf('已打开说明页') >= 0 && nText.indexOf('help.html') >= 0, '成功后就地回显「已打开说明页」+ 文件路径')
+ok(String(src).indexOf('document.write') < 0 && String(src).indexOf('window.open') < 0,
+  '客户端不再自己开窗 / 写文档（改由宿主打开）')
 
 // 门禁：未就绪 → 门禁卡 + 整页灰化（pointer-events:none）
 globalThis.fetch = async (url, opts) => {
@@ -2453,45 +2460,33 @@ ok(r1Text.indexOf('5/6 正常') >= 0, 'R-1：分组徽标仍如实显示 5/6 正
 ok(r1Text.indexOf('可选') >= 0, 'R-1：Obsidian 未就绪显示「可选」而非「缺失 / 警告」')
 
 // ══════════════════════════════════════════════════════════════════
-// [16] 说明页：同源取 HTML → window.open('') → document.write 进独立新窗口
-//      成功路径 + 三种失败（被拦截 / 取内容失败含 403 / 写入抛错）+ Web 载体
+// [16] 说明页：POST /open-doc → 宿主用系统默认程序打开插件目录里的 HTML 文件
+//      /docs 存在性（缺失置灰）· 成功回显路径 · 失败可读原因 · Web 载体
 // ══════════════════════════════════════════════════════════════════
-console.log('\n[16] 说明页（取回 HTML 写入新窗口）')
+console.log('\n[16] 说明页（宿主打开随包 HTML 文件）')
 
-const openCalls16 = []
-let writeLog16 = []
-let winMode16 = 'ok'      // ok | blocked | writethrows
-let helpStatus16 = 200    // fetch /help 的状态码
-let lastWin16 = null
-const makeWin16 = () => {
-  const w = {
-    opener: 'x',
-    closed: false,
-    close() { this.closed = true },
-    document: {
-      open() {},
-      close() {},
-      write(html) {
-        if (winMode16 === 'writethrows') throw new Error('写入被拒绝（模拟）')
-        writeLog16.push(String(html))
-      },
-    },
-  }
-  lastWin16 = w
-  return w
-}
-win.open = (url, target) => {
-  openCalls16.push({ url: String(url), target: String(target) })
-  return winMode16 === 'blocked' ? null : makeWin16()
-}
+const openDocPosts16 = []
+let openDocFail16 = false     // true → /open-doc 返回 ok:false + code
+let docsMissing16 = ''        // '' | 'guide' | 'help' | 'both'
+let docsOk16 = true           // false → /docs 返回 404（接口不可用）
 globalThis.fetch = async (url, opts) => {
   const u = String(url)
   calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
-  if (u.indexOf('/help') >= 0) {
-    if (helpStatus16 !== 200) {
-      return { ok: false, status: helpStatus16, text: async () => 'forbidden', json: async () => ({ ok: false, error: 'forbidden' }) }
-    }
-    return { ok: true, status: 200, text: async () => DOC_HELP, json: async () => { throw new Error('not json') } }
+  if (u.indexOf('/open-doc') >= 0) {
+    let body = {}
+    try { body = JSON.parse(String((opts && opts.body) || '{}')) } catch (err) { body = {} }
+    openDocPosts16.push(body)
+    if (openDocFail16) return jsonRes({ ok: false, error: '找不到说明页文件', code: 'doc-missing' })
+    const doc = body.doc === 'guide' ? 'guide' : 'help'
+    return jsonRes({ ok: true, doc: doc, path: 'C:/plugins/work-personal-secretary/doc/' + doc + '.html', command: 'open ' + doc + '.html' })
+  }
+  if (u.indexOf('/docs') >= 0) {
+    if (!docsOk16) return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+    const miss = (d) => docsMissing16 === d || docsMissing16 === 'both'
+    return jsonRes({ ok: true, items: [
+      { doc: 'guide', path: 'C:/plugins/work-personal-secretary/doc/guide.html', exists: !miss('guide') },
+      { doc: 'help', path: 'C:/plugins/work-personal-secretary/doc/help.html', exists: !miss('help') },
+    ] })
   }
   if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)
   if (u.indexOf('/plugins') >= 0) return jsonRes(PLUGINS_PAYLOAD)
@@ -2510,74 +2505,64 @@ const e16Render = async () => {
 }
 let e16Tree = await e16Render()
 let e16Text = collect(e16Tree, []).join(' | ')
+const e16Btn = (txt) => findButtons(e16Tree).filter((b) => label(b) === txt)[0]
 
-// ① 成功：空白窗口 + 同源取回 + 写入完整文档
-let e16Help = findButtons(e16Tree).filter((b) => label(b) === '使用说明')[0]
-ok(Boolean(e16Help), '「使用说明」按钮存在')
-openCalls16.length = 0
-writeLog16 = []
+// ① 进页面 GET /docs；两个文件都在 → 按钮都可点
+ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/docs'),
+  '进入页面 GET /docs（合成基址；实测 ' + String((calls.filter((c) => c.url.indexOf('/docs') >= 0)[0] || {}).url) + '）')
+const e16Help1 = e16Btn('使用说明')
+const e16Guide1 = findButtons(e16Tree).filter((b) => label(b).indexOf('查看安装引导') >= 0)[0]
+ok(Boolean(e16Help1) && e16Help1.props.disabled !== true, 'help 文件存在 → 「使用说明」可点')
+ok(Boolean(e16Guide1), '找到「查看安装引导」按钮')
+
+// ② 成功：POST /open-doc { doc:'guide' } → 回显文件路径
+openDocPosts16.length = 0
 calls.length = 0
-if (e16Help) e16Help.props.onClick()
-await tick(60)
-ok(openCalls16.length === 1 && openCalls16[0].url === '' && openCalls16[0].target === '_blank',
-  '先同步开空白窗口：window.open("", "_blank")（实测 url=' + JSON.stringify(openCalls16[0] && openCalls16[0].url) + '）')
-ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/help'),
-  '同源取回完整文档（合成基址 /help；实测 ' + String((calls.filter((c) => c.url.indexOf('/help') >= 0)[0] || {}).url) + '）')
-ok(writeLog16.length === 1 && writeLog16[0] === DOC_HELP,
-  'document.write 收到完整文档原文')
-ok(writeLog16.length === 1 && writeLog16[0].indexOf('<!DOCTYPE html>') === 0,
-  '写入的是完整文档（不是 ?embed=1 的 <style>+<article> 片段）')
-ok(String(src).indexOf("'?embed=1'") < 0 && String(src).indexOf('PAGE_EMBED_QUERY') < 0,
-  '客户端仍不请求 embed 片段')
-
-// ② 被拦截：不发取文档请求，提示含地址
-winMode16 = 'blocked'
-calls.length = 0
-openCalls16.length = 0
-e16Tree = await e16Render()
-e16Help = findButtons(e16Tree).filter((b) => label(b) === '使用说明')[0]
-if (e16Help) e16Help.props.onClick()
-await tick(40)
-e16Tree = await e16Render()
-e16Text = collect(e16Tree, []).join(' | ')
-ok(e16Text.indexOf('浏览器拦截了新窗口') >= 0, '被拦截 → 提示「浏览器拦截了新窗口…」')
-ok(e16Text.indexOf('http://dsh.internal/work-personal-secretary/help') >= 0, '被拦截提示里含可手动打开的完整地址')
-ok(calls.filter((c) => c.url.indexOf('/help') >= 0).length === 0, '被拦截时不发取文档请求')
-
-// ③ fetch 403：提示带状态码与凭据说明，并关掉空窗口
-winMode16 = 'ok'
-helpStatus16 = 403
-e16Tree = await e16Render()
-e16Help = findButtons(e16Tree).filter((b) => label(b) === '使用说明')[0]
-lastWin16 = null
-if (e16Help) e16Help.props.onClick()
+if (e16Guide1) e16Guide1.props.onClick()
 await tick(60)
 e16Tree = await e16Render()
 e16Text = collect(e16Tree, []).join(' | ')
-ok(e16Text.indexOf('未能取回说明页内容') >= 0 && e16Text.indexOf('403') >= 0,
-  '取内容失败 → 提示含「未能取回说明页内容」与 HTTP 403')
-ok(e16Text.indexOf('会话凭据不可用') >= 0, '403 → 补一句「当前载体的会话凭据不可用」')
-ok(e16Text.indexOf('http://dsh.internal/work-personal-secretary/help') >= 0, '失败提示仍含可手动打开的地址')
-ok(Boolean(lastWin16) && lastWin16.closed === true, '取内容失败时关掉那个空窗口')
+ok(openDocPosts16.length === 1 && String(JSON.stringify(openDocPosts16[0])) === JSON.stringify({ doc: 'guide' }),
+  '点击「查看安装引导」→ POST /open-doc { doc: "guide" }（实测 ' + JSON.stringify(openDocPosts16[0]) + '）')
+const e16Post = calls.filter((c) => c.method === 'POST' && c.url.indexOf('/open-doc') >= 0)[0]
+ok(Boolean(e16Post) && e16Post.url === 'http://dsh.internal/work-personal-secretary/api/open-doc',
+  '走合成基址 POST /open-doc（实测 ' + String(e16Post && e16Post.url) + '）')
+ok(e16Text.indexOf('已打开说明页') >= 0 && e16Text.indexOf('guide.html') >= 0,
+  '成功后就地回显「已打开说明页」+ 文件路径')
+ok(String(src).indexOf('window.open') < 0 && String(src).indexOf('document.write') < 0,
+  '客户端不再自己开窗 / 写文档（改由宿主打开）')
 
-// ④ document.write 抛错：提示「写入失败」+ 关窗
-helpStatus16 = 200
-winMode16 = 'writethrows'
+// ③ 失败：宿主返回 ok:false + code → 可读原因（不静默）
+openDocFail16 = true
 e16Tree = await e16Render()
-e16Help = findButtons(e16Tree).filter((b) => label(b) === '使用说明')[0]
-lastWin16 = null
-if (e16Help) e16Help.props.onClick()
+const e16Help3 = e16Btn('使用说明')
+if (e16Help3) e16Help3.props.onClick()
 await tick(60)
 e16Tree = await e16Render()
 e16Text = collect(e16Tree, []).join(' | ')
-ok(e16Text.indexOf('写入说明内容失败') >= 0, 'document.write 抛错 → 提示「新窗口已打开，但写入说明内容失败」')
-ok(Boolean(lastWin16) && lastWin16.closed === true, '写入失败时关掉那个窗口')
+ok(e16Text.indexOf('未能打开说明页') >= 0 && e16Text.indexOf('找不到说明页文件') >= 0,
+  '失败 → 提示「未能打开说明页」+ 宿主给的原因')
+ok(e16Text.indexOf('doc-missing') >= 0, '失败提示带上宿主返回的 code')
+openDocFail16 = false
 
-// ⑤ Web 载体：同一个流程，fetch 走根相对路径（GUI 内带 cookie）
-winMode16 = 'ok'
-openCalls16.length = 0
-writeLog16 = []
-webWin.open = (url, target) => { openCalls16.push({ url: String(url), target: String(target) }); return makeWin16() }
+// ④ /docs 说文件缺失 → 对应按钮置灰 + 就地提示路径
+docsMissing16 = 'help'
+e16Tree = await e16Render()
+e16Text = collect(e16Tree, []).join(' | ')
+const e16Help4 = e16Btn('使用说明')
+ok(Boolean(e16Help4) && e16Help4.props.disabled === true, 'help 文件缺失 → 「使用说明」置灰')
+ok(e16Text.indexOf('说明页文件缺失') >= 0 && e16Text.indexOf('help.html') >= 0,
+  '缺失时就地提示「说明页文件缺失」+ 路径')
+docsMissing16 = ''
+
+// ⑤ /docs 接口不可用 → 不拦主流程（按未知处理，按钮仍可点）
+docsOk16 = false
+e16Tree = await e16Render()
+const e16Help5 = e16Btn('使用说明')
+ok(Boolean(e16Help5) && e16Help5.props.disabled !== true, '/docs 不可用时不拦主流程：按钮仍可点（未知按可点）')
+docsOk16 = true
+
+// ⑥ Web 载体：POST 走根相对路径
 hookSlots = []
 hookCursor = 0
 effectQueue = []
@@ -2591,8 +2576,8 @@ const e16WebHelp = findButtons(e16Web).filter((b) => label(b) === '使用说明'
 calls.length = 0
 if (e16WebHelp) e16WebHelp.props.onClick()
 await tick(60)
-ok(calls.some((c) => c.url === '/work-personal-secretary/help'), 'Web 载体：根相对路径取回 HTML（同源带 cookie）')
-ok(writeLog16.length === 1, 'Web 载体：同样把 HTML 写入新窗口')
+ok(calls.some((c) => c.method === 'POST' && c.url === '/work-personal-secretary/api/open-doc'),
+  'Web 载体：POST /work-personal-secretary/api/open-doc 走根相对路径')
 
 
 // 第 3 项：字段说明按设计定稿 §3.2 口径；第 2 项：「浏览…」按钮不换行

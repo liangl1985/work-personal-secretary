@@ -108,21 +108,12 @@ window.__ModuleLoader__.load({
     /** 可选项（未就绪时用「可选」措辞，不当故障显示） */
     const DEP_OPTIONAL_IDS = ['obsidian']
     /**
-     * 两个随包网页（宿主侧同波实现，路径冻结）：安装引导 / 使用说明。
-     * 打开方式统一为**页内展开**：桌面外壳的宿主地址是合成 origin http://dsh.internal
-     * （见 HOST_BASE），它只在外壳内部有效 —— 交给系统浏览器（Electron 对 http/https
-     * 链接走 shell.openExternal）只会打开一个解析不了的页面；Web 载体虽能 window.open，
-     * 但两种载体统一成一种行为最稳（设计定稿 §12 决议 12）。
+     * 随包说明页的两个 id（与宿主契约一致）。说明页是**插件目录里预先做好的 HTML 文件**：
+     * 由宿主侧 POST /open-doc 用系统默认程序打开，客户端不做导航、不取内容、不需要凭据。
+     * 这也是三轮下来的定论：页内注入（否决）→ 新窗口导航（403 门禁）→ 前端取回写入（撤回），
+     * 都不如「宿主直接打开那个文件」简单可靠。
      */
-    const PAGE_PATHS = { guide: '/work-personal-secretary/guide', help: '/work-personal-secretary/help' }
-    /**
-     * 随包网页的地址（完整文档，不带 ?embed=1 —— 那是宿主为「页内注入」保留的片段形态，
-     * 接口留着，本客户端不再调用）。两种载体都**由客户端取回 HTML 再写入新窗口**：
-     *   · Web 载体：根相对路径（真 origin，同源 fetch 带 cookie）；
-     *   · 桌面外壳：合成 origin HOST_BASE（外壳的 fetch 桥转发给宿主）。
-     * 不用「新窗口直接导航该地址」：宿主导航门禁没有 cookie 就 401/403，真机实测得到 forbidden。
-     */
-    const PAGE_OPEN_TARGET = '_blank'
+    const DOC_IDS = ['guide', 'help']
     /** 状态 → 文案键（ok | warn | missing | skip） */
     const STATUS_KEYS = { ok: 'statusOk', warn: 'statusWarn', missing: 'statusMissing', skip: 'statusSkip' }
     /** 批量执行状态 → 文案键 / 徽标样式 */
@@ -246,10 +237,9 @@ window.__ModuleLoader__.load({
       guideOpen: '查看安装引导（{n} 项待处理）',
       guideReady: '环境已就绪',
       helpOpen: '使用说明',
-      docBlocked: '浏览器拦截了新窗口，请在已登录的窗口里手动访问：',
-      docFetchFailed: '未能取回说明页内容',
-      docForbiddenHint: '当前载体的会话凭据不可用（外部窗口没有登录凭据）',
-      docWriteFailed: '新窗口已打开，但写入说明内容失败',
+      docOpened: '已打开说明页：',
+      docOpenFailed: '未能打开说明页',
+      docMissing: '说明页文件缺失',
 
       // ── 核心配置（1.1.3：门禁；目录与岗位字段由后续任务填充） ──────
       gateTitle: '先满足最低使用需求',
@@ -788,10 +778,9 @@ window.__ModuleLoader__.load({
       guideOpen: 'Open install guide ({n} item(s) pending)',
       guideReady: 'Environment ready',
       helpOpen: 'User guide',
-      docBlocked: 'The browser blocked the new window — open this address manually in the signed-in window: ',
-      docFetchFailed: 'Could not fetch the page content',
-      docForbiddenHint: 'the session credential is unavailable in this context (the external window has no login cookie)',
-      docWriteFailed: 'The new window opened, but writing the content failed',
+      docOpened: 'Opened: ',
+      docOpenFailed: 'Could not open the page',
+      docMissing: 'The page file is missing',
 
       // ── Core setup (1.1.3: gate; fields filled by a later task) ───
       gateTitle: 'Meet the minimum requirements first',
@@ -1975,49 +1964,6 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 取**随包网页**的 HTML 正文（同源请求，不走 API 前缀）：GET /work-personal-secretary/guide|help。
-     * 宿主返回 text/html 而非 JSON，所以单独一条文本通道；基址分档与 requestJson 一致
-     *（Web 载体先根相对路径、失败再合成基址；桌面外壳只走合成基址）。
-     * 为什么由客户端取回、而不是让新窗口自己导航：宿主对浏览器导航有门禁
-     *（dsh-client-connection 的 requestRejection：无凭据一律 401/403），新窗口没有登录
-     * cookie，直接打开会得到 forbidden（真机实测）；同源 fetch 在 GUI 里带着凭据，能过门禁。
-     * 失败信息带 HTTP 状态与响应正文摘要，供上层给出可读原因。
-     */
-    async function requestText(urlPath, timeoutMs) {
-      const rel = String(urlPath)
-      const abs = new URL(rel, HOST_BASE).toString()
-      const attempts = HOST_FALLBACK ? [abs] : [rel, abs]
-      let lastErr = null
-      for (const src of attempts) {
-        let timer = null
-        let ctl = null
-        try {
-          const opts = { headers: { accept: 'text/html' } }
-          if (typeof AbortController === 'function') {
-            ctl = new AbortController()
-            opts.signal = ctl.signal
-            if (timeoutMs) timer = setTimeout(() => { try { ctl.abort() } catch (e) { /* 忽略：仅用于取消 */ } }, timeoutMs)
-          }
-          const res = await fetch(src, opts)
-          if (!res || res.ok === false) {
-            const status = (res && typeof res.status === 'number') ? res.status : 0
-            let brief = ''
-            try { brief = String(await res.text() || '').replace(/\s+/g, ' ').slice(0, 120) } catch (e) { brief = '' }
-            throw new Error('HTTP ' + status + (brief ? '：' + brief : ''))
-          }
-          const text = await res.text()
-          if (!text || !String(text).trim()) throw new Error('空响应')
-          return String(text)
-        } catch (err) {
-          lastErr = String((err && err.message) || err) + ' @' + src
-        } finally {
-          if (timer) clearTimeout(timer)
-        }
-      }
-      throw new Error(lastErr || 'request failed')
-    }
-
-    /**
      * 需要**读响应体**的写请求（1.1.3 T4 执行链）：基址分档与 postJson 相同，但不把
      * 4xx / 5xx 当传输异常 —— 宿主的 400 / 403 / 503 都带可读中文（error / message），
      * 必须原样回显（例如 503 = profile 未提供模型服务）。返回 { ok, status, body }。
@@ -2206,17 +2152,14 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 打开说明页失败时的可读提示（三态；渲染层都会再附上「可手动打开的完整地址」）：
-     *   blocked = window.open 被拦截；fetch = 取回 HTML 失败（带 HTTP 状态）；write = 写入新窗口失败。
+     * 说明页提示文案：ok = 已交给系统打开（附文件路径）；fail = 可读失败原因（附 code）。
      */
     function openHintText(t, hint) {
       const h = hint || {}
-      if (h.phase === 'blocked') return t('docBlocked')
-      if (h.phase === 'write') return t('docWriteFailed') + '：' + String(h.message || '')
+      if (h.phase === 'ok') return t('docOpened')
       const msg = String(h.message || '')
-      // 403 = 宿主门禁拒了这次请求（最常见是凭据上下文不对）
-      const forbidden = msg.indexOf('403') >= 0
-      return t('docFetchFailed') + '：' + msg + (forbidden ? '（' + t('docForbiddenHint') + '）' : '')
+      const code = h.code ? '（' + h.code + '）' : ''
+      return t('docOpenFailed') + '：' + msg + code
     }
 
     /**
@@ -2232,7 +2175,9 @@ window.__ModuleLoader__.load({
         picked: {}, fixingId: '', batch: null, copyState: null,
         // 1.1.3：子插件分组（GET /plugins）；失败时降级用 /check 的 subPlugins 探针兜底
         plugPhase: 'loading', plugItems: [], plugError: '',
-        // window.open 被拦截时的提示（{ kind, url }；成功打开则为 null）
+        // 说明页：/docs 的存在性、/open-doc 的进行中标记与结果提示
+        docs: { phase: 'loading', map: {}, error: '' },
+        docBusy: '',
         openHint: null,
       })
       const st = state[0]
@@ -2270,53 +2215,68 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** 「重新检测」= 两份只读清单一起刷新（门禁判定与 /check 同源，见 CorePage） */
+      /** 「重新检测」= 三份只读信息一起刷新（环境 / 子插件 / 说明页文件存在性） */
       async function recheck() {
         setSt((prev) => Object.assign({}, prev, { batch: null, copyState: null }))
-        await Promise.all([detect(), detectPlugins()])
+        await Promise.all([detect(), detectPlugins(), detectDocs()])
       }
 
       /**
-       * 打开随包网页（guide / help）：**客户端取回 HTML，写入一个独立新窗口**。
-       * 不走「新窗口直接导航受保护地址」——那会撞上宿主导航门禁（无 cookie → 401/403，
-       * 真机实测显示 forbidden）；同源 fetch 在 GUI 内带着凭据，能过门禁。
-       * 顺序是**先同步开空窗口、再取内容**：window.open 必须在用户点击的手势内调用，
-       * 先 await fetch 再开窗会被弹出拦截器拦掉。HTML 自带 <style>，在独立文档里渲染，
-       * 不会污染设置页 —— 这正是独立窗口的价值。
+       * 打开说明页（guide / help）：**交给宿主打开插件目录里的那个 HTML 文件**。
+       * POST /open-doc { doc } → 200 { ok, doc, path, command }；失败 { ok:false, error, code }。
+       * 客户端不做导航、不取内容、不碰凭据；成功时只回显一下文件路径。
        */
       function openDoc(kind) {
-        const path = PAGE_PATHS[kind]
-        if (!path) return
-        // 提示里用可手动打开的完整地址：Web 载体是根相对路径，桌面外壳是合成 origin
-        const url = HOST_FALLBACK ? new URL(path, HOST_BASE).toString() : path
-        let win = null
-        try { win = window.open('', PAGE_OPEN_TARGET) } catch (err) { win = null }
-        if (!win) {
-          setSt((prev) => Object.assign({}, prev, { openHint: { kind: kind, phase: 'blocked', url: url, message: '' } }))
-          return
-        }
-        // 不传 'noopener' feature（那会让返回值恒为 null）；拿到句柄后再做隔离
-        try { win.opener = null } catch (err) { /* 跨源时可能被拒：忽略 */ }
-        setSt((prev) => Object.assign({}, prev, { openHint: null }))
-        requestText(path, 20000).then((html) => {
-          try {
-            win.document.open()
-            win.document.write(String(html))
-            win.document.close()
-          } catch (err) {
-            // 写入失败：关掉空窗口，给可读原因（地址仍可手动打开）
-            try { win.close() } catch (e) { /* 忽略 */ }
+        if (DOC_IDS.indexOf(kind) < 0) return
+        setSt((prev) => Object.assign({}, prev, { docBusy: kind, openHint: null }))
+        postFull('/open-doc', { doc: kind }, 60000).then((res) => {
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (!res.ok || body.ok === false) {
             setSt((prev) => Object.assign({}, prev, {
-              openHint: { kind: kind, phase: 'write', url: url, message: String((err && err.message) || err) },
+              docBusy: '',
+              openHint: {
+                kind: kind, phase: 'fail', path: typeof body.path === 'string' ? body.path : '',
+                message: String(body.error || body.message || ('HTTP ' + res.status)),
+                code: String(body.code || ''),
+              },
             }))
+            return
           }
-        }, (err) => {
-          // 取内容失败：关掉空窗口，提示带 HTTP 状态与原因（403 补一句凭据说明）
-          try { win.close() } catch (e) { /* 忽略 */ }
           setSt((prev) => Object.assign({}, prev, {
-            openHint: { kind: kind, phase: 'fetch', url: url, message: String((err && err.message) || err) },
+            docBusy: '',
+            openHint: { kind: kind, phase: 'ok', path: typeof body.path === 'string' ? body.path : '', message: '', code: '' },
+          }))
+        }, (err) => {
+          setSt((prev) => Object.assign({}, prev, {
+            docBusy: '',
+            openHint: { kind: kind, phase: 'fail', path: '', message: String((err && err.message) || err), code: '' },
           }))
         })
+      }
+
+      /**
+       * 两个说明页文件的存在性（只读；可选能力）：GET /docs → { ok, items:[{ doc, path, exists }] }。
+       * 接口不可用时按「未知」处理，**不拦主流程**（按钮照常可点，失败原因由 /open-doc 给出）。
+       */
+      async function detectDocs() {
+        setSt((prev) => Object.assign({}, prev, { docs: Object.assign({}, prev.docs, { phase: 'loading', error: '' }) }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/docs', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'docs 返回 ok:false'))
+          const map = {}
+          for (const it of (Array.isArray(body.items) ? body.items : [])) {
+            if (it && typeof it.doc === 'string') {
+              map[it.doc] = { path: typeof it.path === 'string' ? it.path : '', exists: it.exists === true }
+            }
+          }
+          setSt((prev) => Object.assign({}, prev, { docs: { phase: 'ready', map: map, error: '' } }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            docs: { phase: 'error', map: {}, error: String((err && err.message) || err) },
+          }))
+        }
       }
 
       function setBatchState(id, value) {
@@ -2460,7 +2420,7 @@ window.__ModuleLoader__.load({
         })
       }
 
-      useEffect(() => { detect(); detectPlugins() }, [])
+      useEffect(() => { detect(); detectPlugins(); detectDocs() }, [])
 
       const byId = {}
       for (const it of (st.items || [])) { if (it && it.id) byId[it.id] = it }
@@ -2512,6 +2472,16 @@ window.__ModuleLoader__.load({
       const plugPending = plugKnown
         ? (INSTALL_ORDER.length - plugOkCount)
         : (subPlugProbe && subPlugProbe.status !== 'ok' && subPlugProbe.status !== 'skip' ? 1 : 0)
+      // 说明页文件存在性（/docs 明确说 exists:false 才视为缺失；接口不可用按「未知」处理）
+      const docState = (st.docs && typeof st.docs === 'object') ? st.docs : { phase: 'loading', map: {} }
+      const docExists = (id) => {
+        const it = docState.map ? docState.map[id] : null
+        return !it || it.exists !== false
+      }
+      const missingDocs = DOC_IDS.filter((id) => !docExists(id)).map((id) => ({
+        id: id,
+        path: String((docState.map && docState.map[id] && docState.map[id].path) || ''),
+      }))
       // 主按钮：依赖组（6）+ 子插件组（5）全部正常 → 置灰（文案「环境已就绪」）
       const pendingCount = depPending + plugPending
       const allReady = st.phase === 'ready' && pendingCount === 0
@@ -2528,17 +2498,19 @@ window.__ModuleLoader__.load({
 
       return h('div', null, [
         h('style', { key: 'kf' }, KEYFRAMES),
-        // ① 置顶按钮组（设计定稿 §2：主按钮最显眼）。两个入口都指向随包网页，页内展开。
+        // ① 置顶按钮组（设计定稿 §2：主按钮最显眼）。两个入口都请宿主打开随包 HTML 文件。
         h('div', { key: 'top', style: S.actionsTop }, [
           h('button', {
             key: 'guide', type: 'button',
-            disabled: guideDisabled,
-            style: Object.assign({}, S.btn, S.btnPrimary, guideDisabled ? S.btnDisabled : null),
+            disabled: guideDisabled || !docExists('guide') || st.docBusy === 'guide',
+            style: Object.assign({}, S.btn, S.btnPrimary,
+              (guideDisabled || !docExists('guide') || st.docBusy === 'guide') ? S.btnDisabled : null),
             onClick: () => openDoc('guide'),
           }, allReady ? t('guideReady') : fill(t('guideOpen'), pendingCount)),
           h('button', {
             key: 'help', type: 'button',
-            style: S.btn,
+            disabled: !docExists('help') || st.docBusy === 'help',
+            style: Object.assign({}, S.btn, (!docExists('help') || st.docBusy === 'help') ? S.btnDisabled : null),
             onClick: () => openDoc('help'),
           }, t('helpOpen')),
         ]),
@@ -2552,11 +2524,15 @@ window.__ModuleLoader__.load({
           }, loading ? t('checking') : t('recheck')),
           ' · ' + t('readOnlyNote'),
         ]),
-        // ③ 打开说明页失败时的可读提示（被拦截 / 取内容失败 / 写入失败——三态都附可手动打开的地址）
-        st.openHint ? h('div', { key: 'openhint', style: S.warnLine }, [
+        // ③ 说明页打开结果（成功回显文件路径；失败给可读原因 —— 都不静默）
+        st.openHint ? h('div', { key: 'openhint', style: st.openHint.phase === 'ok' ? S.note : S.warnLine }, [
           h('div', { key: 'm' }, openHintText(t, st.openHint)),
-          h('code', { key: 'u', style: S.fixCmd }, String(st.openHint.url)),
+          st.openHint.path ? h('code', { key: 'u', style: S.fixCmd }, String(st.openHint.path)) : null,
         ]) : null,
+        // ③b 文件缺失（仅当 /docs 明确说 exists:false；对应按钮已置灰）
+        missingDocs.length ? h('div', { key: 'docmiss', style: S.warnLine },
+          [h('div', { key: 'm' }, t('docMissing'))].concat(
+            missingDocs.map((d) => h('code', { key: d.id, style: S.fixCmd }, d.path || d.id)))) : null,
         // ④ 环境依赖（6 项，只读）
         h('div', { key: 'deps', style: S.card }, [
           h('div', { key: 'head', style: S.cardHead }, [
