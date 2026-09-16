@@ -45,23 +45,29 @@ import {
   BACKUP_SUFFIX,
   BASEDECK_APPLY_ORDER,
   BASEDECK_ID_LIST,
+  IDENTITY_PLACEHOLDER_TEXT,
   SETTINGS_TARGETS,
+  STARTER_TODOS,
   applyBaseDeck,
   applyBaseDeckItem,
   currentBlockBody,
   decideAgentsStatus,
   hashBlockBody,
   inspectSimpleYaml,
+  listVaultModules,
   loadAgentsTemplate,
   loadMemorySeed,
+  memoryEntryBody,
   normalizeBlockBody,
+  parseMemoryEntries,
   planBaseDeck,
   readSettingsValues,
   resolveWorkspace,
   safeWorkspaceParam,
   sha256Text,
 } from '../lib/basedeck.js'
-import { API_PATHS, API_ROOT, installApi } from '../lib/api.js'
+import { API_PATHS, API_ROOT, PAGE_PATHS, PAGE_ROOT, installApi } from '../lib/api.js'
+import { isSameOrNested, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -266,8 +272,8 @@ function opts(extra) {
 // ═══════════════════════════ 主流程 ═══════════════════════════
 
 section('[1] 契约形状')
-ok(BASEDECK_ID_LIST.join(',') === 'agentsMd,memorySeed,skills,settings,dirs', '五项 id 与顺序')
-ok(BASEDECK_APPLY_ORDER.join(',') === 'dirs,memorySeed,skills,settings,agentsMd', '执行顺序按依赖排，agentsMd 最后')
+ok(BASEDECK_ID_LIST.join(',') === 'agentsMd,memorySeed,skills,settings,dirs,memoryDeck,knowledgeDeck', '七项 id 与顺序（1.1.3 在末尾追加记忆体结构 / 知识库结构）')
+ok(BASEDECK_APPLY_ORDER.join(',') === 'dirs,memorySeed,memoryDeck,knowledgeDeck,skills,settings,agentsMd', '执行顺序按依赖排，agentsMd 最后')
 ok(SETTINGS_TARGETS.map((t) => t.ns + '.' + t.key).join(',') === 'work-memory.memoryDir,work-memory.obsidianSyncDir,experts.defaultDomain,experts.identityExpert', '只增改这 4 个键')
 ok(API_PATHS.join(',') === '/check,/fix,/fix-all,/plugins,/install,/install-all,/basedeck', 'API_PATHS 含 /basedeck')
 
@@ -600,7 +606,8 @@ installApi(ctx, {
   dshHome: routeHome,
 })
 ok(ctx.routes.filter((r) => r.kind === 'prefix').length === 1, 'prefix 路由已注册')
-ok(ctx.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length, 'exact 路由逐条注册（含 /basedeck）')
+ok(ctx.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length,
+  'exact 路由逐条注册（API ' + API_PATHS.length + ' 条 + 随包网页 ' + PAGE_PATHS.length + ' 条）')
 const handler = prefixHandler(ctx)
 async function call(method, sub, body, headers) {
   const res = makeRes()
@@ -612,8 +619,8 @@ async function call(method, sub, body, headers) {
 const routeTreeBefore = treeSnapshot(wsRoute)
 const rGet = await call('GET', '/basedeck')
 ok(rGet.status === 200 && rGet.body.ok === true, 'GET /basedeck → 200 ok（只读）')
-ok(rGet.body.items.length === 5 && typeof rGet.body.setupNeeded === 'boolean', 'items 五项 + setupNeeded 信号')
-ok(rGet.body.items[0].id === 'agentsMd' && rGet.body.summary.total === 5, '计划按展示顺序，summary.total=5')
+ok(rGet.body.items.length === 7 && typeof rGet.body.setupNeeded === 'boolean', 'items 七项 + setupNeeded 信号')
+ok(rGet.body.items[0].id === 'agentsMd' && rGet.body.summary.total === 7, '计划按展示顺序，summary.total=7')
 ok(rGet.body.workspaceSource === 'config', 'workspaceSource=config（来自设置项 workspace）')
 ok(rGet.body.items.every((it) => it.internal === undefined), '内部字段 internal 不对外')
 const rGetWs = await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsRoute))
@@ -632,11 +639,11 @@ ok(!existsSync(join(wsRoute, 'AGENTS.md')), '被拦下的跨站请求没有产�
 const rPostReal = await call('POST', '/basedeck', {
   ids: BASEDECK_ID_LIST.concat(['nope']),
   dryRun: false,
-  overrides: { workspace: wsRoute, memoryDir: routeMem, obsidianSyncDir: join(TMP_ROOT, 'routemirror') },
+  overrides: { workspace: wsRoute, memoryDir: routeMem, obsidianSyncDir: join(TMP_ROOT, 'routemirror'), obsidianDir: join(TMP_ROOT, 'routevault') },
 }, REQ_HEADERS)
 ok(rPostReal.status === 200 && rPostReal.body.ok === true, 'POST dryRun:false → 真写成功（仅夹具）')
 ok(rPostReal.body.rejected.join(',') === 'nope', '未知 id 计入 rejected（不静默跳过）')
-ok(rPostReal.body.results.map((r) => r.id).join(',') === 'dirs,memorySeed,skills,settings,agentsMd', '真写按依赖顺序执行，agentsMd 最后')
+ok(rPostReal.body.results.map((r) => r.id).join(',') === 'dirs,memorySeed,memoryDeck,knowledgeDeck,skills,settings,agentsMd', '真写按依赖顺序执行，agentsMd 最后')
 assertInsideTmp(join(wsRoute, 'AGENTS.md'), 'route agentsMd')
 ok(existsSync(join(wsRoute, 'AGENTS.md')), '夹具工作区里的 AGENTS.md 已写入')
 ok(existsSync(join(routeMem, 'MEMORY.md')), '夹具记忆库 MEMORY.md 已写入')
@@ -651,7 +658,7 @@ const shape = (await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsR
 ok(shape.items.every((it) => typeof it.preview.sampleLines === 'string'), 'preview.sampleLines 全部是**字符串**（不是数组）')
 ok(shape.items.every((it) => typeof it.autoApplyable === 'boolean' && typeof it.detail === 'string' && typeof it.status === 'string'), 'items 字段类型符合契约')
 ok(shape.items.every((it) => typeof it.preview.action === 'string' && typeof it.preview.blockVersion === 'string' && typeof it.preview.contentHash === 'string'), 'preview 四字段齐全且为字符串')
-ok(shape.summary.total === 5 && typeof shape.setupNeeded === 'boolean' && typeof shape.workspace === 'string', 'summary + setupNeeded + workspace 存在')
+ok(shape.summary.total === 7 && typeof shape.setupNeeded === 'boolean' && typeof shape.workspace === 'string', 'summary + setupNeeded + workspace 存在')
 const wsSingle = makeWorkspace('single')
 const emptyOv = { workspace: wsSingle, defaultDomain: '', identityExpert: '', memoryDir: '', obsidianSyncDir: '' }
 const singleDry = await call('POST', '/basedeck', { ids: ['agentsMd'], overrides: emptyOv }, REQ_HEADERS)
@@ -792,6 +799,209 @@ ok(memSetVal === memSeedItem.target.replace(/\/MEMORY\.md$/, ''), 'settings 声�
 const memPlanDefault = planBaseDeck(opts({ workspace: wsMem, settingsFile: join(FAKE_DSH, 'settings-memdir2.yaml'), memoryDir: undefined }))
 const memSetDefault = ((memPlanDefault.items.filter((i) => i.id === 'settings')[0].settingsKeys || []).filter((k) => k.key === 'memoryDir')[0] || {}).value || ''
 ok(memSetDefault.endsWith('/memdir'), '不传 memoryDir → 回落「工作区目录名」推导（真机即 memories/lina）')
+
+section('[18] 1.1.3 记忆体结构 / 知识库结构生成器（T6）')
+const deckWs = makeWorkspace('deck')
+const deckMem = join(TMP_ROOT, 'deckmem')
+const deckVault = join(TMP_ROOT, 'deckvault')
+const deckHome = join(TMP_ROOT, 'deckhome', '.dsh')
+const deckBase = opts({
+  workspace: deckWs, dshHome: deckHome, settingsFile: join(deckHome, 'settings.yaml'),
+  memoryDir: deckMem, obsidianDir: deckVault, obsidianSyncDir: join(deckVault, '00_全局记忆'),
+})
+const deckOpts = Object.assign({}, deckBase, { moduleDir: MODULE_DIR })
+
+const planDeck = planBaseDeck(deckOpts)
+ok(planDeck.items.length === 7, '计划仍是七项（1.1.3 在末尾追加两项，既有五项顺序不变）')
+const memItem = planDeck.items.filter((i) => i.id === 'memoryDeck')[0]
+const knowItem = planDeck.items.filter((i) => i.id === 'knowledgeDeck')[0]
+ok(memItem.status === 'append' && knowItem.status === 'append', '两块结构初装状态都是 append')
+ok(memItem.dirs.map((d) => d.key).join(',') === 'PROJECTS,DAILY,ARCHIVE', '记忆体骨架目录 = PROJECTS / DAILY / ARCHIVE')
+ok(memItem.files.map((f) => f.name).join(',') === 'MEMORY.md,USER.md,GRAPH.json,PROJECTS/工作秘书.md', '记忆体文件清单 = MEMORY / USER / GRAPH / 工作秘书.md')
+ok(memItem.files.every((f) => f.state === 'create'), '四个文件初装都是「将新建」')
+
+const treeDeckBefore = treeSnapshot(TMP_ROOT)
+const dryDeck = applyBaseDeck(['memoryDeck', 'knowledgeDeck'], Object.assign({}, deckOpts, { dryRun: true }))
+ok(dryDeck.dryRun === true && dryDeck.results.every((r) => r.bytesWritten === 0), 'dry-run：零字节写盘')
+ok(!existsSync(deckMem) && !existsSync(deckVault), 'dry-run 未创建任何目录')
+ok(sameTree(treeDeckBefore, treeSnapshot(TMP_ROOT)), 'dry-run 后整棵树逐项一致')
+
+const realDeck = applyBaseDeck(['memoryDeck', 'knowledgeDeck'], Object.assign({}, deckOpts, { dryRun: false }))
+ok(realDeck.ok === true && realDeck.wroteAny === true, '真写成功（两项都 ok）')
+assertInsideTmp(deckMem, 'deck memory dir')
+assertInsideTmp(deckVault, 'deck vault')
+
+const deckMemText = readFileSync(join(deckMem, 'MEMORY.md'), 'utf8')
+ok(/^\[id:[a-f0-9]{12}\] \[\d{4}-\d{2}-\d{2}\] \[tag:关键\] 使用者身份：/.test(deckMemText),
+  'MEMORY.md 首条 =「使用者身份」占位（id / 日期 / tag=关键 / 前缀起头 齐全）')
+ok(deckMemText.indexOf(IDENTITY_PLACEHOLDER_TEXT) > 0, '占位正文逐字对齐设计定稿 §6.2')
+ok(statSync(join(deckMem, 'USER.md')).size === 0, 'USER.md = 空偏好文件（0 字节）')
+const deckGraph = JSON.parse(readFileSync(join(deckMem, 'GRAPH.json'), 'utf8'))
+ok(Array.isArray(deckGraph.entities) && deckGraph.entities.length === 0 && Array.isArray(deckGraph.edges) && deckGraph.edges.length === 0,
+  'GRAPH.json = 可解析的 {entities:[],edges:[]} 骨架')
+ok(readdirSync(join(deckMem, 'DAILY')).length === 0 && readdirSync(join(deckMem, 'ARCHIVE')).length === 0, 'DAILY / ARCHIVE 为空目录（搭框架、不造内容）')
+
+const projFile = join(deckMem, 'PROJECTS', '工作秘书.md')
+const projEntries = parseMemoryEntries(readFileSync(projFile, 'utf8'))
+ok(projEntries.length === 4, 'PROJECTS/工作秘书.md 写入 4 条')
+const projBodies = projEntries.map(memoryEntryBody)
+ok(projBodies[0].indexOf('【使用说明】') === 0 && projBodies[1].indexOf('【安装说明】') === 0
+  && projBodies[2].indexOf('【待办·开局】') === 0 && projBodies[3].indexOf('【技能库】') === 0,
+  '四条顺序 = 使用说明 / 安装说明 / 待办·开局 / 技能库')
+ok(projBodies[0].indexOf('保存配置并开始') > 0, '使用说明正文用定稿按钮文案「保存配置并开始」（与 defaults/use.zh-CN.md 同源）')
+ok(projBodies[1].indexOf('winget install -e --id Python.Python.3.12') > 0, '安装说明正文来自 defaults/install.zh-CN.md（单一真相源）')
+ok(STARTER_TODOS.every((t) => projBodies[2].indexOf(t) > 0), '待办条目含设计定稿 §6.3 的全部七项')
+
+ok(readdirSync(deckVault).sort().join(',') === '.obsidian,00_全局记忆,工具,🏠 主页.md', '知识库骨架 = 主页 + 00_全局记忆 + 工具 + .obsidian')
+ok(readdirSync(join(deckVault, '工具')).sort().join(',') === '00_工具总览.md,MCP,技能,脚本', '工具/ = 工具总览 + 技能/脚本/MCP')
+ok(readdirSync(join(deckVault, '工具', '技能')).length === 0 && readdirSync(join(deckVault, '工具', '脚本')).length === 0
+  && readdirSync(join(deckVault, '工具', 'MCP')).length === 0,
+  '工具/ 三个子目录都建出来但**不造内容**')
+const vaultApp = JSON.parse(readFileSync(join(deckVault, '.obsidian', 'app.json'), 'utf8'))
+ok(vaultApp.alwaysUpdateLinks === true, '.obsidian/app.json 为可解析的最小配置')
+ok(readFileSync(join(deckVault, '工具', '00_工具总览.md'), 'utf8').indexOf('同步纪律') > 0, '工具总览写明单向 / 幂等 / 手改不覆盖的同步纪律')
+
+const homeFile = join(deckVault, '🏠 主页.md')
+writeText(homeFile, '# 我自己的主页' + NL)
+const memSnapBefore = readFileSync(join(deckMem, 'MEMORY.md'), 'utf8')
+const againDeck = applyBaseDeck(['memoryDeck', 'knowledgeDeck'], Object.assign({}, deckOpts, { dryRun: false }))
+ok(againDeck.results.every((r) => r.status === 'up_to_date' && r.wroteAny === false), '再跑一次幂等：两项都 up_to_date 且不写盘')
+ok(readFileSync(homeFile, 'utf8').indexOf('我自己的主页') > 0, '被手改过的主页**不被覆盖**')
+ok(readFileSync(join(deckMem, 'MEMORY.md'), 'utf8') === memSnapBefore, 'MEMORY.md 一字未动')
+
+writeText(projFile, projEntries[0] + NL)
+const appendDeck = applyBaseDeckItem('memoryDeck', Object.assign({}, deckOpts, { dryRun: false }))
+ok(appendDeck.ok === true && appendDeck.wroteAny === true, '缺条时补写成功')
+ok(Array.isArray(appendDeck.backups) && appendDeck.backups.length === 1 && existsSync(appendDeck.backups[0].backup), '改写既有文件前已备份')
+const projAfter = parseMemoryEntries(readFileSync(projFile, 'utf8'))
+ok(memoryEntryBody(projAfter[0]) === projBodies[0], '原有那一条逐字保留')
+ok(projAfter.length === 4, '缺失的三条已补回（共 4 条）')
+
+const deckMem2 = join(TMP_ROOT, 'deckmem2')
+const failDeck = applyBaseDeckItem('memoryDeck', Object.assign({}, deckOpts, {
+  memoryDir: deckMem2, io: { writeFileSync: () => { throw new Error('mock deck write fail') } }, dryRun: false,
+}))
+ok(failDeck.ok === false && /已回滚/.test(failDeck.detail), '写入失败 → 报告已回滚')
+ok(!existsSync(join(deckMem2, 'MEMORY.md')) && !existsSync(join(deckMem2, 'USER.md')), '回滚后不残留半成品文件')
+
+const noVaultBase = opts({ workspace: deckWs, dshHome: deckHome, settingsFile: join(deckHome, 'settings.yaml'), memoryDir: deckMem })
+const nokK = planBaseDeck(noVaultBase).items.filter((i) => i.id === 'knowledgeDeck')[0]
+ok(nokK.status === 'none' && nokK.detail.indexOf('不猜路径') > 0, '未提供 obsidianDir → 状态 none 并明确说不猜路径')
+
+section('[19] 1.1.3 可用性检查（preflight，只读）')
+const okReport = { items: [
+  { id: 'subPlugins', status: 'ok', value: '5/5 已装', detail: 'dsh-work-memory@1.0.5、dsh-doc-suite@0.7.9、dsh-experts@0.5.7' },
+  { id: 'python', status: 'ok', value: '3.12.10', detail: '' },
+  { id: 'pythonDeps', status: 'ok', value: '8/8 就绪', detail: '' },
+] }
+const badReport = { items: [
+  { id: 'subPlugins', status: 'missing', value: '0/5 已装', detail: 'dsh-work-memory（未安装）' },
+  { id: 'python', status: 'missing', value: '', detail: '未检测到 Python' },
+  { id: 'pythonDeps', status: 'missing', value: '0/8', detail: '未安装' },
+] }
+const pfOk = runPreflight({ report: okReport, memoryDir: deckMem, obsidianDir: deckVault, env: {} })
+ok(pfOk.ready === true && pfOk.summary.block === 0, '环境就绪 + 两目录合法可写 + 同盘 + 无冲突 → ready=true')
+ok(pfOk.checks.some((c) => c.id === 'sameVolume' && c.level === 'ok'), '同工作区（同卷）判定通过')
+ok(pfOk.checks.some((c) => c.id === 'memoryFileConflict' && c.level === 'ok'), '既有 MEMORY.md 可解析 → 允许只补缺失')
+const pfBad = runPreflight({ report: badReport, memoryDir: deckMem, obsidianDir: deckVault, env: {} })
+ok(pfBad.ready === false && pfBad.checks.filter((c) => c.id.indexOf('env') === 0).every((c) => c.level === 'block'), '环境三项不满足 → 全 block 且 ready=false')
+const pfSame = runPreflight({ report: okReport, memoryDir: deckMem, obsidianDir: deckMem, env: {} })
+ok(pfSame.ready === false && pfSame.checks.filter((c) => c.id === 'noNesting')[0].level === 'block', '两目录相同 → 拦截（noNesting=block）')
+const pfEmpty = runPreflight({ report: okReport, memoryDir: '', obsidianDir: deckVault, env: {} })
+ok(pfEmpty.ready === false && pfEmpty.checks.filter((c) => c.id === 'memoryDir')[0].detail.indexOf('未填写') >= 0, '必填目录为空 → block 且理由可读')
+const pfLow = runPreflight({ report: { items: [
+  { id: 'subPlugins', status: 'ok', value: '5/5 已装', detail: 'dsh-work-memory@1.0.5' },
+  { id: 'python', status: 'ok', value: '3.8.10', detail: '' },
+  { id: 'pythonDeps', status: 'ok', value: '8/8 就绪', detail: '' },
+] }, memoryDir: deckMem, obsidianDir: deckVault, env: {} })
+ok(pfLow.checks.filter((c) => c.id === 'envPython')[0].level === 'block', 'Python 低于 3.10 → block（版本门槛生效）')
+const pfNested = runPreflight({ report: okReport, memoryDir: deckMem, obsidianDir: join(deckMem, 'sub'), env: {} })
+ok(pfNested.ready === false, '一目录嵌在另一目录里 → 拦截')
+ok(isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'a', 'b')) === true && isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'ab')) === false,
+  '嵌套判定不误伤同前缀目录')
+ok(volumeOf(deckMem) === volumeOf(deckVault), 'volumeOf：同盘返回同一卷标识')
+
+section('[20] 1.1.3 新路由契约（preflight / identity / domain）+ 随包网页')
+const ctx13 = makeMockCtx()
+installApi(ctx13, {
+  platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'),
+  env: {}, now: FIXED_NOW, dshHome: join(TMP_ROOT, 'home13', '.dsh'),
+  probeOptions: { skip: ['host', 'node', 'python', 'pythonDeps', 'wps', 'obsidian', 'subPlugins'] },
+})
+ok(ctx13.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length, 'exact = API_PATHS + 两个随包网页')
+const h13 = (ctx13.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
+async function call13(method, sub, body, headers) {
+  const res = makeRes()
+  await h13(makeReq({ method: method, url: API_ROOT + sub, body: body, headers: headers }), res)
+  let json = null
+  try { json = JSON.parse(res.body) } catch (e) { json = null }
+  return { status: res.status, body: json }
+}
+const pfRoute = await call13('GET', '/preflight')
+ok(pfRoute.status === 200 && pfRoute.body.ok === true && Array.isArray(pfRoute.body.checks) && pfRoute.body.ready === false,
+  'GET /preflight → 200 + checks（目录未填时 ready=false）')
+const idMem = join(TMP_ROOT, 'idroute')
+const idGet0 = await call13('GET', '/identity?memoryDir=' + encodeURIComponent(idMem))
+ok(idGet0.status === 200 && idGet0.body.ok === true && idGet0.body.exists === false, 'GET /identity 首次 → exists=false')
+const idDry = await call13('POST', '/identity/save', { memoryDir: idMem, content: '从事信息安全售前工作。' }, REQ_HEADERS)
+ok(idDry.status === 200 && idDry.body.dryRun === true && idDry.body.status === 'append', 'POST /identity/save 未传 dryRun → dry-run 计划 append')
+ok(!existsSync(join(idMem, 'MEMORY.md')), 'identity dry-run 未落盘')
+const idReal = await call13('POST', '/identity/save', { memoryDir: idMem, content: '从事信息安全售前工作。', dryRun: false }, REQ_HEADERS)
+ok(idReal.body.ok === true && idReal.body.wroteAny === true, 'identity dryRun:false → 真写')
+const idCross = await call13('POST', '/identity/save', { memoryDir: idMem, content: 'x', dryRun: false }, CROSS_HEADERS)
+ok(idCross.status === 403, '跨站 POST /identity/save → 403')
+const idBad = await call13('POST', '/identity/save', { memoryDir: idMem, content: '' }, REQ_HEADERS)
+ok(idBad.body.ok === false && typeof idBad.body.error === 'string' && idBad.body.error.length > 0, 'identity 空正文 → ok:false + error 可读')
+
+const dl = await call13('GET', '/domain/list')
+ok(dl.status === 200 && dl.body.ok === true && dl.body.items.length === 5, 'GET /domain/list → 五个预置岗位')
+ok(dl.body.items.map((i) => i.id).join(',') === 'infosec,accounting,hr,coding,finance', '预置岗位 id 顺序 = 设计定稿 §3.2')
+ok(dl.body.prefix === '使用者身份：' && dl.body.items.every((i) => i.content.length <= dl.body.maxChars), '统一前缀 + 每段 ≤200 字')
+const dg = await call13('POST', '/domain/generate', { name: '工控安全售前' }, REQ_HEADERS)
+ok(dg.status === 503 && dg.body.ok === false && /手填/.test(dg.body.error), '无模型服务 → 503 + 可读中文提示（不假成功）')
+const dgBad = await call13('POST', '/domain/generate', {}, REQ_HEADERS)
+ok(dgBad.status === 400 && dgBad.body.ok === false, '无名称也无内容 → 400')
+const dgCross = await call13('POST', '/domain/generate', { name: 'x' }, CROSS_HEADERS)
+ok(dgCross.status === 403, '跨站 POST /domain/generate → 403')
+
+const ctxEnh = makeMockCtx()
+ctxEnh.get = (name) => (name === 'promptEnhancer'
+  ? { enhance: async () => ({ enhanced: '# 使用者身份：从事财务工作。', model: 'mock' }) } : undefined)
+installApi(ctxEnh, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'), env: {}, now: FIXED_NOW, dshHome: join(TMP_ROOT, 'home13', '.dsh') })
+const hEnh = (ctxEnh.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
+const resEnh = makeRes()
+await hEnh(makeReq({ method: 'POST', url: API_ROOT + '/domain/generate', body: { name: '财务' }, headers: REQ_HEADERS }), resEnh)
+const enh = JSON.parse(resEnh.body)
+ok(resEnh.status === 200 && enh.ok === true && enh.channel === 'promptEnhancer' && enh.content.indexOf('使用者身份：') < 0,
+  'promptEnhancer 优先，输出被归一化（去 markdown 与重复前缀）')
+
+const ctxLlm = makeMockCtx()
+ctxLlm.get = (name) => (name === 'llm'
+  ? {
+    listProviders: () => [{ id: 'p1' }],
+    listModels: async () => [{ id: 'm1' }],
+    stream: async function* () { yield { type: 'text-delta', text: '从事金融研究工作。' }; yield { type: 'finish', reason: { kind: 'stop' } } },
+  }
+  : undefined)
+installApi(ctxLlm, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'), env: {}, now: FIXED_NOW, dshHome: join(TMP_ROOT, 'home13', '.dsh') })
+const hLlm = (ctxLlm.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
+const resLlm = makeRes()
+await hLlm(makeReq({ method: 'POST', url: API_ROOT + '/domain/generate', body: { name: '金融' }, headers: REQ_HEADERS }), resLlm)
+const llmOut = JSON.parse(resLlm.body)
+ok(resLlm.status === 200 && llmOut.ok === true && llmOut.channel === 'llm' && llmOut.model === 'm1', '缺 promptEnhancer 时回退 llm + agentDefaultModel，并回显 provider / model')
+ok(llmOut.content === '从事金融研究工作。', 'llm 通道正文归一化后原样返回')
+
+const pageGuide = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/guide')[0] || {}).handler
+const pageHelp = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/help')[0] || {}).handler
+const gRes = makeRes()
+await pageGuide(makeReq({ method: 'GET', url: PAGE_ROOT + '/guide' }), gRes)
+ok(gRes.status === 200 && String(gRes.headers['content-type']).indexOf('text/html') === 0, 'GET /work-personal-secretary/guide → text/html; charset=utf-8')
+ok(gRes.body.indexOf('<!DOCTYPE html>') === 0 && gRes.body.indexOf('安装引导') > 0, 'guide 页是完整 HTML 且含标题')
+ok(gRes.body.indexOf('py -3 -m pip install') > 0, 'guide 页正文来自 defaults/install.zh-CN.md（与记忆条目同源）')
+const hRes = makeRes()
+await pageHelp(makeReq({ method: 'GET', url: PAGE_ROOT + '/help' }), hRes)
+ok(hRes.status === 200 && hRes.body.indexOf('使用说明') > 0, 'GET /work-personal-secretary/help → text/html 使用说明')
+ok(hRes.body.indexOf('保存配置并开始') > 0, 'help 页正文用定稿按钮文案「保存配置并开始」')
 
 section('[15] 真实环境只读快照首尾比对')
 let realDrift = 0

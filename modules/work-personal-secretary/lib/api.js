@@ -10,9 +10,20 @@
  *   POST /install-all —— 批量安装：服务端按固定顺序串行（同源保护）
  *   GET  /basedeck    —— 配置底座的**只读计划**（dry-run；五项：指令层 / 记忆种子 / 技能 / 设置 / 目录）
  *   POST /basedeck    —— 配置引导一次性写入（同源保护；**dryRun 默认 true**，只有显式 false 才落盘）
- *   GET  /settings        —— 能力配置页：白名单 ns（work-memory / experts）设置**只读枚举**（P4）
+ *   GET  /settings        —— 能力配置页：白名单 ns 设置**只读枚举**（P4）
  *   POST /settings/write  —— 能力配置页：写子插件设置**用户层**（同源保护；dryRun 默认 true + revision 栅栏）
  *   GET  /experts/preview —— 能力配置页：专家打分实时预览（动态加载子插件 match.js；只读）
+ *
+ * 1.1.3 新增（同样走本文件的 prefix handler，**不并入 API_PATHS**）：
+ *   GET|POST /preflight       —— 可用性检查（只读）：环境就绪 / 两目录合法可写 / 同工作区 / 目标无冲突
+ *   GET  /identity            —— 读「使用者身份」条目状态与正文（只读）
+ *   POST /identity/save       —— 整条写入身份（同源保护；dryRun 默认 true）
+ *   GET  /domain/list         —— 五个预置岗位的身份正文（只读）
+ *   POST /domain/generate     —— 岗位正文生成（同源保护；promptEnhancer → llm → 503 手填）
+ *
+ * 1.1.3 随包网页（**路径冻结**，用 kind:'exact' 挂在 /work-personal-secretary 下）：
+ *   GET  /work-personal-secretary/guide —— 安装引导页（text/html；正文来自 defaults/install.zh-CN.md）
+ *   GET  /work-personal-secretary/help  —— 使用说明页（text/html；正文来自 defaults/use.zh-CN.md）
  *
  * 路由注册口径（P4 起）：
  *   - 上述三条走本文件的 **prefix** handler（浏览器载体 / Web GUI 的根相对 fetch 命中它），
@@ -33,6 +44,8 @@
 
 import { URL } from 'node:url'
 import { execFile } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   FIX_WHITELIST,
   FIX_EXECUTION_ORDER,
@@ -70,15 +83,39 @@ import {
   applyBaseDeck,
   planBaseDeck,
   publicPlan,
+  resolveDeckContext,
   safeWorkspaceParam,
 } from './basedeck.js'
 
 import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
+// 1.1.3 新增能力的宿主侧实现（T6 可用性检查 / T7 身份写入 / T8 岗位生成 / T9 随包网页）
+import { runPreflight } from './preflight.js'
+import { applyIdentity, readIdentity } from './identity.js'
+import { DOMAIN_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
+import { renderMarkdown, renderPage } from './md.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
 /** 精确路由（桌面载体的 fetch 桥只认精确路由） */
 export const API_PATHS = ['/check', '/fix', '/fix-all', '/plugins', '/install', '/install-all', '/basedeck']
+
+/**
+ * 两个**随包网页**的根与路径（1.1.3，T9）。
+ * ⚠️ 路径**已冻结**：客户端会直接指向它们（window.open 或页内展开），不得改动。
+ * 它们不是 JSON API，所以挂在 /work-personal-secretary 下、不并入 API_PATHS；
+ * 用 kind:'exact' 注册（与 API 前缀路由互不干扰，见 dsh-host-webserver 的 match：先 exact 后最长前缀）。
+ */
+export const PAGE_ROOT = '/work-personal-secretary'
+export const PAGE_PATHS = ['/guide', '/help']
+
+/**
+ * 两个网页的**单一真相源**映射（T9）：页面正文只来自 defaults 下的 md，
+ * 同一份 md 也被写进记忆条目 PROJECTS/工作秘书.md 的前两条，杜绝两处措辞漂移。
+ */
+export const PAGE_SPECS = {
+  '/guide': { file: 'install.zh-CN.md', title: '工作秘书 · 安装引导' },
+  '/help': { file: 'use.zh-CN.md', title: '工作秘书 · 使用说明' },
+}
 
 /**
  * 本体设置命名空间名（与 lib/settings.js 的 SETTINGS_NS 同值：= 本体包名）。
@@ -104,6 +141,13 @@ function sendJson(res, status, body) {
 
 function sendError(res, status, message) {
   sendJson(res, status, { ok: false, error: message })
+}
+
+/** 直出 HTML（随包两个说明网页用；不做任何模板渲染，正文来自 defaults/*.md） */
+function sendHtml(res, status, html) {
+  const buf = Buffer.from(String(html == null ? '' : html), 'utf8')
+  res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'content-length': String(buf.length) })
+  res.end(buf)
 }
 
 async function readBody(req, maxBytes = 64 * 1024) {
@@ -484,6 +528,28 @@ export function installApi(ctx, deps = {}) {
     }
   }
 
+  /**
+   * 当前记忆库目录（1.1.3）：从设置 / 工作区推导解析，**只读**。
+   * 客户端未显式传 memoryDir 时用它兜底；解析不到返回空串（由调用方给可读错误）。
+   */
+  const currentMemoryDir = () => {
+    try {
+      const deck = resolveDeckContext({
+        dshHome: basedeckDshHome,
+        configWorkspace: basedeckWorkspaceConfig,
+        env: installEnv,
+        now: installNow,
+        moduleDir: installModuleDir,
+      })
+      return deck.memoryDir || ''
+    } catch (e) {
+      return ''
+    }
+  }
+
+  /** 统一失败响应：{ ok:false, error } 之外保留原字段（便于客户端定位） */
+  const failBody = (result) => Object.assign({ error: String(result && result.detail ? result.detail : '操作失败') }, result)
+
   const handler = async (req, res) => {
     try {
       const url = new URL(req.url || '/', 'http://dsh.internal')
@@ -498,6 +564,102 @@ export function installApi(ctx, deps = {}) {
       // ---- P4 能力配置页三条路由：GET /settings、POST /settings/write、GET /experts/preview ----
       // 不匹配时返回 false，交回下面的既有路由（8 条行为一字不变）。
       if (await settingsApi.handle(req, res, url, sub)) return
+
+      // ══ 1.1.3 新增（T6 可用性检查 / T7 身份读写 / T8 岗位生成）══
+      // 全部走本 prefix handler（浏览器载体 / Web GUI 命中；不并入 API_PATHS）。
+
+      // GET|POST /preflight —— 可用性检查（**只读**）：环境就绪 · 两目录路径合法可写 · 同工作区 · 目标无冲突
+      //   GET  /preflight?memoryDir=&obsidianDir=&workspace=
+      //   POST /preflight { memoryDir, obsidianDir, workspace }（同源保护）
+      if (sub === '/preflight' || sub === '/preflight/') {
+        const q = (name) => url.searchParams.get(name) || ''
+        let body0 = {}
+        if (req.method === 'POST') {
+          const guard = sameOriginGuard(req)
+          if (guard) return sendError(res, 403, guard)
+          try { body0 = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        } else if (req.method !== 'GET') {
+          return sendError(res, 405, 'preflight 只支持 GET（查询参数）与 POST（JSON）')
+        }
+        const pick = (key) => {
+          const v = body0 && typeof body0[key] === 'string' ? body0[key] : ''
+          return String(v || q(key)).trim().slice(0, 1024)
+        }
+        const workspaceRaw = pick('workspace')
+        let workspace = ''
+        if (workspaceRaw) {
+          const check = safeWorkspaceParam(workspaceRaw)
+          if (check.ok) workspace = check.workspace
+        }
+        const report = await runProbes(probeOptions)
+        const result = runPreflight({
+          report: report,
+          memoryDir: pick('memoryDir'),
+          obsidianDir: pick('obsidianDir'),
+          workspace: workspace,
+          env: installEnv,
+        })
+        return sendJson(res, 200, {
+          ok: true, ready: result.ready, checks: result.checks, summary: result.summary, checkedAt: report.checkedAt,
+        })
+      }
+
+      // GET /identity[?memoryDir=] —— 当前「使用者身份」条目状态与正文（只读）
+      if (req.method === 'GET' && (sub === '/identity' || sub === '/identity/')) {
+        const dirParam = String(url.searchParams.get('memoryDir') || '').trim().slice(0, 1024)
+        return sendJson(res, 200, readIdentity({ memoryDir: dirParam || currentMemoryDir() }))
+      }
+
+      // POST /identity/save { content, memoryDir?, dryRun } —— 整条写入身份（同源保护；dryRun 默认 true）
+      if (req.method === 'POST' && (sub === '/identity/save' || sub === '/identity/save/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const dirParam = typeof body.memoryDir === 'string' ? body.memoryDir.trim().slice(0, 1024) : ''
+        const result = applyIdentity({
+          memoryDir: dirParam || currentMemoryDir(),
+          content: typeof body.content === 'string' ? body.content.slice(0, 4000) : '',
+          now: installNow,
+          dryRun: body.dryRun !== false,
+        })
+        return sendJson(res, 200, result.ok ? result : failBody(result))
+      }
+
+      // GET /domain/list —— 五个预置岗位的正文（只读；客户端下拉直接取用）
+      if (req.method === 'GET' && (sub === '/domain/list' || sub === '/domain/list/')) {
+        return sendJson(res, 200, {
+          ok: true,
+          prefix: IDENTITY_PREFIX,
+          maxChars: DOMAIN_MAX_CHARS,
+          items: DOMAIN_PRESETS.map((p) => ({ id: p.id, label: p.label, content: p.content })),
+          note: '预置正文不含「' + IDENTITY_PREFIX + '」前缀，由 POST /identity/save 统一加上；都不是（新建岗位）时可自填或调 POST /domain/generate 生成',
+        })
+      }
+
+      // POST /domain/generate { name, content } —— 生成岗位身份正文（同源保护）
+      // 通道与桌宠同构：promptEnhancer 优先 → llm + agentDefaultModel → 都没有 → 503 + 可读中文提示
+      if (req.method === 'POST' && (sub === '/domain/generate' || sub === '/domain/generate/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const name = typeof body.name === 'string' ? body.name.trim().slice(0, 64) : ''
+        const draft = typeof body.content === 'string' ? body.content.trim().slice(0, 2000) : ''
+        if (!name && !draft) {
+          return sendJson(res, 400, { ok: false, error: '岗位名称与岗位内容至少填一项，否则没有可生成的依据' })
+        }
+        const result = await generateDomainContent(ctx, { name: name, content: draft })
+        if (result.ok) {
+          return sendJson(res, 200, {
+            ok: true, content: result.content, channel: result.channel,
+            provider: result.provider, model: result.model, maxChars: DOMAIN_MAX_CHARS,
+          })
+        }
+        return sendJson(res, result.code === 'no-model-service' ? 503 : 502, {
+          ok: false, error: result.error, channel: result.channel, code: result.code,
+        })
+      }
 
       // GET /check —— 七项只读环境检查
       if (req.method === 'GET' && (sub === '/check' || sub === '/check/')) {
@@ -729,6 +891,8 @@ export function installApi(ctx, deps = {}) {
       // ?workspace=<绝对路径> 可显式指定工作区；无效时回退服务端解析并在 message 里说明。
       if (req.method === 'GET' && (sub === '/basedeck' || sub === '/basedeck/')) {
         const wsParam = url.searchParams.get('workspace') || ''
+        // 1.1.3：?obsidianDir=<知识库根> —— 显式指定知识库目录（知识库结构生成器用它）
+        const vaultParam = String(url.searchParams.get('obsidianDir') || '').trim().slice(0, 1024)
         let workspaceOverride = ''
         let message = ''
         if (wsParam) {
@@ -736,10 +900,13 @@ export function installApi(ctx, deps = {}) {
           if (check.ok) workspaceOverride = check.workspace
           else message = 'workspace 参数无效，已回退服务端解析：' + check.error
         }
+        const queryOverrides = {}
+        if (workspaceOverride) queryOverrides.workspace = workspaceOverride
+        if (vaultParam) queryOverrides.obsidianDir = vaultParam
         const repo = currentRepoRoot()
         const plan = planBaseDeck({
           // query 里的 workspace 是**客户端显式传值** → 走 overrides（source=client）
-          overrides: workspaceOverride ? { workspace: workspaceOverride } : {},
+          overrides: queryOverrides,
           dshHome: basedeckDshHome,
           configWorkspace: basedeckWorkspaceConfig,
           repoRoot: repo.repoRoot,
@@ -766,7 +933,7 @@ export function installApi(ctx, deps = {}) {
         if (!Array.isArray(ids)) {
           return sendJson(res, 200, {
             ok: false, dryRun: dryRun, results: [], rejected: [], durationMs: 0,
-            message: 'ids 必须是字符串数组（缺省 = 五项全部）',
+            message: 'ids 必须是字符串数组（缺省 = 七项全部）',
           })
         }
         const rawOverrides = (body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)) ? body.overrides : {}
@@ -776,6 +943,8 @@ export function installApi(ctx, deps = {}) {
           identityExpert: clean(rawOverrides.identityExpert, 64),
           memoryDir: clean(rawOverrides.memoryDir, 1024),
           obsidianSyncDir: clean(rawOverrides.obsidianSyncDir, 1024),
+          // 1.1.3：知识库根目录（与 obsidianSyncDir 严格区分：前者是 vault 根，后者是镜像子目录）
+          obsidianDir: clean(rawOverrides.obsidianDir, 1024),
         }
         const wsRaw = clean(rawOverrides.workspace, 1024)
         if (wsRaw) {
@@ -834,6 +1003,35 @@ export function installApi(ctx, deps = {}) {
       disposers.push(ctx.webServer.register({ kind: 'exact', path: API_ROOT + p, handler: handler }))
     } catch (err) {
       ctx.logger?.warn?.('work-personal-secretary: 精确路由注册失败 ' + p + '：' + (err && err.message ? err.message : err))
+    }
+  }
+
+  // ── 两个随包网页（1.1.3 / T9；路径冻结，客户端直接指向） ──
+  // 用 exact 注册在 PAGE_ROOT 下（不是 API 前缀下）：/work-personal-secretary/guide 与 /help。
+  const pageHandler = async (req, res) => {
+    const notFound = (code, text) => sendHtml(res, code,
+      '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><title>' + text + '</title></head>'
+      + '<body style="font-family:system-ui,sans-serif;padding:32px"><p>' + text + '</p></body></html>')
+    try {
+      const method = String(req.method || 'GET').toUpperCase()
+      if (method !== 'GET' && method !== 'HEAD') return notFound(405, '本页只支持 GET')
+      const url = new URL(req.url || '/', 'http://dsh.internal')
+      const subPath = url.pathname.indexOf(PAGE_ROOT) === 0 ? url.pathname.slice(PAGE_ROOT.length) : ''
+      const spec = PAGE_SPECS[subPath]
+      if (!spec) return notFound(404, '页面不存在')
+      const raw = readFileSync(join(installModuleDir, 'defaults', spec.file), 'utf8')
+      return sendHtml(res, 200, renderPage(spec.title, renderMarkdown(raw)))
+    } catch (err) {
+      const why = String(err && err.message ? err.message : err).replace(/[<>&]/g, '')
+      ctx.logger?.warn?.('work-personal-secretary: 随包网页渲染失败：' + why)
+      return notFound(500, '页面渲染失败：' + why)
+    }
+  }
+  for (const p of PAGE_PATHS) {
+    try {
+      disposers.push(ctx.webServer.register({ kind: 'exact', path: PAGE_ROOT + p, handler: pageHandler }))
+    } catch (err) {
+      ctx.logger?.warn?.('work-personal-secretary: 随包网页路由注册失败 ' + p + '：' + (err && err.message ? err.message : err))
     }
   }
   return () => {

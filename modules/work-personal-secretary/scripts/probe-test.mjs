@@ -46,7 +46,7 @@ import {
   pipInstallArgv,
 } from '../lib/probe.js'
 
-import { API_ROOT, API_PATHS, resolveFixCommand, resolveFixAllPlan, installApi } from '../lib/api.js'
+import { API_ROOT, API_PATHS, PAGE_PATHS, PAGE_ROOT, resolveFixCommand, resolveFixAllPlan, installApi } from '../lib/api.js'
 
 import { SUB_PLUGINS, readVersion, apply as applyHost, inject as hostInject } from '../lib/index.js'
 
@@ -385,8 +385,10 @@ installApi(ctx, {
 const handler = prefixHandler(ctx)
 ok(typeof handler === 'function', 'prefix 路由已注册：' + API_ROOT)
 const exacts = ctx.routes.filter((r) => r.kind === 'exact').map((r) => r.path).sort()
-ok(exacts.join(',') === API_PATHS.map((p) => API_ROOT + p).sort().join(','),
-  'exact 路由与 API_PATHS 一一对应：' + exacts.join(', '))
+// 1.1.3：exact 集合 = API_PATHS（API 前缀下）+ PAGE_PATHS（/work-personal-secretary 下，两个随包网页）
+const expectedExacts = API_PATHS.map((p) => API_ROOT + p).concat(PAGE_PATHS.map((p) => PAGE_ROOT + p)).sort()
+ok(exacts.join(',') === expectedExacts.join(','),
+  'exact 路由 = API_PATHS 七条 + 随包网页两条：' + exacts.join(', '))
 
 const resCheck = makeRes()
 await handler(makeReq({ method: 'GET', url: API_ROOT + '/check' }), resCheck)
@@ -509,8 +511,8 @@ section('[6b] 宿主半 apply（有 / 无 webServer）')
 ok(hostInject.indexOf('settings') >= 0 && hostInject.indexOf('webServer') >= 0, 'inject 含 settings + webServer：' + hostInject.join(', '))
 const ctxHost = makeMockCtx()
 const disposeHost = applyHost(ctxHost, {})
-ok(ctxHost.routes.length === API_PATHS.length + 1 && typeof disposeHost === 'function',
-  'apply 注册 prefix + ' + API_PATHS.length + ' exact 并返回 disposer（' + ctxHost.routes.length + ' 条）')
+ok(ctxHost.routes.length === API_PATHS.length + PAGE_PATHS.length + 1 && typeof disposeHost === 'function',
+  'apply 注册 1 prefix + ' + API_PATHS.length + ' API exact + ' + PAGE_PATHS.length + ' 页面 exact 并返回 disposer（' + ctxHost.routes.length + ' 条）')
 let disposeErr = null
 try { disposeHost() } catch (e) { disposeErr = e }
 ok(disposeErr === null, 'disposer 可安全调用')
@@ -529,7 +531,9 @@ ok(SUB_PLUGINS.map((p) => p.name).join(',') === ['dsh-work-memory', 'dsh-doc-sui
 const pkgVersion = JSON.parse(readFileSync(join(MODULE_DIR, 'package.json'), 'utf8')).version
 ok(readVersion() === pkgVersion, 'readVersion 与 package.json 一致：v' + pkgVersion)
 const banned = ['莉娜', '主人', '天地和兴', '知识库-天地', 'lina', 'C:\\Users']
-for (const rel of ['lib/probe.js', 'lib/api.js', 'lib/index.js', 'lib/install.js', 'lib/basedeck.js']) {
+for (const rel of ['lib/probe.js', 'lib/api.js', 'lib/index.js', 'lib/install.js', 'lib/basedeck.js',
+  'lib/md.js', 'lib/preflight.js', 'lib/identity.js', 'lib/domain.js',
+  'defaults/use.zh-CN.md', 'defaults/install.zh-CN.md']) {
   const src = readFileSync(join(MODULE_DIR, rel), 'utf8')
   const hit = banned.filter((k) => src.indexOf(k) >= 0)
   ok(hit.length === 0, rel + ' 无私有信息' + (hit.length ? '（命中：' + hit.join(', ') + '）' : ''))

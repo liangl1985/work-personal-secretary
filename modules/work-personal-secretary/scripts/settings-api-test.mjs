@@ -38,7 +38,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { homedir, tmpdir } from 'node:os'
 
-import { API_PATHS, API_ROOT, installApi, installSettingsExactRoutes } from '../lib/api.js'
+import { API_PATHS, API_ROOT, PAGE_PATHS, installApi, installSettingsExactRoutes } from '../lib/api.js'
 import {
   MAX_WRITE_OPS,
   PREVIEW_TEXT_LIMIT,
@@ -306,7 +306,7 @@ const REAL_BEFORE = REAL_TARGETS.map((t) => ({ t: t, v: readRealTarget(t) }))
 
 section('[1] 契约形状')
 ok(SETTINGS_API_PATHS.join(',') === '/settings,/settings/write,/experts/preview', 'P4 三条路由与契约 §4 一致')
-ok(SETTINGS_NS_WHITELIST.join(',') === 'work-memory,experts', 'ns 白名单硬编码为 work-memory / experts（契约 §5.1）')
+ok(SETTINGS_NS_WHITELIST.join(',') === 'work-memory,experts,dsh-doc-suite', 'ns 白名单硬编码为 work-memory / experts / dsh-doc-suite（契约 §5.1 + 文档能力组）')
 ok(PREVIEW_TEXT_LIMIT === 2000, '预览文本上限 2000 字符（契约 §4.3）')
 ok(API_PATHS.join(',') === '/check,/fix,/fix-all,/plugins,/install,/install-all,/basedeck', '既有 8 条 API_PATHS 一字未动')
 
@@ -342,10 +342,10 @@ ok(normalizeSchemaFields(null).length === 0 && normalizeSchemaFields({}).length 
 section('[3] 白名单裁剪 + 未注册 ns 占位')
 const mock = makeMockSettings()
 const view = buildSettingsView(mock.settings.describe({ redactSecrets: true }), { writable: true })
-ok(view.ok === true && view.namespaces.length === 2, '只保留白名单两个 ns')
-ok(view.namespaces.map((n) => n.ns).join(',') === 'work-memory,experts', '顺序按白名单（页面分组稳定）')
+ok(view.ok === true && view.namespaces.length === 3, '只保留白名单三个 ns')
+ok(view.namespaces.map((n) => n.ns).join(',') === 'work-memory,experts,dsh-doc-suite', '顺序按白名单（页面分组稳定）')
 ok(JSON.stringify(view).indexOf('workspace-tokenpet') < 0, 'describe 里的非白名单 ns（workspace-tokenpet）不出现在响应里')
-ok(view.namespaces[0].title === '记忆库' && view.namespaces[1].title === '专家库', 'ns 标题按契约 §3')
+ok(view.namespaces[0].title === '记忆库' && view.namespaces[1].title === '专家库' && view.namespaces[2].title === '文档能力', 'ns 标题按契约 §3')
 ok(view.namespaces[0].revision === 12 && view.namespaces[1].revision === 5, 'revision 透出')
 ok(view.namespaces[0].applies === 'live', 'applies 透出')
 ok(fieldOf(view.namespaces[0].fields, 'personaLabel').override === true, '用户层有该键 → override=true（页面标「已覆盖」）')
@@ -356,7 +356,7 @@ ok(view.namespaces[0].installed === true, '已注册 ns 标 installed:true')
 const partial = buildSettingsView([
   { ns: 'work-memory', schema: WM_SCHEMA, value: {}, revision: 3, applies: 'live' },
 ], { writable: true })
-ok(partial.namespaces.length === 2 && partial.namespaces[1].ns === 'experts', '未注册 ns 仍占位（页面不出现空分组）')
+ok(partial.namespaces.length === 3 && partial.namespaces[1].ns === 'experts' && partial.namespaces[2].ns === 'dsh-doc-suite', '未注册 ns 仍占位（页面不出现空分组）')
 ok(partial.namespaces[1].installed === false && partial.namespaces[1].writable === false && partial.namespaces[1].fields.length === 0,
   '未注册 ns → installed:false / writable:false / fields 空（可读降级，不崩）')
 
@@ -367,7 +367,7 @@ ok(validateWriteRequest(good, V).ok === true, '白名单 ns + 已声明 path →
 ok(validateWriteRequest(good, V).dryRun === true, '未传 dryRun → dryRun=true（契约 §5.4）')
 ok(validateWriteRequest(Object.assign({}, good, { dryRun: false }), V).dryRun === false, 'dryRun:false 透传')
 ok(validateWriteRequest(Object.assign({}, good, { ns: 'workspace-tokenpet' }), V).error === 'ns-not-allowed', '非白名单 ns 被拒（契约 §5.1）')
-ok(validateWriteRequest(Object.assign({}, good, { ns: 'dsh-doc-suite' }), V).error === 'ns-not-allowed', '任意 ns 一律被拒')
+ok(validateWriteRequest(Object.assign({}, good, { ns: 'dsh-mermaid' }), V).error === 'ns-not-allowed', '非白名单 ns 一律被拒（白名单之外的任何 ns）')
 ok(validateWriteRequest({ ns: 'experts', ops: [{ op: 'set', path: ['expertInjectMax'], value: 2 }] }, V).ok === true,
   '白名单里的另一个 ns 允许（path 白名单按该 ns schema 各自判定）')
 ok(validateWriteRequest({ ns: 'experts', ops: [{ op: 'set', path: ['snapshotMaxChars'], value: 1 }] }, V).error === 'path-not-allowed',
@@ -536,25 +536,25 @@ section('[11] 路由注册口径：installApi / apply 的 exact 数不变 + P4 �
 const ctxR = makeMockCtx(makeMockSettings().settings)
 installApi(ctxR, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: FAKE_MODULE, profileDir: FAKE_PROFILE, env: {}, commonCandidates: [] })
 ok(ctxR.routes.filter((x) => x.kind === 'prefix').length === 1, 'prefix 路由仍为 1 条（既有断言不破）')
-ok(ctxR.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length,
-  'installApi 的 exact 路由数仍 = API_PATHS.length = 8（既有 basedeck-test [13] 段不破）')
+ok(ctxR.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length,
+  'installApi 的 exact 路由数 = API_PATHS.length + PAGE_PATHS.length = ' + (API_PATHS.length + PAGE_PATHS.length) + '（API 七条 + 两个随包网页；basedeck-test [13] 段同步为同一口径）')
 const disposeExact = installSettingsExactRoutes(ctxR, { repoRoot: FAKE_REPO, moduleDir: FAKE_MODULE, profileDir: FAKE_PROFILE, env: {}, commonCandidates: [] })
-ok(ctxR.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length + SETTINGS_API_PATHS.length,
-  '补注册后 exact = 8 + 3（桌面载体 fetch 桥可用）')
+ok(ctxR.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + SETTINGS_API_PATHS.length,
+  '补注册后 exact = API_PATHS + 页面 + 3（桌面载体 fetch 桥可用）')
 ok(SETTINGS_API_PATHS.every((p) => exactHandlerOf(ctxR, p) !== null), '三条精确路由逐条可查')
 const exactGet = await callExact(ctxR, '/settings', 'GET', null, null)
-ok(exactGet.status === 200 && exactGet.body && exactGet.body.ok === true && exactGet.body.namespaces.length === 2,
-  '精确路由 handler 正常工作（GET /settings 走 exact 也拿到两个 ns）')
+ok(exactGet.status === 200 && exactGet.body && exactGet.body.ok === true && exactGet.body.namespaces.length === 3,
+  '精确路由 handler 正常工作（GET /settings 走 exact 也拿到三个 ns）')
 ok(typeof disposeExact === 'function', '精确路由返回 disposer（函数级已就绪，接线即可用）')
 
 // 零回归护栏：apply 的路由总数必须与 probe-test:497 的口径一致（1 prefix + API_PATHS.length exact）
 const hostModule = await import('../lib/index.js')
 const ctxApply = makeMockCtx(makeMockSettings().settings)
 const disposeApply = hostModule.apply(ctxApply, {})
-ok(ctxApply.routes.length === API_PATHS.length + 1,
-  'apply 注册总数 = API_PATHS.length + 1 = ' + (API_PATHS.length + 1) + '（既有 probe-test 断言不破）')
-ok(ctxApply.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length,
-  'apply 未新增 exact 路由（P4 三条一律走 prefix 分发）')
+ok(ctxApply.routes.length === API_PATHS.length + PAGE_PATHS.length + 1,
+  'apply 注册总数 = API_PATHS.length + PAGE_PATHS.length + 1 = ' + (API_PATHS.length + PAGE_PATHS.length + 1) + '（与 probe-test 同步）')
+ok(ctxApply.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length,
+  'apply 的 exact = API_PATHS + 两个随包网页（P4 三条仍走 prefix 分发，未新增它们的 exact）')
 ok(ctxApply.routes.filter((x) => x.kind === 'prefix').length === 1, 'apply 的 prefix 仍为 1 条')
 disposeApply()
 

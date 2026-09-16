@@ -1,13 +1,17 @@
 /**
  * work-personal-secretary —— 配置底座引擎（安装器第四步：把配置底座分步落地）
  *
- * 职责：把集成体自带的**配置底座**（指令层 / 记忆种子 / 技能 / 设置 / 目录）落地到使用者环境。
- * 五项：
- *   agentsMd   把 defaults/AGENTS.zh-CN.md 的**标记块区间**合并进 <workspace>/AGENTS.md
- *   memorySeed 把 defaults/global-memory.seed.md 的种子条目追加进记忆库 MEMORY.md（全局记忆）
- *   skills     把 <repoRoot>/modules/dsh-doc-suite/skills/<name>/SKILL.md 装到 <workspace>/.dsh/skills/<name>/
- *   settings   写 <DSH_HOME>/settings.yaml 的 work-memory / experts 段（只增改指定键）
- *   dirs       创建记忆库 / 备份 / Obsidian 镜像 / 桌宠素材目录（只创建缺失的）
+ * 职责：把集成体自带的**配置底座**落地到使用者环境。
+ * 七项（前五项是 1.1.2 既有能力，后两项 1.1.3 新增，追加在 BASEDECK_ITEMS 末尾）：
+ *   agentsMd     把 defaults/AGENTS.zh-CN.md 的**标记块区间**合并进 <workspace>/AGENTS.md
+ *   memorySeed   把 defaults/global-memory.seed.md 的种子条目追加进记忆库 MEMORY.md（全局记忆）
+ *   skills       把 <repoRoot>/modules/dsh-doc-suite/skills/<name>/SKILL.md 装到 <workspace>/.dsh/skills/<name>/
+ *   settings     写 <DSH_HOME>/settings.yaml 的 work-memory / experts 段（只增改指定键）
+ *   dirs         创建记忆库 / 备份 / Obsidian 镜像 / 桌宠素材目录（只创建缺失的）
+ *   memoryDeck   记忆体结构（1.1.3）：PROJECTS / DAILY / ARCHIVE 骨架 + MEMORY.md 的「使用者身份」
+ *                占位条目 + USER.md / GRAPH.json 骨架 + PROJECTS/工作秘书.md 四条（设计定稿 §6）
+ *   knowledgeDeck 知识库结构（1.1.3）：🏠 主页.md + 00_全局记忆/ + 工具/（总览 + 技能·脚本·MCP）
+ *                + .obsidian 最小配置（设计定稿 §7）
  *
  * 规范来源（已审查通过的 AGENTS 标记块规范）：
  *   标记块格式、块首元数据字段、content-hash 规范化口径、七状态判定算法、写回纪律、
@@ -45,23 +49,35 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 
 import { MODULE_DIR, detectBom, posix, resolveRepoRoot } from './install.js'
+import { IDENTITY_PREFIX } from './domain.js'
 
 // ───────────────────────────── 常量 ─────────────────────────────
 
-/** 五项配置底座的**唯一来源**（顺序 = 面板展示顺序 = GET 计划顺序，接口契约定死） */
+/**
+ * 七项配置底座的**唯一来源**（顺序 = 面板展示顺序 = GET 计划顺序）。
+ * 前五项为 1.1.2 既有能力（顺序与语义一字未动）；后两项是 1.1.3 新增的
+ * 记忆体结构（memoryDeck）与知识库结构（knowledgeDeck）生成器，**追加在末尾**，
+ * 保证既有调用方按下标取项的行为不受影响。
+ */
 export const BASEDECK_ITEMS = [
   { id: 'agentsMd', label: '指令层 AGENTS.md' },
   { id: 'memorySeed', label: '记忆种子' },
   { id: 'skills', label: '文档技能' },
   { id: 'settings', label: '设置用户层' },
   { id: 'dirs', label: '工作目录' },
+  { id: 'memoryDeck', label: '记忆体结构' },
+  { id: 'knowledgeDeck', label: '知识库结构' },
 ]
 
-/** 五项 id 的字符串数组（查表 / 回显用） */
+/** 七项 id 的字符串数组（查表 / 回显用） */
 export const BASEDECK_ID_LIST = BASEDECK_ITEMS.map((it) => it.id)
 
-/** **默认执行顺序**：按依赖排，agentsMd 放最后（引导一次性写入时使用） */
-export const BASEDECK_APPLY_ORDER = ['dirs', 'memorySeed', 'skills', 'settings', 'agentsMd']
+/**
+ * **默认执行顺序**：按依赖排，agentsMd 放最后（引导一次性写入时使用）。
+ * memoryDeck 排在 memorySeed 之后（两者都追加写 MEMORY.md，互不动对方的条目）；
+ * knowledgeDeck 紧随其后，与记忆体结构配套（00_全局记忆 是两者的关联点）。
+ */
+export const BASEDECK_APPLY_ORDER = ['dirs', 'memorySeed', 'memoryDeck', 'knowledgeDeck', 'skills', 'settings', 'agentsMd']
 
 /** 输出上限（与 /fix 契约的 8000 保持一致） */
 export const BASEDECK_OUTPUT_LIMIT = 8000
@@ -830,6 +846,7 @@ export function resolveDeckContext(options = {}) {
   const ovWorkspace = typeof overrides.workspace === 'string' ? overrides.workspace.trim() : ''
   const ovMemoryDir = typeof overrides.memoryDir === 'string' ? overrides.memoryDir.trim() : ''
   const ovObsidian = typeof overrides.obsidianSyncDir === 'string' ? overrides.obsidianSyncDir.trim() : ''
+  const ovObsidianDir = typeof overrides.obsidianDir === 'string' ? overrides.obsidianDir.trim() : ''
   const ovDomain = typeof overrides.defaultDomain === 'string' ? overrides.defaultDomain.trim() : ''
   const ovIdentity = typeof overrides.identityExpert === 'string' ? overrides.identityExpert.trim() : ''
 
@@ -878,6 +895,11 @@ export function resolveDeckContext(options = {}) {
       || normalizePath(values['work-memory.obsidianSyncDir'])
       || (workspace ? join(workspace, 'work-memory') : ''))
 
+  // obsidianDir（1.1.3）= **知识库根目录**（vault 根），与 obsidianSyncDir（镜像子目录）严格区分。
+  // 只接受显式传入（overrides.obsidianDir / options.obsidianDir）：**绝不从镜像目录反推** ——
+  // 结构生成器会在这条路径下建目录与文件，猜错会写进使用者其它目录。
+  const obsidianDir = normalizePath(ovObsidianDir) || normalizePath(options.obsidianDir)
+
   // 记忆库名与记忆库根（供客户端做「使用默认」候选与路径拼接）
   const libraryName = memoryDir ? basename(memoryDir) : ''
   const memoryRoot = memoryDir ? dirname(memoryDir) : ''
@@ -913,6 +935,7 @@ export function resolveDeckContext(options = {}) {
     memoryFile: memoryDir ? join(memoryDir, 'MEMORY.md') : '',
     backupDir: backupDir,
     obsidianSyncDir: obsidianSyncDir,
+    obsidianDir: obsidianDir,
     petSkinsDir: normalizePath(options.petSkinsDir) || join(dshHome, PET_SKINS_SUBDIR),
     skillsSourceDir: skillsSourceDir,
     skillsTargetDir: normalizePath(options.skillsTargetDir) || (workspace ? join(workspace, '.dsh', SKILLS_DIR_NAME) : ''),
@@ -923,6 +946,7 @@ export function resolveDeckContext(options = {}) {
       workspace: ovWorkspace,
       memoryDir: ovMemoryDir,
       obsidianSyncDir: ovObsidian,
+      obsidianDir: ovObsidianDir,
       defaultDomain: ovDomain,
       identityExpert: ovIdentity,
     },
@@ -1002,6 +1026,8 @@ export function planBaseDeck(options = {}) {
     if (spec.id === 'memorySeed') return planMemorySeed(ctx)
     if (spec.id === 'skills') return planSkills(ctx)
     if (spec.id === 'settings') return planSettings(ctx)
+    if (spec.id === 'memoryDeck') return planMemoryDeck(ctx)
+    if (spec.id === 'knowledgeDeck') return planKnowledgeDeck(ctx)
     return planDirs(ctx)
   })
   const note = workspaceNoteFor(ctx)
@@ -1290,9 +1316,15 @@ function planSettings(ctx) {
   const suggestedMemoryDir = ctx.memoryDir
     ? posix(ctx.memoryDir)
     : (ctx.workspace ? posix(join(ctx.dshHome, 'memories', basename(ctx.workspace))) : '')
+  // 1.1.3：填了知识库根目录时，镜像目录的**建议值**改为 <知识库根>/00_全局记忆
+  //（设计定稿 §3.3 第 3 步「把记忆镜像写入知识库的 00_全局记忆 区」）。
+  // 未提供 obsidianDir 时保持 1.1.2 的口径（<工作区>/work-memory），既有测试与行为一字不变。
+  const suggestedMirror = ctx.obsidianDir
+    ? posix(join(ctx.obsidianDir, VAULT_MIRROR_DIR_NAME))
+    : (ctx.workspace ? posix(join(ctx.workspace, 'work-memory')) : '')
   const suggested = {
     'work-memory.memoryDir': suggestedMemoryDir,
-    'work-memory.obsidianSyncDir': ctx.workspace ? posix(join(ctx.workspace, 'work-memory')) : '',
+    'work-memory.obsidianSyncDir': suggestedMirror,
   }
   // 「不使用镜像」哨兵：写成空值（显式关闭），与「空串 = 用现状/默认」严格区分
   const obsidianOff = ov.obsidianSyncDir === NONE_SENTINEL_VALUE
@@ -1560,6 +1592,8 @@ export function applyBaseDeckItem(id, options = {}) {
   if (id === 'memorySeed') return applyMemorySeed(ctx, item, item.internal || {}, io, dryRun, base)
   if (id === 'skills') return applySkills(ctx, item, item.internal || {}, io, dryRun, base)
   if (id === 'settings') return applySettings(ctx, item, item.internal || {}, io, dryRun, base)
+  if (id === 'memoryDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base)
+  if (id === 'knowledgeDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base)
   return applyDirs(ctx, item, item.internal || {}, io, dryRun, base)
 }
 
@@ -2001,3 +2035,467 @@ export function publicPlan(plan) {
     setupNeeded: plan.setupNeeded,
   }
 }
+
+// ═════════════════════ 1.1.3 新增：⑥ 记忆体结构 / ⑦ 知识库结构 ═════════════════════
+//
+// 设计定稿 §6（记忆库初始化）与 §7（知识库初始化）。
+// 共同纪律：**只补缺失、不覆盖已有内容**；dry-run 默认；写前备份（仅改写既有文件时）；
+// 临时文件 + rename；写后校验（无 BOM + SHA256 一致）；任一失败回滚本次全部改动。
+
+/** 记忆体骨架目录（只创建缺失的） */
+export const MEMORY_SKELETON_DIRS = ['PROJECTS', 'DAILY', 'ARCHIVE']
+
+/** 记忆条目分隔符（与 dsh-work-memory/lib/store.js 的 ENTRY_DELIMITER 一致） */
+export const ENTRY_SEP = '\n§\n'
+
+/** 「使用者身份」占位条目正文（设计定稿 §6.2；正文以「使用者身份：」起头，身份写入模块据此定位） */
+export const IDENTITY_PLACEHOLDER_TEXT = '（待指定）本条目记录使用者的身份与工作岗位；在「设置 → 工作秘书 → 核心配置」选定或填写岗位后，由该页整条写入本条。'
+
+/** 开局待办七项（逐字对照设计定稿 §6.3） */
+export const STARTER_TODOS = [
+  '① 指定助手人设——告诉我你的称呼、我该怎么称呼你、我的身份与性格（未指定前我不臆造人格）',
+  '② 建立并检查技能库——确认随包技能已落盘到 <工作区>\\.dsh\\skills\\；缺失时在「安装与检查」页重跑一键配置补装',
+  '③ 核对环境——记忆库插件 / Python 解释器 / Python 工具 三项就绪',
+  '④ 选定工作岗位——「核心配置」页选岗位并保存（写入使用者身份）',
+  '⑤ 生成结构——「核心配置」页点「保存配置并开始」',
+  '⑥ 导入旧内容（可选）——本机已有知识库或记忆文件时选文件夹带过来',
+  '⑦ 最后一步：读一次《使用说明》（「安装与检查」页有入口）',
+]
+
+/** PROJECTS/工作秘书.md 的文件名（第一个项目） */
+export const WORK_SECRETARY_FILE = '工作秘书.md'
+
+/** 第四条【技能库】的预留占位正文（执行后由集成体生成摘要） */
+export const SKILL_LIBRARY_STUB = '【技能库】（待生成）随包技能、工作区技能与已装插件的清单及同步状态；一键配置执行后生成摘要。'
+
+/** 知识库根下的受管目录（不当作业务模块，也不重复登记） */
+export const VAULT_MANAGED_DIRS = ['00_全局记忆', '工具']
+
+/** 知识库固定名字 */
+export const VAULT_HOME_FILE = '🏠 主页.md'
+export const VAULT_MIRROR_DIR_NAME = '00_全局记忆'
+export const VAULT_TOOLS_DIR_NAME = '工具'
+export const VAULT_TOOL_SUBDIRS = ['技能', '脚本', 'MCP']
+export const VAULT_TOOL_OVERVIEW_FILE = '00_工具总览.md'
+export const VAULT_OBSIDIAN_DIR_NAME = '.obsidian'
+export const VAULT_APP_JSON_FILE = 'app.json'
+
+/** .obsidian 最小配置（只放一个中性键；使用者已有配置一律不覆盖） */
+export const VAULT_APP_JSON_TEXT = '{\n  "alwaysUpdateLinks": true\n}\n'
+
+/** 条目标题前缀（幂等判定用：已有同前缀条目即跳过，绝不重复追加） */
+export const WORK_SECRETARY_TITLES = ['【使用说明】', '【安装说明】', '【待办·开局】', '【技能库】']
+
+// ── 记忆条目小工具（口径与 dsh-work-memory 的 store.js 一致） ──
+
+/** 拆条目 */
+export function parseMemoryEntries(text) {
+  return String(text == null ? '' : text).split(ENTRY_SEP).map((e) => e.trim()).filter((e) => e.length > 0)
+}
+
+/** 拼条目（结尾一个换行） */
+export function serializeMemoryEntries(entries) {
+  return entries.join(ENTRY_SEP) + '\n'
+}
+
+/** 剥掉条目头部的 [id:…] [日期] [tag:…] 等元数据，得到正文 */
+export function memoryEntryBody(entry) {
+  return String(entry == null ? '' : entry).replace(/^(?:\s*\[[^\]]*\]\s*)+/, '')
+}
+
+/** 拼一条记忆条目 */
+export function makeMemoryEntry(content, options = {}) {
+  const id = options.id || memoryEntryId(content)
+  const date = options.date || formatDate(nowValue(options.now))
+  const tag = options.tag || '常规'
+  return '[id:' + id + '] [' + date + '] [tag:' + tag + '] ' + content
+}
+
+/** 确定性条目 id（同内容同 id，保证幂等） */
+export function memoryEntryId(content) {
+  return sha256Text('wps-deck:' + String(content)).slice(0, 12)
+}
+
+/** 在既有文本末尾追加条目（保留原有内容逐字不变） */
+export function appendEntriesText(existingText, newEntries) {
+  const trimmed = String(existingText == null ? '' : existingText).replace(/[\r\n]+$/, '')
+  const parts = trimmed === '' ? [] : [trimmed]
+  for (const e of newEntries) parts.push(e)
+  return parts.join(ENTRY_SEP) + '\n'
+}
+
+/** 读取数据文件（读不到返回空串） */
+function readTextOf(file) {
+  const raw = readFileRaw(file)
+  return raw ? raw.text : ''
+}
+
+/** 文件是否存在且是普通文件 */
+function fileExists(file) {
+  try { return statSync(file).isFile() } catch (e) { return false }
+}
+
+// ── ⑥ 记忆体结构 ──
+
+function planMemoryDeck(ctx) {
+  const spec = BASEDECK_ITEMS[5]
+  const emptyInternal = { dirs: [], writes: [] }
+  if (!ctx.memoryDir) {
+    return makeItem(spec, {
+      status: 'none',
+      target: '',
+      detail: '没有可用的记忆库目录（显式失败，不猜路径）：请先在「核心配置」里填写记忆库目录',
+      dirs: [],
+      files: [],
+      preview: { action: '没有可用的记忆库目录，无法处理', blockVersion: '', contentHash: '', sampleLines: '' },
+      internal: emptyInternal,
+    })
+  }
+
+  // ① 骨架目录：PROJECTS / DAILY / ARCHIVE（只创建缺失的）
+  const dirs = []
+  for (const name of MEMORY_SKELETON_DIRS) {
+    const dir = join(ctx.memoryDir, name)
+    let exists = false
+    try { exists = statSync(dir).isDirectory() } catch (e) { exists = false }
+    dirs.push({ key: name, label: name, dir: posix(dir), state: exists ? 'exists' : 'missing', detail: exists ? '已存在，跳过' : '缺失，将创建' })
+  }
+
+  const files = []
+  const writes = []
+  let broken = ''
+
+  // ② MEMORY.md 写入「使用者身份」占位（已有同前缀条目则跳过）
+  const memoryFile = ctx.memoryFile
+  const rawMem = memoryFile ? readFileRaw(memoryFile) : null
+  const memText = rawMem ? rawMem.text : ''
+  if (rawMem && rawMem.bom) broken = 'MEMORY.md 带 ' + rawMem.bom + ' BOM，已拒绝写入；请先另存为 UTF-8 无 BOM'
+  let memEntries = rawMem ? parseMemoryEntries(memText) : []
+  if (!broken && rawMem && memText.trim() !== '' && memEntries.length === 0) {
+    broken = 'MEMORY.md 存在但读不出任何条目，已拒绝追加（避免覆盖你的记忆库）'
+  }
+  if (!broken) {
+    const already = memEntries.some((e) => memoryEntryBody(e).indexOf(IDENTITY_PREFIX) === 0)
+    const entry = makeMemoryEntry(IDENTITY_PREFIX + IDENTITY_PLACEHOLDER_TEXT, { id: memoryEntryId('identity-placeholder'), now: ctx.now, tag: '关键' })
+    if (already) {
+      files.push({ name: 'MEMORY.md', path: posix(memoryFile), state: 'exists', detail: '已有「使用者身份」条目，跳过（只补缺失，不覆盖）' })
+    } else {
+      const content = appendEntriesText(memText, [entry])
+      writes.push({ name: 'MEMORY.md', path: memoryFile, mode: rawMem ? 'append' : 'create', hadFile: Boolean(rawMem), content: content, bytes: Buffer.byteLength(content, 'utf8') })
+      files.push({ name: 'MEMORY.md', path: posix(memoryFile), state: rawMem ? 'append' : 'create', detail: '将写入「使用者身份」占位条目（tag=关键）' })
+    }
+  }
+
+  // ③ USER.md / GRAPH.json 骨架（不存在才建；GRAPH.json 结构与 work-memory 的 readGraph 对齐）
+  if (!broken) {
+    const userFile = join(ctx.memoryDir, 'USER.md')
+    if (fileExists(userFile)) {
+      files.push({ name: 'USER.md', path: posix(userFile), state: 'exists', detail: '已存在，跳过' })
+    } else {
+      writes.push({ name: 'USER.md', path: userFile, mode: 'create', hadFile: false, content: '', bytes: 0 })
+      files.push({ name: 'USER.md', path: posix(userFile), state: 'create', detail: '将新建空偏好文件（首条偏好由 memory_remember 写入）' })
+    }
+    const graphFile = join(ctx.memoryDir, 'GRAPH.json')
+    if (fileExists(graphFile)) {
+      files.push({ name: 'GRAPH.json', path: posix(graphFile), state: 'exists', detail: '已存在，跳过' })
+    } else {
+      const graphText = JSON.stringify({ entities: [], edges: [] }, null, 2)
+      writes.push({ name: 'GRAPH.json', path: graphFile, mode: 'create', hadFile: false, content: graphText, bytes: Buffer.byteLength(graphText, 'utf8') })
+      files.push({ name: 'GRAPH.json', path: posix(graphFile), state: 'create', detail: '将新建关联图骨架' })
+    }
+  }
+
+  // ④ PROJECTS/工作秘书.md：四条（使用说明 / 安装说明 / 待办·开局 / 技能库），只补缺失的
+  if (!broken) {
+    const projectFile = join(ctx.memoryDir, 'PROJECTS', WORK_SECRETARY_FILE)
+    const projectRaw = readFileRaw(projectFile)
+    if (projectRaw && projectRaw.bom) {
+      broken = 'PROJECTS/' + WORK_SECRETARY_FILE + ' 带 ' + projectRaw.bom + ' BOM，已拒绝写入'
+    } else {
+      const projectText = projectRaw ? projectRaw.text : ''
+      const existing = projectRaw ? parseMemoryEntries(projectText) : []
+      const bodies = existing.map((e) => memoryEntryBody(e))
+      const useText = readTextOf(join(ctx.moduleDir, 'defaults', 'use.zh-CN.md'))
+      const installText = readTextOf(join(ctx.moduleDir, 'defaults', 'install.zh-CN.md'))
+      const wanted = [
+        { title: WORK_SECRETARY_TITLES[0], content: '【使用说明】\n' + (useText || '（随包说明缺失：请重装集成体）'), tag: '常规' },
+        { title: WORK_SECRETARY_TITLES[1], content: '【安装说明】\n' + (installText || '（随包说明缺失：请重装集成体）'), tag: '常规' },
+        { title: WORK_SECRETARY_TITLES[2], content: '【待办·开局】\n' + STARTER_TODOS.join('\n'), tag: '关键' },
+        { title: WORK_SECRETARY_TITLES[3], content: SKILL_LIBRARY_STUB, tag: '常规' },
+      ]
+      const missingEntries = []
+      const presentTitles = []
+      for (const w of wanted) {
+        if (bodies.some((b) => b.indexOf(w.title) === 0)) { presentTitles.push(w.title); continue }
+        missingEntries.push(makeMemoryEntry(w.content, { id: memoryEntryId('wsmd:' + w.title), now: ctx.now, tag: w.tag }))
+      }
+      if (missingEntries.length === 0) {
+        files.push({ name: 'PROJECTS/' + WORK_SECRETARY_FILE, path: posix(projectFile), state: 'exists', detail: '四条（使用说明 / 安装说明 / 待办·开局 / 技能库）都已存在，跳过' })
+      } else {
+        const content = appendEntriesText(projectText, missingEntries)
+        writes.push({ name: 'PROJECTS/' + WORK_SECRETARY_FILE, path: projectFile, mode: projectRaw ? 'append' : 'create', hadFile: Boolean(projectRaw), content: content, bytes: Buffer.byteLength(content, 'utf8') })
+        files.push({
+          name: 'PROJECTS/' + WORK_SECRETARY_FILE,
+          path: posix(projectFile),
+          state: projectRaw ? 'append' : 'create',
+          detail: '将补写 ' + missingEntries.length + ' 条（' + wanted.filter((w) => missingEntries.some((m) => m.indexOf(w.title) >= 0)).map((w) => w.title).join(' ') + '）' + (presentTitles.length ? '；已有 ' + presentTitles.join(' ') + ' 逐字保留' : ''),
+        })
+      }
+    }
+  }
+
+  const missingDirs = dirs.filter((d) => d.state === 'missing')
+  const bytes = writes.reduce((acc, w) => acc + w.bytes, 0)
+  const status = broken ? 'broken' : (missingDirs.length === 0 && writes.length === 0 ? 'up_to_date' : (dirs.every((d) => d.state === 'missing') && writes.every((w) => w.mode === 'create') ? 'append' : 'update'))
+  const action = broken ? '结构不可安全写入，已停止' : (status === 'up_to_date' ? '已是最新无需写入' : '将只补缺失的目录与条目（不覆盖任何已有内容）')
+  const detail = broken || ('骨架目录 ' + (MEMORY_SKELETON_DIRS.length - missingDirs.length) + '/' + MEMORY_SKELETON_DIRS.length + ' 已存在；待写入 ' + writes.length + ' 个文件')
+
+  return makeItem(spec, {
+    status: status,
+    target: posix(ctx.memoryDir),
+    detail: detail,
+    autoApplyable: !broken && (missingDirs.length > 0 || writes.length > 0),
+    dirs: dirs,
+    files: files,
+    preview: {
+      action: action,
+      blockVersion: '',
+      contentHash: 'sha256:' + sha256Text(dirs.map((d) => d.key + ':' + d.state).join('\n') + '\n' + files.map((x) => x.name + ':' + x.state).join('\n')),
+      sampleLines: sampleBlock(dirs.map((d) => d.dir + '  [' + d.state + ']').concat(files.map((x) => x.name + '  [' + x.state + ']'))),
+    },
+    internal: { dirs: dirs, writes: writes, missingDirs: missingDirs.map((d) => d.dir) },
+  })
+}
+
+// ── ⑦ 知识库结构 ──
+
+/** 扫描知识库根下已存在的一级业务模块目录（排除受管目录与点目录） */
+export function listVaultModules(vaultDir) {
+  let ents = []
+  try { ents = readdirSync(vaultDir, { withFileTypes: true }) } catch (e) { return [] }
+  return ents
+    .filter((d) => d.isDirectory() && d.name[0] !== '.' && VAULT_MANAGED_DIRS.indexOf(d.name) < 0)
+    .map((d) => d.name)
+    .sort()
+}
+
+/** 主页正文（不写死任何业务模块名，模块清单来自扫描结果） */
+export function buildVaultHomeText(modules) {
+  const list = Array.isArray(modules) ? modules : []
+  const rows = list.length > 0
+    ? list.map((m) => '- [' + m + '](<./' + m + '>)：业务知识与资料').join('\n')
+    : '- （还没有业务模块目录；可在本库新建，或在「核心配置」里指定）'
+  return [
+    '# 🏠 主页',
+    '',
+    '本库由「工作秘书」集成体建立：业务知识、工具索引与记忆镜像都从这里进入。',
+    '',
+    '## 记忆镜像',
+    '',
+    '- [00_全局记忆](<./00_全局记忆>)：由记忆库自动镜像，请勿在此手改（改动走记忆工具或面板）。',
+    '',
+    '## 工具',
+    '',
+    '- [' + VAULT_TOOL_OVERVIEW_FILE.replace(/\.md$/, '') + '](<./' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_OVERVIEW_FILE + '>)：技能 / 脚本 / MCP 三个子目录的入口。',
+    '',
+    '## 业务模块',
+    '',
+    rows,
+    '',
+    '## 约定',
+    '',
+    '- 本库是知识库的真相源；记忆镜像区只读，改动走记忆工具。',
+    '- 工具副本为单向同步（源 → 工具/），内容未变则跳过，被手改过的副本不覆盖。',
+    '',
+  ].join('\n')
+}
+
+/** 工具总览正文（说明三个子目录各放什么 + 同步纪律） */
+export function buildToolOverviewText() {
+  return [
+    '# 00_工具总览',
+    '',
+    '本目录集中放工具与技能，三个子目录各管一类：',
+    '',
+    '| 子目录 | 放什么 |',
+    '|---|---|',
+    '| 技能/ | DSH 技能与插件随包技能的同步副本 + 索引 |',
+    '| 脚本/ | 工作区与知识库脚本的说明与用法 |',
+    '| MCP/ | MCP 服务登记（本机没有就空着） |',
+    '',
+    '## 同步纪律',
+    '',
+    '- 单向：只从工作区与已装插件同步到本目录，不反向写回源。',
+    '- 幂等：内容未变则跳过；文件头标注真身路径与同步时间。',
+    '- 库里副本被手改过则不覆盖，只提示差异。',
+    '- 技能含附属文件时不搬进本目录，只在索引里标注。',
+    '',
+  ].join('\n')
+}
+
+function planKnowledgeDeck(ctx) {
+  const spec = BASEDECK_ITEMS[6]
+  const emptyInternal = { dirs: [], writes: [] }
+  if (!ctx.obsidianDir) {
+    return makeItem(spec, {
+      status: 'none',
+      target: '',
+      detail: '没有指定 Obsidian 知识库目录（显式失败，不猜路径）：请先在「核心配置」里填写',
+      dirs: [],
+      files: [],
+      preview: { action: '没有知识库目录，无法处理', blockVersion: '', contentHash: '', sampleLines: '' },
+      internal: emptyInternal,
+    })
+  }
+
+  const vault = ctx.obsidianDir
+  const dirTargets = [
+    { key: 'mirror', label: VAULT_MIRROR_DIR_NAME, dir: join(vault, VAULT_MIRROR_DIR_NAME) },
+    { key: 'tools', label: VAULT_TOOLS_DIR_NAME, dir: join(vault, VAULT_TOOLS_DIR_NAME) },
+  ]
+  for (const sub of VAULT_TOOL_SUBDIRS) {
+    dirTargets.push({ key: 'tools/' + sub, label: VAULT_TOOLS_DIR_NAME + '/' + sub, dir: join(vault, VAULT_TOOLS_DIR_NAME, sub) })
+  }
+
+  const dirs = dirTargets.map((t) => {
+    let exists = false
+    try { exists = statSync(t.dir).isDirectory() } catch (e) { exists = false }
+    return { key: t.key, label: t.label, dir: posix(t.dir), state: exists ? 'exists' : 'missing', detail: exists ? '已存在，跳过' : '缺失，将创建' }
+  })
+
+  const modules = listVaultModules(vault)
+  const files = []
+  const writes = []
+  let broken = ''
+  const fileSpecs = [
+    { name: VAULT_HOME_FILE, path: join(vault, VAULT_HOME_FILE), content: buildVaultHomeText(modules), note: '总入口（含已登记的 ' + modules.length + ' 个业务模块）' },
+    { name: VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_OVERVIEW_FILE, path: join(vault, VAULT_TOOLS_DIR_NAME, VAULT_TOOL_OVERVIEW_FILE), content: buildToolOverviewText(), note: '工具入口与同步纪律' },
+    { name: VAULT_OBSIDIAN_DIR_NAME + '/' + VAULT_APP_JSON_FILE, path: join(vault, VAULT_OBSIDIAN_DIR_NAME, VAULT_APP_JSON_FILE), content: VAULT_APP_JSON_TEXT, note: '.obsidian 最小配置' },
+  ]
+  for (const s of fileSpecs) {
+    if (fileExists(s.path)) {
+      files.push({ name: s.name, path: posix(s.path), state: 'exists', detail: '已存在，保留不覆盖（' + s.note + '）' })
+      continue
+    }
+    writes.push({ name: s.name, path: s.path, mode: 'create', hadFile: false, content: s.content, bytes: Buffer.byteLength(s.content, 'utf8') })
+    files.push({ name: s.name, path: posix(s.path), state: 'create', detail: '将新建：' + s.note })
+  }
+
+  const missingDirs = dirs.filter((d) => d.state === 'missing')
+  const bytes = writes.reduce((acc, w) => acc + w.bytes, 0)
+  const status = broken ? 'broken' : (missingDirs.length === 0 && writes.length === 0 ? 'up_to_date' : (dirs.every((d) => d.state === 'missing') ? 'append' : 'update'))
+  const action = status === 'up_to_date' ? '已是最新无需写入' : '将只补缺失的目录与文件（不覆盖任何已有内容）'
+  const detail = '模块骨架登记 ' + modules.length + ' 个（' + (modules.join('、') || '暂无') + '）；目录缺失 ' + missingDirs.length + ' / ' + dirs.length + '；待写入 ' + writes.length + ' 个文件'
+
+  return makeItem(spec, {
+    status: status,
+    target: posix(vault),
+    detail: detail,
+    autoApplyable: status !== 'up_to_date' && !broken,
+    dirs: dirs,
+    files: files,
+    modules: modules,
+    preview: {
+      action: action,
+      blockVersion: '',
+      contentHash: 'sha256:' + sha256Text(files.map((x) => x.name + ':' + x.state).join('\n')),
+      sampleLines: sampleBlock(dirs.map((d) => d.dir + '  [' + d.state + ']').concat(files.map((x) => x.name + '  [' + x.state + ']'))),
+    },
+    internal: { dirs: dirs, writes: writes, missingDirs: missingDirs.map((d) => d.dir) },
+  })
+}
+
+// ── ⑥⑦ 共用写回器 ──
+
+function applyDeckFiles(ctx, item, internal, io, dryRun, base) {
+  if (item.status === 'up_to_date') {
+    return Object.assign(base, { ok: true, detail: item.detail + '（未写盘）' })
+  }
+  if (item.status === 'broken' || item.status === 'none') {
+    return Object.assign(base, { ok: false, detail: item.detail + '（未写盘）' })
+  }
+  const dirs = (internal.dirs || []).filter((d) => d.state === 'missing')
+  const writes = internal.writes || []
+  const totalBytes = writes.reduce((acc, w) => acc + (w.bytes || 0), 0)
+  base.wouldWriteBytes = totalBytes
+  base.plannedDirs = dirs.map((d) => d.dir)
+  base.plannedFiles = writes.map((w) => ({ name: w.name, path: posix(w.path), mode: w.mode }))
+  base.plannedBackups = writes.filter((w) => w.hadFile).map((w) => posix(w.path + BACKUP_SUFFIX + stamp(ctx.now)))
+
+  if (dryRun) {
+    return Object.assign(base, {
+      ok: true,
+      detail: item.detail + '；干跑：未写盘（将创建 ' + dirs.length + ' 个目录、写入 ' + writes.length + ' 个文件，共 ' + totalBytes + ' 字节）',
+    })
+  }
+
+  const createdDirs = []
+  const createdFiles = []
+  const backups = []
+  const rollbackAll = () => {
+    for (const p of createdFiles.slice().reverse()) {
+      const b = backups.filter((x) => x.path === p)[0]
+      try {
+        if (b && b.backup) io.copyFileSync(b.backup, p)
+        else io.rmSync(p, { force: true })
+      } catch (e) { /* best-effort */ }
+    }
+    for (const d of createdDirs.slice().reverse()) {
+      try { io.rmSync(d, { recursive: false, force: true }) } catch (e) { /* 非空则保留，best-effort */ }
+    }
+  }
+
+  for (const d of dirs) {
+    try {
+      io.mkdirSync(d.dir, { recursive: true })
+      createdDirs.push(d.dir)
+    } catch (err) {
+      rollbackAll()
+      return Object.assign(base, { ok: false, detail: '创建目录失败（已回滚）：' + posix(d.dir) + '（' + String(err && err.message ? err.message : err) + '）' })
+    }
+  }
+  for (const w of writes) {
+    try {
+      io.mkdirSync(dirname(w.path), { recursive: true })
+      let backup = ''
+      if (w.hadFile) {
+        backup = backupFile(w.path, io, ctx.now)
+        backups.push({ path: w.path, backup: backup })
+      }
+      atomicWriteText(w.path, w.content, io)
+      createdFiles.push(w.path)
+    } catch (err) {
+      rollbackAll()
+      return Object.assign(base, { ok: false, detail: '写入失败（已回滚）：' + posix(w.path) + '（' + String(err && err.message ? err.message : err) + '）' })
+    }
+  }
+
+  // 写后校验：无 BOM + SHA256 与预期一致
+  for (const w of writes) {
+    const verify = readFileRaw(w.path)
+    if (!verify) {
+      rollbackAll()
+      return Object.assign(base, { ok: false, detail: '写后读取失败（已回滚）：' + posix(w.path) })
+    }
+    if (verify.bom) {
+      rollbackAll()
+      return Object.assign(base, { ok: false, detail: '写后检测到 ' + verify.bom + ' BOM（已回滚）：' + posix(w.path) })
+    }
+    if (sha256Text(verify.buffer) !== sha256Text(Buffer.from(w.content, 'utf8'))) {
+      rollbackAll()
+      return Object.assign(base, { ok: false, detail: '写后 SHA256 不一致（已回滚）：' + posix(w.path) })
+    }
+  }
+
+  return Object.assign(base, {
+    ok: true,
+    bytesWritten: totalBytes,
+    wroteAny: createdDirs.length > 0 || createdFiles.length > 0,
+    createdDirs: createdDirs.map((d) => posix(d)),
+    writtenFiles: createdFiles.map((x) => posix(x)),
+    backups: backups.map((b) => ({ path: posix(b.path), backup: b.backup ? posix(b.backup) : '' })),
+    detail: item.detail + '；已创建 ' + createdDirs.length + ' 个目录、写入 ' + createdFiles.length + ' 个文件（' + totalBytes + ' 字节），写后校验通过'
+      + (backups.length > 0 ? '；改写前已备份 ' + backups.length + ' 个文件' : '；全部为新建，无需备份'),
+  })
+}
+
