@@ -7,7 +7,7 @@
  * 绝不抛异常、绝不让调用方 500。
  *
  * 取值口径：
- *   · memoryDir   ← work-memory.memoryDir；空则给**生效默认**（`<DSH_HOME>/memories/work-memory`，
+ *   · memoryDir   ← work-memory.memoryDir；空则给**生效默认**（`<DSH_HOME>/data/dsh-work-memory/memory`，
  *                   与 dsh-work-memory 的 `defaultMemoryRoot()` 同口径）并标 source='default'；
  *   · obsidianDir ← 由 work-memory.obsidianSyncDir（镜像目录）**反推 vault 根**，标 source='derived'；
  *                   反推复用 lib/basedeck.js 的 `deriveVaultRootFromMirror`（只有一份实现）；
@@ -17,10 +17,11 @@
  * @module work-personal-secretary/setup-state
  */
 
+import { statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { posix } from './install.js'
-import { DEFAULT_MEMORY_SUBDIR, deriveVaultRootFromMirror, resolveDshHome } from './basedeck.js'
+import { DEFAULT_MEMORY_SUBDIR, LEGACY_MEMORY_SUBDIR, deriveVaultRootFromMirror, resolveDshHome } from './basedeck.js'
 import { DOMAIN_PRESETS } from './domain.js'
 import { readIdentity } from './identity.js'
 import { buildSettingsView } from './settings-api.js'
@@ -140,6 +141,7 @@ export async function readSetupState(ctx, deps = {}) {
   const dom = pickKeyValue(view, SETUP_STATE_KEYS.defaultDomain.ns, SETUP_STATE_KEYS.defaultDomain.key)
 
   // memoryDir 为空时的「生效默认」：与 dsh-work-memory 的 defaultMemoryRoot() 同口径
+  // （1.0.6 起是 <DSH_HOME>/data/dsh-work-memory/memory，见 basedeck.js 的 DEFAULT_MEMORY_SUBDIR）
   // 只在**设置服务可用**时才给「生效默认」：服务不可用时给一个可能不对的绝对路径反而误导
   let memoryDirDefault = ''
   if (view && !mem.value) {
@@ -176,3 +178,36 @@ export async function readSetupState(ctx, deps = {}) {
   if (notes.length > 0) state.note = state.note + '（' + notes.join('；') + '）'
   return state
 }
+
+/** 目录存在性判定（静默：不存在 / 无权限都算「不是目录」） */
+function isDirQuiet(dir) {
+  try { return statSync(dir).isDirectory() } catch (e) { return false }
+}
+
+/**
+ * 解析「迁移来源」＝ 旧记忆库现在可能在哪。**只读**、不抛异常。
+ *
+ * 顺序固定（回显里必须让人看见是哪一种，别让人猜）：
+ *   ① source='settings'       设置里显式配置的 memoryDir；
+ *   ② source='legacy-default' 旧的默认位置 <DSH_HOME>/memories/work-memory（**仅当该目录确实存在**）；
+ *   ③ source='new-default'    新的默认位置 <DSH_HOME>/data/dsh-work-memory/memory。
+ *
+ * 为什么要留 ②：1.0.6 之前的默认位置里可能还躺着使用者的记忆；默认位置已经搬到 ③，
+ * 但「老库还留在老地方」这件事只能靠存在性检查发现。
+ *
+ * @param {object} state readSetupState / buildSetupState 的结果（只读 memoryDir 字段）
+ * @param {object} [deps] { env, dshHome }
+ * @returns {{from:string, source:'settings'|'legacy-default'|'new-default'|'none'}}
+ */
+export function resolveMigrateSource(state, deps = {}) {
+  const mem = (state && state.memoryDir && typeof state.memoryDir === 'object') ? state.memoryDir : {}
+  const value = clean(mem.value)
+  const kind = clean(mem.source)
+  if (kind === 'settings' && value) return { from: value, source: 'settings' }
+  const dshHome = deps.dshHome ? String(deps.dshHome) : resolveDshHome(deps.env || process.env)
+  const legacy = dshHome ? join(dshHome, LEGACY_MEMORY_SUBDIR) : ''
+  if (legacy && isDirQuiet(legacy)) return { from: legacy, source: 'legacy-default' }
+  if (value) return { from: value, source: 'new-default' }
+  return { from: '', source: 'none' }
+}
+

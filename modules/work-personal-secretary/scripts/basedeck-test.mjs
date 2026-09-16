@@ -4,7 +4,7 @@
  * 用法：node scripts/basedeck-test.mjs
  *
  * 覆盖：
- *   [1] 契约形状：五项 id / 执行顺序 / 4 个设置键
+ *   [1] 契约形状：八项 id / 执行顺序 / 4 个设置键
  *   [2] content-hash 规范化（行尾 / 尾随空白 / 首尾空行）
  *   [3] 标记块七状态（append / update / up_to_date / user_modified / ahead / broken / multiple）
  *   [4] AGENTS.md 端到端：首次追加 + 只替换块区间 + **块外逐字节未变** + 备份 + 无 BOM
@@ -19,6 +19,7 @@
  *  [13] 路由：GET /basedeck 只读、POST /basedeck 默认 dry-run、dryRun:false 在夹具里真写、跨站 403
  *  [14] setupNeeded 引导信号
  *  [15] 真实环境**只读快照**首尾比对（证明本次开发未写入真实工作区 / 真实设置文件）
+ *  [22] ⑧ 迁移旧记忆库：只补缺失不覆盖 / 旧目录只读 / 逐文件校验 / 失败回滚 / 失败即停后续步骤 / 来源三级顺序
  *
  * 隔离红线（本测试的全部保证）：
  *   - 所有夹具（假 DSH_HOME / 假仓库 / 假工作区 / 假设置 / 假记忆库）都在 os.tmpdir() 下自建；
@@ -27,6 +28,7 @@
  *   - 真实工作区与真实设置文件只做 statSync / readdir 只读快照，首尾比对，**从不用作任何写入目标**。
  */
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -67,10 +69,17 @@ import {
   resolveWorkspace,
   safeWorkspaceParam,
   sha256Text,
+  DEFAULT_MEMORY_SUBDIR,
+  LEGACY_MEMORY_SUBDIR,
+  MIGRATE_MANIFEST_PREFIX,
+  isMigrateNoise,
+  sameFsPath,
+  walkFilesForMigrate,
 } from '../lib/basedeck.js'
 import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
 import { isSameOrNested, pathChecks, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
+import { resolveMigrateSource } from '../lib/setup-state.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MODULE_DIR = join(HERE, '..')
@@ -274,8 +283,8 @@ function opts(extra) {
 // ═══════════════════════════ 主流程 ═══════════════════════════
 
 section('[1] 契约形状')
-ok(BASEDECK_ID_LIST.join(',') === 'agentsMd,memorySeed,skills,settings,dirs,memoryDeck,knowledgeDeck', '七项 id 与顺序（1.1.3 在末尾追加记忆体结构 / 知识库结构）')
-ok(BASEDECK_APPLY_ORDER.join(',') === 'dirs,memorySeed,memoryDeck,knowledgeDeck,skills,settings,agentsMd', '执行顺序按依赖排，agentsMd 最后')
+ok(BASEDECK_ID_LIST.join(',') === 'agentsMd,memorySeed,skills,settings,dirs,memoryDeck,knowledgeDeck,migrateMemory', '八项 id 与顺序（1.1.3 在末尾追加记忆体结构 / 知识库结构 / 旧记忆库迁移）')
+ok(BASEDECK_APPLY_ORDER.join(',') === 'dirs,migrateMemory,memorySeed,memoryDeck,knowledgeDeck,skills,settings,agentsMd', '执行顺序按依赖排：迁移紧跟 dirs（前置步骤），agentsMd 最后')
 ok(SETTINGS_TARGETS.map((t) => t.ns + '.' + t.key).join(',') === 'work-memory.memoryDir,work-memory.obsidianSyncDir,experts.defaultDomain,experts.identityExpert', '只增改这 4 个键')
 ok(API_PATHS.join(',') === '/check,/fix,/fix-all,/plugins,/install,/install-all,/basedeck', 'API_PATHS 含 /basedeck')
 
@@ -621,8 +630,8 @@ async function call(method, sub, body, headers) {
 const routeTreeBefore = treeSnapshot(wsRoute)
 const rGet = await call('GET', '/basedeck')
 ok(rGet.status === 200 && rGet.body.ok === true, 'GET /basedeck → 200 ok（只读）')
-ok(rGet.body.items.length === 7 && typeof rGet.body.setupNeeded === 'boolean', 'items 七项 + setupNeeded 信号')
-ok(rGet.body.items[0].id === 'agentsMd' && rGet.body.summary.total === 7, '计划按展示顺序，summary.total=7')
+ok(rGet.body.items.length === 8 && typeof rGet.body.setupNeeded === 'boolean', 'items 八项 + setupNeeded 信号')
+ok(rGet.body.items[0].id === 'agentsMd' && rGet.body.summary.total === 8, '计划按展示顺序，summary.total=8')
 ok(rGet.body.workspaceSource === 'config', 'workspaceSource=config（来自设置项 workspace）')
 ok(rGet.body.items.every((it) => it.internal === undefined), '内部字段 internal 不对外')
 const rGetWs = await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsRoute))
@@ -645,7 +654,7 @@ const rPostReal = await call('POST', '/basedeck', {
 }, REQ_HEADERS)
 ok(rPostReal.status === 200 && rPostReal.body.ok === true, 'POST dryRun:false → 真写成功（仅夹具）')
 ok(rPostReal.body.rejected.join(',') === 'nope', '未知 id 计入 rejected（不静默跳过）')
-ok(rPostReal.body.results.map((r) => r.id).join(',') === 'dirs,memorySeed,memoryDeck,knowledgeDeck,skills,settings,agentsMd', '真写按依赖顺序执行，agentsMd 最后')
+ok(rPostReal.body.results.map((r) => r.id).join(',') === 'dirs,migrateMemory,memorySeed,memoryDeck,knowledgeDeck,skills,settings,agentsMd', '真写按依赖顺序执行（迁移在 dirs 之后、memorySeed 之前），agentsMd 最后')
 assertInsideTmp(join(wsRoute, 'AGENTS.md'), 'route agentsMd')
 ok(existsSync(join(wsRoute, 'AGENTS.md')), '夹具工作区里的 AGENTS.md 已写入')
 ok(existsSync(join(routeMem, 'MEMORY.md')), '夹具记忆库 MEMORY.md 已写入')
@@ -660,7 +669,7 @@ const shape = (await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsR
 ok(shape.items.every((it) => typeof it.preview.sampleLines === 'string'), 'preview.sampleLines 全部是**字符串**（不是数组）')
 ok(shape.items.every((it) => typeof it.autoApplyable === 'boolean' && typeof it.detail === 'string' && typeof it.status === 'string'), 'items 字段类型符合契约')
 ok(shape.items.every((it) => typeof it.preview.action === 'string' && typeof it.preview.blockVersion === 'string' && typeof it.preview.contentHash === 'string'), 'preview 四字段齐全且为字符串')
-ok(shape.summary.total === 7 && typeof shape.setupNeeded === 'boolean' && typeof shape.workspace === 'string', 'summary + setupNeeded + workspace 存在')
+ok(shape.summary.total === 8 && typeof shape.setupNeeded === 'boolean' && typeof shape.workspace === 'string', 'summary + setupNeeded + workspace 存在')
 const wsSingle = makeWorkspace('single')
 const emptyOv = { workspace: wsSingle, defaultDomain: '', identityExpert: '', memoryDir: '', obsidianSyncDir: '' }
 const singleDry = await call('POST', '/basedeck', { ids: ['agentsMd'], overrides: emptyOv }, REQ_HEADERS)
@@ -814,7 +823,7 @@ const deckBase = opts({
 const deckOpts = Object.assign({}, deckBase, { moduleDir: MODULE_DIR })
 
 const planDeck = planBaseDeck(deckOpts)
-ok(planDeck.items.length === 7, '计划仍是七项（1.1.3 在末尾追加两项，既有五项顺序不变）')
+ok(planDeck.items.length === 8, '计划是八项（1.1.3 在末尾追加三项，既有五项顺序不变）')
 const memItem = planDeck.items.filter((i) => i.id === 'memoryDeck')[0]
 const knowItem = planDeck.items.filter((i) => i.id === 'knowledgeDeck')[0]
 ok(memItem.status === 'append' && knowItem.status === 'append', '两块结构初装状态都是 append')
@@ -1198,8 +1207,8 @@ const hSetup2 = installSetupCtx([
   { ns: 'work-memory', schema: SETUP_MEM_SCHEMA, value: { memoryDir: '' }, revision: 1, applies: 'live' },
 ])
 const ss2 = await callRoute(hSetup2, 'GET', '/setup-state')
-ok(ss2.body.memoryDir.source === 'default' && ss2.body.memoryDir.value.indexOf('memories/work-memory') > 0,
-  '②memoryDir 为空 → 生效默认（<DSH_HOME>/memories/work-memory，绝对路径）+ source=default：' + ss2.body.memoryDir.value)
+ok(ss2.body.memoryDir.source === 'default' && ss2.body.memoryDir.value.indexOf('data/dsh-work-memory/memory') > 0,
+  '②memoryDir 为空 → 生效默认（<DSH_HOME>/data/dsh-work-memory/memory，绝对路径）+ source=default：' + ss2.body.memoryDir.value)
 ok(ss2.body.obsidianDir.source === 'none' && ss2.body.obsidianDir.value === '', '③obsidianSyncDir 为空 → obsidianDir source=none、value 空')
 
 const hSetup3 = installSetupCtx([
@@ -1293,6 +1302,142 @@ const reOut = withMemoryDirLock(reDir, () => withMemoryDirLock(reDir, () => 'inn
 ok(reOut === 'inner-ok' && Date.now() - tReentrant < 500,
   '同进程重入不再抢同一把文件锁（内层直接复用，不死等；实测 ' + (Date.now() - tReentrant) + 'ms）')
 ok(!existsSync(join(reDir, '.work-memory.lock')), '重入退出后锁文件已释放')
+
+section('[22] ⑧ 迁移旧记忆库（改记忆库目录时把旧内容带过来）')
+const BS = String.fromCharCode(92) // 反斜杠：避免在测试源码里写转义字面量
+
+// 纯函数：噪声判定 / 路径等价 / 迁移来源三级顺序
+ok(isMigrateNoise('.work-memory.lock') && isMigrateNoise('MEMORY.md.bak-20260101-000000-000')
+  && isMigrateNoise('MEMORY.md.wps-tmp-1-ab') && isMigrateNoise(MIGRATE_MANIFEST_PREFIX + '20260101-000000-000.json')
+  && isMigrateNoise('a.tmp'),
+  '噪声识别：锁 / 写前备份 / 原子写临时文件 / 迁移清单 / .tmp 一律不迁移')
+ok(!isMigrateNoise('MEMORY.md') && !isMigrateNoise('GRAPH.json') && !isMigrateNoise('.triage.json') && !isMigrateNoise('.access.json') && !isMigrateNoise('PROJECTS'),
+  '状态文件不是噪声（含点号前缀的 .triage.json / .access.json 要迁移 —— 不按点号一刀切）')
+ok(sameFsPath('C:/A/lib/', 'c:' + BS + 'a' + BS + 'lib') === true, '路径等价：大小写与分隔符归一后是同一目录')
+ok(sameFsPath('C:/A/lib', 'C:/A/lib2') === false, '路径等价：不同目录为 false')
+ok(LEGACY_MEMORY_SUBDIR.replace(/\\/g, '/') === 'memories/work-memory'
+  && DEFAULT_MEMORY_SUBDIR.replace(/\\/g, '/') === 'data/dsh-work-memory/memory',
+  '默认路径常量：新默认 = data/dsh-work-memory/memory；旧默认另立 LEGACY_MEMORY_SUBDIR 供迁移回退')
+
+// 旧库夹具：三块结构 + 状态文件 + 两类噪声
+const migHome = join(TMP_ROOT, 'mighome', '.dsh')
+const migWs = makeWorkspace('migrate')
+const migOld = join(TMP_ROOT, 'migold')
+const migNew = join(TMP_ROOT, 'mignew')
+const migBackup = join(TMP_ROOT, 'migbackup')
+writeText(join(migOld, 'MEMORY.md'), '【全局记忆】A' + NL)
+writeText(join(migOld, 'USER.md'), '【用户偏好】U' + NL)
+writeText(join(migOld, 'GRAPH.json'), '{ "edges": [] }' + NL)
+writeText(join(migOld, 'PROJECTS', 'proj.md'), 'P' + NL)
+writeText(join(migOld, 'DAILY', '2026-01-02.md'), 'D' + NL)
+writeText(join(migOld, '.triage.json'), '{ "keep": [] }' + NL)
+writeText(join(migOld, '.work-memory.lock'), '99999')
+writeText(join(migOld, 'MEMORY.md.bak-20260101-000000-000'), '旧备份' + NL)
+assertInsideTmp(migOld, 'migold')
+
+const migOpts = (extra) => opts(Object.assign({
+  workspace: migWs, dshHome: migHome, settingsFile: join(migHome, 'settings.yaml'),
+  memoryDir: migNew, backupDir: migBackup, moduleDir: MODULE_DIR,
+  migrateFrom: migOld, migrateFromSource: 'settings',
+}, extra || {}))
+const migItemOf = (o) => planBaseDeck(o).items.filter((i) => i.id === 'migrateMemory')[0]
+
+const migPlan = migItemOf(migOpts())
+ok(migPlan.status === 'append' && migPlan.migrateStats.copy === 6 && migPlan.migrateStats.noise === 2,
+  '计划：待复制 6 个、噪声 2 个（锁 + 写前备份）')
+ok(migPlan.files.map((f) => f.name).sort().join(',') === '.triage.json,DAILY/2026-01-02.md,GRAPH.json,MEMORY.md,PROJECTS/proj.md,USER.md',
+  '待复制清单含三块结构与状态文件，不含锁 / 备份')
+ok(migPlan.migrateSource === 'settings' && migPlan.migrateSourceText.indexOf('设置') > 0, '计划回显迁移来源口径（settings）')
+ok(migPlan.target.length === 2 && migPlan.target[0].indexOf('migold') > 0 && migPlan.target[1].indexOf('mignew') > 0, 'target 回显「旧目录 → 目标目录」')
+ok(migPlan.autoApplyable === true && typeof migPlan.preview.sampleLines === 'string', '可自动执行 + preview.sampleLines 是字符串（客户端契约）')
+
+const migTreeBefore = treeSnapshot(TMP_ROOT)
+const migDry = applyBaseDeckItem('migrateMemory', migOpts({ dryRun: true }))
+ok(migDry.ok === true && migDry.wroteAny === false && migDry.bytesWritten === 0, '干跑：ok 且零字节（wouldWriteBytes=' + migDry.wouldWriteBytes + '）')
+ok(!existsSync(migNew) && sameTree(migTreeBefore, treeSnapshot(TMP_ROOT)), '干跑不创建目标目录（整棵树逐项一致）')
+
+const migReal = applyBaseDeckItem('migrateMemory', migOpts({ dryRun: false }))
+ok(migReal.ok === true && migReal.wroteAny === true && migReal.migratedFiles.length === 6, '真写：复制 6 个文件')
+ok(readBytes(join(migNew, 'MEMORY.md')).equals(readBytes(join(migOld, 'MEMORY.md'))), 'MEMORY.md 逐字节一致（写后大小 + SHA256 校验通过）')
+ok(existsSync(join(migNew, 'PROJECTS', 'proj.md')) && existsSync(join(migNew, 'DAILY', '2026-01-02.md')) && existsSync(join(migNew, '.triage.json')),
+  '子目录结构与状态文件一并带过去（目录层级保留）')
+ok(!existsSync(join(migNew, '.work-memory.lock')) && !existsSync(join(migNew, 'MEMORY.md.bak-20260101-000000-000')),
+  '锁与写前备份不迁移（噪声），锁在收尾时已释放')
+ok(existsSync(join(migOld, 'MEMORY.md')) && existsSync(join(migOld, 'MEMORY.md.bak-20260101-000000-000')) && existsSync(join(migOld, '.work-memory.lock')),
+  '旧目录只读：原样保留，未删除、未改写')
+ok(migReal.manifest.indexOf(MIGRATE_MANIFEST_PREFIX) > 0 && existsSync(migReal.manifest), '迁移清单写入备份目录（事后可审计）')
+assertInsideTmp(migReal.manifest, 'migrate manifest')
+
+const migPlan2 = migItemOf(migOpts())
+ok(migPlan2.status === 'up_to_date' && migPlan2.migrateStats.copy === 0, '再计划一次 → up_to_date（幂等）')
+const migAgain = applyBaseDeckItem('migrateMemory', migOpts({ dryRun: false }))
+ok(migAgain.ok === true && migAgain.wroteAny === false && /未写盘/.test(migAgain.detail), '幂等：第二次真写也不再落盘')
+
+writeText(join(migNew, 'USER.md'), '【用户偏好】目标自己的版本' + NL)
+const migConflictPlan = migItemOf(migOpts())
+ok(migConflictPlan.conflicts.join(',') === 'USER.md' && /内容不同/.test(migConflictPlan.detail), '目标已有同名但内容不同 → 计冲突并在 detail 说明')
+const migConflictRes = applyBaseDeckItem('migrateMemory', migOpts({ dryRun: false }))
+ok(migConflictRes.ok === true && readFileSync(join(migNew, 'USER.md'), 'utf8').indexOf('目标自己的版本') > 0, '绝不覆盖：目标内容原样保留')
+ok(migConflictRes.conflicts.join(',') === 'USER.md', 'apply 结果回显冲突清单')
+
+const migSame = migItemOf(migOpts({ memoryDir: migOld }))
+ok(migSame.status === 'up_to_date' && /同一个/.test(migSame.detail), '旧目录 = 目标目录 → up_to_date（不自己迁自己）')
+const migMissing = migItemOf(migOpts({ migrateFrom: join(TMP_ROOT, 'no-such-lib') }))
+ok(migMissing.status === 'up_to_date' && /不存在/.test(migMissing.detail), '旧目录不存在 → up_to_date（不报错、不阻断引导）')
+const migNoSrc = migItemOf(migOpts({ migrateFrom: '', migrateFromSource: 'none' }))
+ok(migNoSrc.status === 'up_to_date' && migNoSrc.migrateSource === 'none' && migNoSrc.migrateStats.copy === 0, '未解析到来源 → up_to_date + source=none')
+const migWsFallback = migItemOf(migOpts({ memoryDir: '' }))
+ok(migWsFallback.status === 'append' && migWsFallback.target[1].indexOf('memories/migrate') > 0 && migWsFallback.migrateStats.copy === 6,
+  'memoryDir 留空 → 目标按既有口径回退到 <DSH_HOME>/memories/<工作区名>（引导必经显式填值，这里只验证回退口径）')
+
+// 回滚：第二个文件复制失败 → 本次已复制文件全部撤回，旧目录不动
+const migNew2 = join(TMP_ROOT, 'mignew2')
+let migCopyCount = 0
+const migFailIo = { copyFileSync: (a, b) => { migCopyCount += 1; if (migCopyCount === 2) throw new Error('EACCES 模拟'); copyFileSync(a, b) } }
+const migRb = applyBaseDeckItem('migrateMemory', migOpts({ dryRun: false, memoryDir: migNew2, io: migFailIo }))
+ok(migRb.ok === false && /已回滚/.test(migRb.detail), '复制失败 → ok:false + 「已回滚」说明')
+ok(!existsSync(migNew2) || readdirSync(migNew2).length === 0, '回滚后目标里没有残留文件（新建目录一并撤回）')
+ok(existsSync(join(migOld, 'DAILY', '2026-01-02.md')) && existsSync(join(migOld, 'USER.md')), '回滚不影响旧目录')
+ok(migRb.wroteAny !== true, '回滚的失败结果不谎报 wroteAny')
+
+// 迁移是前置步骤：失败 → 链停在这一步，settings 不写（记忆库目录不切换）
+const migStopHome = join(TMP_ROOT, 'migstophome', '.dsh')
+const migStopBase = opts({
+  workspace: makeWorkspace('migstop'), dshHome: migStopHome, settingsFile: join(migStopHome, 'settings.yaml'),
+  memoryDir: join(TMP_ROOT, 'migstopmem'), backupDir: join(TMP_ROOT, 'migstopbackup'), moduleDir: MODULE_DIR,
+  migrateFrom: migOld, migrateFromSource: 'settings',
+})
+const migStopRun = applyBaseDeck(['dirs', 'migrateMemory', 'settings', 'agentsMd'],
+  Object.assign({}, migStopBase, { dryRun: false, io: { copyFileSync: () => { throw new Error('EACCES 模拟') } } }))
+ok(migStopRun.ok === false && migStopRun.stoppedAt === 'migrateMemory', '迁移失败 → 链在 migrateMemory 处停止（stoppedAt 回显）')
+ok(migStopRun.results.map((r) => r.id).join(',') === 'dirs,migrateMemory', '后续步骤（settings / agentsMd）不再执行')
+ok(!existsSync(join(migStopHome, 'settings.yaml')), '迁移失败时不写 settings（记忆库目录没有被切换）')
+ok(/后续步骤已停止/.test(migStopRun.stopReason), 'stopReason 给出可读原因：' + migStopRun.stopReason)
+
+// 迁移来源三级顺序（纯函数，逐条判）
+const srcHome = join(TMP_ROOT, 'srchome', '.dsh')
+mkdirSync(join(srcHome, 'memories', 'work-memory'), { recursive: true })
+const src1 = resolveMigrateSource({ memoryDir: { value: 'D:/my/lib', source: 'settings' } }, { dshHome: srcHome })
+ok(src1.source === 'settings' && src1.from === 'D:/my/lib', '来源①：设置里显式配置 → settings（优先于旧默认位置）')
+const src2 = resolveMigrateSource({ memoryDir: { value: '', source: 'none' } }, { dshHome: srcHome })
+ok(src2.source === 'legacy-default' && src2.from.replace(/\\/g, '/').indexOf('memories/work-memory') > 0,
+  '来源②：设置空但旧默认位置里有数据 → legacy-default')
+rmSync(join(srcHome, 'memories'), { recursive: true, force: true })
+const src3 = resolveMigrateSource({ memoryDir: { value: join(TMP_ROOT, 'newdefaultlib'), source: 'default' } }, { dshHome: srcHome })
+ok(src3.source === 'new-default' && src3.from.indexOf('newdefaultlib') > 0, '来源③：旧默认位置不存在 → 用新默认位置（new-default）')
+const srcNone = resolveMigrateSource({ memoryDir: { value: '', source: 'none' } }, { dshHome: srcHome })
+ok(srcNone.source === 'none' && srcNone.from === '', '三级都没有 → none（不猜路径、不阻断）')
+
+// 路由：GET /basedeck 回显迁移来源（走宿主设置服务那条只读路）
+const hMig = installSetupCtx([
+  { ns: 'work-memory', schema: SETUP_MEM_SCHEMA, value: { memoryDir: migOld }, revision: 1, applies: 'live' },
+], { dshHome: migHome, env: { DSH_HOME: migHome } })
+const rMig = await callRoute(hMig, 'GET', '/basedeck')
+ok(rMig.status === 200 && rMig.body.migrateFromSource === 'settings' && rMig.body.migrateFrom.indexOf('migold') > 0,
+  'GET /basedeck 回显迁移来源：source=' + rMig.body.migrateFromSource + '、旧目录路径已带上')
+const rMigItem = (rMig.body.items || []).filter((i) => i.id === 'migrateMemory')[0]
+ok(rMigItem && typeof rMigItem.status === 'string' && typeof rMigItem.migrateSourceText === 'string' && rMigItem.internal === undefined,
+  'GET /basedeck 的 migrateMemory 项有状态 + 来源说明，且内部字段 internal 不对外')
 
 section('[15] 真实环境只读快照首尾比对')
 let realDrift = 0

@@ -8,7 +8,8 @@
  *   GET  /plugins     —— 五个子插件的版本 / 安装模式清单（**只读**）
  *   POST /install     —— 安装单个子插件（同源保护；来源路径由服务端拼接）
  *   POST /install-all —— 批量安装：服务端按固定顺序串行（同源保护）
- *   GET  /basedeck    —— 配置底座的**只读计划**（dry-run；五项：指令层 / 记忆种子 / 技能 / 设置 / 目录）
+ *   GET  /basedeck    —— 配置底座的**只读计划**（dry-run；八项：指令层 / 记忆种子 / 技能 / 设置 / 目录 /
+ *                        记忆体结构 / 知识库结构 / 迁移旧记忆库）
  *   POST /basedeck    —— 配置引导一次性写入（同源保护；**dryRun 默认 true**，只有显式 false 才落盘）
  *   GET  /settings        —— 能力配置页：白名单 ns 设置**只读枚举**（P4）
  *   POST /settings/write  —— 能力配置页：写子插件设置**用户层**（同源保护；dryRun 默认 true + revision 栅栏）
@@ -96,7 +97,7 @@ import {
 import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
 // 1.1.3 新增能力的宿主侧实现（T6 可用性检查 / T7 身份写入 / T8 岗位生成 / T9 随包网页）
 import { runPreflight } from './preflight.js'
-import { readSetupState } from './setup-state.js'
+import { readSetupState, resolveMigrateSource } from './setup-state.js'
 import { applyIdentityAsync, readIdentity } from './identity.js'
 import { DOMAIN_MAX_CHARS, DOMAIN_NAME_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
 import { renderFragment, renderMarkdown, renderPage } from './md.js'
@@ -1079,6 +1080,17 @@ export function installApi(ctx, deps = {}) {
         return sendJson(res, 200, payload)
       }
 
+      // ⑧ 迁移来源（旧记忆库目录）：只走宿主设置服务 + 两个默认位置的存在性判定，**只读、绝不抛**
+      // 口径与回显见 setup-state.js 的 resolveMigrateSource（settings / legacy-default / new-default）
+      const migrateSource = async () => {
+        try {
+          const st = await readSetupState(ctx, { env: installEnv, dshHome: basedeckDshHome })
+          return resolveMigrateSource(st, { env: installEnv, dshHome: basedeckDshHome })
+        } catch (err) {
+          return { from: '', source: 'none' }
+        }
+      }
+
       // GET /basedeck —— 配置底座的**只读计划**（dry-run；绝不写盘）
       // ?workspace=<绝对路径> 可显式指定工作区；无效时回退服务端解析并在 message 里说明。
       if (req.method === 'GET' && (sub === '/basedeck' || sub === '/basedeck/')) {
@@ -1096,6 +1108,7 @@ export function installApi(ctx, deps = {}) {
         if (workspaceOverride) queryOverrides.workspace = workspaceOverride
         if (vaultParam) queryOverrides.obsidianDir = vaultParam
         const repo = currentRepoRoot()
+        const mig = await migrateSource()
         const plan = planBaseDeck({
           // query 里的 workspace 是**客户端显式传值** → 走 overrides（source=client）
           overrides: queryOverrides,
@@ -1106,6 +1119,8 @@ export function installApi(ctx, deps = {}) {
           now: installNow,
           moduleDir: installModuleDir,
           commonCandidates: deps.commonCandidates,
+          migrateFrom: mig.from,
+          migrateFromSource: mig.source,
         })
         const payload = publicPlan(plan)
         if (message) payload.message = message
@@ -1125,7 +1140,7 @@ export function installApi(ctx, deps = {}) {
         if (!Array.isArray(ids)) {
           return sendJson(res, 200, {
             ok: false, dryRun: dryRun, results: [], rejected: [], durationMs: 0,
-            message: 'ids 必须是字符串数组（缺省 = 七项全部）',
+            message: 'ids 必须是字符串数组（缺省 = 八项全部）',
           })
         }
         const rawOverrides = (body.overrides && typeof body.overrides === 'object' && !Array.isArray(body.overrides)) ? body.overrides : {}
@@ -1150,6 +1165,7 @@ export function installApi(ctx, deps = {}) {
           overrides.workspace = check.workspace
         }
         const repo = currentRepoRoot()
+        const mig = await migrateSource()
         const opts = {
           dryRun: dryRun,
           // overrides.workspace 是**客户端表单值** → source=client；设置项走 configWorkspace
@@ -1161,6 +1177,8 @@ export function installApi(ctx, deps = {}) {
           now: installNow,
           moduleDir: installModuleDir,
           commonCandidates: deps.commonCandidates,
+          migrateFrom: mig.from,
+          migrateFromSource: mig.source,
         }
         const applied = applyBaseDeck(ids, opts)
         const payload = {
@@ -1172,9 +1190,13 @@ export function installApi(ctx, deps = {}) {
           libraryName: applied.libraryName || '',
           memoryRoot: applied.memoryRoot || '',
           memoryDir: applied.memoryDir || '',
+          migrateFrom: applied.migrateFrom || '',
+          migrateFromSource: applied.migrateFromSource || '',
           results: applied.results,
           rejected: applied.rejected,
           wroteAny: applied.wroteAny === true,
+          stoppedAt: applied.stoppedAt || '',
+          stopReason: applied.stopReason || '',
           durationMs: applied.durationMs,
           setupNeeded: planBaseDeck(opts).setupNeeded,
         }

@@ -2,7 +2,7 @@
  * work-personal-secretary —— 配置底座引擎（安装器第四步：把配置底座分步落地）
  *
  * 职责：把集成体自带的**配置底座**落地到使用者环境。
- * 七项（前五项是 1.1.2 既有能力，后两项 1.1.3 新增，追加在 BASEDECK_ITEMS 末尾）：
+ * 八项（前五项是 1.1.2 既有能力，后三项 1.1.3 新增，追加在 BASEDECK_ITEMS 末尾）：
  *   agentsMd     把 defaults/AGENTS.zh-CN.md 的**标记块区间**合并进 <workspace>/AGENTS.md
  *   memorySeed   把 defaults/global-memory.seed.md 的种子条目追加进记忆库 MEMORY.md（全局记忆）
  *   skills       把 <repoRoot>/modules/dsh-doc-suite/skills/<name>/SKILL.md 装到 <workspace>/.dsh/skills/<name>/
@@ -12,14 +12,16 @@
  *                占位条目 + USER.md / GRAPH.json 骨架 + PROJECTS/工作秘书.md 四条（设计定稿 §6）
  *   knowledgeDeck 知识库结构（1.1.3）：🏠 主页.md + 00_全局记忆/ + 工具/（总览 + 技能·脚本·MCP）
  *                + .obsidian 最小配置（设计定稿 §7）
+ *   migrateMemory 迁移旧记忆库（1.1.3）：把旧记忆库目录里缺失的文件补到新目录（只补缺失、绝不覆盖，
+ *                旧目录只读保留；是「改记忆库目录」的前置步骤，失败即停后续步骤）
  *
  * 规范来源（已审查通过的 AGENTS 标记块规范）：
  *   标记块格式、块首元数据字段、content-hash 规范化口径、七状态判定算法、写回纪律、
  *   块内被使用者手改时的保守处置 —— 逐条落地在本文件（见各函数注释）。
  *
- * 形态：**配置引导（setup wizard）** —— 使用者填好首用必配项后一次性把五项全部写入。
- *   执行顺序按依赖排（agentsMd 放最后，它是使用者最在意的文件）：
- *     dirs -> memorySeed -> skills -> settings -> agentsMd
+ * 形态：**配置引导（setup wizard）** —— 使用者填好首用必配项后一次性把各项写入。
+ *   执行顺序的唯一来源是 `BASEDECK_APPLY_ORDER`（agentsMd 放最后，它是使用者最在意的文件）：
+ *     dirs -> migrateMemory -> memorySeed -> memoryDeck -> knowledgeDeck -> skills -> settings -> agentsMd
  *
  * 红线（本文件）：
  * 1. **dry-run 是默认**：GET /basedeck 与不带 dryRun:false 的 POST /basedeck 都**绝不写盘**。
@@ -58,9 +60,9 @@ import { IDENTITY_PREFIX } from './domain.js'
 // ───────────────────────────── 常量 ─────────────────────────────
 
 /**
- * 七项配置底座的**唯一来源**（顺序 = 面板展示顺序 = GET 计划顺序）。
- * 前五项为 1.1.2 既有能力（顺序与语义一字未动）；后两项是 1.1.3 新增的
- * 记忆体结构（memoryDeck）与知识库结构（knowledgeDeck）生成器，**追加在末尾**，
+ * 八项配置底座的**唯一来源**（顺序 = 面板展示顺序 = GET 计划顺序）。
+ * 前五项为 1.1.2 既有能力（顺序与语义一字未动）；后三项是 1.1.3 新增的
+ * 记忆体结构（memoryDeck）、知识库结构（knowledgeDeck）生成器与旧记忆库迁移（migrateMemory），**追加在末尾**，
  * 保证既有调用方按下标取项的行为不受影响。
  */
 export const BASEDECK_ITEMS = [
@@ -71,17 +73,20 @@ export const BASEDECK_ITEMS = [
   { id: 'dirs', label: '工作目录' },
   { id: 'memoryDeck', label: '记忆体结构' },
   { id: 'knowledgeDeck', label: '知识库结构' },
+  { id: 'migrateMemory', label: '迁移旧记忆库' },
 ]
 
-/** 七项 id 的字符串数组（查表 / 回显用） */
+/** 八项 id 的字符串数组（查表 / 回显用） */
 export const BASEDECK_ID_LIST = BASEDECK_ITEMS.map((it) => it.id)
 
 /**
  * **默认执行顺序**：按依赖排，agentsMd 放最后（引导一次性写入时使用）。
+ * migrateMemory 紧接 dirs 之后、memoryDeck 之前 —— 迁移是**前置步骤**：先把旧记忆库带过来，
+ * 再建立/补齐新结构（迁移只补缺失、绝不覆盖，所以放前面不会覆盖任何既有内容）。
  * memoryDeck 排在 memorySeed 之后（两者都追加写 MEMORY.md，互不动对方的条目）；
  * knowledgeDeck 紧随其后，与记忆体结构配套（00_全局记忆 是两者的关联点）。
  */
-export const BASEDECK_APPLY_ORDER = ['dirs', 'memorySeed', 'memoryDeck', 'knowledgeDeck', 'skills', 'settings', 'agentsMd']
+export const BASEDECK_APPLY_ORDER = ['dirs', 'migrateMemory', 'memorySeed', 'memoryDeck', 'knowledgeDeck', 'skills', 'settings', 'agentsMd']
 
 /** 输出上限（与 /fix 契约的 8000 保持一致） */
 export const BASEDECK_OUTPUT_LIMIT = 8000
@@ -113,8 +118,14 @@ export const SEED_TAG_RULES = [
 ]
 export const SEED_DEFAULT_TAG = '常规'
 
-/** 记忆库默认（与 dsh-work-memory 的 store.js / backup.js 保持一致） */
-export const DEFAULT_MEMORY_SUBDIR = join('memories', 'work-memory')
+/**
+ * 记忆库默认（与 dsh-work-memory 的 `store.js` `defaultMemoryRoot()` 同口径）：
+ *   <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory
+ * 1.0.6 之前的默认是 <base>/memories/work-memory —— 那一个只作为「迁移来源」回退用
+ * （见本文件末尾的 `LEGACY_MEMORY_SUBDIR`），不再是任何新建目标。
+ */
+export const DEFAULT_MEMORY_SUBDIR = join('data', 'dsh-work-memory', 'memory')
+/** 备份目录默认（与 dsh-work-memory 的 `backup.js` `defaultBackupDir()` 同口径，未随记忆库默认一起搬家） */
 export const DEFAULT_BACKUP_SUBDIR = join('memories', 'work-memory-backup')
 
 /** 桌宠素材目录（与 workspace-tokenpet 的 skinsDir 一致：<dsh home>/data/workspace-tokenpet/skins） */
@@ -945,6 +956,10 @@ export function resolveDeckContext(options = {}) {
     settingsFile: settingsFile,
     settingsRead: settingsRead,
     memoryDir: memoryDir,
+    // 迁移来源（旧记忆库目录）：由 api 层经**宿主设置服务**解析后注入；
+    // basedeck 自己不读 settings.yaml（那是宿主的文件与格式，不归本插件管）
+    migrateFrom: normalizePath(options.migrateFrom),
+    migrateFromSource: typeof options.migrateFromSource === 'string' ? options.migrateFromSource : '',
     libraryName: libraryName,
     memoryRoot: memoryRoot,
     obsidianExplicitOff: obsidianExplicitOff,
@@ -1044,6 +1059,7 @@ export function planBaseDeck(options = {}) {
     if (spec.id === 'settings') return planSettings(ctx)
     if (spec.id === 'memoryDeck') return planMemoryDeck(ctx)
     if (spec.id === 'knowledgeDeck') return planKnowledgeDeck(ctx)
+    if (spec.id === 'migrateMemory') return planMigrateMemory(ctx)
     return planDirs(ctx)
   })
   const note = workspaceNoteFor(ctx)
@@ -1063,6 +1079,8 @@ export function planBaseDeck(options = {}) {
     libraryName: ctx.libraryName || '',
     memoryRoot: ctx.memoryRoot ? posix(ctx.memoryRoot) : '',
     memoryDir: ctx.memoryDir ? posix(ctx.memoryDir) : '',
+    migrateFrom: ctx.migrateFrom ? posix(ctx.migrateFrom) : '',
+    migrateFromSource: ctx.migrateFromSource || '',
     items: items,
     summary: summarize(items),
     setupNeeded: computeSetupNeeded(items),
@@ -1771,7 +1789,7 @@ function rollbackWrite(file, backup, io, hadFile) {
 
 /**
  * 执行（或干跑）指定项。**dryRun 默认 true**。
- * @param {string} id 五项之一
+ * @param {string} id 八项之一（BASEDECK_ID_LIST）
  * @param {object} options resolveDeckContext 的选项 + { dryRun:boolean, overrides:object }
  * @returns {object} 契约字段 + 各分支的补充证据字段
  */
@@ -1805,6 +1823,7 @@ export function applyBaseDeckItem(id, options = {}) {
   if (id === 'memorySeed') return applyMemorySeed(ctx, item, item.internal || {}, io, dryRun, base, options)
   if (id === 'skills') return applySkills(ctx, item, item.internal || {}, io, dryRun, base)
   if (id === 'settings') return applySettings(ctx, item, item.internal || {}, io, dryRun, base)
+  if (id === 'migrateMemory') return applyMigrateMemory(ctx, item, item.internal || {}, io, dryRun, base, options)
   if (id === 'memoryDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base, options)
   if (id === 'knowledgeDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base, options)
   return applyDirs(ctx, item, item.internal || {}, io, dryRun, base)
@@ -2223,6 +2242,8 @@ export function applyBaseDeck(ids, options = {}) {
   const order = BASEDECK_APPLY_ORDER.filter((id) => accepted.indexOf(id) >= 0)
   const ctx = resolveDeckContext(options)
   const results = []
+  let stoppedAt = ''
+  let stopReason = ''
   for (const id of order) {
     let r
     try {
@@ -2234,6 +2255,13 @@ export function applyBaseDeck(ids, options = {}) {
       }
     }
     results.push(r)
+    // 迁移是**前置步骤**：它失败时（旧记忆没带过来）后面一律不做 —— 尤其不写 settings，
+    // 否则使用者会以为记忆库已切换、而旧记忆「不见了」。全流程唯一一处「失败即停」。
+    if (id === 'migrateMemory' && r.ok !== true) {
+      stoppedAt = 'migrateMemory'
+      stopReason = '旧记忆库迁移未完成，后续步骤已停止：未写入任何设置，记忆库仍指向原目录'
+      break
+    }
   }
   return {
     ok: results.length > 0 && results.every((r) => r.ok),
@@ -2247,6 +2275,10 @@ export function applyBaseDeck(ids, options = {}) {
     libraryName: ctx.libraryName || '',
     memoryRoot: ctx.memoryRoot ? posix(ctx.memoryRoot) : '',
     memoryDir: ctx.memoryDir ? posix(ctx.memoryDir) : '',
+    migrateFrom: ctx.migrateFrom ? posix(ctx.migrateFrom) : '',
+    migrateFromSource: ctx.migrateFromSource || '',
+    stoppedAt: stoppedAt,
+    stopReason: stopReason,
     durationMs: Date.now() - started,
   }
 }
@@ -2262,6 +2294,8 @@ export function publicPlan(plan) {
     libraryName: plan.libraryName || '',
     memoryRoot: plan.memoryRoot || '',
     memoryDir: plan.memoryDir || '',
+    migrateFrom: plan.migrateFrom || '',
+    migrateFromSource: plan.migrateFromSource || '',
     items: plan.items.map((it) => {
       const out = {}
       for (const k of Object.keys(it)) {
@@ -2806,6 +2840,375 @@ function applyDeckFilesLocked(ctx, item, internal, io, dryRun, base) {
     backups: backups.map((b) => ({ path: posix(b.path), backup: b.backup ? posix(b.backup) : '' })),
     detail: item.detail + '；已创建 ' + createdDirs.length + ' 个目录、写入 ' + createdFiles.length + ' 个文件（' + totalBytes + ' 字节），写后校验通过'
       + (backups.length > 0 ? '；改写前已备份 ' + backups.length + ' 个文件' : '；全部为新建，无需备份'),
+  })
+}
+
+// ═════════════════ 1.1.3 新增：⑧ 迁移旧记忆库（改记忆库目录时把旧内容带过来） ═════════════════
+//
+// 场景：使用者在「核心配置」里把记忆库目录改到别处。旧目录里的记忆必须先**带过去**再切换，
+// 否则新目录是空的、看起来像「记忆丢了」。
+//
+// 迁移专属纪律（在通用写回纪律之上再加四条）：
+//   1. **只补缺失、绝不覆盖**：目标已有同名文件时一律跳过（内容一致）或计冲突（内容不同），不比对不合并；
+//   2. **旧目录只读**：迁移从不删除、从不改写旧目录里的任何文件（迁完旧目录原样保留，由使用者自行处理）；
+//   3. **逐文件校验**：复制后按「大小 + SHA256」与源比对，任一不一致即回滚本次已复制的文件；
+//   4. **对目标取记忆库锁**：与记忆写入共用同一把 .work-memory.lock，并在锁内**重算**再复制。
+//
+// 另：本项是**前置步骤**（dirs 之后、memorySeed 之前）。失败时 applyBaseDeck 停止后续步骤，
+// 尤其不写 settings —— 迁移没成功就不切换记忆库目录。
+
+/** 迁移清单文件名前缀（写在备份目录，供事后审计；它不是记忆库内容，迁移时按噪声跳过） */
+export const MIGRATE_MANIFEST_PREFIX = '.wps-migrate-'
+
+/** 旧的默认记忆库相对路径（1.0.6 / 1.1.2 及更早）；只用于「迁移来源」回退，不再作为任何新建目标 */
+export const LEGACY_MEMORY_SUBDIR = join('memories', 'work-memory')
+
+/** 迁移来源的四种口径：让使用者看得见「旧目录是怎么定出来的」 */
+export const MIGRATE_SOURCE_LABELS = {
+  settings: '当前设置里生效的记忆库目录',
+  'legacy-default': '旧的默认位置（<DSH_HOME>/memories/work-memory）',
+  'new-default': '新的默认位置（<DSH_HOME>/data/dsh-work-memory/memory）',
+  none: '未解析到来源',
+}
+
+/**
+ * 迁移时要跳过的「噪声」文件：锁、写前备份、原子写临时文件、迁移清单与 .tmp。
+ * 这些是运行时状态而不是记忆内容，搬过去只会造成误解（例如把一个陈旧锁搬进新库）。
+ * 注意：**不按点号前缀一刀切** —— .triage.json / .access.json / ARCHIVE/.last-run 等状态文件要迁移。
+ */
+export function isMigrateNoise(name) {
+  const n = String(name == null ? '' : name)
+  if (!n) return true
+  if (n === MEMORY_LOCK_NAME) return true
+  if (n.indexOf(BACKUP_SUFFIX) >= 0) return true
+  if (n.indexOf('.wps-tmp') >= 0) return true
+  if (n.indexOf(MIGRATE_MANIFEST_PREFIX) === 0) return true
+  if (/\.tmp$/i.test(n)) return true
+  return false
+}
+
+/** 路径等价判定（Windows 不分区大小写；先规范化再去掉末尾分隔符） */
+export function sameFsPath(a, b) {
+  const na = normalizePath(a)
+  const nb = normalizePath(b)
+  if (!na || !nb) return false
+  const ca = posix(na).replace(/\/+$/, '')
+  const cb = posix(nb).replace(/\/+$/, '')
+  return process.platform === 'win32' ? ca.toLowerCase() === cb.toLowerCase() : ca === cb
+}
+
+/** 静默 stat（不存在 / 无权限都返回 null，由调用方按「拿不到」处理） */
+function statQuiet(p) {
+  try { return statSync(p) } catch (e) { return null }
+}
+
+/**
+ * 递归列出源目录下的**普通文件**（相对路径一律用 / 分隔）。
+ * 只读；不跟随符号链接（可能是环，也可能指到库外）；读写异常向上抛给计划器转成 broken。
+ * @param {string} root 源根目录
+ * @param {string} [rel] 当前相对路径
+ * @param {object[]} [out] 收集到的文件
+ * @param {string[]} [noise] 收集到的噪声文件（只用于回显计数）
+ */
+export function walkFilesForMigrate(root, rel = '', out = [], noise = []) {
+  const dir = rel ? join(root, rel) : root
+  let entries
+  try {
+    entries = readdirSync(dir, { withFileTypes: true })
+  } catch (err) {
+    throw new Error('读取旧记忆库目录失败：' + posix(dir) + '（' + String(err && err.message ? err.message : err) + '）')
+  }
+  const byName = new Map()
+  for (const e of entries) byName.set(e.name, e)
+  const names = entries.map((e) => e.name).sort()
+  for (const name of names) {
+    const ent = byName.get(name)
+    const childRel = rel ? rel + '/' + name : name
+    if (isMigrateNoise(name)) { noise.push(childRel); continue }
+    if (ent && typeof ent.isSymbolicLink === 'function' && ent.isSymbolicLink()) continue
+    if (ent && typeof ent.isDirectory === 'function' && ent.isDirectory()) {
+      walkFilesForMigrate(root, childRel, out, noise)
+      continue
+    }
+    const st = statQuiet(join(root, childRel))
+    if (st && st.isFile()) out.push({ rel: childRel, path: join(root, childRel), bytes: st.size })
+  }
+  return out
+}
+
+/**
+ * ⑧ 迁移旧记忆库的计划（**只读**，绝不落盘）。
+ * 输入：ctx.migrateFrom（旧目录，由 api 层经宿主设置服务解析）/ ctx.migrateFromSource（来源口径）/ ctx.memoryDir（目标）。
+ */
+function planMigrateMemory(ctx) {
+  const spec = BASEDECK_ITEMS[7]
+  const from = ctx.migrateFrom || ''
+  const to = ctx.memoryDir || ''
+  const sourceKind = ctx.migrateFromSource || (from ? 'settings' : 'none')
+  const sourceText = MIGRATE_SOURCE_LABELS[sourceKind] || ('来源：' + sourceKind)
+
+  const stop = (status, detail) => makeItem(spec, {
+    status: status,
+    target: (from || to) ? [posix(from), posix(to)] : '',
+    detail: detail,
+    autoApplyable: false,
+    migratedFrom: from ? posix(from) : '',
+    migrateSource: sourceKind,
+    migrateSourceText: sourceText,
+    files: [],
+    conflicts: [],
+    copies: 0,
+    skips: 0,
+    migrateStats: { copy: 0, skip: 0, conflict: 0, noise: 0, bytes: 0 },
+    oldDirKept: true,
+    preview: { action: detail, blockVersion: '', contentHash: '', sampleLines: '' },
+    internal: { from: from, to: to, source: sourceKind, copies: [], conflicts: [], skips: [], noise: [] },
+  })
+
+  if (!to) return stop('none', '没有可用的记忆库目录（显式失败，不猜路径）：请先在「核心配置」里填写记忆库目录')
+  if (!from) return stop('up_to_date', '未解析到旧记忆库来源（设置服务不可用或未配置），本项跳过')
+  if (sameFsPath(from, to)) {
+    return stop('up_to_date', '旧记忆库与目标目录是同一个（' + posix(to) + '，来源：' + sourceText + '），无需迁移')
+  }
+  const fromStat = statQuiet(from)
+  if (!fromStat || !fromStat.isDirectory()) {
+    return stop('up_to_date', '旧记忆库目录不存在或不是目录（' + posix(from) + '，来源：' + sourceText + '），无需迁移')
+  }
+  const toStat = statQuiet(to)
+  if (toStat && !toStat.isDirectory()) {
+    return stop('broken', '目标记忆库位置已被同名文件占用（' + posix(to) + '）：已拒绝迁移，请先处理该文件')
+  }
+
+  let walked = []
+  const noise = []
+  try {
+    walked = walkFilesForMigrate(from, '', [], noise)
+  } catch (err) {
+    return stop('broken', String(err && err.message ? err.message : err) + '：已拒绝迁移，未改动任何文件')
+  }
+
+  const copies = []
+  const conflicts = []
+  const skips = []
+  for (const f of walked) {
+    const target = join(to, f.rel)
+    const st = statQuiet(target)
+    if (st && !st.isFile()) { conflicts.push({ rel: f.rel, reason: 'occupied' }); continue }
+    const srcSha = sha256Of(f.path)
+    if (st && srcSha && st.size === f.bytes && sha256Of(target) === srcSha) {
+      skips.push({ rel: f.rel, reason: 'identical' })
+      continue
+    }
+    if (st) { conflicts.push({ rel: f.rel, reason: 'differs' }); continue }
+    copies.push({ rel: f.rel, from: f.path, to: target, bytes: f.bytes, sha256: srcSha })
+  }
+
+  const stats = {
+    copy: copies.length,
+    skip: skips.length,
+    conflict: conflicts.length,
+    noise: noise.length,
+    bytes: copies.reduce((acc, c) => acc + (c.bytes || 0), 0),
+  }
+  const status = copies.length === 0 ? 'up_to_date' : (skips.length === 0 && conflicts.length === 0 ? 'append' : 'update')
+  const action = copies.length === 0 ? '无需迁移（目标侧没有要补的文件）'
+    : '将从旧目录复制 ' + copies.length + ' 个文件（只补缺失、绝不覆盖，旧目录原样保留）'
+  const detail = status === 'up_to_date'
+    ? '无需迁移：' + (conflicts.length > 0
+      ? '目标已有 ' + conflicts.length + ' 个同名文件且内容不同，一律保留目标内容（不覆盖）'
+      : '目标侧已包含全部可迁移文件')
+      + '；旧目录 ' + posix(from) + '（' + sourceText + '）'
+    : '旧记忆库 ' + posix(from) + '（' + sourceText + '）→ ' + posix(to)
+      + '：待复制 ' + copies.length + ' 个文件（' + stats.bytes + ' 字节）'
+      + '；已存在且内容一致 ' + skips.length + ' 个（跳过）'
+      + '；同名但内容不同 ' + conflicts.length + ' 个（保留目标，不覆盖）'
+      + '；噪声 ' + noise.length + ' 个（锁 / 备份 / 临时文件，不迁移）'
+
+  const fileList = copies.map((c) => ({ name: c.rel, path: posix(c.to), state: 'copy', detail: '缺失，将复制（' + c.bytes + ' 字节）' }))
+    .concat(conflicts.map((c) => ({ name: c.rel, path: posix(join(to, c.rel)), state: 'conflict', detail: '目标已有同名文件且内容不同，保留目标' })))
+  const listNote = stats.copy > 500 ? '（只列前 500 项）' : ''
+
+  return makeItem(spec, {
+    status: status,
+    target: [posix(from), posix(to)],
+    detail: detail,
+    autoApplyable: copies.length > 0,
+    migratedFrom: posix(from),
+    migrateSource: sourceKind,
+    migrateSourceText: sourceText,
+    migrateStats: stats,
+    files: fileList.slice(0, 500),
+    conflicts: conflicts.map((c) => c.rel),
+    copies: stats.copy,
+    skips: stats.skip,
+    oldDirKept: true,
+    preview: {
+      action: action,
+      blockVersion: '',
+      contentHash: 'sha256:' + sha256Text(copies.map((c) => c.rel + ':' + c.sha256).join('\n')),
+      sampleLines: sampleBlock(fileList.slice(0, SAMPLE_LINES).map((x) => x.name + '  [' + x.state + ']' + listNote)),
+    },
+    internal: { from: from, to: to, source: sourceKind, copies: copies, conflicts: conflicts, skips: skips, noise: noise, stats: stats },
+  })
+}
+
+/**
+ * ⑧ 写回器：复制缺失文件。干跑只统计；执行在**目标记忆库锁内重算**后逐文件复制 + 校验 + 失败回滚。
+ * 与 ⑥⑦ 的差别：本项**从旧目录读、往新目录写**，且**从不删除旧目录**。
+ */
+function applyMigrateMemory(ctx, item, internal, io, dryRun, base, options) {
+  const to = internal.to || ''
+  if (!dryRun && to) {
+    // 护栏前置到取锁之前：被拒的目标目录不该被创建锁文件
+    const preGuard = assertWritableDir(to, '记忆库目录', ctx.env)
+    if (!preGuard.ok) return Object.assign(base, { ok: false, detail: '已拒绝写入：' + preGuard.error })
+    try {
+      return withMemoryDirLock(to, () => {
+        const fresh = planBaseDeck(options || {}).items.filter((it) => it.id === 'migrateMemory')[0]
+        return applyMigrateMemoryLocked(ctx, fresh || item, (fresh && fresh.internal) || internal, io, false, base)
+      })
+    } catch (err) {
+      return Object.assign(base, { ok: false, detail: '迁移未执行（未改动任何文件）：' + String(err && err.message ? err.message : err) })
+    }
+  }
+  return applyMigrateMemoryLocked(ctx, item, internal, io, dryRun, base)
+}
+
+/** 记录式建目录：从最上层逐个建（便于回滚时按空目录删掉，不误删使用者原有目录） */
+function ensureDirsTracked(dir, io, created) {
+  const pending = []
+  let cur = dir
+  for (let i = 0; i < 64; i++) {
+    if (!cur || existsSync(cur)) break
+    pending.unshift(cur)
+    const parent = dirname(cur)
+    if (parent === cur) break
+    cur = parent
+  }
+  for (const p of pending) {
+    io.mkdirSync(p, { recursive: true })
+    created.push(p)
+  }
+}
+
+function applyMigrateMemoryLocked(ctx, item, internal, io, dryRun, base) {
+  const from = internal.from || ''
+  const to = internal.to || ''
+  const copies = internal.copies || []
+  const conflicts = internal.conflicts || []
+  const skips = internal.skips || []
+  const stats = internal.stats || {
+    copy: copies.length,
+    skip: skips.length,
+    conflict: conflicts.length,
+    noise: (internal.noise || []).length,
+    bytes: copies.reduce((acc, c) => acc + (c.bytes || 0), 0),
+  }
+  base.wouldWriteBytes = stats.bytes
+  base.migrateStats = stats
+  base.migratedFrom = from ? posix(from) : ''
+  base.migrateSource = internal.source || ''
+  base.oldDirKept = from ? posix(from) : ''
+
+  if (item.status === 'up_to_date') {
+    return Object.assign(base, {
+      ok: true,
+      detail: item.detail + '（未写盘）',
+      migratedFiles: [],
+      conflicts: conflicts.map((c) => c.rel),
+    })
+  }
+  if (item.status === 'broken' || item.status === 'none') {
+    return Object.assign(base, { ok: false, detail: item.detail + '（未写盘）' })
+  }
+  if (dryRun) {
+    return Object.assign(base, {
+      ok: true,
+      plannedFiles: copies.map((c) => ({ from: posix(c.from), to: posix(c.to), bytes: c.bytes })),
+      detail: item.detail + '；干跑：未写盘（将复制 ' + copies.length + ' 个文件，共 ' + stats.bytes + ' 字节）',
+    })
+  }
+
+  const guard = assertWritableDir(to, '记忆库目录', ctx.env)
+  if (!guard.ok) return Object.assign(base, { ok: false, detail: '已拒绝写入：' + guard.error })
+
+  const createdDirs = []
+  const copied = []
+  const rollbackAll = () => {
+    for (const p of copied.slice().reverse()) {
+      try { io.rmSync(p, { force: true }) } catch (e) { /* best-effort */ }
+    }
+    for (const d of createdDirs.slice().reverse()) {
+      // 注意：fs.rmSync 对目录必须带 recursive，否则抛 EISDIR（空目录也删不掉）。
+      // 这里删的都是本轮**新建**的目录，里面的文件已在上一步删掉，递归删不会碰到使用者的原有内容。
+      try { io.rmSync(d, { recursive: true, force: true }) } catch (e) { /* best-effort */ }
+    }
+  }
+
+  for (const c of copies) {
+    try {
+      ensureDirsTracked(dirname(c.to), io, createdDirs)
+      io.copyFileSync(c.from, c.to)
+      copied.push(c.to)
+    } catch (err) {
+      rollbackAll()
+      return Object.assign(base, {
+        ok: false,
+        detail: '复制失败（已回滚本次已复制的文件，旧目录未改动）：' + posix(c.from) + ' → ' + posix(c.to)
+          + '（' + String(err && err.message ? err.message : err) + '）',
+      })
+    }
+  }
+
+  // 写后校验：目标的大小与 SHA256 必须与源一致（源在计划阶段已算好）
+  for (const c of copies) {
+    const st = statQuiet(c.to)
+    if (!st || !st.isFile() || st.size !== c.bytes) {
+      rollbackAll()
+      return Object.assign(base, { ok: false, detail: '复制后大小不一致（已回滚，旧目录未改动）：' + posix(c.to) })
+    }
+    if (c.sha256 && sha256Of(c.to) !== c.sha256) {
+      rollbackAll()
+      return Object.assign(base, { ok: false, detail: '复制后 SHA256 不一致（已回滚，旧目录未改动）：' + posix(c.to) })
+    }
+  }
+
+  // 迁移清单（审计用；写在备份目录，写失败不影响迁移结果）
+  let manifest = ''
+  const backupDir = ctx.backupDir || ''
+  if (backupDir) {
+    try {
+      io.mkdirSync(backupDir, { recursive: true })
+      manifest = join(backupDir, MIGRATE_MANIFEST_PREFIX + stamp(ctx.now) + '.json')
+      const body = JSON.stringify({
+        generator: GENERATOR_ID,
+        at: formatDate(ctx.now) + ' ' + stamp(ctx.now),
+        from: posix(from),
+        to: posix(to),
+        source: internal.source || '',
+        stats: stats,
+        files: copied.map((p) => posix(p)),
+      }, null, 2)
+      atomicWriteText(manifest, body + '\n', io)
+    } catch (e) {
+      manifest = ''
+    }
+  }
+
+  return Object.assign(base, {
+    ok: true,
+    bytesWritten: stats.bytes,
+    wroteAny: copied.length > 0,
+    migratedFiles: copied.map((p) => posix(p)),
+    conflicts: conflicts.map((c) => c.rel),
+    skippedFiles: skips.map((s) => s.rel),
+    manifest: manifest ? posix(manifest) : '',
+    detail: '已从旧目录 ' + posix(from) + ' 复制 ' + copied.length + ' 个文件（' + stats.bytes + ' 字节）到 ' + posix(to)
+      + '；写后大小 + SHA256 校验通过'
+      + (skips.length > 0 ? '；已存在且一致 ' + skips.length + ' 个跳过' : '')
+      + (conflicts.length > 0 ? '；同名但内容不同 ' + conflicts.length + ' 个保留目标内容（未覆盖）' : '')
+      + '；旧目录原样保留，未删除、未改写'
+      + (manifest ? '；迁移清单 ' + posix(manifest) : ''),
   })
 }
 
