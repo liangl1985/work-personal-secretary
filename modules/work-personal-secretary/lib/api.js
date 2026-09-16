@@ -21,6 +21,8 @@
  *   POST /identity/save       —— 整条写入身份（同源保护；dryRun 默认 true）
  *   GET  /domain/list         —— 五个预置岗位的身份正文（只读）
  *   POST /domain/generate     —— 岗位正文生成（同源保护；promptEnhancer → llm → 503 手填）
+ *   GET  /dirs[?path=]        —— 目录选择：列一层目录（ctx.directoryPicker 的 browse 原语代理；只读）
+ *   POST /dirs/new            —— 目录选择：在父目录下建一个子目录（同源保护；只建一层）
  *
  * 1.1.3 随包网页（**路径冻结**，用 kind:'exact' 挂在 /work-personal-secretary 下）：
  *   GET  /work-personal-secretary/guide —— 安装引导页（text/html；正文来自 defaults/install.zh-CN.md）
@@ -31,10 +33,11 @@
  *   - 桌面载体的 fetch 桥（合成 origin http://dsh.internal）**只认精确路由**，因此 prefix 之外另注册 exact：
  *       API_PATHS（7）            /check /fix /fix-all /plugins /install /install-all /basedeck
  *       PAGE_PATHS（2，另一前缀） /work-personal-secretary/guide、/help
- *       CORE_API_EXACT_PATHS（5） /preflight /identity /identity/save /domain/list /domain/generate
+ *       CORE_API_EXACT_PATHS（10）/preflight /identity /identity/save /domain/list /domain/generate
+ *                                 /docs /open-doc /setup-state /dirs /dirs/new
  *       SETTINGS_API_PATHS（3）   /settings /settings/write /experts/preview
- *     → **exact 共 17 条**；加 1 条 prefix，`apply()` 注册的**路由总数 = 18**。
- *   - 前 14 条在本函数内注册（handler 是本地闭包）；P4 三条由文件末尾的 installSettingsExactRoutes
+ *     → **exact 共 22 条**；加 1 条 prefix，`apply()` 注册的**路由总数 = 23**。
+ *   - 前 19 条在本函数内注册（handler 是本地闭包）；P4 三条由文件末尾的 installSettingsExactRoutes
  *     注册，并在 lib/index.js 的 apply 里**已接线**（1.1.3 起按产品决策方案 A）。
  *   - 既有 7 条精确路由的集合与顺序一字不动；四条测试断言（probe-test / settings-api-test /
  *     basedeck-test / install-test）已同步为上述完整集合的**相等比较**，未放宽为 includes / >=。
@@ -101,6 +104,8 @@ import { readSetupState, resolveMigrateSource } from './setup-state.js'
 import { applyIdentityAsync, readIdentity } from './identity.js'
 import { DOMAIN_MAX_CHARS, DOMAIN_NAME_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
 import { renderFragment, renderMarkdown, renderPage } from './md.js'
+// 目录选择后端（宿主 ctx.directoryPicker 的 browse / native 能力分支代理）
+import { createChildDirectory, listDirectories } from './dirs.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
@@ -122,7 +127,7 @@ export const PAGE_PATHS = ['/guide', '/help']
  * 所以在 installApi 内与 API_PATHS、PAGE_PATHS 一起注册；不含 P4 三条
  * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
  */
-export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state']
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new']
 
 /**
  * 两个说明文档的**唯一映射**（单一真相源 = defaults 下的 md）：
@@ -852,6 +857,35 @@ export function installApi(ctx, deps = {}) {
       if (req.method === 'GET' && (sub === '/setup-state' || sub === '/setup-state/')) {
         const state = await readSetupState(ctx, { env: installEnv, dshHome: basedeckDshHome })
         return sendJson(res, 200, state)
+      }
+
+      // ⑪ 目录选择后端（1.1.3 · 方案 A）—— 宿主的 ctx.directoryPicker 是**可判别能力**：
+      //   browse → 用 list / createDirectory 两个原语在宿主文件系统上作答（本文件只做代理）；
+      //   native → 由系统对话框完成选择，本接口明确告知（不假装支持）；
+      //   服务缺失 / 能力未知 → 可读降级，**绝不抛异常、不 500**。
+      // 服务一律运行时 ctx.get('directoryPicker') 取值，**绝不写进 inject**（缺该服务的环境不能让插件加载失败）。
+      // GET /dirs[?path=<完全限定绝对路径>] —— 列一层目录（只读；**不传 path** 表示用宿主默认位置）
+      if (req.method === 'GET' && (sub === '/dirs' || sub === '/dirs/')) {
+        const guard = sameOriginLooseGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        const result = await listDirectories(ctx, {
+          // 区分「没传参数」与「传了空串」：后者是调用方给错了，400
+          path: url.searchParams.has('path') ? String(url.searchParams.get('path') || '') : undefined,
+          platform: platform,
+        })
+        return sendJson(res, result.status, result.body)
+      }
+
+      // POST /dirs/new { path, name } —— 在父目录下建一个子目录（同源保护；只建一层）
+      if (req.method === 'POST' && (sub === '/dirs/new' || sub === '/dirs/new/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) {
+          return sendJson(res, 400, { ok: false, code: 'bad-body', message: String(err && err.message ? err.message : err) })
+        }
+        const result = await createChildDirectory(ctx, { path: body.path, name: body.name, platform: platform })
+        return sendJson(res, result.status, result.body)
       }
 
       // GET /check —— 七项只读环境检查

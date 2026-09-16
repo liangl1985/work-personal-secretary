@@ -20,6 +20,7 @@
  *  [14] setupNeeded 引导信号
  *  [15] 真实环境**只读快照**首尾比对（证明本次开发未写入真实工作区 / 真实设置文件）
  *  [22] ⑧ 迁移旧记忆库：只补缺失不覆盖 / 旧目录只读 / 逐文件校验 / 失败回滚 / 失败即停后续步骤 / 来源三级顺序
+ *  [23] ⑪ 目录选择：完全限定路径判定 / browse 列举与建目录 / native 与缺服务降级 / 非法入参 400 / 同源保护
  *
  * 隔离红线（本测试的全部保证）：
  *   - 所有夹具（假 DSH_HOME / 假仓库 / 假工作区 / 假设置 / 假记忆库）都在 os.tmpdir() 下自建；
@@ -80,6 +81,7 @@ import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, insta
 import { isSameOrNested, pathChecks, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
 import { resolveMigrateSource } from '../lib/setup-state.js'
+import { isFullyQualifiedPath, listDirectories } from '../lib/dirs.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MODULE_DIR = join(HERE, '..')
@@ -576,12 +578,15 @@ ok(dryAll.results.every((r) => r.dryRun === true), 'dryRun 标记透传到每一
 ok(planClean.setupNeeded === true, 'setupNeeded：干净工作区 + 缺键 + 缺技能 → true')
 
 section('[13] 路由：GET /basedeck / POST /basedeck')
-function makeMockCtx() {
+function makeMockCtx(services) {
   const routes = []
+  const box = services || {}
   return {
     routes: routes,
     logger: { debug() {}, warn() {}, info() {} },
     webServer: { register(o) { routes.push(o); return () => {} } },
+    // 运行时服务取值（本插件只在 /dirs 里用 ctx.get；缺省返回 undefined = 服务缺失，走降级分支）
+    get(name) { return box[name] },
   }
 }
 function prefixHandler(ctx) { return (ctx.routes.filter((x) => x.kind === 'prefix')[0] || {}).handler }
@@ -1452,6 +1457,134 @@ ok(rMig.status === 200 && rMig.body.migrateFromSource === 'settings' && rMig.bod
 const rMigItem = (rMig.body.items || []).filter((i) => i.id === 'migrateMemory')[0]
 ok(rMigItem && typeof rMigItem.status === 'string' && typeof rMigItem.migrateSourceText === 'string' && rMigItem.internal === undefined,
   'GET /basedeck 的 migrateMemory 项有状态 + 来源说明，且内部字段 internal 不对外')
+
+section('[23] 目录选择：ctx.directoryPicker 的 browse 原语代理（GET /dirs · POST /dirs/new）')
+// 反斜杠统一用 [22] 段已声明的 BS（String.fromCharCode(92)），本段不再重复声明
+
+// 纯函数：完全限定绝对路径判定（口径与 browse 后端的 fullyQualified 逐字对齐）
+ok(isFullyQualifiedPath('C:/Users/me', 'win32') === true && isFullyQualifiedPath('C:' + BS + 'Users' + BS + 'me', 'win32') === true,
+  'Windows：盘符限定（正反斜杠两种写法）→ 合法')
+ok(isFullyQualifiedPath(BS + BS + 'server' + BS + 'share' + BS + 'dir', 'win32') === true, 'Windows：完整 UNC → 合法')
+ok(isFullyQualifiedPath(BS + 'foo', 'win32') === false && isFullyQualifiedPath('/foo', 'win32') === false,
+  'Windows：无盘符的 ' + BS + 'foo 与 /foo → 拒绝（会落在进程当前盘）')
+ok(isFullyQualifiedPath(BS + BS, 'win32') === false && isFullyQualifiedPath(BS + BS + 'server', 'win32') === false,
+  'Windows：不完整 UNC（只有两反斜杠 / 只有服务器）→ 拒绝')
+ok(isFullyQualifiedPath('relative/path', 'win32') === false && isFullyQualifiedPath('', 'win32') === false && isFullyQualifiedPath('   ', 'win32') === false,
+  'Windows：相对路径 / 空串 / 全空白 → 拒绝')
+ok(isFullyQualifiedPath('/usr/local', 'linux') === true && isFullyQualifiedPath('usr/local', 'linux') === false, 'POSIX：/ 开头为绝对，其余拒绝')
+
+// mock picker：browse 原语（只回目录，带 crumbs / truncated）
+const dirCalls = []
+const dirCap = {
+  kind: 'browse',
+  list: async (path) => {
+    dirCalls.push({ op: 'list', path: path })
+    const target = path || 'C:/Users/me'
+    return {
+      path: target,
+      home: 'C:/Users/me',
+      crumbs: [{ name: 'C:', path: 'C:/' }, { name: 'Users', path: 'C:/Users' }, { name: 'me', path: target }],
+      entries: [{ name: 'proj', path: target + '/proj', hidden: false }, { name: '.cache', path: target + '/.cache', hidden: true }],
+      truncated: false,
+    }
+  },
+  createDirectory: async (path, name) => {
+    dirCalls.push({ op: 'create', path: path, name: name })
+    if (name === 'exists') {
+      const e = new Error('already exists')
+      e.name = 'DirectoryPickerError'
+      e.code = 'directory-exists'
+      e.path = path + '/' + name
+      throw e
+    }
+    return path + '/' + name
+  },
+}
+const dirPicker = { capability: () => dirCap }
+function installDirsCtx(services) {
+  const c = makeMockCtx(services)
+  installApi(c, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, env: {}, now: FIXED_NOW, dshHome: join(TMP_ROOT, 'dirsdsh', '.dsh'), profileDir: join(TMP_ROOT, 'dirsprofile') })
+  return { ctx: c, handler: prefixHandler(c) }
+}
+const dirs = installDirsCtx({ directoryPicker: dirPicker })
+const dirsHandler = dirs.handler
+
+// ① browse 正常列举
+const rDirsList = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent('C:/Users/me'))
+ok(rDirsList.status === 200 && rDirsList.body.ok === true && rDirsList.body.kind === 'browse', '①GET /dirs（browse）→ 200 + ok:true + kind=browse')
+ok(rDirsList.body.path === 'C:/Users/me' && rDirsList.body.parent === 'C:/Users' && rDirsList.body.home === 'C:/Users/me', '①path / parent / home 归一为 POSIX 风格')
+ok(Array.isArray(rDirsList.body.crumbs) && rDirsList.body.crumbs.length === 3 && rDirsList.body.crumbs[0].path === 'C:/' && rDirsList.body.crumbs[2].path === 'C:/Users/me',
+  '①crumbs = 从根到当前目录（每级 name + path，可跳）')
+ok(rDirsList.body.entries.length === 2 && rDirsList.body.entries.every((e) => e.name && e.path) && rDirsList.body.entries[1].hidden === true,
+  '①entries = 只有目录（hidden 透传）')
+ok(rDirsList.body.truncated === false && typeof rDirsList.body.message === 'string' && /已列出 2 个目录/.test(rDirsList.body.message), '①truncated 透传 + 可读 message')
+ok(dirCalls[0].op === 'list' && dirCalls[0].path === 'C:/Users/me', '①原语确实被调用且入参原样透传')
+const rDirsRoot = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent('C:/'))
+ok(rDirsRoot.body.ok === true && (rDirsRoot.body.parent === '' || rDirsRoot.body.parent === 'C:/'), '①盘符根：没有可跳的上一级（parent 为空串）')
+const rDirsDefault = await callRoute(dirsHandler, 'GET', '/dirs')
+ok(rDirsDefault.status === 200 && rDirsDefault.body.ok === true && dirCalls[dirCalls.length - 1].path === undefined,
+  '①不传 path 参数 → 用宿主默认位置（list(undefined)，browse 后端回落用户主目录）')
+
+// ② createDirectory 正常与失败
+const rNew = await callRoute(dirsHandler, 'POST', '/dirs/new', { path: 'C:/Users/me', name: 'newproj' }, REQ_HEADERS)
+ok(rNew.status === 200 && rNew.body.ok === true && rNew.body.path === 'C:/Users/me/newproj', '②POST /dirs/new 正常 → 200 + { ok:true, path }')
+const rNewExists = await callRoute(dirsHandler, 'POST', '/dirs/new', { path: 'C:/Users/me', name: 'exists' }, REQ_HEADERS)
+ok(rNewExists.status === 200 && rNewExists.body.ok === false && rNewExists.body.code === 'directory-exists' && rNewExists.body.path === 'C:/Users/me/exists',
+  '②DirectoryPickerError 的 code 与 path 原样透传（不做字符串匹配猜语义）')
+ok(/同名目录已存在/.test(rNewExists.body.message) && /directory-exists/.test(rNewExists.body.message), '②失败消息可读中文 + 带 code 便于排查：' + rNewExists.body.message)
+
+// ③ native 载体：明确告知，不调用任何原语
+const nativeCalls = []
+const nativePicker = { capability: () => ({ kind: 'native', pick: () => { nativeCalls.push('pick'); return Promise.resolve('') } }) }
+const nativeDirs = installDirsCtx({ directoryPicker: nativePicker })
+const rNative = await callRoute(nativeDirs.handler, 'GET', '/dirs?path=' + encodeURIComponent('C:/Users/me'))
+ok(rNative.status === 200 && rNative.body.ok === false && rNative.body.code === 'native-only' && rNative.body.kind === 'native',
+  '③native 载体 → ok:false + code=native-only（不假装支持 listing）')
+ok(nativeCalls.length === 0, '③native 分支不调用任何原语（不开系统对话框、不 500）')
+const rNativeNew = await callRoute(nativeDirs.handler, 'POST', '/dirs/new', { path: 'C:/x', name: 'y' }, REQ_HEADERS)
+ok(rNativeNew.body.ok === false && rNativeNew.body.code === 'native-only' && nativeCalls.length === 0, '③POST /dirs/new 在 native 载体同样明确告知（不调用 pick）')
+
+// ④ 服务缺失 / ctx 没有 get（旧宿主）
+const noneDirs = installDirsCtx({})
+const rNone = await callRoute(noneDirs.handler, 'GET', '/dirs?path=' + encodeURIComponent('C:/Users/me'))
+ok(rNone.status === 200 && rNone.body.ok === false && rNone.body.code === 'no-service' && rNone.body.kindMissing === true,
+  '④服务缺失 → 200 + ok:false + code=no-service + kindMissing（可读降级，不 500）')
+const rNoneNew = await callRoute(noneDirs.handler, 'POST', '/dirs/new', { path: 'C:/x', name: 'y' }, REQ_HEADERS)
+ok(rNoneNew.status === 200 && rNoneNew.body.ok === false && rNoneNew.body.code === 'no-service', '④POST 在服务缺失下同样可读降级')
+const directNone = await listDirectories({}, { path: 'C:/Users/me', platform: 'win32' })
+ok(directNone.status === 200 && directNone.body.code === 'no-service', '④ctx 根本没有 get 方法（旧宿主）→ 同样 no-service，不抛异常')
+
+// ⑤ 非法入参 → 400（与「本机形态」严格区分）
+const rRel = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent('foo/bar'))
+ok(rRel.status === 400 && rRel.body.ok === false && rRel.body.code === 'bad-path', '⑤相对路径 → 400 + code=bad-path')
+const rBack = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent(BS + 'foo'))
+ok(rBack.status === 400 && rBack.body.code === 'bad-path', '⑤无盘符 ' + BS + 'foo → 400（会落在当前盘，拒）')
+const rEmpty = await callRoute(dirsHandler, 'GET', '/dirs?path=')
+ok(rEmpty.status === 400 && rEmpty.body.code === 'bad-path', '⑤传了空串 path → 400（与「不传参数用默认位置」区分开）')
+const rLong = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent('C:/' + 'a'.repeat(1200)))
+ok(rLong.status === 400 && rLong.body.code === 'path-too-long', '⑤超长 path（>1024）→ 400 + code=path-too-long')
+const rNewEsc = await callRoute(dirsHandler, 'POST', '/dirs/new', { path: 'C:/ok', name: '../escape' }, REQ_HEADERS)
+ok(rNewEsc.status === 400 && rNewEsc.body.code === 'bad-name', '⑤name 含路径分隔符 → 400 + code=bad-name（绝不拼路径）')
+const rNewDot = await callRoute(dirsHandler, 'POST', '/dirs/new', { path: 'C:/ok', name: '..' }, REQ_HEADERS)
+ok(rNewDot.status === 400 && rNewDot.body.code === 'bad-name', '⑤name = .. → 400')
+const rNewRel = await callRoute(dirsHandler, 'POST', '/dirs/new', { path: 'foo', name: 'x' }, REQ_HEADERS)
+ok(rNewRel.status === 400 && rNewRel.body.code === 'bad-path', '⑤父目录是相对路径 → 400')
+const rNewEmpty = await callRoute(dirsHandler, 'POST', '/dirs/new', { path: 'C:/ok', name: '' }, REQ_HEADERS)
+ok(rNewEmpty.status === 400 && rNewEmpty.body.code === 'bad-name', '⑤name 为空 → 400')
+
+// ⑥ 同源保护（POST 403；GET 带跨站 Origin 同样拒）
+const createCallsBefore = dirCalls.filter((c) => c.op === 'create').length
+const rNewCross = await callRoute(dirsHandler, 'POST', '/dirs/new', { path: 'C:/Users/me', name: 'x' }, CROSS_HEADERS)
+ok(rNewCross.status === 403, '⑥跨站 POST /dirs/new → 403（沿用既有同源保护）')
+ok(dirCalls.filter((c) => c.op === 'create').length === createCallsBefore, '⑥被拦下的跨站请求没有调用 createDirectory')
+const rGetCross = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent('C:/Users/me'), undefined, CROSS_HEADERS)
+ok(rGetCross.status === 403, '⑥带跨站 Origin 的 GET /dirs → 403（只读同源守卫）')
+
+// ⑦ 精确路由（桌面载体 fetch 桥只认精确路由）
+ok(CORE_API_EXACT_PATHS.indexOf('/dirs') > 0 && CORE_API_EXACT_PATHS.indexOf('/dirs/new') > 0, '⑦两条路径进 CORE_API_EXACT_PATHS')
+ok(isFullyQualifiedPath('D:/ws', 'win32') === true, '⑦路径判定对其它盘符同样成立（D:）')
+const dirsExact = dirs.ctx.routes.filter((r) => r.kind === 'exact').map((r) => r.path)
+ok(dirsExact.indexOf(API_ROOT + '/dirs') >= 0 && dirsExact.indexOf(API_ROOT + '/dirs/new') >= 0, '⑦两条 exact 路由确实注册（桌面载体可达）')
 
 section('[15] 真实环境只读快照首尾比对')
 let realDrift = 0
