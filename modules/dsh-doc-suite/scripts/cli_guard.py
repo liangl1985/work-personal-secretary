@@ -23,7 +23,7 @@ EXIT_INPUT = 2
 
 # 各工具中代表"输入文件"的参数名（argparse 会把 --from-md 变成 from_md）
 INPUT_ATTRS = ("file", "src", "pdf", "files", "images", "doc_a", "doc_b",
-               "from_md", "from_csv", "template")
+               "from_md", "from_csv", "template", "manifest")
 
 _LABELS = {
     "doc_a": "文档 A",
@@ -33,6 +33,7 @@ _LABELS = {
     "from_md": "Markdown 源文件",
     "from_csv": "CSV 源文件",
     "template": "模板文件",
+    "manifest": "manifest 源文件",
 }
 
 

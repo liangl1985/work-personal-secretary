@@ -43,6 +43,230 @@
       "heading_4": "A：/B:"
     }
   },
+  "pptx": {
+    "_note": "PPT 设计令牌（B 线，2026-09-16）。与 word/excel 平级、共用顶层 colors。layouts/components/chart_series 一律用对象（deep_merge 对数组整体替换）。②a 几何真值已落笔（cover/bullets/cards 三类 + card 组件）；主题库后置，本段先给一套中性默认值。",
+    "_note_geometry": "几何真值口径（②a，2026-09-16；经独立复核修订）：① 单位一律**英寸**（1 in = 914400 EMU），页面 13.3333×7.5，与 margin 同单位，不再二次换算；② box = {x,y,w,h}，**页面绝对坐标、原点左上**（components.* 例外，见其 coord 字段）；③ 文本元素只引用 sizes_pt 的键与 color_roles 的键（或 6 位 hex），不写死字号与色值，保证换主题不失效；④ autofit = {min_size_pt,max_lines}：**max_lines = 基础字号下该 box 能容纳的行数**（不是「缩到下限后」的行数）；渲染器用 Pillow 按**字符**测量（python-pptx 的 fit_text 对中文不可用），超容量按档缩到 min_size_pt，仍放不下则**告警**（不静默丢字）。容量判据已作为硬校验：`max_lines × 字号pt × 行距 ÷ 72 + (max_lines−1) × 段距in ≤ box.h`；**段距只加在段与段之间，最后一段不加**（`bullet.gap_between_only`）；元素未写 `line_spacing` 时**回退 `pptx.spacing.line_spacing`（1.35）** —— 校验器与渲染器同一口径（②a 探针抓出：校验器原先默认 1.0，会让 card.icon 这类 28pt 元素蒙混过关）。⑤ elements 数组顺序即 z 序（后画在上），\"optional\":true 的元素由 manifest 是否给值决定画不画；⑥ **正文下限 18pt**（依 55 号第十三章 #3「正文 20（下限 18）」；卡片正文 card_body 16pt 为卡片内小字，另有下限 12pt）；⑦ 颜色对比度按 WCAG 2.1 AA 实测（本机脚本计算）：浅底正文 text_on_light 10.37:1 · 页码 text_muted_on_light 7.00:1 · 深底标题 text_on_dark 8.66:1 · 深底次要字 text_muted_on_dark 6.14:1 · 卡片标题 on surface_alt 7.74:1。**accent_decor(ED7D31) 两底均不足 4.5:1（白底 2.77、深底 3.13），只作装饰（色带/线/图形），不作文字色**；故 bullets 项目符号圆点用 accent(B45309，白底 5.02:1)。⑧ **对比度目前只靠人工实测、无门禁**（55 号第九章列为验收项，留待 ②b/③ 补自测）；换主题改了 primary/accent 后必须重跑对比度实测（compact 主题已实测：最低 5.02:1）。",
+    "slide": {
+      "width_emu": 12192000,
+      "height_emu": 6858000
+    },
+    "margin": {
+      "left": 0.8,
+      "right": 0.8,
+      "top": 0.6,
+      "bottom": 0.6
+    },
+    "fonts": {
+      "heading": {
+        "latin": "微软雅黑",
+        "ea": "微软雅黑"
+      },
+      "body": {
+        "latin": "微软雅黑",
+        "ea": "微软雅黑"
+      }
+    },
+    "allowed_fonts": [
+      "微软雅黑",
+      "仿宋"
+    ],
+    "sizes_pt": {
+      "cover_title": 44,
+      "section_title": 40,
+      "slide_title": 32,
+      "subtitle": 22,
+      "card_title": 22,
+      "body": 20,
+      "card_body": 16,
+      "small": 14,
+      "page_no": 12,
+      "icon": 28
+    },
+    "color_roles": {
+      "_note": "PPT 色角色（②a 补齐）。值有两种写法：6 位 hex（固定值）或**顶层 colors 的键**（primary / accent_decor / neutral.light / semantic.risk …，跟随主题）。几何一律引用本段的键，不直接引顶层 colors —— 换主题只改这里。文字色（text_on_light / text_on_dark / text_muted_* / accent）用实测达标的固定 hex，不随主题漂移，避免换色后对比度失效。",
+      "text_heading": "primary",
+      "rule": "accent_decor",
+      "text_on_light": "404040",
+      "text_on_dark": "FFFFFF",
+      "text_muted_on_light": "595959",
+      "text_muted_on_dark": "D9D9D9",
+      "surface": "FFFFFF",
+      "surface_alt": "F2F2F2",
+      "panel_dark": "primary",
+      "accent": "B45309",
+      "card_line": "D9D9D9",
+      "chart_series": {
+        "s1": "1F4E79",
+        "s2": "2E75B6",
+        "s3": "ED7D31",
+        "s4": "548235",
+        "s5": "808080"
+      }
+    },
+    "spacing": {
+      "block_gap_in": 0.35,
+      "line_spacing": 1.35
+    },
+    "chrome": {
+      "page_number": {
+        "show": true,
+        "skip_layouts": [
+          "cover"
+        ],
+        "position": "bottom-right",
+        "format": "{n}"
+      },
+      "footer": "",
+      "dark_cover": true
+    },
+    "content_page": {
+      "_note": "内容页共用骨架（页标题 / 分隔线 / 页码）。layouts.bullets / cards 等以 \"inherits\":\"content_page\" 引用，避免 13 类内容页各抄一遍标题几何（真值唯一）。渲染顺序：content_page.elements 先画（在下），本页 elements 后画（在上）。x/w 按版心对齐（margin 左右 0.8 → 版心 0.8–12.5333）。",
+      "elements": [
+        {
+          "role": "title",
+          "box": { "x": 0.8, "y": 0.55, "w": 11.7333, "h": 0.85 },
+          "text": { "size": "slide_title", "color": "text_heading", "bold": true, "align": "left", "valign": "bottom" },
+          "autofit": { "min_size_pt": 24, "max_lines": 1 }
+        },
+        {
+          "role": "rule",
+          "box": { "x": 0.8, "y": 1.5, "w": 1.4, "h": 0.05 },
+          "fill": "rule"
+        },
+        {
+          "role": "page_number",
+          "box": { "x": 11.6333, "y": 6.95, "w": 0.9, "h": 0.35 },
+          "text": { "size": "page_no", "color": "text_muted_on_light", "align": "right", "valign": "middle" },
+          "format": "{n}"
+        }
+      ]
+    },
+    "layouts": {
+      "cover": {
+        "_note": "深色封面（chrome.dark_cover=true）——全幅 panel_dark 底 + 左侧对齐大标题。浅色封面变体属主题库（后置，本期不做）。kicker 为册次/年份小字，meta 为讲述人·日期小字，二者 optional。",
+        "background": "panel_dark",
+        "elements": [
+          {
+            "role": "kicker",
+            "box": { "x": 0.8, "y": 1.72, "w": 7.0, "h": 0.42 },
+            "text": { "size": "small", "color": "text_muted_on_dark", "bold": false, "align": "left", "valign": "bottom" },
+            "autofit": { "min_size_pt": 11, "max_lines": 1 },
+            "optional": true
+          },
+          {
+            "role": "rule",
+            "box": { "x": 0.8, "y": 2.3, "w": 1.6, "h": 0.055 },
+            "fill": "rule"
+          },
+          {
+            "role": "title",
+            "box": { "x": 0.8, "y": 2.52, "w": 11.7333, "h": 1.72 },
+            "text": { "size": "cover_title", "color": "text_on_dark", "bold": true, "align": "left", "valign": "top", "line_spacing": 1.15 },
+            "autofit": { "min_size_pt": 32, "max_lines": 2 }
+          },
+          {
+            "role": "subtitle",
+            "box": { "x": 0.8, "y": 4.4, "w": 9.6, "h": 0.9 },
+            "text": { "size": "subtitle", "color": "text_on_dark", "bold": false, "align": "left", "valign": "top", "line_spacing": 1.3 },
+            "autofit": { "min_size_pt": 16, "max_lines": 2 },
+            "optional": true
+          },
+          {
+            "role": "meta",
+            "box": { "x": 0.8, "y": 6.3, "w": 8.4, "h": 0.38 },
+            "text": { "size": "small", "color": "text_muted_on_dark", "bold": false, "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 11, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "bullets": {
+        "_note": "要点页：标题骨架来自 content_page；主体为单栏要点区，项目符号自绘圆点（accent 色，白底 5.02:1 达标），悬挂缩进 0.32；source 为数据来源行（optional，small 14pt，与页码同行、位于页脚带）。**max_lines=9 是按容量反算的上限**：9 行 × (20pt×1.35÷72=0.3750 in) + 8 段 × (10pt=0.1389 in) = 4.486 ≤ box.h 4.85；10 行 = 5.000 放不下（②a 独立复核抓出，原写 12 行不自洽）。缩到下限 18pt 时同框可容 10 行；超上限由渲染器告警并建议拆页。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "body",
+            "box": { "x": 0.8, "y": 1.8, "w": 11.7333, "h": 4.85 },
+            "text": { "size": "body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
+            "bullet": { "char": "•", "indent_in": 0.32, "hanging_in": 0.32, "gap_after_pt": 10, "gap_between_only": true, "color": "accent" },
+            "autofit": { "min_size_pt": 18, "max_lines": 9 }
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.3 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "cards": {
+        "_note": "卡片页：标题骨架来自 content_page；主体为网格，槽位渲染 components.card。列宽 (11.7333−2×0.35)/3 = **3.6777**（取 3.6778 会让 need_w=11.7334 微超网格区宽 11.7333，②a 复核小改）；行高 (5.05−0.35)/2 = 2.35；排布规则：≤3 张单行、4 张 2×2、5–6 张 3×2（行优先）。valign=middle：单行时卡组在网格区**垂直居中**，避免下方留 2.7 in 空白（②a 目检修正，原 top 对齐）。**网格区底 6.85 与 source 行（y=6.95，页脚带）不重叠** —— 原 source 在 6.72 时与网格区重叠 0.13 in，②a 复核抓出后下移。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 1.8, "w": 11.7333, "h": 5.05 },
+            "cols": 3,
+            "max_rows": 2,
+            "gap_in": 0.35,
+            "col_w_in": 3.6777,
+            "row_h_in": 2.35,
+            "fill_order": "row",
+            "valign": "middle",
+            "slot": "card"
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.3 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      }
+    },
+    "components": {
+      "_note": "组件几何（②a 只做 card，供 cards 页的 grid 槽位调用）。chip / kpi / bar 待 ③a，ring 待小样验证（55 号风险 10）。",
+      "card": {
+        "_note": "卡片组件：coord=relative，box 为**相对卡片左上角**的相对坐标（英寸），渲染器按 grid 算出卡片绝对框后叠加。符号值只允许 slot_w / slot_h（表示随槽宽/槽高伸缩），其余为固定英寸值。accent_bar 用 edge 表达（随槽宽自动整条），避免写死宽度；包边色走色角色 card_line（不写死 hex）。卡内垂直占位**按字号行高反算、与 autofit 上限自洽**（②a 目检 + 独立复核修订）：icon 0.22–0.70（28pt **行距 1.0** = 0.389 ≤ 0.48 —— 原按默认 1.35 算得 0.525 超框，复核抓出）· 标题 0.80–1.20（22pt×1.2 单行 = 0.367 ≤ 0.40，上限 1 行）· 正文 1.28–2.14（16pt×1.25 × 3 行 = 0.833 ≤ 0.86），卡高 2.35 内留底 0.21。卡内宽 = 列宽 3.6777 − 2×0.28 = 3.1177。",
+        "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.06,
+        "accent_bar": { "edge": "top", "size_in": 0.055, "fill": "rule" },
+        "pad_in": 0.28,
+        "elements": [
+          {
+            "role": "icon",
+            "box": { "x": 0.28, "y": 0.22, "w": 0.48, "h": 0.48 },
+            "source": "assets/icons",
+            "fill": "panel_dark",
+            "text": { "size": "icon", "color": "text_on_dark", "align": "center", "valign": "middle", "line_spacing": 1.0 },
+            "autofit": { "min_size_pt": 20, "max_lines": 1 },
+            "optional": true
+          },
+          {
+            "role": "title",
+            "box": { "x": 0.28, "y": 0.8, "w": 3.1177, "h": 0.4 },
+            "text": { "size": "card_title", "color": "text_heading", "bold": true, "align": "left", "valign": "top", "line_spacing": 1.2 },
+            "autofit": { "min_size_pt": 16, "max_lines": 1 }
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.28, "y": 1.28, "w": 3.1177, "h": 0.86 },
+            "text": { "size": "card_body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.25 },
+            "autofit": { "min_size_pt": 12, "max_lines": 3 }
+          }
+        ]
+      },
+      "chip": {},
+      "kpi": {},
+      "bar": {}
+    }
+  },
   "word": {
     "page": {
       "size": "A4",

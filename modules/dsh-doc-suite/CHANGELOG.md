@@ -1,3 +1,126 @@
+## 0.2.2 — 2026-09-16（B 线施工 ②b：ppt_render.py 最小版 + ②c 样张验收）
+
+### 一、这一步做了什么
+
+把几何真值变成**可调用的渲染能力**：新增 `scripts/office/ppt_render.py`（manifest → pptx）与 `specs/ppt-manifest.schema.json`（manifest 字段规范）；②b 先覆盖 cover / bullets / cards 三类页型。
+
+命令面：`render <manifest> <out.pptx> [--theme] [--assets] [--dry-run]` · `validate <manifest>` · `list-layouts [--theme]`；退出码 `0` 成功 / `2` 参数或 manifest 校验失败 / `5` 缺 Pillow 或字体文件。
+
+- **manifest 契约（AI → 渲染器的唯一交接）**：`specs/ppt-manifest.schema.json` 是 JSON Schema（draft 2020-12），`validate` 由它驱动；**零新增依赖**（自写子集校验器：type / required / properties / items / allOf / if-then / $ref）。兼容规则：未知 layout → 退化为 bullets 并告警；未知字段 → 忽略；缺必填 → exit 2 并指明页号（`manifest.slides[N].xxx`）；超 `limits.max_slides` → 保留首页 + 中段 + 末页。
+- **渲染**：完全读 `pptx` 几何（不写死尺寸 / 字号 / 色值）；`inherits: content_page` 先画骨架、本页元素随后覆盖；`elements` 顺序即 z 序；`optional` 元素按 manifest 是否给值决定画不画；`chrome.page_number` 的 `show` / `skip_layouts` / `format` 生效；`notes` 数组按索引写入演讲者备注（单页 `notes` 优先）。
+- **自动缩字号**：Pillow 按**字符**换行（python-pptx 的 `fit_text()` 对中文不可用）；超容量按整磅下探到 `autofit.min_size_pt`，到下限仍放不下则**告警**（不静默丢字）。
+- **卡片**：网格 ≤3 单行 / 4 张 2×2 / 5–6 张 3×2（`valign: middle` 垂直居中）；超容量省略并告警；图标槽位 = 素材 PNG 优先 → **内置几何标记**（坐标画，天然同心）→ 使用者显式单字符仍走文本。
+
+### 二、两处口径修正（②b 出图目检实测，均有像素证据）
+
+| # | 问题 | 依据（本机实测） | 修正 |
+|---|---|---|---|
+| 1 | **行高口径偏乐观约 23%**：几何与 `spec_sync` 用「字号 × 行距 ÷ 72」当行高；WPS 实际行高是「字号 × **1.228**（单倍行高）× 行距」 | 96 px/in 出图量得：20pt / 行距 1.35 → 相邻段起点间距 57px（行高 44.2px + 段距 10pt）；19pt / 1.35 → 同段两行间距 42px = 0.4375 in | 渲染器改用实测行高判定（更保守，宁缩不溢）；常量 `SINGLE_LINE_EM = 1.228` 处附实测数据与换字体重校准方法 |
+| 2 | **项目符号圆点未对齐首行**：原按「整段中线」定位，多行段的圆点落到段中部 | 出图目检 + 像素量（4 个圆点中心与对应文本带中心差 0.5~3.5px） | 改为对齐**每段首行中线**，与容量判定共用同一行高 |
+
+**同时处置的边界**：`box.h` 是按旧口径设计的，比 WPS 实际行高小 1~3pt —— 若一律按真实行高收缩，会把 ②a 已确认的设计字号系统性压小（实测会出现来源行 14→13pt、卡标题 22→19pt）。故规定：**单段单行元素只校验宽度、不因行高收缩**（溢出量 ≤0.06 in，不会压到相邻元素）；多段或需要换行的文本严格判定。
+
+### 三、图标同心度修正（②c 主人目检提出）
+
+字体符号字符由 WPS 自行排版，实测白色字符 ink 中心比圆盘中心偏左上 1~2px（卡 3 的方形符号偏下 4.8px），放大到大屏可见。改为**几何形状标记**（`ICON_MARKS`：shield→菱形 / eye→圆环 / lock→圆角方块 / chart·doc→方块 / gear·net→六边形 / flag·bolt→三角，未知名兜底菱形；边长 = 槽位 × 0.42），同心度由坐标保证 —— 复核 **Δx ≤ 0.16px、Δy ≤ 0.10px**。
+
+### 四、验证
+
+- `spec_sync --check` **0**（新增 `*.schema.json` 跳过规则：字段规范不参与样式规格校验，但仍随 `specs/` 同步到 profile）
+- `style-test.mjs` **23 / 0**（A 线零回归）
+- ②b 自测 **17/17**：缺必填（指名页号）· 未知 layout 退化 · 未知字段忽略 · JSON 带 BOM 拒绝 · 非法 JSON · `max_slides` 裁剪 · `notes` 写备注 · 自动缩字号 · 缩到下限告警 · cards 超 6 张拒收 · 文件不存在 · 样张 4 页
+- ②c 样张：`render` → WPS COM 出图 4 页（cover / bullets / cards / bullets 超容量自动缩 20→18pt），**主人目视验收通过（2026-09-16）**；行内与段间距、圆点对齐、无溢出均经像素复核
+- 仓库 ↔ profile 逐文件 SHA256 一致
+
+### 五、踩坑记录
+
+- WPS COM 出图仍会留下进程（`wpp` + `wps`），按**启动时间**甄别清理；使用者自己开着的 WPS 绝不碰
+- JSON 一律用 Python/Node 写：PowerShell 带 BOM，渲染器会直接拒绝（并给中文提示）
+
+### 六、未做（下一步 ③a / ③b）
+
+- 其余 13 类页型（toc / section / compare / data / chart / table / quote / closing / image / process / timeline / case / qa）
+- 组件 `chip` / `kpi` / `bar`（`ring` 待小样验证）；`assets/` 最小集与 `files` 白名单（⑤ 步）；生图 / 图示链路（⑥ 步）；`ppt_style.py` 存量美化（④ 步）
+- **几何容量口径统一**：`specs` 声明的 `max_lines` 与单行框高按旧口径反算，比 WPS 实际乐观约 23%。建议 ③a 第一件事按 1.228 系数重算一遍几何容量（属 ②a 已定稿内容，需主人点头后动）
+- `ppt-render-test.mjs` ≥15 例（③a 验收项）；对比度门禁（②a 遗留）
+
+### 七、回退
+
+1. 版本改回 **0.2.1**（或 `git revert` 本提交）
+2. `dsh plugin --profile desktop install --force`（profile 里是 `file:` 副本，不重装不生效）
+3. 重启 DSH —— 本次只改 `scripts/**.py` 与 `specs/*.json` 且新增 `scripts/office/ppt_render.py`，**免重启**
+4. ②b 主体是纯新增文件（`ppt_render.py` / `ppt-manifest.schema.json`），删除即回到 ②a 状态；`cli_guard.py` 与 `spec_sync.py` 各只改 2 行，可单独 `git checkout --` 回滚
+
+## 0.2.1 — 2026-09-16（B 线施工 ②a：PPT 几何真值落笔）
+
+### 一、这一步做了什么
+
+把 PPT 从"设计"推进到"有真值可渲染"：`specs/standard.json` 的 `pptx` 段补齐 **cover / bullets / cards 三类页型的真实几何**（英寸、原点左上、页面坐标系），并新增内容页共用骨架与卡片组件。
+
+- **`content_page`（新增）**：内容页共用骨架（页标题 32pt / 分隔线 / 页码），`layouts.*` 以 `"inherits":"content_page"` 引用 —— 避免 13 类内容页各抄一遍标题几何，真值唯一。
+- **`layouts.cover`**：深色封面（全幅 panel_dark + 左侧 44pt 大标题 + kicker/副标题/meta 三个可选位 + 装饰分隔线）。
+- **`layouts.bullets`**：标题骨架 + 单栏要点区（20pt、行距 1.35、自绘圆点、悬挂缩进 0.32）+ 可选来源行。
+- **`layouts.cards`**：标题骨架 + 3 列 × 最多 2 行网格（列宽 3.6778 / 行高 2.35 / 间距 0.35、行优先、`valign: middle` 单行垂直居中）+ 槽位渲染 `components.card`。
+- **`components.card`**：相对坐标卡片（surface_alt 底 + 细边框 + 圆角 + 顶部装饰色带 + 图标/标题/正文）。
+
+### 二、口径（后续页型照此办理）
+
+- 坐标一律**英寸**（与 `margin` 同单位）、`box={x,y,w,h}`、`elements` 顺序即 z 序、`"optional":true` 由 manifest 是否给值决定画不画。
+- 文本元素只引用 `sizes_pt` / `color_roles` 的键，**不写死字号与色值** —— 换主题只改色角色。
+- `color_roles` 的值允许是**顶层 `colors` 的键**（`primary` / `accent_decor` / `neutral.light` …）；解析链 hex → color_roles → colors。
+- `autofit = {min_size_pt, max_lines}`：渲染器用 Pillow 按字符测量，超容量缩到下限，仍放不下则**告警**（不静默丢字）。
+- 配色对比度按 WCAG 2.1 AA 实测：浅底正文 10.37:1 · 页码 7.00:1 · 深底标题 8.66:1 · 深底次要字 6.14:1 · 卡片标题 7.74:1；**accent_decor(ED7D31) 两底均 <4.5:1，只作装饰不作文字色**（项目符号圆点因此用 accent B45309，白底 5.02:1）。
+
+### 三、新增校验（几何真值的守护）
+
+`scripts/spec_sync.py` 对**凡带 `pptx` 段的规格**做全量几何校验，错误一律**中文单行 + 具体数值 + exit 2**：
+
+- 页面/元素**越界**（含相对坐标的卡内元素超出卡框）、box 宽高非正
+- 引用悬空：`sizes_pt` 字号键、`color_roles`/顶层 `colors` 色角色、`inherits` 指向的段、`grid.slot` 指向的组件
+- `autofit.min_size_pt` 大于所引用字号；网格 `cols×col_w + 间距` 超出网格区
+- `render_doc` 同步补上 **pptx 段展示**（此前规格展示文档缺该段，属 58 号遗留 #1）
+
+### 四、验证
+
+- `spec_sync --check` **0**；`style-test.mjs` **21 → 23 通过 / 0 失败**（新增两条：①「三类页型齐全且在页内」并带**容量自洽 / 页脚带不重叠 / 色角色存在**断言；②「越界 / 悬空引用 / 缺页型 / 容量不实 / 空页型 / extends 子层越界必须被拒」——15 组负例与正例）
+- 几何可视化核验：按 `pptx` 段原样渲染 3 页（cover/bullets/cards）并经 WPS COM 出图目检 → 抓出并修正 **2 处真实缺陷**：① `components.card` 正文框 0.66 in 装不下自称的 3 行（16pt×1.25 需 0.83 in）；② cards 页单行卡片顶部对齐导致下方留白 2.7 in（改 `valign: middle` 垂直居中）
+- 仓库 ↔ profile 逐文件 SHA256 一致（`specs/standard.json` `7e3096ce…`）
+
+### 五、独立复核与修订（2026-09-16 · 代码审查视角，只读复核）
+
+一次独立复核（几何反算表 + 17 组校验探针 + 对比度全量复算）判为「**需修后合并**」：无安全/数据损坏类问题，但几何本身有 1 处容量矛盾、1 处页内框相交，且新校验对 `extends` 自定义层完全不生效。逐条修订：
+
+| # | 复核发现（级别） | 修订 |
+|---|---|---|
+| 1 | **阻塞**：`bullets.body` 声称 `max_lines=12`，按自己的字号（20pt×1.35）+ 10pt 段距只能放 **9 行**（10 行 = 5.000 in > 4.85） | 改 `max_lines: 9`；并按 55 号第十三章 #3「正文 20（下限 18）」把 `min_size_pt` 16 → **18**（18pt 下同框可容 10 行） |
+| 2 | **建议（最大缺口）**：`extends` 派生规格**完全绕过** pptx 校验（实测塞 `box.w=99` + 悬空字号 + 错色值全放行），而主题一律 extends 派生 → 新校验对真实自定义主题形同虚设 | `spec_sync` 新增 `deep_merge` / `_merge_chain`：继承件**先合并基座再校验**，基座缺失或成环明确报错。探针实测：子层只改 `colors.primary` 放行；子层几何越界 / 超容量被拦 |
+| 3 | 建议：缺 box.h ↔ max_lines 容量检查（阻塞 1 未被拦住的根因） | 新增容量判据 `max_lines×字号×行距÷72 + (max_lines−1)×段距 ≤ box.h`；并对**无 autofit** 的文本元素加「单行也必须放得下」检查 |
+| 4 | 建议：`cards.grid` 底 6.85 与 `source` 顶 6.72 **重叠 0.13 in**（2 行卡片时框线穿来源行） | `source` 统一下移到 y=6.95，与页码同处页脚带（x 不重叠） |
+| 5 | 建议：`card.icon` 28pt×1.35 = 0.525 in > box.h 0.48（可容 0 行且无 autofit） | icon 显式 `line_spacing: 1.0`（0.389 ≤ 0.48）+ `autofit{min 20, max_lines 1}` |
+| 6 | 建议：色角色白名单未过滤 `_` 前缀与 dict 值 → `fill="_note"` / `fill="chart_series"` 实测放行（渲染器会崩） | `allowed` 只收字符串值键；dict 值改为「父.子」子键（`chart_series.s1` 放行、`chart_series` 拒绝） |
+| 7 | 建议：`cover.elements=[]` / 空骨架静默通过 | 三类页型与 `content_page` 的 `elements` 必须是**非空数组** |
+| 8 | 小改：`col_w_in 3.6778` → need_w 11.7334 微超网格区宽 11.7333 | 改 **3.6777**（卡内宽同步 3.1177） |
+| 9 | 小改：`card.line.color` 写死 hex；`text.size` 非字符串会抛 TypeError；`inherits` 指向后声明段会误报；`page_number` 的 `show` 与 `chrome` 重复 | 分别改为色角色 `card_line`、显式类型报错、**两阶段**校验、删冗余字段 |
+| 10 | 存疑：封面页码（全局 `show` 而 cover 无页码元素） | `chrome.page_number.skip_layouts: ["cover"]` 显式声明封面不画页码 |
+| 11 | 存疑：`gap_after_pt` 是否含最后一段 | 新增 `bullet.gap_between_only: true`，校验公式用 `(n−1)×gap`，渲染器同口径 —— 否则 12 行也才勉强 4.5 in，与 gap=10 直接冲突 |
+| 12 | 存疑：对比度无门禁 | 写入 `_note_geometry` ⑧ 并列入本节遗留（②b/③ 补自测） |
+| 13 | 小改：`specs/*.bak-*` untracked 且 `.gitignore` 无规则 | 仓库根 `.gitignore` 加 `*.bak-*`（该文件为**混合编码**，按字节追加、既有内容零改动） |
+
+**自证**：把上述复核项写成 14 组校验探针（`E:\lina\.dsh\tmp\b-line-spec\probe_validate.py`，临时不入库），**19 项全部符合预期**。探针还抓出复核未发现的一处口径不一致 —— 校验器把「未写 `line_spacing`」默认成 1.0，而渲染约定应回退 `pptx.spacing.line_spacing`（1.35），会让 `card.icon` 这类元素蒙混过关；已统一口径并在 `style-test.mjs` 中固化为门禁。
+
+**复核确认成立、无需改的**：几何反算逐项、`_note_geometry` 的 9 项对比度数字（独立复算全部吻合）、贴版心余量、`compact` 主题对比度（6.89 / 7.71）、A 线 21 条零回归、异常路径不偏离 exit 2、回滚备份 `standard.json.bak-20260916-143128`（②a 前版本、无 pptx 段）可用。
+
+### 六、踩坑记录（对后续样张环节有用）
+
+- **WPS COM 导出同名文件会返回上一次的缓存画面**：重渲染同名 pptx 后导出的 PNG 与旧图逐字节相同；改用新文件名即正常。出样张时务必换名，或确认图与源同批。
+- WPS COM `Quit` 后进程可能残留（本次 `wpp`/`wps` 各一），需按**启动时间**甄别后清理 —— 不要盲杀使用者自己打开的 WPS。
+
+### 七、未做（下一步）
+
+- `ppt_render.py` 最小版（②b）与样张（②c）—— 当前几何只是**真值**，尚无可调用命令
+- 其余 13 类页型（③a/③b）、`chip`/`kpi`/`bar`/`ring` 组件、主题库（后置）
+- **对比度门禁**：目前只靠人工实测，规格校验不拦截（55 号第九章列为验收项）
+
 ## 0.2.0 — 2026-09-15（编号层级与 Markdown 解析修复；新增 5 级标题）
 
 ### 一、缺陷来源（真实、可复现）

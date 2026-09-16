@@ -105,6 +105,118 @@ t('规格 v1.1：doc_title / roles / align_rules 与主人拍板字号', () => {
   assert(s.excel.align_rules && s.excel.align_rules.serial_align === 'center', 'Excel 序号列应居中');
 });
 
+t('pptx 几何真值：三类页型齐全且在页内（②a）', () => {
+  const p = globalThis.SPEC.pptx;
+  assert(p, 'pptx 段缺失');
+  const W = p.slide.width_emu / 914400, H = p.slide.height_emu / 914400;
+  assert(Math.abs(W - 13.3333) < 0.001 && Math.abs(H - 7.5) < 0.001, '页面应为 13.3333×7.5 英寸');
+  assert(p.content_page && Array.isArray(p.content_page.elements), 'content_page 骨架缺失');
+  for (const lay of ['cover', 'bullets', 'cards']) assert(p.layouts[lay], '缺页型 ' + lay);
+  const els = [...p.content_page.elements];
+  for (const lay of ['cover', 'bullets', 'cards']) els.push(...p.layouts[lay].elements);
+  const roles = new Set();
+  for (const e of els) {
+    assert(e.role, '元素缺 role');
+    roles.add(e.role);
+    for (const k of ['x', 'y', 'w', 'h']) assert(typeof e.box?.[k] === 'number', e.role + ' 的 box 缺 ' + k);
+    assert(e.box.w > 0 && e.box.h > 0, e.role + ' 宽高应为正');
+    assert(e.box.x + e.box.w <= W + 0.002 && e.box.y + e.box.h <= H + 0.002, e.role + ' 越出页面');
+    if (e.text) {
+      assert(p.sizes_pt[e.text.size], e.role + ' 引用了不存在的字号键 ' + e.text.size);
+      if (e.autofit) assert(e.autofit.min_size_pt <= p.sizes_pt[e.text.size], e.role + ' 的 min_size_pt 大于所引用字号');
+    }
+    if (e.fill && !/^[0-9A-Fa-f]{6}$/.test(e.fill)) assert(p.color_roles[e.fill], '色角色缺失 ' + e.fill);
+    if (e.text?.color && !/^[0-9A-Fa-f]{6}$/.test(e.text.color)) assert(p.color_roles[e.text.color], '色角色缺失 ' + e.text.color);
+    if (e.bullet?.color) assert(p.color_roles[e.bullet.color], '项目符号色角色缺失 ' + e.bullet.color);
+  }
+  for (const r of ['title', 'rule', 'page_number', 'body', 'grid']) assert(roles.has(r), '缺少元素 ' + r);
+  const g = p.layouts.cards.elements.find((e) => e.role === 'grid');
+  assert(g.cols * g.col_w_in + (g.cols - 1) * g.gap_in <= g.box.w + 0.002, '卡片网格宽超出网格区');
+  assert(g.max_rows * g.row_h_in + (g.max_rows - 1) * g.gap_in <= g.box.h + 0.002, '卡片网格高超出网格区');
+  const card = p.components.card;
+  assert(card && card.coord === 'relative' && card.elements.length >= 3, 'card 组件应为相对坐标且含 icon/title/body');
+  for (const e of card.elements) {
+    assert(e.box.x + e.box.w <= g.col_w_in + 0.002, '卡片内元素 ' + e.role + ' 超出卡宽');
+    assert(e.box.y + e.box.h <= g.row_h_in + 0.002, '卡片内元素 ' + e.role + ' 超出卡高');
+  }
+  assert(p.color_roles.text_heading && p.color_roles.rule, 'color_roles 应含 text_heading / rule（几何不直接引顶层 colors）');
+  // 容量自洽（2026-09-16 独立复核抓出 max_lines 与字号/行距/段距不自洽，必须有门禁）
+  const lsDefault = p.spacing?.line_spacing ?? 1.0;
+  for (const e of [...els, ...card.elements]) {
+    if (!e.text || !e.autofit) continue;
+    const pt = p.sizes_pt[e.text.size];
+    const ls = e.text.line_spacing ?? lsDefault;
+    const gapIn = e.bullet?.gap_after_pt ? e.bullet.gap_after_pt / 72 : 0;
+    const need = e.autofit.max_lines * (pt * ls / 72) + Math.max(0, e.autofit.max_lines - 1) * gapIn;
+    assert(need <= e.box.h + 0.002, e.role + ' 容量不自洽：' + need.toFixed(4) + ' in > box.h ' + e.box.h + '（max_lines 应按基础字号反算）');
+    assert(e.autofit.min_size_pt <= pt, e.role + ' 的 min_size_pt 大于基础字号');
+  }
+  // 无 autofit 的文本元素：单行也必须放得下（icon 就是这么被抓出来的）
+  for (const e of [...els, ...card.elements]) {
+    if (!e.text || e.autofit) continue;
+    const pt = p.sizes_pt[e.text.size];
+    const ls = e.text.line_spacing ?? lsDefault;
+    assert(pt * ls / 72 <= e.box.h + 0.002, e.role + ' 单行高已超出 box.h 且无 autofit 可缩');
+  }
+  // 页脚带不得与主体区重叠（复核抓出：cards 网格区底 6.85 > source 顶 6.72）
+  const gridEl = p.layouts.cards.elements.find((e) => e.role === 'grid');
+  const srcEl = p.layouts.cards.elements.find((e) => e.role === 'source');
+  assert(gridEl.box.y + gridEl.box.h <= srcEl.box.y + 0.002, 'cards 网格区与来源行重叠');
+});
+
+t('spec_sync 能拒绝越界 / 悬空引用 / 缺页型的几何（负例）', () => {
+  const scriptsDir = path.join(mod, 'scripts');
+  const specPath = path.join(mod, 'specs', 'standard.json');
+  const py = pyLine([
+    'import json, sys, copy, io',
+    'sys.path.insert(0, ' + JSON.stringify(scriptsDir) + ')',
+    'import spec_sync',
+    'base = json.load(open(' + JSON.stringify(specPath) + ', encoding="utf-8"))',
+    'by_id = {"standard": base}',
+    'def _run(spec):',
+    '    real = sys.stderr',
+    '    sys.stderr = io.StringIO()',
+    '    try:',
+    '        spec_sync.validate("probe", spec, by_id)',
+    '        return None',
+    '    except SystemExit as exc:',
+    '        return exc.code',
+    '    finally:',
+    '        sys.stderr = real',
+    'def expect_fail(tag, mut=None, child=None):',
+    '    if child is not None:',
+    '        spec = {"schema": "dsh-doc-suite/style-spec@1", "id": "probe-theme", "extends": "standard"}',
+    '        child(spec)',
+    '    else:',
+    '        spec = copy.deepcopy(base)',
+    '        mut(spec)',
+    '    code = _run(spec)',
+    '    assert code == 2, tag + " 期望 exit 2，实得 " + str(code)',
+    'def expect_pass(tag, spec):',
+    '    code = _run(spec)',
+    '    assert code is None, tag + " 期望通过，实得 exit " + str(code)',
+    'expect_fail("标题越界", lambda s: s["pptx"]["content_page"]["elements"][0]["box"].__setitem__("w", 99))',
+    'expect_fail("字号键悬空", lambda s: s["pptx"]["content_page"]["elements"][0]["text"].__setitem__("size", "no_such_size"))',
+    'expect_fail("字号键非字符串", lambda s: s["pptx"]["content_page"]["elements"][0]["text"].__setitem__("size", ["body"]))',
+    'expect_fail("色角色悬空", lambda s: s["pptx"]["layouts"]["cover"]["elements"][1].__setitem__("fill", "no-such-color"))',
+    'expect_fail("私有色角色 _note", lambda s: s["pptx"]["layouts"]["cover"]["elements"][1].__setitem__("fill", "_note"))',
+    'expect_fail("dict 色角色 chart_series", lambda s: s["pptx"]["layouts"]["cover"]["elements"][1].__setitem__("fill", "chart_series"))',
+    'expect_fail("缺 cards 页型", lambda s: s["pptx"]["layouts"].pop("cards"))',
+    'expect_fail("空页型 cover.elements", lambda s: s["pptx"]["layouts"]["cover"].__setitem__("elements", []))',
+    'expect_fail("网格超宽", lambda s: s["pptx"]["layouts"]["cards"]["elements"][0].__setitem__("cols", 6))',
+    'expect_fail("slot 悬空", lambda s: s["pptx"]["layouts"]["cards"]["elements"][0].__setitem__("slot", "no_such_component"))',
+    'expect_fail("max_lines 超容量", lambda s: s["pptx"]["layouts"]["bullets"]["elements"][0]["autofit"].__setitem__("max_lines", 99))',
+    'expect_fail("icon 未显式行距则单行超框", lambda s: s["pptx"]["components"]["card"]["elements"][0]["text"].pop("line_spacing"))',
+    'expect_fail("extends 子层几何越界（合并后必须被拦）", child=lambda c: c.update({"pptx": {"layouts": {"bullets": {"elements": [{"role": "body", "box": {"x": 0.8, "y": 1.8, "w": 99, "h": 4.85}, "text": {"size": "body", "color": "text_on_light"}}]}}}}))',
+    'expect_pass("extends 子层只改 colors.primary（正常主题定制不得误伤）", {"schema": "dsh-doc-suite/style-spec@1", "id": "probe-theme", "extends": "standard", "colors": {"primary": "123456"}})',
+    'spec_sync.validate("standard", base, by_id)',
+    'print("OK")',
+  ]);
+  const r = pyRun('-c', [py]);
+  if (!r) return 'skip';
+  assert(r.status === 0, '负例校验未通过：' + (r.stdout || '') + (r.stderr || ''));
+});
+
 t('端到端：编号模式纠正原文层级（Heading 2 的「三、」→ 一级）', () => {
   const probe = pyRun('-c', ['import docx;print("ok")']);
   if (!probe || probe.status !== 0) return 'skip';

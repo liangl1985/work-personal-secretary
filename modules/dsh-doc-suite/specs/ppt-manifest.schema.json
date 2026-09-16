@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dsh-doc-suite/ppt-manifest@1",
+  "title": "PPT manifest（AI → 渲染器的唯一交接）",
+  "description": "B 线（PPT）manifest 字段规范（55 号 3.1）。validate / render 由本文件驱动。兼容规则：未知 layout → 退化为 bullets 并告警；未知字段 → 忽略（故不设 additionalProperties:false）；缺必填字段 → exit 2 并指明页号；超 limits.max_slides → 保留首页 + 中段 + 末页。",
+  "type": "object",
+  "required": ["schema", "slides"],
+  "properties": {
+    "schema": {
+      "const": "dsh-doc-suite/ppt-manifest@1",
+      "description": "契约版本；写错直接 exit 2。"
+    },
+    "theme": {
+      "type": "string",
+      "default": "standard",
+      "description": "主题规格 id（specs/<id>.json 或使用者自定义层同名文件）；命令行 --theme 优先。"
+    },
+    "language": {
+      "type": "string",
+      "default": "zh-CN"
+    },
+    "title": {
+      "type": "string",
+      "description": "册名（不进页面，供元数据与文件名）。"
+    },
+    "meta": {
+      "type": "object",
+      "description": "册级元信息（给专家/人读，渲染器不用）。",
+      "properties": {
+        "audience": { "type": "string" },
+        "occasion": { "type": "string" },
+        "duration_min": { "type": "number", "exclusiveMinimum": 0 },
+        "presenter": { "type": "string" },
+        "date": { "type": "string" }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "properties": {
+        "max_slides": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "页数上限；超出时保留首页 + 中段 + 末页并告警。"
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "讲稿（与 slides 等长，按索引对齐）；写入演讲者备注。单页备注优先用 slide.notes。"
+    },
+    "slides": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/slide" }
+    }
+  },
+  "$defs": {
+    "slide": {
+      "type": "object",
+      "required": ["layout"],
+      "properties": {
+        "layout": {
+          "type": "string",
+          "description": "页型。②b 已实现 cover / bullets / cards；其余（toc/section/compare/…）本轮退化为 bullets 兜底并告警。",
+          "examples": ["cover", "bullets", "cards"]
+        },
+        "title": {
+          "type": "string",
+          "description": "页标题（cover 为封面大标题，内容页为标题骨架的文本）。"
+        },
+        "notes": {
+          "type": "string",
+          "description": "单页讲稿（优先于顶层 notes[i]）。"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "cover" } } },
+          "then": { "$ref": "#/$defs/cover" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "bullets" } } },
+          "then": { "$ref": "#/$defs/bullets" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "cards" } } },
+          "then": { "$ref": "#/$defs/cards" }
+        }
+      ]
+    },
+    "cover": {
+      "type": "object",
+      "required": ["title"],
+      "description": "封面页：深色全幅底 + kicker / 分隔线 / 大标题 / 副标题 / 元信息。",
+      "properties": {
+        "kicker": {
+          "type": "string",
+          "description": "册次/年份小字（optional，对应几何里的 kicker 元素）。"
+        },
+        "subtitle": { "type": "string" },
+        "meta": {
+          "type": "string",
+          "description": "讲述人 · 日期一行小字（optional）。"
+        }
+      }
+    },
+    "bullets": {
+      "type": "object",
+      "required": ["bullets"],
+      "description": "要点页：标题骨架 + 单栏要点区（自绘圆点、悬挂缩进）+ 来源行。",
+      "properties": {
+        "bullets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" },
+          "description": "要点，逐条一段；容量/字号由 specs 的 layouts.bullets 几何决定，超容量自动缩字号（下限告警）。"
+        },
+        "source": {
+          "type": "string",
+          "description": "数据来源行（optional，页脚带，small 字号）。"
+        }
+      }
+    },
+    "cards": {
+      "type": "object",
+      "required": ["cards"],
+      "description": "卡片页：网格槽位渲染 components.card。排布：≤3 单行、4 张 2×2、5–6 张 3×2。",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": { "$ref": "#/$defs/card" },
+          "description": "超网格容量的多余卡片会被省略并告警（不静默丢）。"
+        },
+        "source": {
+          "type": "string",
+          "description": "数据来源行（optional）。"
+        }
+      }
+    },
+    "card": {
+      "type": "object",
+      "required": ["title"],
+      "properties": {
+        "icon": {
+          "type": "string",
+          "description": "图标名（assets/icons/<name>.png）或单字符；缺素材时按内置字符兜底（assets 最小集属 ③b）。"
+        },
+        "title": { "type": "string" },
+        "body": { "type": "string" }
+      }
+    }
+  }
+}
