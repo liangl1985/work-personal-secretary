@@ -2692,15 +2692,23 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 执行链六步（客户端写死）。顺序**必须**与宿主 basedeck 的固定序一致：
+     * 执行链（客户端写死，逐步发请求）。顺序**必须**与宿主的唯一权威源一致：
+     * `lib/basedeck.js` 的 `BASEDECK_APPLY_ORDER` =
      * dirs → migrateMemory → memorySeed → memoryDeck → knowledgeDeck → skills → settings → agentsMd。
-     * 即：先建记忆库目录（迁移的目标要先存在）→ 再迁移旧记忆库 → 再建知识库 → 关联 → 写身份。
+     * 本链只取其中要跑的五步（dirs / memorySeed / skills / agentsMd 由别的入口负责）。
+     *
+     * ⚠️ **顺序有后果，别随手调换**：迁移是**逐文件只补缺失、目标已有同名文件一律保留目标不覆盖**
+     * （`planMigrateMemory`）。若先跑 memoryDeck，它会先写出 MEMORY.md / USER.md / GRAPH.json /
+     * PROJECTS/工作秘书.md，迁移随即把这四个判成「同名但内容不同」而**全部跳过** —— 旧库的身份、
+     * 全局记忆、偏好与项目记忆一个都进不来。实测：目标为空时 copies=4；先建库后 copies=1 / conflicts=3。
+     * 所以**必须先迁移、再由 memoryDeck 补缺失的骨架与占位**。（迁移的目标目录不需要预先存在：
+     * `withMemoryDirLockAsync` 取锁前会 `mkdirSync(target, {recursive:true})`。）
      * 「检」是最前面的只读可用性检查（preflight），不属于 basedeck 的项。
      */
     const CORE_CHAIN = [
       { id: 'check', labelKey: 'chainStepCheck', subKey: 'chainStepCheckSub' },
-      { id: 'memoryDeck', labelKey: 'chainStepMemory', subKey: 'chainStepMemorySub' },
       { id: 'migrateMemory', labelKey: 'chainStepMigrate', subKey: 'chainStepMigrateSub' },
+      { id: 'memoryDeck', labelKey: 'chainStepMemory', subKey: 'chainStepMemorySub' },
       { id: 'knowledgeDeck', labelKey: 'chainStepKnowledge', subKey: 'chainStepKnowledgeSub' },
       { id: 'link', labelKey: 'chainStepLink', subKey: 'chainStepLinkSub' },
       { id: 'identity', labelKey: 'chainStepIdentity', subKey: 'chainStepIdentitySub' },

@@ -2144,6 +2144,11 @@ globalThis.fetch = async (url, opts) => {
   if (u.indexOf('/basedeck') >= 0) {
     const body = JSON.parse(String((opts && opts.body) || '{}'))
     bdCalls.push(body)
+    // GET = 干跑预览（迁移步先只读探一次来源）。这里给一个「检测到旧记忆库」，
+    // 目的是让迁移步真的发一次 POST —— 只有它发了 POST，下面才能断言「迁移排在建立结构之前」。
+    if ((opts && opts.method) !== 'POST') {
+      return jsonRes({ ok: true, dryRun: true, migrateFrom: 'D:/old-mem', results: [], wroteAny: false })
+    }
     if (failKnowledge && (body.ids || []).indexOf('knowledgeDeck') >= 0) {
       return jsonRes({ ok: true, dryRun: false, results: [{ id: 'knowledgeDeck', ok: false, error: '目标目录不可写（模拟失败）' }] })
     }
@@ -2213,12 +2218,16 @@ const t4Seq = calls.filter((c) => c.method === 'POST').map((c) => {
   const b = JSON.parse(String(c.body || '{}'))
   return (b.ids ? '/basedeck:' + b.ids.join(',') : String(c.url).replace(/^.*\/api/, ''))
 })
-ok(String(t4Seq) === String(['/preflight', '/basedeck:memoryDeck', '/basedeck:knowledgeDeck', '/basedeck:settings', '/identity/save']),
-  '执行链按序发请求：preflight → memoryDeck → knowledgeDeck → settings → identity/save（实测 ' + String(t4Seq) + '）')
+ok(String(t4Seq) === String(['/preflight', '/basedeck:migrateMemory', '/basedeck:memoryDeck', '/basedeck:knowledgeDeck', '/basedeck:settings', '/identity/save']),
+  '执行链按序发请求：preflight → migrateMemory → memoryDeck → knowledgeDeck → settings → identity/save（实测 ' + String(t4Seq) + '）')
+// 顺序的**后果**断言：迁移只补缺失、不覆盖，排在建结构之后就会把 MEMORY.md / USER.md /
+// GRAPH.json / PROJECTS/工作秘书.md 判成「同名但内容不同」而全部跳过（旧记忆一个都进不来）。
+ok(t4Seq.indexOf('/basedeck:migrateMemory') > -1 && t4Seq.indexOf('/basedeck:migrateMemory') < t4Seq.indexOf('/basedeck:memoryDeck'),
+  '迁移排在建立记忆库结构之前（否则旧库 MEMORY.md / USER.md / GRAPH.json / PROJECTS 会被判冲突而全部跳过）')
 ok(Boolean(preflightPayload) && preflightPayload.dryRun === undefined, '可用性检查是只读的（不传 dryRun）')
 const bdWrites = bdCalls.filter((b) => Array.isArray(b.ids))
-ok(bdWrites.length === 3 && bdWrites.every((b) => b.dryRun === false),
-  '三次 basedeck 写请求均显式 dryRun:false（迁移步的只读 GET 不计；实测写 ' + bdWrites.length + ' 次 / 全部 ' + bdCalls.length + ' 次）')
+ok(bdWrites.length === 4 && bdWrites.every((b) => b.dryRun === false),
+  '四次 basedeck 写请求均显式 dryRun:false（迁移步的只读 GET 不计；实测写 ' + bdWrites.length + ' 次 / 全部 ' + bdCalls.length + ' 次）')
 const t4Link = bdCalls.filter((b) => (b.ids || []).indexOf('settings') >= 0)[0]
 ok(Boolean(t4Link) && String(t4Link.overrides.obsidianSyncDir).indexOf('00_全局记忆') >= 0,
   '第 3 步关联：basedeck settings 的 overrides.obsidianSyncDir = <Obsidian 目录>/00_全局记忆（实测 ' + (t4Link && t4Link.overrides.obsidianSyncDir) + '）')
@@ -2861,8 +2870,8 @@ t19Posts.length = 0
 let t19 = await t19Run()
 if (t19.save) t19.save.props.onClick()
 await tick(120)
-ok(String(JSON.stringify(t19Posts)) === String(JSON.stringify([['memoryDeck'], ['migrateMemory'], ['knowledgeDeck'], ['settings']])),
-  'basedeck 写请求顺序：memoryDeck → migrateMemory → knowledgeDeck → settings（实测 ' + JSON.stringify(t19Posts) + '）')
+ok(String(JSON.stringify(t19Posts)) === String(JSON.stringify([['migrateMemory'], ['memoryDeck'], ['knowledgeDeck'], ['settings']])),
+  'basedeck 写请求顺序：migrateMemory → memoryDeck → knowledgeDeck → settings（与宿主 BASEDECK_APPLY_ORDER 一致；实测 ' + JSON.stringify(t19Posts) + '）')
 const t19Text = collect(await (async () => { hookCursor = 0; effectQueue = []; return expand(reg.render({ initialTab: 'core' })) })(), []).join(' | ')
 ok(t19Text.indexOf('迁移旧记忆库') >= 0, '执行链出现「迁移旧记忆库」步骤（保存后链条卡片可见）')
 ok(t19Text.indexOf('已迁移 3 个文件') >= 0, '迁移步回显迁移文件数（migrateStats.copy）')
@@ -2885,8 +2894,8 @@ const t19FailTree = expand(reg.render({ initialTab: 'core' }))
 const t19FailText = collect(t19FailTree, []).join(' | ')
 ok(t19FailText.indexOf('已在「migrateMemory」停止') >= 0 && t19FailText.indexOf('目标目录不可写') >= 0,
   'stoppedAt 非空 → 就地显示停止步与中文原因')
-ok(JSON.stringify(t19Posts) === JSON.stringify([['memoryDeck'], ['migrateMemory']]),
-  'stoppedAt 非空 → 后续 basedeck 写请求一个都不发（实测 ' + JSON.stringify(t19Posts) + '）')
+ok(JSON.stringify(t19Posts) === JSON.stringify([['migrateMemory']]),
+  'stoppedAt 非空（迁移步就失败）→ 后续 basedeck 写请求一个都不发，尤其不发 memoryDeck（实测 ' + JSON.stringify(t19Posts) + '）')
 ok(calls.filter((c) => c.url.indexOf('/identity/save') >= 0).length === 0, 'stoppedAt 非空 → 不发 identity/save')
 ok(Boolean(findButtons(t19FailTree).filter((b) => label(b) === '重试')[0]), 'stoppedAt 失败后出现「重试」按钮')
 
