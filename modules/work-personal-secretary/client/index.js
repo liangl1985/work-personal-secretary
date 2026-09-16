@@ -116,11 +116,11 @@ window.__ModuleLoader__.load({
      */
     const PAGE_PATHS = { guide: '/work-personal-secretary/guide', help: '/work-personal-secretary/help' }
     /**
-     * 随包网页一律**交给浏览器打开完整文档**（使用者 2026-09-16 裁定：不做页内降级）：
-     *   · Web 载体：根相对路径即可（真 origin，同源）；
-     *   · 桌面外壳：用合成 origin HOST_BASE 拼绝对地址 —— 外壳把 http/https 链接交给系统浏览器
-     *     （Electron 的 shell.openExternal）。
-     * 不带 ?embed=1：那是宿主为「页内注入」保留的片段形态，接口留着，本客户端不再调用。
+     * 随包网页的地址（完整文档，不带 ?embed=1 —— 那是宿主为「页内注入」保留的片段形态，
+     * 接口留着，本客户端不再调用）。两种载体都**由客户端取回 HTML 再写入新窗口**：
+     *   · Web 载体：根相对路径（真 origin，同源 fetch 带 cookie）；
+     *   · 桌面外壳：合成 origin HOST_BASE（外壳的 fetch 桥转发给宿主）。
+     * 不用「新窗口直接导航该地址」：宿主导航门禁没有 cookie 就 401/403，真机实测得到 forbidden。
      */
     const PAGE_OPEN_TARGET = '_blank'
     /** 状态 → 文案键（ok | warn | missing | skip） */
@@ -246,7 +246,10 @@ window.__ModuleLoader__.load({
       guideOpen: '查看安装引导（{n} 项待处理）',
       guideReady: '环境已就绪',
       helpOpen: '使用说明',
-      docBlocked: '浏览器拦截了新窗口，请手动访问：',
+      docBlocked: '浏览器拦截了新窗口，请在已登录的窗口里手动访问：',
+      docFetchFailed: '未能取回说明页内容',
+      docForbiddenHint: '当前载体的会话凭据不可用（外部窗口没有登录凭据）',
+      docWriteFailed: '新窗口已打开，但写入说明内容失败',
 
       // ── 核心配置（1.1.3：门禁；目录与岗位字段由后续任务填充） ──────
       gateTitle: '先满足最低使用需求',
@@ -785,7 +788,10 @@ window.__ModuleLoader__.load({
       guideOpen: 'Open install guide ({n} item(s) pending)',
       guideReady: 'Environment ready',
       helpOpen: 'User guide',
-      docBlocked: 'The browser blocked the new window — open this address manually: ',
+      docBlocked: 'The browser blocked the new window — open this address manually in the signed-in window: ',
+      docFetchFailed: 'Could not fetch the page content',
+      docForbiddenHint: 'the session credential is unavailable in this context (the external window has no login cookie)',
+      docWriteFailed: 'The new window opened, but writing the content failed',
 
       // ── Core setup (1.1.3: gate; fields filled by a later task) ───
       gateTitle: 'Meet the minimum requirements first',
@@ -1969,6 +1975,49 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 取**随包网页**的 HTML 正文（同源请求，不走 API 前缀）：GET /work-personal-secretary/guide|help。
+     * 宿主返回 text/html 而非 JSON，所以单独一条文本通道；基址分档与 requestJson 一致
+     *（Web 载体先根相对路径、失败再合成基址；桌面外壳只走合成基址）。
+     * 为什么由客户端取回、而不是让新窗口自己导航：宿主对浏览器导航有门禁
+     *（dsh-client-connection 的 requestRejection：无凭据一律 401/403），新窗口没有登录
+     * cookie，直接打开会得到 forbidden（真机实测）；同源 fetch 在 GUI 里带着凭据，能过门禁。
+     * 失败信息带 HTTP 状态与响应正文摘要，供上层给出可读原因。
+     */
+    async function requestText(urlPath, timeoutMs) {
+      const rel = String(urlPath)
+      const abs = new URL(rel, HOST_BASE).toString()
+      const attempts = HOST_FALLBACK ? [abs] : [rel, abs]
+      let lastErr = null
+      for (const src of attempts) {
+        let timer = null
+        let ctl = null
+        try {
+          const opts = { headers: { accept: 'text/html' } }
+          if (typeof AbortController === 'function') {
+            ctl = new AbortController()
+            opts.signal = ctl.signal
+            if (timeoutMs) timer = setTimeout(() => { try { ctl.abort() } catch (e) { /* 忽略：仅用于取消 */ } }, timeoutMs)
+          }
+          const res = await fetch(src, opts)
+          if (!res || res.ok === false) {
+            const status = (res && typeof res.status === 'number') ? res.status : 0
+            let brief = ''
+            try { brief = String(await res.text() || '').replace(/\s+/g, ' ').slice(0, 120) } catch (e) { brief = '' }
+            throw new Error('HTTP ' + status + (brief ? '：' + brief : ''))
+          }
+          const text = await res.text()
+          if (!text || !String(text).trim()) throw new Error('空响应')
+          return String(text)
+        } catch (err) {
+          lastErr = String((err && err.message) || err) + ' @' + src
+        } finally {
+          if (timer) clearTimeout(timer)
+        }
+      }
+      throw new Error(lastErr || 'request failed')
+    }
+
+    /**
      * 需要**读响应体**的写请求（1.1.3 T4 执行链）：基址分档与 postJson 相同，但不把
      * 4xx / 5xx 当传输异常 —— 宿主的 400 / 403 / 503 都带可读中文（error / message），
      * 必须原样回显（例如 503 = profile 未提供模型服务）。返回 { ok, status, body }。
@@ -2157,6 +2206,20 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 打开说明页失败时的可读提示（三态；渲染层都会再附上「可手动打开的完整地址」）：
+     *   blocked = window.open 被拦截；fetch = 取回 HTML 失败（带 HTTP 状态）；write = 写入新窗口失败。
+     */
+    function openHintText(t, hint) {
+      const h = hint || {}
+      if (h.phase === 'blocked') return t('docBlocked')
+      if (h.phase === 'write') return t('docWriteFailed') + '：' + String(h.message || '')
+      const msg = String(h.message || '')
+      // 403 = 宿主门禁拒了这次请求（最常见是凭据上下文不对）
+      const forbidden = msg.indexOf('403') >= 0
+      return t('docFetchFailed') + '：' + msg + (forbidden ? '（' + t('docForbiddenHint') + '）' : '')
+    }
+
+    /**
      * 「安装与检查」页。
      * 生命周期：首次进入自动 GET /check（loading → ready / error）；
      * 单项「补齐」→ POST /fix { id }；底部主按钮 → POST /fix-all { ids }（串行），
@@ -2214,20 +2277,46 @@ window.__ModuleLoader__.load({
       }
 
       /**
-       * 打开随包网页（guide / help）：**一律交给浏览器**打开完整文档（新标签/新窗口）。
-       * 不做页内降级；window.open 被拦截时只给一行**可手动复制的完整地址**。
-       * 注意：**不要**给 window.open 传 'noopener' feature —— 那会让它固定返回 null，
-       * 把「打开成功」误判成「被拦截」；这里用返回的窗口句柄清 opener 达到同样的隔离。
+       * 打开随包网页（guide / help）：**客户端取回 HTML，写入一个独立新窗口**。
+       * 不走「新窗口直接导航受保护地址」——那会撞上宿主导航门禁（无 cookie → 401/403，
+       * 真机实测显示 forbidden）；同源 fetch 在 GUI 内带着凭据，能过门禁。
+       * 顺序是**先同步开空窗口、再取内容**：window.open 必须在用户点击的手势内调用，
+       * 先 await fetch 再开窗会被弹出拦截器拦掉。HTML 自带 <style>，在独立文档里渲染，
+       * 不会污染设置页 —— 这正是独立窗口的价值。
        */
       function openDoc(kind) {
         const path = PAGE_PATHS[kind]
         if (!path) return
-        // Web 载体用根相对路径；桌面外壳用合成 origin 的绝对地址（两种载体行为一致）
+        // 提示里用可手动打开的完整地址：Web 载体是根相对路径，桌面外壳是合成 origin
         const url = HOST_FALLBACK ? new URL(path, HOST_BASE).toString() : path
         let win = null
-        try { win = window.open(url, PAGE_OPEN_TARGET) } catch (err) { win = null }
-        if (win) { try { win.opener = null } catch (err) { /* 跨源时可能被拒：忽略 */ } }
-        setSt((prev) => Object.assign({}, prev, { openHint: win ? null : { kind: kind, url: url } }))
+        try { win = window.open('', PAGE_OPEN_TARGET) } catch (err) { win = null }
+        if (!win) {
+          setSt((prev) => Object.assign({}, prev, { openHint: { kind: kind, phase: 'blocked', url: url, message: '' } }))
+          return
+        }
+        // 不传 'noopener' feature（那会让返回值恒为 null）；拿到句柄后再做隔离
+        try { win.opener = null } catch (err) { /* 跨源时可能被拒：忽略 */ }
+        setSt((prev) => Object.assign({}, prev, { openHint: null }))
+        requestText(path, 20000).then((html) => {
+          try {
+            win.document.open()
+            win.document.write(String(html))
+            win.document.close()
+          } catch (err) {
+            // 写入失败：关掉空窗口，给可读原因（地址仍可手动打开）
+            try { win.close() } catch (e) { /* 忽略 */ }
+            setSt((prev) => Object.assign({}, prev, {
+              openHint: { kind: kind, phase: 'write', url: url, message: String((err && err.message) || err) },
+            }))
+          }
+        }, (err) => {
+          // 取内容失败：关掉空窗口，提示带 HTTP 状态与原因（403 补一句凭据说明）
+          try { win.close() } catch (e) { /* 忽略 */ }
+          setSt((prev) => Object.assign({}, prev, {
+            openHint: { kind: kind, phase: 'fetch', url: url, message: String((err && err.message) || err) },
+          }))
+        })
       }
 
       function setBatchState(id, value) {
@@ -2463,9 +2552,9 @@ window.__ModuleLoader__.load({
           }, loading ? t('checking') : t('recheck')),
           ' · ' + t('readOnlyNote'),
         ]),
-        // ③ window.open 被拦截时的可读提示（不是降级：地址可手动复制后自行访问）
+        // ③ 打开说明页失败时的可读提示（被拦截 / 取内容失败 / 写入失败——三态都附可手动打开的地址）
         st.openHint ? h('div', { key: 'openhint', style: S.warnLine }, [
-          h('span', { key: 'm' }, t('docBlocked')),
+          h('div', { key: 'm' }, openHintText(t, st.openHint)),
           h('code', { key: 'u', style: S.fixCmd }, String(st.openHint.url)),
         ]) : null,
         // ④ 环境依赖（6 项，只读）
