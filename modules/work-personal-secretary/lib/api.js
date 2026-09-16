@@ -97,7 +97,7 @@ import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
 // 1.1.3 新增能力的宿主侧实现（T6 可用性检查 / T7 身份写入 / T8 岗位生成 / T9 随包网页）
 import { runPreflight } from './preflight.js'
 import { applyIdentityAsync, readIdentity } from './identity.js'
-import { DOMAIN_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
+import { DOMAIN_MAX_CHARS, DOMAIN_NAME_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
 import { renderFragment, renderMarkdown, renderPage } from './md.js'
 
 /** 路由前缀（接口契约定死） */
@@ -709,20 +709,29 @@ export function installApi(ctx, deps = {}) {
         if (guard) return sendError(res, 403, guard)
         let body
         try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
-        const name = typeof body.name === 'string' ? body.name.trim().slice(0, 64) : ''
+        const name = typeof body.name === 'string' ? body.name.trim().slice(0, DOMAIN_NAME_MAX_CHARS) : ''
         const draft = typeof body.content === 'string' ? body.content.trim().slice(0, 2000) : ''
         if (!name && !draft) {
           return sendJson(res, 400, { ok: false, error: '岗位名称与岗位内容至少填一项，否则没有可生成的依据' })
         }
-        const result = await generateDomainContent(ctx, { name: name, content: draft })
+        // 会话路由可由客户端带入（桌宠同款做法：客户端从会话上下文取到后放进请求体；
+        // 不传则回退 agentDefaultModel —— 设置分区插槽本身拿不到会话路由）
+        const result = await generateDomainContent(ctx, {
+          name: name,
+          content: draft,
+          provider: typeof body.provider === 'string' ? body.provider.trim().slice(0, 64) : '',
+          model: typeof body.model === 'string' ? body.model.trim().slice(0, 64) : '',
+        })
         if (result.ok) {
           return sendJson(res, 200, {
             ok: true, content: result.content, channel: result.channel,
-            provider: result.provider, model: result.model, maxChars: DOMAIN_MAX_CHARS,
+            provider: result.provider, model: result.model,
+            name: result.name || name, maxChars: DOMAIN_MAX_CHARS, nameMaxChars: DOMAIN_NAME_MAX_CHARS,
           })
         }
         return sendJson(res, result.code === 'no-model-service' ? 503 : 502, {
           ok: false, error: result.error, channel: result.channel, code: result.code,
+          name: result.name || name, maxChars: DOMAIN_MAX_CHARS, nameMaxChars: DOMAIN_NAME_MAX_CHARS,
         })
       }
 

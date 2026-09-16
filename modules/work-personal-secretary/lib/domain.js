@@ -19,17 +19,45 @@
 /** 记忆条目正文的统一前缀（身份写入模块据此定位唯一目标条目） */
 export const IDENTITY_PREFIX = '使用者身份：'
 
-/** 生成正文的长度上限（设计定稿 §9：200 字以内一段话） */
+/**
+ * 生成正文的长度上限（设计定稿 §9：**200 字以内一段话**）。
+ * 2026-09-16 曾一度裁定改为 300 字，同日**已更正回 200** —— 维持原口径。
+ * 它同时是**服务端兜底截断值**：模型不听话时也不会把超长内容写进身份条目。
+ */
 export const DOMAIN_MAX_CHARS = 200
+
+/** 岗位名称的长度上限（2026-09-16 裁定：**≤10 字**；正文口径已撤回，本条保留）；生成提示与入库前都按此归一化 */
+export const DOMAIN_NAME_MAX_CHARS = 10
 
 /** 生成通道的独立 purpose 标识（与桌宠的 workspace-tokenpet-prompt-enhance 区分） */
 export const DOMAIN_PURPOSE = 'work-personal-secretary-domain'
+
+/**
+ * 生成调用的 **token 预算（模型用量）** —— 与桌宠的 **2048** 档位对齐。
+ *
+ * 口径边界（2026-09-16 明确）：**「输出字数」与「模型用量」是两件事**。
+ *   · 200 字是产品对**最终写入内容**的约束（提示词 + 前端 maxLength + 服务端截断三层保证）；
+ *   · `maxTokens` 是**给模型的额度**，不从输出字数反推、也不为省用量压小 ——
+ *     512 正是被推理阶段吃光、收不到 `text-delta` 的那个取值。
+ *
+ * 宿主契约（一手核实）：
+ *   · `maxTokens` 被原样映射为 provider 的 `max_tokens`，**不做 clamp**，只要求正整数
+ *     （`@deepseek-ai/dsh-llm-deepseek/lib/index.js:246` 与同文件 `:1965`）；
+ *   · 该 adapter 自身默认上限是 `config.maxTokens ?? 256e3`（同文件 `:1998`）——
+ *     2048 远低于宿主可用额度，属「给足而不过量」；
+ *   · 推理（reasoning）与正文**共用同一预算**，额度必须同时覆盖思考与正文。
+ * 下面的 CAP 只是防御性的调用方可传上限（远低于 adapter 的 256000）。
+ */
+export const DOMAIN_MAX_TOKENS = 2048
+/** 调用方可覆盖的 token 上限（防御性上限，不是推荐值） */
+export const DOMAIN_MAX_TOKENS_CAP = 4096
 
 /** 生成用的系统提示词（只输出可直接写入的正文） */
 export const DOMAIN_SYSTEM_PROMPT = [
   '你为个人助手写一条「使用者身份」记忆条目的正文。',
   '只输出正文本身，不要任何前言、解释、标题、markdown 标记、引号或项目符号。',
   '正文必须写成一段中文，200 字以内，内容依次覆盖：岗位名称与职责、关注点与边界、常见产出物。',
+  '岗位名称不超过 10 个字（给的名字过长时，按前 10 个字理解即可，不要复述名字）。',
   '只写使用者（人）的身份与工作，不写助手人设、不写称呼、不写公司名与客户名。',
   '不编造资质、证书、业绩数字与从业年限。',
   '不要以「使用者身份：」开头（系统会统一加前缀）。',
@@ -90,7 +118,7 @@ export function normalizeDomainText(text, max) {
  * @returns {{system:string, prompt:string}}
  */
 export function buildDomainPrompt(input = {}) {
-  const name = cleanText(input.name, 64) || '（未命名岗位）'
+  const name = cleanText(input.name, DOMAIN_NAME_MAX_CHARS) || '（未命名岗位）'
   const draft = cleanText(input.content, 1000)
   const lines = [
     '岗位名称：' + name,
@@ -110,8 +138,11 @@ export function buildDomainPrompt(input = {}) {
  */
 export async function generateDomainContent(ctx, input = {}) {
   const built = buildDomainPrompt(input)
+  // 名称先归一化（≤10 字），提示词与响应回显共用同一个值
+  const domainName = cleanText(input.name, DOMAIN_NAME_MAX_CHARS)
   const maxTokens = Number.isInteger(input.maxTokens) && input.maxTokens > 0
-    ? Math.min(input.maxTokens, 2048) : 512
+    ? Math.min(input.maxTokens, DOMAIN_MAX_TOKENS_CAP)
+    : DOMAIN_MAX_TOKENS
   const get = (ctx && typeof ctx.get === 'function') ? (name) => { try { return ctx.get(name) } catch (e) { return undefined } } : () => undefined
 
   // ① promptEnhancer 优先（与桌宠一致）
@@ -122,7 +153,7 @@ export async function generateDomainContent(ctx, input = {}) {
       const text = typeof result === 'string' ? result : (result && result.enhanced)
       const content = normalizeDomainText(text)
       if (content) {
-        return { ok: true, content: content, channel: 'promptEnhancer', provider: '', model: (result && result.model) || '', code: '', error: '' }
+        return { ok: true, content: content, channel: 'promptEnhancer', provider: '', model: (result && result.model) || '', code: '', error: '', name: domainName }
       }
       return { ok: false, content: '', channel: 'promptEnhancer', provider: '', model: '', code: 'empty', error: '提示词增强服务没有返回正文，请改为手填' }
     } catch (err) {
@@ -141,8 +172,18 @@ export async function generateDomainContent(ctx, input = {}) {
   if (defaults && typeof defaults.currentSelection === 'function') {
     try { selection = defaults.currentSelection() || {} } catch (e) { selection = {} }
   }
-  let provider = selection.provider || (providers[0] && providers[0].id) || ''
-  let model = selection.model || ''
+  // 透传推理强度：agentDefaultModel.currentSelection() 会带 reasoningEffort（取不到就不传，向后兼容）
+  const reasoningEffort = typeof selection.reasoningEffort === 'string' && selection.reasoningEffort
+    ? selection.reasoningEffort : ''
+  // 路由优先级（与桌宠 lib/prompt-route.js 的 resolvePromptRoute 同构）：
+  //   ① 请求体显式传入（客户端从会话上下文取到后带上）→ ② agentDefaultModel（首轮之前的兜底）
+  //   ③ 唯一 provider → ④ 该 provider 的首个模型。
+  // 说明：设置分区插槽只拿到 { close }（宿主 dsh-client-ui-settings-general/lib/client.js:197），
+  // 拿不到会话路由；会话路由只能由客户端经请求体带入（桌宠同样如此）。
+  const requestProvider = cleanText(input.provider, 64)
+  const requestModel = cleanText(input.model, 64)
+  let provider = requestProvider || selection.provider || (providers[0] && providers[0].id) || ''
+  let model = requestModel || (provider === selection.provider ? selection.model : '') || ''
   if (!model && llm && provider && typeof llm.listModels === 'function') {
     try {
       const models = await llm.listModels(provider)
@@ -155,28 +196,86 @@ export async function generateDomainContent(ctx, input = {}) {
       error: '当前 profile 未提供可用的模型服务（promptEnhancer 与 llm 都不可用），无法自动生成；请改为手填岗位内容，或先在 DSH 里配置模型。',
     }
   }
-  try {
+  const baseRequest = {
+    provider: provider,
+    model: model,
+    system: built.system,
+    messages: [{ role: 'user', content: [{ type: 'text', text: built.prompt }], source: { kind: 'plugin', plugin: 'work-personal-secretary' } }],
+    maxTokens: maxTokens,
+    // 宿主 GenerateOptions.purpose 的类型只允许 'compaction' | 'session-title'，且 LlmRuntime 运行时
+    // 不读取它（dsh-llm/lib/typert.host.js:287；dsh-llm/lib/index.js 内无消费点）。保留只为将来可追踪。
+    purpose: DOMAIN_PURPOSE,
+  }
+
+  /**
+   * 跑一次流，把 chunk 收成可判定的事实：正文 / 是否收到过推理 / 结束原因。
+   * @param {boolean} withEffort 是否带上 reasoningEffort
+   */
+  const runStream = async (withEffort) => {
+    const request = Object.assign({}, baseRequest)
+    if (withEffort && reasoningEffort) request.reasoningEffort = reasoningEffort
     let text = ''
-    for await (const chunk of llm.stream({
-      provider: provider,
-      model: model,
-      system: built.system,
-      messages: [{ role: 'user', content: [{ type: 'text', text: built.prompt }], source: { kind: 'plugin', plugin: 'work-personal-secretary' } }],
-      maxTokens: maxTokens,
-      purpose: DOMAIN_PURPOSE,
-    })) {
-      if (chunk && chunk.type === 'text-delta' && typeof chunk.text === 'string') text += chunk.text
-      if (chunk && chunk.type === 'finish' && chunk.reason && chunk.reason.kind === 'error') {
-        const why = (chunk.reason.failure && chunk.reason.failure.message) || '模型返回错误'
-        return { ok: false, content: '', channel: 'llm', provider: provider, model: model, code: 'stream-failed', error: '生成失败：' + String(why).slice(0, 200) + '；可改为手填' }
+    let reasoningChars = 0
+    let sawReasoning = false
+    let finishKind = ''
+    let finishFailure = ''
+    for await (const chunk of llm.stream(request)) {
+      if (!chunk) continue
+      if (chunk.type === 'text-delta' && typeof chunk.text === 'string') {
+        text += chunk.text
+      } else if (chunk.type === 'reasoning-delta' && typeof chunk.text === 'string') {
+        sawReasoning = true
+        reasoningChars += chunk.text.length
+      } else if (chunk.type === 'finish') {
+        finishKind = (chunk.reason && chunk.reason.kind) || ''
+        finishFailure = (chunk.reason && chunk.reason.failure && chunk.reason.failure.message) || ''
       }
     }
-    const content = normalizeDomainText(text)
-    if (!content) {
-      return { ok: false, content: '', channel: 'llm', provider: provider, model: model, code: 'empty', error: '模型没有返回正文，请重试或改为手填（channel=llm, model=' + model + '）' }
+    return { text: text, sawReasoning: sawReasoning, reasoningChars: reasoningChars, finishKind: finishKind, finishFailure: finishFailure }
+  }
+
+  /** 失败结果统一形状（可读中文 + 排查证据） */
+  const fail = (code, error, extra) => Object.assign({
+    ok: false, content: '', channel: 'llm', provider: provider, model: model, code: code, error: error,
+    name: domainName, maxTokens: maxTokens, reasoningEffort: reasoningEffort, finishKind: '', reasoningChars: 0,
+  }, extra || {})
+
+  try {
+    let run = await runStream(true)
+    // 推理强度与宿主/连接侧配置冲突（例如连接已禁用 thinking）→ 去掉该字段重试**一次**；
+    // 只在确实没有拿到正文时重试，避免重复调用与重复计费。
+    if (!normalizeDomainText(run.text) && run.finishKind === 'error' && /reasoning|thinking/i.test(String(run.finishFailure))) {
+      run = await runStream(false)
     }
-    return { ok: true, content: content, channel: 'llm', provider: provider, model: model, code: '', error: '' }
+    const content = normalizeDomainText(run.text)
+    if (content) {
+      return {
+        ok: true, content: content, channel: 'llm', provider: provider, model: model, code: '', error: '',
+        name: domainName, maxTokens: maxTokens, reasoningEffort: reasoningEffort,
+        finishKind: run.finishKind, reasoningChars: run.reasoningChars,
+      }
+    }
+    const evidence = '（channel=llm, model=' + model + ', maxTokens=' + maxTokens
+      + (reasoningEffort ? ', reasoningEffort=' + reasoningEffort : '')
+      + (run.finishKind ? ', finish=' + run.finishKind : '') + '）'
+    if (run.finishKind === 'error') {
+      return fail('stream-failed', '生成失败：' + String(run.finishFailure || '模型返回错误').slice(0, 200) + '；可改为手填',
+        { finishKind: run.finishKind, reasoningChars: run.reasoningChars })
+    }
+    if (run.sawReasoning) {
+      // 关键区分：**收到过 reasoning-delta 但正文为空** = 预算被思考吃掉，不是「模型什么都没输出」
+      return fail('reasoning-only',
+        '模型把 token 预算用在了思考上，没有留下正文（收到 ' + run.reasoningChars + ' 字符推理内容、正文 0 字符）'
+        + evidence + '；可重试，或先手填一句岗位内容再点「自动生成」，也可直接手填',
+        { finishKind: run.finishKind, reasoningChars: run.reasoningChars })
+    }
+    if (run.finishKind === 'max-tokens') {
+      return fail('max-tokens',
+        '模型输出被 token 上限截断，未产出正文（上限 ' + maxTokens + ' token）' + evidence + '；可重试或改为手填',
+        { finishKind: run.finishKind })
+    }
+    return fail('empty', '模型没有返回任何内容（既无正文也无推理输出）' + evidence + '；可重试或改为手填', { finishKind: run.finishKind })
   } catch (err) {
-    return { ok: false, content: '', channel: 'llm', provider: provider, model: model, code: 'stream-failed', error: '生成失败：' + String(err && err.message ? err.message : err).slice(0, 200) + '；可改为手填' }
+    return fail('stream-failed', '生成失败：' + String(err && err.message ? err.message : err).slice(0, 200) + '；可改为手填')
   }
 }

@@ -987,21 +987,98 @@ const enh = JSON.parse(resEnh.body)
 ok(resEnh.status === 200 && enh.ok === true && enh.channel === 'promptEnhancer' && enh.content.indexOf('使用者身份：') < 0,
   'promptEnhancer 优先，输出被归一化（去 markdown 与重复前缀）')
 
-const ctxLlm = makeMockCtx()
-ctxLlm.get = (name) => (name === 'llm'
-  ? {
-    listProviders: () => [{ id: 'p1' }],
-    listModels: async () => [{ id: 'm1' }],
-    stream: async function* () { yield { type: 'text-delta', text: '从事金融研究工作。' }; yield { type: 'finish', reason: { kind: 'stop' } } },
+// ── 岗位生成通道（llm）：三种情形 + 参数契约（maxTokens / reasoningEffort） ──
+function installLlmCtx(streamFn, selection) {
+  const seen = []
+  const ctx = makeMockCtx()
+  ctx.get = (name) => {
+    if (name === 'llm') {
+      return {
+        listProviders: () => [{ id: 'p1' }],
+        listModels: async () => [{ id: 'm1' }],
+        stream: (opts) => { seen.push(opts); return streamFn(opts) },
+      }
+    }
+    if (name === 'agentDefaultModel') return { currentSelection: () => selection }
+    return undefined
   }
-  : undefined)
-installApi(ctxLlm, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'), env: {}, now: FIXED_NOW, dshHome: join(TMP_ROOT, 'home13', '.dsh') })
-const hLlm = (ctxLlm.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
-const resLlm = makeRes()
-await hLlm(makeReq({ method: 'POST', url: API_ROOT + '/domain/generate', body: { name: '金融' }, headers: REQ_HEADERS }), resLlm)
-const llmOut = JSON.parse(resLlm.body)
-ok(resLlm.status === 200 && llmOut.ok === true && llmOut.channel === 'llm' && llmOut.model === 'm1', '缺 promptEnhancer 时回退 llm + agentDefaultModel，并回显 provider / model')
-ok(llmOut.content === '从事金融研究工作。', 'llm 通道正文归一化后原样返回')
+  installApi(ctx, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'), env: {}, now: FIXED_NOW, dshHome: home13 })
+  return { seen: seen, handler: (ctx.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler }
+}
+async function genDomain(handler, body) {
+  const res = makeRes()
+  await handler(makeReq({ method: 'POST', url: API_ROOT + '/domain/generate', body: body, headers: REQ_HEADERS }), res)
+  let json = null
+  try { json = JSON.parse(res.body) } catch (e) { json = null }
+  return { status: res.status, body: json }
+}
+const TEXT_STREAM = async function* () {
+  yield { type: 'text-delta', text: '从事金融研究工作。' }
+  yield { type: 'finish', reason: { kind: 'stop' } }
+}
+const REASONING_ONLY_STREAM = async function* () {
+  yield { type: 'reasoning-delta', text: '先想想这个岗位该写什么……'.repeat(3) }
+  yield { type: 'finish', reason: { kind: 'max-tokens' } }
+}
+const ERROR_STREAM = async function* () {
+  yield { type: 'finish', reason: { kind: 'error', failure: { message: 'provider exploded' } } }
+}
+
+const s1 = installLlmCtx(TEXT_STREAM, { provider: 'p1', model: 'm1', reasoningEffort: 'high' })
+const r1 = await genDomain(s1.handler, { name: '金融' })
+ok(r1.status === 200 && r1.body.ok === true && r1.body.channel === 'llm' && r1.body.model === 'm1', '①正常 text-delta：回退 llm + agentDefaultModel，回显 provider / model')
+ok(r1.body.content === '从事金融研究工作。', '①正文归一化后原样返回')
+ok(s1.seen.length === 1 && s1.seen[0].maxTokens === 2048, '①maxTokens 传 2048（按桌宠档位给足模型余量，不从输出字数反推；改前 512 会被推理阶段吃光）')
+ok(s1.seen[0].reasoningEffort === 'high', '①把 agentDefaultModel.currentSelection() 的 reasoningEffort 透传给 llm.stream')
+ok(typeof s1.seen[0].system === 'string' && s1.seen[0].system.length > 0 && Array.isArray(s1.seen[0].messages), '①system 与 messages 形态符合宿主 GenerateOptions 契约')
+
+const s2 = installLlmCtx(REASONING_ONLY_STREAM, { provider: 'p1', model: 'm1' })
+const r2 = await genDomain(s2.handler, { name: '财务' })
+ok(r2.status === 502 && r2.body.ok === false && r2.body.code === 'reasoning-only', '②只有 reasoning-delta、没有 text-delta → code=reasoning-only（与「什么都没输出」区分）')
+ok(/思考|推理/.test(String(r2.body.error)) && /手填/.test(String(r2.body.error)), '②文案点明预算被思考吃掉并给出出路：' + String(r2.body.error).slice(0, 36) + '…')
+ok(s2.seen[0].maxTokens === 2048 && s2.seen[0].reasoningEffort === undefined, '②未配置 reasoningEffort 时不传该字段（向后兼容）')
+
+const s3 = installLlmCtx(ERROR_STREAM, { provider: 'p1', model: 'm1' })
+const r3 = await genDomain(s3.handler, { name: '编码' })
+ok(r3.status === 502 && r3.body.ok === false && r3.body.code === 'stream-failed', '③finish=error → code=stream-failed')
+ok(String(r3.body.error).indexOf('provider exploded') >= 0, '③原样回显宿主给的可读原因')
+
+const REFUSE_ON_EFFORT = async function* (opts) {
+  if (opts.reasoningEffort !== undefined) {
+    yield { type: 'finish', reason: { kind: 'error', failure: { message: 'llm-deepseek: reasoning effort conflicts with disabled thinking' } } }
+    return
+  }
+  yield { type: 'text-delta', text: '去掉推理强度后拿到的正文。' }
+  yield { type: 'finish', reason: { kind: 'stop' } }
+}
+const s4 = installLlmCtx(REFUSE_ON_EFFORT, { provider: 'p1', model: 'm1', reasoningEffort: 'high' })
+const r4 = await genDomain(s4.handler, { name: '人力' })
+ok(s4.seen.length === 2 && s4.seen[0].reasoningEffort === 'high' && s4.seen[1].reasoningEffort === undefined, '④推理强度与宿主配置冲突时，去掉该字段重试一次（其余参数不变）')
+ok(r4.body.ok === true && r4.body.content === '去掉推理强度后拿到的正文。', '④重试拿到正文 → ok:true')
+
+const s5 = installLlmCtx(TEXT_STREAM, { provider: 'p1', model: 'm1' })
+const r5 = await genDomain(s5.handler, { name: '路由覆盖', provider: 'p2', model: 'm2' })
+ok(s5.seen.length === 1 && s5.seen[0].provider === 'p2' && s5.seen[0].model === 'm2',
+  '⑤请求体带 provider/model 时优先于 agentDefaultModel（与桌宠 resolvePromptRoute 同构）')
+ok(r5.body.ok === true && r5.body.provider === 'p2' && r5.body.model === 'm2', '⑤响应回显实际使用的 provider / model')
+
+const LONG_BODY = '甲'.repeat(260)
+const LONG_BODY_STREAM = async function* () {
+  yield { type: 'text-delta', text: LONG_BODY }
+  yield { type: 'finish', reason: { kind: 'stop' } }
+}
+const s6 = installLlmCtx(LONG_BODY_STREAM, { provider: 'p1', model: 'm1' })
+const r6 = await genDomain(s6.handler, { name: '长文' })
+ok(r6.body.ok === true && r6.body.content === '甲'.repeat(200), '⑥正文超 200 字 → 服务端兜底截断到 200（截断处之外不改内容）')
+ok(r6.body.maxChars === 200, '⑥响应回显 maxChars=200（口径可核对）')
+
+const LONG_NAME = '非常非常长的岗位名称确实超过十个字了'
+const s7 = installLlmCtx(TEXT_STREAM, { provider: 'p1', model: 'm1' })
+const r7 = await genDomain(s7.handler, { name: LONG_NAME })
+ok(r7.body.name === LONG_NAME.slice(0, 10) && r7.body.nameMaxChars === 10, '⑦岗位名称超 10 字 → 归一化截断到 10 字（响应回显：' + r7.body.name + '）')
+ok(s7.seen[0].messages[0].content[0].text.indexOf(LONG_NAME.slice(0, 10)) >= 0
+  && s7.seen[0].messages[0].content[0].text.indexOf(LONG_NAME.slice(0, 11)) < 0,
+  '⑦进入提示词的岗位名称同样是前 10 个字（不会把全名喂给模型）')
 
 const pageGuide = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/guide')[0] || {}).handler
 const pageHelp = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/help')[0] || {}).handler
