@@ -1,3 +1,43 @@
+## 0.2.4 — 2026-09-16（③a 第二批：8 类页型几何真值 + 3 个组件）
+
+### 一、这一步做了什么
+
+**核心 11 类页型的几何真值已齐**（②a 三类 + 本批八类）：`toc` · `section` · `compare` · `data` · `chart` · `table` · `quote` · `closing`；组件新增 **`kpi`**（数据卡）· **`toc_item`**（目录条目）· **`compare_panel`**（对比面板）。
+
+| 页型 | 结构 | 关键几何（容量按实测行高 1.228） |
+|---|---|---|
+| `toc` | 骨架 + 单列条目网格（槽 11.7333×0.52） | 最多 8 条：8×0.52 + 7×0.08 = 4.72 ≤ 4.75 |
+| `section` | 深色底（**不继承骨架**）+ 编号 + 40pt 标题 + 短线 + 深底页码 | 标题单行 0.921 ≤ 1.0 |
+| `compare` | 骨架 + 两个等宽面板（槽 5.6916×4.6、间距 0.35） | 2×5.6916 + 0.35 = 11.7332 ≤ 版心 |
+| `data` | 骨架 + 4 个 KPI（槽 2.7083×1.6）+ 说明要点 5 行 + 来源 | 4×2.7083 + 3×0.3 = 11.7332；说明 2.858 ≤ 2.9 |
+| `chart` | 骨架 + 图表区（区域/类型/图例/数据标签；系列色走 `color_roles.chart_series`）+ 来源 | 区域底 6.4 与来源行 6.95 不重叠 |
+| `table` | 骨架 + 表格区（字号引用 `table_header`/`table_cell`）+ 来源 | 同上 |
+| `quote` | **不继承骨架**（引文页无页标题）+ 居中引文 28pt + 短线 + 出处 + 页码 | 3 行 1.862 ≤ 2.4 |
+| `closing` | 深色底 + 居中 40pt 致谢 + 短线 + 可选副标题 + 深底页码 | 单行 0.921 ≤ 1.0 |
+
+字号新增：`quote` 28 · `kpi_value` 36 · `table_header` 14 · `table_cell` 14。
+**role ↔ manifest 字段映射约定**写入 `_note_geometry` ⑨：默认同名（title / subtitle / kicker / index / source / text / attribution / value / label / page），仅两处例外（bullets 页要点字段 `bullets` → role body；data 页说明字段 `body` → role body）；grid 槽位内字段取自对应条目的同名字段。
+
+### 二、目检抓出并修掉的问题
+
+`quote` 页引文最初 role 写作 `quotation`（与 manifest 字段 `text` 不同名）→ 按字段取值取空、**引文不显示**；改为 `role: "text"` 后正常 —— 这条正是把「role 默认等于字段名」固化成约定的原因。
+
+### 三、验证
+
+- `spec_sync --check` **0**（11 类页型 + 7 个组件全部通过几何校验：页内不越界、引用不悬空、容量自洽、网格不超区、extends 合并后仍校验）
+- `style-test` **24 / 0**
+- 几何预览样张 8 页（`E:\lina\.dsh\tmp\b-line-render\png-geom8-v2\`，源 `samples\geom-8-v2.pptx`）逐页目检通过
+
+### 四、未做（③a 继续）
+
+- **渲染实现**：`ppt_render.py` 目前只画 cover / bullets / cards；本批八类的绘制（chart/table 的原生对象、toc/compare/data 的组件槽位）待实现
+- 组件 `chip` / `bar` / `ring`（`ring` 待小样验证）
+- `ppt-render-test.mjs` ≥15 例；`assets/` 最小集与 `files` 白名单（⑤ 步）
+
+### 五、回退
+
+版本改回 **0.2.3** 或 `git revert` 本提交；profile 同步一次即可。
+
 ## 0.2.3 — 2026-09-16（③a 第一步：几何容量口径统一）
 
 ### 一、这一步做了什么

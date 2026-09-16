@@ -44,8 +44,8 @@
     }
   },
   "pptx": {
-    "_note": "PPT 设计令牌（B 线，2026-09-16）。与 word/excel 平级、共用顶层 colors。layouts/components/chart_series 一律用对象（deep_merge 对数组整体替换）。②a 几何真值已落笔（cover/bullets/cards 三类 + card 组件）；主题库后置，本段先给一套中性默认值。",
-    "_note_geometry": "几何真值口径（②a，2026-09-16；经独立复核修订）：① 单位一律**英寸**（1 in = 914400 EMU），页面 13.3333×7.5，与 margin 同单位，不再二次换算；② box = {x,y,w,h}，**页面绝对坐标、原点左上**（components.* 例外，见其 coord 字段）；③ 文本元素只引用 sizes_pt 的键与 color_roles 的键（或 6 位 hex），不写死字号与色值，保证换主题不失效；④ autofit = {min_size_pt,max_lines}：**max_lines = 基础字号下该 box 能容纳的行数**（不是「缩到下限后」的行数）；渲染器用 Pillow 按**字符**测量（python-pptx 的 fit_text 对中文不可用），超容量按档缩到 min_size_pt，仍放不下则**告警**（不静默丢字）。容量判据已作为硬校验（③a 起按 WPS 实测行高统一）：`max_lines × (字号pt ÷ 72 × 1.228 × 行距) + (max_lines−1) × 段距in ≤ box.h`；**1.228 = WPS 实测单倍行高系数**（②b 出图像素量得：20pt/行距1.35 → 相邻段起点间距 57px = 行高 44.2px + 段距 10pt；19pt 同段两行 42px = 0.4375 in；旧口径「字号×行距÷72」低约 23%），三处必须一致：`scripts/spec_sync.py`／`scripts/office/ppt_render.py`／`scripts/style-test.mjs`（有门禁断言）；**段距只加在段与段之间，最后一段不加**（`bullet.gap_between_only`）；元素未写 `line_spacing` 时**回退 `pptx.spacing.line_spacing`（1.35）** —— 校验器与渲染器同一口径（②a 探针抓出：校验器原先默认 1.0，会让 card.icon 这类 28pt 元素蒙混过关）。⑤ elements 数组顺序即 z 序（后画在上），\"optional\":true 的元素由 manifest 是否给值决定画不画；⑥ **正文下限 18pt**（依 55 号第十三章 #3「正文 20（下限 18）」；卡片正文 card_body 16pt 为卡片内小字，另有下限 12pt）；⑦ 颜色对比度按 WCAG 2.1 AA 实测（本机脚本计算）：浅底正文 text_on_light 10.37:1 · 页码 text_muted_on_light 7.00:1 · 深底标题 text_on_dark 8.66:1 · 深底次要字 text_muted_on_dark 6.14:1 · 卡片标题 on surface_alt 7.74:1。**accent_decor(ED7D31) 两底均不足 4.5:1（白底 2.77、深底 3.13），只作装饰（色带/线/图形），不作文字色**；故 bullets 项目符号圆点用 accent(B45309，白底 5.02:1)。⑧ **对比度目前只靠人工实测、无门禁**（55 号第九章列为验收项，留待 ②b/③ 补自测）；换主题改了 primary/accent 后必须重跑对比度实测（compact 主题已实测：最低 5.02:1）。",
+    "_note": "PPT 设计令牌（B 线，2026-09-16）。与 word/excel 平级、共用顶层 colors。layouts/components/chart_series 一律用对象（deep_merge 对数组整体替换）。几何真值进度：②a 落 cover/bullets/cards + card 组件；③a 第二批落 toc/section/compare/data/chart/table/quote/closing 八类 + kpi/toc_item/compare_panel 组件（核心 11 类页型几何已齐；chart/table 的绘制在渲染阶段实现）。主题库后置，本段先给一套中性默认值。",
+    "_note_geometry": "几何真值口径（②a，2026-09-16；经独立复核修订）：① 单位一律**英寸**（1 in = 914400 EMU），页面 13.3333×7.5，与 margin 同单位，不再二次换算；② box = {x,y,w,h}，**页面绝对坐标、原点左上**（components.* 例外，见其 coord 字段）；③ 文本元素只引用 sizes_pt 的键与 color_roles 的键（或 6 位 hex），不写死字号与色值，保证换主题不失效；④ autofit = {min_size_pt,max_lines}：**max_lines = 基础字号下该 box 能容纳的行数**（不是「缩到下限后」的行数）；渲染器用 Pillow 按**字符**测量（python-pptx 的 fit_text 对中文不可用），超容量按档缩到 min_size_pt，仍放不下则**告警**（不静默丢字）。容量判据已作为硬校验（③a 起按 WPS 实测行高统一）：`max_lines × (字号pt ÷ 72 × 1.228 × 行距) + (max_lines−1) × 段距in ≤ box.h`；**1.228 = WPS 实测单倍行高系数**（②b 出图像素量得：20pt/行距1.35 → 相邻段起点间距 57px = 行高 44.2px + 段距 10pt；19pt 同段两行 42px = 0.4375 in；旧口径「字号×行距÷72」低约 23%），三处必须一致：`scripts/spec_sync.py`／`scripts/office/ppt_render.py`／`scripts/style-test.mjs`（有门禁断言）；**段距只加在段与段之间，最后一段不加**（`bullet.gap_between_only`）；元素未写 `line_spacing` 时**回退 `pptx.spacing.line_spacing`（1.35）** —— 校验器与渲染器同一口径（②a 探针抓出：校验器原先默认 1.0，会让 card.icon 这类 28pt 元素蒙混过关）。⑤ elements 数组顺序即 z 序（后画在上），\"optional\":true 的元素由 manifest 是否给值决定画不画；⑥ **正文下限 18pt**（依 55 号第十三章 #3「正文 20（下限 18）」；卡片正文 card_body 16pt 为卡片内小字，另有下限 12pt）；⑦ 颜色对比度按 WCAG 2.1 AA 实测（本机脚本计算）：浅底正文 text_on_light 10.37:1 · 页码 text_muted_on_light 7.00:1 · 深底标题 text_on_dark 8.66:1 · 深底次要字 text_muted_on_dark 6.14:1 · 卡片标题 on surface_alt 7.74:1。**accent_decor(ED7D31) 两底均不足 4.5:1（白底 2.77、深底 3.13），只作装饰（色带/线/图形），不作文字色**；故 bullets 项目符号圆点用 accent(B45309，白底 5.02:1)。⑧ **对比度目前只靠人工实测、无门禁**（55 号第九章列为验收项，留待 ②b/③ 补自测）；换主题改了 primary/accent 后必须重跑对比度实测（compact 主题已实测：最低 5.02:1）。⑨ **元素 role 与 manifest 字段的映射（③a 第二批定）**：默认同名 —— title / subtitle / kicker / index / source / text / attribution / value / label / page；仅两处例外：bullets 页的要点数组字段名为 bullets、渲染到 role body；data 页的说明数组字段名为 body、同样渲染到 role body。grid 槽位组件内的字段取自对应条目的同名字段（如 toc_item 取条目的 index/title/page，kpi 取 value/label，compare_panel 取 title/body）。",
     "slide": {
       "width_emu": 12192000,
       "height_emu": 6858000
@@ -80,7 +80,11 @@
       "card_body": 16,
       "small": 14,
       "page_no": 12,
-      "icon": 28
+      "icon": 28,
+      "quote": 28,
+      "kpi_value": 36,
+      "table_header": 14,
+      "table_cell": 14
     },
     "color_roles": {
       "_note": "PPT 色角色（②a 补齐）。值有两种写法：6 位 hex（固定值）或**顶层 colors 的键**（primary / accent_decor / neutral.light / semantic.risk …，跟随主题）。几何一律引用本段的键，不直接引顶层 colors —— 换主题只改这里。文字色（text_on_light / text_on_dark / text_muted_* / accent）用实测达标的固定 hex，不随主题漂移，避免换色后对比度失效。",
@@ -226,10 +230,227 @@
             "optional": true
           }
         ]
+      },
+      "toc": {
+        "_note": "目录页（③a）：标题骨架来自 content_page；主体为单列条目区，每行一个 toc_item（序号 + 标题 + 页码）。最多 8 条：行高 0.52 + 间距 0.08 → 8×0.52 + 7×0.08 = 4.72 ≤ box.h 4.75；网格区底 6.65 与来源行 6.95 不重叠。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 1.9, "w": 11.7333, "h": 4.75 },
+            "cols": 1,
+            "max_rows": 8,
+            "gap_in": 0.08,
+            "col_w_in": 11.7333,
+            "row_h_in": 0.52,
+            "fill_order": "row",
+            "valign": "top",
+            "slot": "toc_item"
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "section": {
+        "_note": "章节页（③a）：深色底 + 小号编号 + 40pt 章节标题 + 装饰短线 + 深底页码。刻意不继承 content_page —— 无页标题需求，且页码在深底上要用 text_muted_on_dark（content_page 的页码是浅底色）。标题单行，容量 40pt×1.35×1.228÷72 = 0.921 ≤ 1.0。",
+        "background": "panel_dark",
+        "elements": [
+          {
+            "role": "index",
+            "box": { "x": 0.8, "y": 2.45, "w": 6.0, "h": 0.42 },
+            "text": { "size": "small", "color": "text_muted_on_dark", "bold": false, "align": "left", "valign": "bottom" },
+            "autofit": { "min_size_pt": 11, "max_lines": 1 },
+            "optional": true
+          },
+          {
+            "role": "rule",
+            "box": { "x": 0.8, "y": 3.0, "w": 1.6, "h": 0.055 },
+            "fill": "rule"
+          },
+          {
+            "role": "title",
+            "box": { "x": 0.8, "y": 3.22, "w": 11.7333, "h": 1.0 },
+            "text": { "size": "section_title", "color": "text_on_dark", "bold": true, "align": "left", "valign": "top" },
+            "autofit": { "min_size_pt": 28, "max_lines": 1 }
+          },
+          {
+            "role": "page_number",
+            "box": { "x": 11.6333, "y": 6.95, "w": 0.9, "h": 0.35 },
+            "text": { "size": "page_no", "color": "text_muted_on_dark", "align": "right", "valign": "middle" },
+            "format": "{n}"
+          }
+        ]
+      },
+      "compare": {
+        "_note": "左右对比页（③a）：标题骨架来自 content_page；主体两个等宽面板（槽 5.6916×4.6、间距 0.35 → 2×5.6916 + 0.35 = 11.7332 ≤ 版心 11.7333）。左右差异靠面板标题文本表达，几何与配色一致（不按数据改色）。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 1.9, "w": 11.7333, "h": 4.6 },
+            "cols": 2,
+            "max_rows": 1,
+            "gap_in": 0.35,
+            "col_w_in": 5.6916,
+            "row_h_in": 4.6,
+            "fill_order": "row",
+            "valign": "top",
+            "slot": "compare_panel"
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "data": {
+        "_note": "数据页（③a）：标题骨架 + 顶部 4 个 KPI 卡（槽 2.7083×1.6、间距 0.3 → 4×2.7083 + 3×0.3 = 11.7332）+ 下方说明要点 + 来源行。说明区 20pt：5 行 × 0.4605 + 4 × 0.1389 = 2.858 ≤ box.h 2.9；KPI 区底 3.5 与说明区顶 3.8 不重叠。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 1.9, "w": 11.7333, "h": 1.6 },
+            "cols": 4,
+            "max_rows": 1,
+            "gap_in": 0.3,
+            "col_w_in": 2.7083,
+            "row_h_in": 1.6,
+            "fill_order": "row",
+            "valign": "top",
+            "slot": "kpi"
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.8, "y": 3.8, "w": 11.7333, "h": 2.9 },
+            "text": { "size": "body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
+            "bullet": { "char": "•", "indent_in": 0.32, "hanging_in": 0.32, "gap_after_pt": 10, "gap_between_only": true, "color": "accent" },
+            "autofit": { "min_size_pt": 18, "max_lines": 5 }
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "chart": {
+        "_note": "图表页（③a 几何）：标题骨架 + 图表区（渲染阶段用 python-pptx 原生图表，本段只给区域与类型/图例/数据标签开关，不写死系列色 —— 系列色走 color_roles.chart_series）+ 来源行。图表区底 6.4 与来源行 6.95 不重叠。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "chart",
+            "box": { "x": 0.8, "y": 1.8, "w": 11.7333, "h": 4.6 },
+            "chart_type": "bar",
+            "legend": "bottom",
+            "data_labels": true
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "table": {
+        "_note": "表格页（③a 几何）：标题骨架 + 表格区（渲染阶段用 python-pptx add_table；表头/单元格字号引用 sizes_pt 的 table_header / table_cell，不写死磅值）+ 来源行。行数由 manifest 决定，超容量由渲染器压缩字号或告警。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "table",
+            "box": { "x": 0.8, "y": 1.8, "w": 11.7333, "h": 4.6 },
+            "header_size": "table_header",
+            "cell_size": "table_cell",
+            "zebra": true
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "quote": {
+        "_note": "引文页（③a）：刻意不继承 content_page（引文页不需要页标题）；居中引文 28pt + 装饰短线 + 出处 + 页码。引文最多 3 行：3 × (28÷72×1.228×1.3 = 0.6208) = 1.862 ≤ box.h 2.4；短线居中（x 6.1667 + 1.0 → 中心 6.6667 = 页面中心）。",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "text",
+            "box": { "x": 1.6, "y": 2.5, "w": 10.1333, "h": 2.4 },
+            "text": { "size": "quote", "color": "text_heading", "bold": false, "align": "center", "valign": "middle", "line_spacing": 1.3 },
+            "autofit": { "min_size_pt": 20, "max_lines": 3 }
+          },
+          {
+            "role": "rule",
+            "box": { "x": 6.1667, "y": 5.15, "w": 1.0, "h": 0.04 },
+            "fill": "rule"
+          },
+          {
+            "role": "attribution",
+            "box": { "x": 1.6, "y": 5.35, "w": 10.1333, "h": 0.35 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "center", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          },
+          {
+            "role": "page_number",
+            "box": { "x": 11.6333, "y": 6.95, "w": 0.9, "h": 0.35 },
+            "text": { "size": "page_no", "color": "text_muted_on_light", "align": "right", "valign": "middle" },
+            "format": "{n}"
+          }
+        ]
+      },
+      "closing": {
+        "_note": "结束页（③a）：深色底 + 居中致谢大字 40pt + 装饰短线 + 可选副标题 + 深底页码。单行容量 40pt×1.35×1.228÷72 = 0.921 ≤ 1.0；副标题 22pt×1.3×1.228÷72 = 0.4879 ≤ 0.6。",
+        "background": "panel_dark",
+        "elements": [
+          {
+            "role": "title",
+            "box": { "x": 1.5, "y": 3.05, "w": 10.3333, "h": 1.0 },
+            "text": { "size": "section_title", "color": "text_on_dark", "bold": true, "align": "center", "valign": "middle" },
+            "autofit": { "min_size_pt": 28, "max_lines": 1 }
+          },
+          {
+            "role": "rule",
+            "box": { "x": 6.1667, "y": 4.25, "w": 1.0, "h": 0.05 },
+            "fill": "rule"
+          },
+          {
+            "role": "subtitle",
+            "box": { "x": 1.5, "y": 4.5, "w": 10.3333, "h": 0.6 },
+            "text": { "size": "subtitle", "color": "text_muted_on_dark", "bold": false, "align": "center", "valign": "top", "line_spacing": 1.3 },
+            "autofit": { "min_size_pt": 16, "max_lines": 1 },
+            "optional": true
+          },
+          {
+            "role": "page_number",
+            "box": { "x": 11.6333, "y": 6.95, "w": 0.9, "h": 0.35 },
+            "text": { "size": "page_no", "color": "text_muted_on_dark", "align": "right", "valign": "middle" },
+            "format": "{n}"
+          }
+        ]
       }
     },
     "components": {
-      "_note": "组件几何（②a 只做 card，供 cards 页的 grid 槽位调用）。chip / kpi / bar 待 ③a，ring 待小样验证（55 号风险 10）。",
+      "_note": "组件几何。已实现：card（②a）· kpi / toc_item / compare_panel（③a 第二批，供 data / toc / compare 页的 grid 槽位调用）。未实现：chip · bar · ring（ring 待小样验证，55 号风险 10）。",
       "card": {
         "_note": "卡片组件：coord=relative，box 为**相对卡片左上角**的相对坐标（英寸），渲染器按 grid 算出卡片绝对框后叠加。符号值只允许 slot_w / slot_h（表示随槽宽/槽高伸缩），其余为固定英寸值。accent_bar 用 edge 表达（随槽宽自动整条），避免写死宽度；包边色走色角色 card_line（不写死 hex）。卡内垂直占位**按 WPS 实测行高反算、与 autofit 上限自洽**（③a 口径统一：行高 = 字号÷72 × 1.228 × 行距）：icon 0.22–0.70（28pt **行距 1.0** = 0.4776 ≤ 0.48）· 标题 0.80–1.26（22pt×1.2 单行 = 0.4503 ≤ 0.46，上限 1 行）· 正文 1.32–2.18（16pt×1.25 × 2 行 = 0.682 ≤ 0.86），卡高 2.35 内留底 0.17。卡内宽 = 列宽 3.6777 − 2×0.28 = 3.1177。",
         "coord": "relative",
@@ -263,8 +484,101 @@
         ]
       },
       "chip": {},
-      "kpi": {},
-      "bar": {}
+      "kpi": {
+        "_note": "KPI 卡（相对坐标，data 页 grid 槽位 2.7083×1.6）：数值 36pt（显式行距 1.0 → 单行 0.614 ≤ box.h 0.66）+ 标签 14pt（0.3223 ≤ 0.34）+ 底部装饰条。所有 box 右下 ≤ 槽位尺寸。",
+        "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.06,
+        "accent_bar": { "edge": "top", "size_in": 0.055, "fill": "rule" },
+        "pad_in": 0.24,
+        "elements": [
+          {
+            "role": "value",
+            "box": { "x": 0.24, "y": 0.28, "w": 2.2283, "h": 0.66 },
+            "text": { "size": "kpi_value", "color": "text_heading", "bold": true, "align": "left", "valign": "middle", "line_spacing": 1.0 },
+            "autofit": { "min_size_pt": 20, "max_lines": 1 }
+          },
+          {
+            "role": "label",
+            "box": { "x": 0.24, "y": 1.02, "w": 2.2283, "h": 0.34 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 }
+          },
+          {
+            "role": "bar",
+            "box": { "x": 0.24, "y": 1.4, "w": 2.2283, "h": 0.05 },
+            "fill": "rule"
+          }
+        ]
+      },
+      "bar": {},
+      "toc_item": {
+        "_note": "目录条目（相对坐标，toc 页 grid 槽位 11.7333×0.52）：序号块 + 标题 + 页码 + 细分隔线。标题 20pt 单行 0.4605 ≤ box.h 0.48；序号与页码 14pt 单行 0.3223 ≤ 0.48；元素右下不超槽位。",
+        "coord": "relative",
+        "pad_in": 0.0,
+        "elements": [
+          {
+            "role": "index_box",
+            "box": { "x": 0.0, "y": 0.02, "w": 0.5, "h": 0.48 },
+            "fill": "surface_alt",
+            "line": { "color": "card_line", "width_pt": 0.75 },
+            "radius_in": 0.05
+          },
+          {
+            "role": "index",
+            "box": { "x": 0.0, "y": 0.02, "w": 0.5, "h": 0.48 },
+            "text": { "size": "small", "color": "text_heading", "bold": true, "align": "center", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 }
+          },
+          {
+            "role": "title",
+            "box": { "x": 0.7, "y": 0.02, "w": 9.8, "h": 0.48 },
+            "text": { "size": "body", "color": "text_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 14, "max_lines": 1 }
+          },
+          {
+            "role": "page",
+            "box": { "x": 10.6, "y": 0.02, "w": 1.1333, "h": 0.48 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "right", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 }
+          },
+          {
+            "role": "divider",
+            "box": { "x": 0.0, "y": 0.5, "w": 11.7333, "h": 0.008 },
+            "fill": "card_line"
+          }
+        ]
+      },
+      "compare_panel": {
+        "_note": "对比面板（相对坐标，compare 页 grid 槽位 5.6916×4.6）：顶部色带 + 面板标题 + 分隔线 + 要点区（自绘圆点）。要点 20pt：5 行 × 0.4605 + 4 × (8pt = 0.1111) = 2.747 ≤ box.h 3.0；面板标题 22pt 单行 0.4503 ≤ 0.5。左右面板款式与配色一致，差异靠标题文本。",
+        "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.06,
+        "accent_bar": { "edge": "top", "size_in": 0.055, "fill": "rule" },
+        "pad_in": 0.4,
+        "elements": [
+          {
+            "role": "title",
+            "box": { "x": 0.4, "y": 0.42, "w": 4.8916, "h": 0.5 },
+            "text": { "size": "card_title", "color": "text_heading", "bold": true, "align": "left", "valign": "top", "line_spacing": 1.2 },
+            "autofit": { "min_size_pt": 16, "max_lines": 1 }
+          },
+          {
+            "role": "divider",
+            "box": { "x": 0.4, "y": 1.02, "w": 4.8916, "h": 0.008 },
+            "fill": "card_line"
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.4, "y": 1.2, "w": 4.8916, "h": 3.0 },
+            "text": { "size": "body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
+            "bullet": { "char": "•", "indent_in": 0.28, "hanging_in": 0.28, "gap_after_pt": 8, "gap_between_only": true, "color": "accent" },
+            "autofit": { "min_size_pt": 14, "max_lines": 5 }
+          }
+        ]
+      }
     }
   },
   "word": {
