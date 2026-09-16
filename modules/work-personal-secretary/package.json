@@ -1,6 +1,6 @@
 {
   "name": "work-personal-secretary",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "工作秘书集成体（本体）：统一安装引导、环境检查、能力配置与致谢声明。Work Personal Secretary — integrator body that installs, configures and documents the five bundled sub-plugins.",
   "keywords": [
     "deepseek",

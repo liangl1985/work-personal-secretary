@@ -542,7 +542,8 @@ window.__ModuleLoader__.load({
       cfgFMediaArkEndpoint: '方舟端点',
       cfgDocDeps: '依赖状态',
       cfgDocDepsHint: '取自「安装与检查」页的环境探测结果（只读）',
-      cfgDocSkills: '四技能落盘',
+      cfgDocSkills: '五技能落盘',
+      cfgDocSkillMediaGen: '媒体素材',
       cfgDocSkillHint: '技能落盘状态由文档模块的自检命令给出；本页只列清单，未接入该项结果不代表缺失。',
       cfgDocDoctor: '自检请在文档模块里运行 /doc-doctor；解释器与 WPS 不会被自动安装。',
       cfgDocCheckFailed: '未能取到依赖状态',
@@ -1016,7 +1017,8 @@ window.__ModuleLoader__.load({
       cfgFMediaArkEndpoint: 'Ark endpoint',
       cfgDocDeps: 'Dependency status',
       cfgDocDepsHint: 'Taken from the environment probe on the Install & Check page (read-only)',
-      cfgDocSkills: 'Four skills on disk',
+      cfgDocSkills: 'Five skills on disk',
+      cfgDocSkillMediaGen: 'Media assets',
       cfgDocSkillHint: 'On-disk skill status comes from the document module self-check; this page only lists them, so a missing entry here does not mean a missing skill.',
       cfgDocDoctor: 'Run /doc-doctor inside the document module for a self-check; interpreters and WPS are never installed automatically.',
       cfgDocCheckFailed: 'Dependency status unavailable',
@@ -3458,6 +3460,7 @@ window.__ModuleLoader__.load({
       ['office-excel', 'cfgDocSkillExcel'],
       ['office-ppt', 'cfgDocSkillPpt'],
       ['pdf-tools', 'cfgDocSkillPdf'],
+      ['media-gen', 'cfgDocSkillMediaGen'],
     ]
     /** 文档依赖面板展示的三项（复用 /check 的 id 与既有 label 字典） */
     const CFG_DOC_DEPS = ['python', 'pythonDeps', 'wps']

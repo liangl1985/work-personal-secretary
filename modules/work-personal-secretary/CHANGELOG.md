@@ -34,6 +34,12 @@ CI「集成体本体自测」在 `scripts/settings-api-test.mjs` 停红（103 �
 - 不 `git commit` / `git push`；不改本机 profile（`~/.dsh/profiles/desktop/` 的 `package.json` 与 `node_modules` 一律不动）。
 - 换 id 的实际迁移由主人执行：卸载旧 id → 安装新 id → 确认素材目录（见根 README 与本模块 3.7 节）。
 
+## 1.1.2 — 2026-09-16（文档能力页的技能清单补上 media-gen）
+
+- 「文档能力」组的落盘清单原为**硬编码四个**（office-word / office-excel / office-ppt / pdf-tools），漏了新技能 **media-gen** → 清单与标题改为**五个**（\`CFG_DOC_SKILLS\` + 中英文案 \`五技能落盘\` / \`Five skills on disk\` + 新标签 \`媒体素材\` / \`Media assets\`）
+- 说明：该清单目前**只列名称**（自检结果由文档模块给出），本次仅补齐遗漏；「改成动态读自检结果」留作后续可选项
+- 验证：\`node --check client/index.js\` · \`smoke-load\` **336/0** · 需重启 DSH 后可见
+
 ## 1.1.1 — 2026-09-16（能力配置页：文档能力组接入生图设置）
 
 - **背景**：使用者反馈「文档能力」页看不到生图设置。该组原先只渲染自检面板，而集成体的设计意图本就是**把五个子插件的设置集中到这个分区**（见 §§client/index.js§§ 的 cfgLead）。
