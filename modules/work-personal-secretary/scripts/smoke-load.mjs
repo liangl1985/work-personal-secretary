@@ -119,14 +119,16 @@ const texts = collect(tree, [])
 const joined = texts.join(' | ')
 
 console.log('\n[5] 内容完整性（关于与致谢）')
+// 1.1.3：默认页签是「安装与检查」，关于页内容必须**显式指定页签**才看得到
+const aboutJoined = collect(reg.render({ initialTab: 'about' }), []).join(' | ')
 const expectPlugins = ['dsh-work-memory', 'dsh-doc-suite', 'dsh-experts', 'dsh-mermaid', 'workspace-tokenpet']
 for (const p of expectPlugins) {
-  ok(joined.includes(p), '列出子插件 ' + p)
+  ok(aboutJoined.includes(p), '列出子插件 ' + p)
 }
-ok(joined.includes('MIT'), '声明许可（MIT）')
-ok(joined.includes('不联网') || joined.includes('无遥测'), '声明本地/离线/无遥测')
-ok(joined.includes('未经专业复核') || joined.includes('专业复核'), '声明专家内容免责边界')
-ok(joined.includes('关于与致谢') || joined.includes('About'), '分区标题可读')
+ok(aboutJoined.includes('MIT'), '声明许可（MIT）')
+ok(aboutJoined.includes('不联网') || aboutJoined.includes('无遥测'), '声明本地/离线/无遥测')
+ok(aboutJoined.includes('未经专业复核') || aboutJoined.includes('专业复核'), '声明专家内容免责边界')
+ok(aboutJoined.includes('关于与致谢') || aboutJoined.includes('About'), '分区标题可读')
 
 console.log('\n[6] 中立性（发布件不得出现私有信息）')
 const bad = ['莉娜', '主人', '天地和兴', 'E:\\', '知识库-天地', 'lina']
@@ -389,10 +391,12 @@ function makeCtx() {
     },
   }
 }
+let webWin = null
 const webCaptured = (() => {
   let cap = null
-  const w = { __ModuleLoader__: { load(mod) { cap = mod } }, location: { origin: 'http://127.0.0.1:43120' } }
-  new Function('window', src)(w) // eslint-disable-line no-new-func
+  // 暴露这个 window 对象：Web 载体的 window.open 断言要用（[16] 段）
+  webWin = { __ModuleLoader__: { load(mod) { cap = mod } }, location: { origin: 'http://127.0.0.1:43120' } }
+  new Function('window', src)(webWin) // eslint-disable-line no-new-func
   return cap
 })()
 const webShell = makeCtx()
@@ -1102,7 +1106,7 @@ ok(gText.includes('还差 4 项才能开始使用'), 'setupNeeded:true → 顶�
 ok(gText.includes('去完成配置'), '引导条带「去完成配置」按钮')
 ok(gText.includes('先满足最低使用需求'), 'setupNeeded:true → 默认落在「核心配置」页（引导条 + 门禁卡）')
 
-// setupNeeded 为 false / 缺失 → 默认页仍是「关于与致谢」
+// setupNeeded 为 false / 缺失 → 默认页是「安装与检查」（1.1.3：打开即从环境检查起步）
 globalThis.fetch = async (url) => {
   const u = String(url)
   if (u.indexOf('/basedeck') >= 0) return jsonRes({ ok: true, workspace: 'C:/work/space', items: BD_ITEMS, summary: BD_GET.summary })
@@ -1118,7 +1122,8 @@ hookCursor = 0
 effectQueue = []
 const g2Tree = expand(reg.render({}))
 const g2Text = collect(g2Tree, []).join(' | ')
-ok(g2Text.includes('本集成体包含的插件') && g2Text.indexOf('还差') < 0 && g2Text.indexOf('首用必配项') < 0, 'setupNeeded 为 false / 缺失时默认页仍是「关于与致谢」')
+ok(g2Text.includes('查看安装引导') && g2Text.includes('环境依赖') && g2Text.indexOf('还差') < 0 && g2Text.indexOf('首用必配项') < 0,
+  'setupNeeded 为 false / 缺失时默认落在「安装与检查」页')
 
 // ── Web 载体：GET /basedeck 走根相对路径 ───────────────────────
 globalThis.fetch = async (url, opts) => {
@@ -1635,7 +1640,7 @@ ok(cfUnsetBtns.filter((b) => b.props.disabled !== true).length === 2, '只有用
 await cfSwitchTo('experts')
 ok(cfText.includes('注入形态') && !cfText.includes('快照字符上限'), '切到专家库后只渲染专家库（记忆库字段不再出现）')
 const cfUnsetExp = findByAttr(cfTree, 'data-cfg-action', 'unset')
-ok(cfUnsetExp.length === 10, 'T5 专家库渲染 5 常显 + 5 高级 = 10 项，各有「清除覆盖」（实测 ' + cfUnsetExp.length + '）')
+ok(cfUnsetExp.length === 9, 'T5 专家库渲染 4 常显 + 5 高级 = 9 项，各有「清除覆盖」（实测 ' + cfUnsetExp.length + '）')
 const cfRanges = findAll(cfTree, (x) => x.type === 'input' && x.props && x.props.type === 'range', [])
 ok(cfRanges.length === 2, 'T5 专家库只剩两个预算渲染为滑块（注入字符预算 / 能力层指针预算；实测 ' + cfRanges.length + '）')
 ok(findByAttr(cfTree, 'data-cfg-key', 'expertInjectMax').length === 0,
@@ -1647,8 +1652,8 @@ const cfSelectText = collect(cfSelects[0], []).join(' | ')
 ok(['信息安全', '财务', '人力资源', '代码编程', '金融', '通用职能'].every((x) => cfSelectText.includes(x)),
   '岗位域下拉六项带中文标签')
 ok(cfSelects[0].props.value === 'infosec', '岗位域下拉回显当前值')
-const cfIdent = findByAttr(cfTree, 'data-cfg-key', 'identityExpert').filter((x) => x.type === 'input')[0]
-ok(cfIdent && cfIdent.props.type === 'text', 'identityExpert 用输入框（非下拉）')
+// identityExpert 自 dsh-experts 0.3.0「身份退场」起移出配置页（settings.yaml 仍可配）
+ok(findByAttr(cfTree, 'data-cfg-key', 'identityExpert').length === 0, 'identityExpert 已从配置页移除（不渲染）')
 
 // 文档能力标签
 await cfSwitchTo('docs')
@@ -2016,25 +2021,22 @@ const readyBtn = findButtons(nTree).filter((b) => label(b) === '环境已就绪'
 ok(Boolean(readyBtn) && readyBtn.props.disabled === true, '依赖组 + 子插件组全正常 → 主按钮置灰（「环境已就绪」）')
 ok(nText.includes('6/6 正常') && nText.includes('5/5 已装'), '分组徽标：环境依赖 6/6 正常 · 子插件 5/5 已装')
 
-// 页内展开（不用 window.open：桌面外壳的合成 origin 交给系统浏览器打不开）
+// 随包网页：一律交浏览器打开完整文档（两种载体与拦截分支在 [16] 段详测）
+const opened13 = []
+win.open = (url) => { opened13.push(String(url)); return { opener: null } }
 const helpBtn = findButtons(nTree).filter((b) => label(b) === '使用说明')[0]
 ok(Boolean(helpBtn), '「使用说明」按钮存在且可点')
 calls.length = 0
 if (helpBtn) helpBtn.props.onClick()
-await tick(60)
+await tick(30)
 hookCursor = 0
 effectQueue = []
 nTree = expand(reg.render({ initialTab: 'install' }))
 nText = collect(nTree, []).join(' | ')
-const docCalls = calls.filter((c) => c.url.indexOf('/work-personal-secretary/help') >= 0)
-ok(docCalls.length === 1 && docCalls[0].url === 'http://dsh.internal/work-personal-secretary/help?embed=1',
-  '页内展开：GET 合成基址 /work-personal-secretary/help?embed=1（' + (docCalls[0] && docCalls[0].url) + '）')
-const htmlBox = findAll(nTree, (x) => Boolean(x.props && x.props.dangerouslySetInnerHTML), [])[0]
-ok(Boolean(htmlBox) && String(htmlBox.props.dangerouslySetInnerHTML.__html) === GUIDE_FRAGMENT,
-  'embed 片段整段原样注入（不包裹 html/head/body、不改写）')
-ok(Boolean(htmlBox) && htmlBox.props['data-embed-doc'] === 'help' && !htmlBox.props.style,
-  '注入容器无自有样式，只带 data-embed-doc 标记')
-ok(nText.includes('收起'), '展开区带「收起」按钮')
+ok(opened13.length === 1 && opened13[0] === 'http://dsh.internal/work-personal-secretary/help',
+  '打开随包网页走 window.open 的完整文档地址（实测 ' + String(opened13[0]) + '）')
+ok(calls.length === 0, '打开网页不再发本机请求（不再取 embed 片段）')
+ok(String(src).indexOf('dangerouslySetInnerHTML') < 0, '不再往页面注入 HTML（页内展开已删）')
 
 // 门禁：未就绪 → 门禁卡 + 整页灰化（pointer-events:none）
 globalThis.fetch = async (url, opts) => {
@@ -2229,6 +2231,10 @@ globalThis.fetch = async (url, opts) => {
     if (genMode === 503) {
       return { ok: false, status: 503, json: async () => ({ ok: false, code: 'no-model-service', error: '当前 profile 未提供模型服务，请改为手填岗位内容' }) }
     }
+    // 'long'：服务端给了超长正文（模拟口径变化 / 手改接口），用于验证前端二次截断
+    if (genMode === 'long') {
+      return jsonRes({ ok: true, content: new Array(500).join('字'), channel: 'llm', provider: 'p', model: 'm', maxChars: 200 })
+    }
     return jsonRes({ ok: true, content: 'me-generated-job', channel: 'llm', provider: 'p', model: 'm', maxChars: 200 })
   }
   return t4Base(url, opts)
@@ -2284,6 +2290,38 @@ t4Text = collect(t4Tree, []).join(' | ')
 ok(t4Text.indexOf('保存岗位') < 0, '保存后对话框关闭')
 ok(t4Text.indexOf('工控安全售前（自定义）') >= 0, '新建岗位进入下拉并选中')
 ok(findSave().props.disabled !== true, '自定义岗位选定后保存按钮仍可点')
+// 字数上限（使用者 2026-09-16 裁定：名称 ≤ 10 字、内容 ≤ 200 字）
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+findAll(t4Tree, (x) => x.type === 'select', [])[0].props.onChange({ target: { value: '__new__' } })
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+const mName = findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props['data-modal-field'] === 'name', [])[0]
+const mArea = findAll(t4Tree, (x) => x.type === 'textarea' && x.props && x.props['data-modal-field'] === 'content', [])[0]
+ok(Boolean(mName) && String(mName.props.maxLength) === '10', '岗位名称输入框 maxLength=10')
+ok(Boolean(mArea) && String(mArea.props.maxLength) === '200', '岗位内容 textarea maxLength=200')
+const mText = collect(t4Tree, []).join(' | ')
+ok(mText.indexOf('0/10 字') >= 0, '名称字数提示存在（0/10 字）')
+ok(mText.indexOf('0/200 字') >= 0, '内容字数提示存在（0/200 字）')
+ok(mText.indexOf('200 字以内') >= 0, '内容提示写明「200 字以内」')
+mName.props.onChange({ target: { value: '一二三四五六七八九十十一' } })
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+const mName2 = findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props['data-modal-field'] === 'name', [])[0]
+ok(String(mName2.props.value).length === 10, '名称超过 10 字被截断（实测 ' + String(mName2.props.value).length + ' 字）')
+genMode = 'long'
+findButtons(t4Tree).filter((b) => label(b) === '自动生成')[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+const mArea2 = findAll(t4Tree, (x) => x.type === 'textarea' && x.props && x.props['data-modal-field'] === 'content', [])[0]
+ok(String(mArea2.props.value).length === 200, '生成结果超长被前端二次截断到 200 字（实测 ' + String(mArea2.props.value).length + ' 字）')
+ok(collect(t4Tree, []).join(' | ').indexOf('200/200 字') >= 0, '截断后字数提示同步为 200/200 字')
+
 
 
 // ══════════════════════════════════════════════════════════════════
@@ -2340,17 +2378,17 @@ const pickKeys = findByAttr(cfTree, 'data-cfg-action', 'pick-dir').map((b) => b.
 ok(['memoryDir', 'obsidianSyncDir', 'backupDir'].every((k) => pickKeys.indexOf(k) >= 0),
   '路径类键各有目录入口（实测 ' + String(pickKeys) + '）')
 
-// ── 专家库：常显 5 + 高级 5 + 未放出 9 ───────────────────────────
+// ── 专家库：常显 4 + 高级 5 + 未放出 10（identityExpert 按使用者裁定移出）──
 await cfSwitchTo('experts')
-const EXP_PRIMARY = ['expertsEnabled', 'defaultDomain', 'identityExpert', 'expertInjectDetail', 'expertShowBanner']
+const EXP_PRIMARY = ['expertsEnabled', 'defaultDomain', 'expertInjectDetail', 'expertShowBanner']
 const EXP_ADV = ['expertInjectBudgetChars', 'skillBudgetChars', 'expertCatalogEnabled', 'disciplineEnabled', 'skillInjectEnabled']
-const EXP_HIDDEN = ['enabledDomains', 'enabledExperts', 'expertInjectMax', 'disciplineMemoryDir', 'expertSetupDone',
-  'expertFullHitMax', 'expertSecondThreshold', 'expertGeneralMax', 'expertGeneralMinEvidence']
-ok(EXP_PRIMARY.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '专家库常显 5 键全部渲染')
+const EXP_HIDDEN = ['identityExpert', 'enabledDomains', 'enabledExperts', 'expertInjectMax', 'disciplineMemoryDir',
+  'expertSetupDone', 'expertFullHitMax', 'expertSecondThreshold', 'expertGeneralMax', 'expertGeneralMinEvidence']
+ok(EXP_PRIMARY.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '专家库常显 4 键全部渲染')
 ok(EXP_ADV.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '专家库高级 5 键全部渲染（折叠档内）')
 ok(cfText.indexOf('高级设置（5 项）') >= 0, '专家库高级档标题计数 5 项')
 const expHiddenHit = EXP_HIDDEN.filter((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0)
-ok(expHiddenHit.length === 0, '专家库 9 个未放出键均不渲染（命中：' + String(expHiddenHit) + '）')
+ok(expHiddenHit.length === 0, '专家库 10 个未放出键均不渲染（含 identityExpert；命中：' + String(expHiddenHit) + '）')
 const expSelects = findSelects(cfTree)
 ok(expSelects.length === 2, '专家库两个下拉（工作岗位域 / 注入形态）')
 const expDomText = collect(expSelects[0] || null, []).join(' | ')
@@ -2410,19 +2448,20 @@ ok(r1Text.indexOf('5/6 正常') >= 0, 'R-1：分组徽标仍如实显示 5/6 正
 ok(r1Text.indexOf('可选') >= 0, 'R-1：Obsidian 未就绪显示「可选」而非「缺失 / 警告」')
 
 // ══════════════════════════════════════════════════════════════════
-// [16] embed 片段：两个入口都带 ?embed=1 · 整段原样注入 · 重复展开幂等
-//      + 直接调宿主 lib/md.js::renderFragment 复核片段形状（只读引用，不改 lib）
+// [16] 随包网页：一律交浏览器打开**完整文档**（不再页内注入 embed 片段）
+//      两种载体的 URL 形态 + 被拦截时的可读提示 + 死代码清理的源码护栏
 // ══════════════════════════════════════════════════════════════════
-console.log('\n[16] embed 片段（guide / help）')
+console.log('\n[16] 随包网页（window.open 完整文档）')
 
-const EMBED_GUIDE = '<style>.wps-doc h1{color:#111}</style><article class="wps-doc" aria-label="安装引导"><h1>工作秘书 · 安装引导</h1><p>本页由插件自带</p></article>'
-const EMBED_HELP = '<style>.wps-doc h1{color:#222}</style><article class="wps-doc" aria-label="使用说明"><h1>工作秘书 · 使用说明</h1></article>'
-const embedUrls = []
+const opened16 = []
+let openMode = 'ok'
+win.open = (url, target) => {
+  opened16.push({ url: String(url), target: String(target) })
+  return openMode === 'ok' ? { opener: 'x' } : null
+}
 globalThis.fetch = async (url, opts) => {
   const u = String(url)
   calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
-  if (u.indexOf('/guide') >= 0) { embedUrls.push(u); return htmlRes(EMBED_GUIDE) }
-  if (u.indexOf('/help') >= 0) { embedUrls.push(u); return htmlRes(EMBED_HELP) }
   if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)
   if (u.indexOf('/plugins') >= 0) return jsonRes(PLUGINS_PAYLOAD)
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
@@ -2438,51 +2477,88 @@ effectQueue = []
 e16Tree = expand(reg.render({ initialTab: 'install' }))
 const e16Guide = findButtons(e16Tree).filter((b) => label(b).indexOf('查看安装引导') >= 0)[0]
 ok(Boolean(e16Guide) && e16Guide.props.disabled !== true, '有硬项缺时「查看安装引导」可点（' + (e16Guide ? label(e16Guide) : '未找到') + '）')
+calls.length = 0
 if (e16Guide) e16Guide.props.onClick()
-await tick(60)
+await tick(30)
 hookCursor = 0
 effectQueue = []
 e16Tree = expand(reg.render({ initialTab: 'install' }))
-ok(String(embedUrls[0]) === 'http://dsh.internal/work-personal-secretary/guide?embed=1',
-  '安装引导请求带 embed=1（实测 ' + String(embedUrls[0]) + '）')
-let e16Hosts = findAll(e16Tree, (x) => Boolean(x.props && x.props['data-embed-doc']), [])
-ok(e16Hosts.length === 1 && String(e16Hosts[0].props.dangerouslySetInnerHTML.__html) === EMBED_GUIDE,
-  'guide 片段整段原样注入到单一容器')
+let e16Text = collect(e16Tree, []).join(' | ')
+ok(opened16.length === 1 && opened16[0].url === 'http://dsh.internal/work-personal-secretary/guide',
+  '桌面外壳：打开合成 origin 的完整文档地址（实测 ' + (opened16[0] && opened16[0].url) + '）')
+ok(opened16.length === 1 && opened16[0].url.indexOf('embed=1') < 0, '打开地址不带 embed=1（看完整文档）')
+ok(opened16.length === 1 && opened16[0].target === '_blank', '以新标签 / 新窗口打开（target=_blank）')
+ok(calls.length === 0, '打开网页不再发任何本机请求（embed 片段通道已下线）')
+ok(e16Text.indexOf('浏览器拦截了新窗口') < 0, '打开成功时不显示拦截提示')
+
 const e16Help = findButtons(e16Tree).filter((b) => label(b) === '使用说明')[0]
 if (e16Help) e16Help.props.onClick()
-await tick(60)
+await tick(30)
 hookCursor = 0
 effectQueue = []
 e16Tree = expand(reg.render({ initialTab: 'install' }))
-e16Hosts = findAll(e16Tree, (x) => Boolean(x.props && x.props['data-embed-doc']), [])
-ok(e16Hosts.length === 1, '重复展开仍是同一个容器（实测 ' + e16Hosts.length + ' 个，不叠加）')
-ok(e16Hosts.length === 1 && String(e16Hosts[0].props['data-embed-doc']) === 'help'
-  && String(e16Hosts[0].props.dangerouslySetInnerHTML.__html) === EMBED_HELP,
-  '切换到「使用说明」后容器内容被覆盖为 help 片段')
-ok(String(embedUrls[1]) === 'http://dsh.internal/work-personal-secretary/help?embed=1',
-  '使用说明请求带 embed=1（实测 ' + String(embedUrls[1]) + '）')
-const e16Injected = e16Hosts.length ? String(e16Hosts[0].props.dangerouslySetInnerHTML.__html) : ''
-ok(e16Injected.indexOf('<html') < 0 && e16Injected.indexOf('<body') < 0 && e16Injected.indexOf('<!DOCTYPE') < 0,
-  '注入内容不含 html / body / DOCTYPE（客户端不自行包裹文档骨架）')
+ok(opened16.length === 2 && opened16[1].url === 'http://dsh.internal/work-personal-secretary/help',
+  '「使用说明」同样打开完整文档（实测 ' + (opened16[1] && opened16[1].url) + '）')
 
-let mdMod = null
-let mdErr = ''
-try {
-  mdMod = await import(pathToFileURL(join(HERE, '..', 'lib', 'md.js')).href)
-} catch (err) { mdErr = String((err && err.message) || err) }
-ok(Boolean(mdMod && typeof mdMod.renderFragment === 'function'),
-  '可加载宿主 lib/md.js 的 renderFragment（' + (mdErr || 'ok') + '）')
-if (mdMod && typeof mdMod.renderFragment === 'function') {
-  const real = String(mdMod.renderFragment('安装引导', '<h1>标题</h1>'))
-  ok(real.indexOf('<html') < 0 && real.indexOf('<head') < 0 && real.indexOf('<body') < 0 && real.indexOf('<!DOCTYPE') < 0,
-    '真实 renderFragment 输出不含 html / head / body / DOCTYPE')
-  ok(real.indexOf('<style>') === 0 && real.indexOf('class="wps-doc"') >= 0,
-    '真实片段形状：<style> 起头 + <article class="wps-doc">')
-  const styleBlock = real.slice(0, real.indexOf('</style>'))
-  ok(styleBlock.indexOf('html{') < 0 && styleBlock.indexOf('body{') < 0 && styleBlock.indexOf('*{') < 0,
-    '片段样式块无全局选择器（无 html{ / body{ / *{）')
-  ok(styleBlock.indexOf('.wps-doc') >= 0, '片段样式以 .wps-doc 作用域')
-}
+// 被拦截（window.open 返回 null）→ 只给可手动复制的地址，**不降级**
+openMode = 'blocked'
+if (e16Help) e16Help.props.onClick()
+await tick(30)
+hookCursor = 0
+effectQueue = []
+e16Tree = expand(reg.render({ initialTab: 'install' }))
+e16Text = collect(e16Tree, []).join(' | ')
+ok(e16Text.indexOf('浏览器拦截了新窗口') >= 0, 'window.open 返回 null → 显示可读拦截提示（不降级为页内展开）')
+ok(e16Text.indexOf('http://dsh.internal/work-personal-secretary/help') >= 0, '提示里含可手动复制的完整地址')
+ok(findAll(e16Tree, (x) => Boolean(x.props && x.props.dangerouslySetInnerHTML), []).length === 0,
+  '页面不再有任何 HTML 注入容器')
+
+// Web 载体：同一个 openDoc，用根相对路径（真 origin 下同源）
+opened16.length = 0
+openMode = 'ok'
+webWin.open = (url, target) => { opened16.push({ url: String(url), target: String(target) }); return { opener: 'x' } }
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let e16Web = expand(webReg.render({ initialTab: 'install' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(40)
+hookCursor = 0
+effectQueue = []
+e16Web = expand(webReg.render({ initialTab: 'install' }))
+const e16WebHelp = findButtons(e16Web).filter((b) => label(b) === '使用说明')[0]
+if (e16WebHelp) e16WebHelp.props.onClick()
+ok(opened16.length === 1 && opened16[0].url === '/work-personal-secretary/help',
+  'Web 载体：用根相对路径打开（实测 ' + (opened16[0] && opened16[0].url) + '）')
+
+// 死代码清理护栏（源码级）：embed 片段通道与页内注入必须彻底不在
+ok(String(src).indexOf('PAGE_EMBED_QUERY') < 0 && String(src).indexOf("'?embed=1'") < 0,
+  '客户端源码不再请求 embed 片段（常量与请求串都已删除；注释里的接口说明不算）')
+ok(String(src).indexOf('dangerouslySetInnerHTML') < 0, '客户端源码不再有 dangerouslySetInnerHTML')
+ok(String(src).indexOf('data-embed-doc') < 0, '客户端源码不再有 data-embed-doc')
+ok(String(src).indexOf('requestText') < 0, 'requestText（片段文本通道）已删除')
+
+
+// 第 3 项：字段说明按设计定稿 §3.2 口径；第 2 项：「浏览…」按钮不换行
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let e16Core = expand(reg.render({ initialTab: 'core' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(40)
+hookCursor = 0
+effectQueue = []
+e16Core = expand(reg.render({ initialTab: 'core' }))
+const e16CoreText = collect(e16Core, []).join(' | ')
+ok(e16CoreText.indexOf('必填。推荐新建一个空文件夹专用，或放进长期使用的主工作区') >= 0,
+  '记忆库目录说明改为定稿 §3.2 口径（选目录注意事项）')
+ok(e16CoreText.indexOf('脚本在此建立 MEMORY.md / PROJECTS / DAILY / ARCHIVE 与首条记忆') < 0,
+  '旧的「会建哪些文件」说明已移除')
+ok(e16CoreText.indexOf('脚本在此建立知识库结构，并把记忆镜像区 00_全局记忆 与记忆库关联') >= 0,
+  'Obsidian 目录说明保持定稿口径（未改）')
+const e16Browse = findButtons(e16Core).filter((b) => label(b) === '浏览…')[0]
+ok(Boolean(e16Browse) && e16Browse.props.style && e16Browse.props.style.whiteSpace === 'nowrap',
+  '「浏览…」按钮不换行（whiteSpace:nowrap；真机反馈曾被挤成竖排）')
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)

@@ -116,12 +116,13 @@ window.__ModuleLoader__.load({
      */
     const PAGE_PATHS = { guide: '/work-personal-secretary/guide', help: '/work-personal-secretary/help' }
     /**
-     * 页内展开取的是**片段**（embed=1）：响应体为 <style>…</style> + <article class="wps-doc" …>，
-     * 不含 <html>/<head>/<body>，样式全部作用域在 .wps-doc（宿主 lib/md.js 的 renderFragment）。
-     * 客户端把片段**整段原样注入**，不自行包裹文档骨架、也不取完整文档
-     *（否则会把 html/head/body 塞进设置页 DOM）。桌面外壳与 Web 载体走同一条路径。
+     * 随包网页一律**交给浏览器打开完整文档**（使用者 2026-09-16 裁定：不做页内降级）：
+     *   · Web 载体：根相对路径即可（真 origin，同源）；
+     *   · 桌面外壳：用合成 origin HOST_BASE 拼绝对地址 —— 外壳把 http/https 链接交给系统浏览器
+     *     （Electron 的 shell.openExternal）。
+     * 不带 ?embed=1：那是宿主为「页内注入」保留的片段形态，接口留着，本客户端不再调用。
      */
-    const PAGE_EMBED_QUERY = '?embed=1'
+    const PAGE_OPEN_TARGET = '_blank'
     /** 状态 → 文案键（ok | warn | missing | skip） */
     const STATUS_KEYS = { ok: 'statusOk', warn: 'statusWarn', missing: 'statusMissing', skip: 'statusSkip' }
     /** 批量执行状态 → 文案键 / 徽标样式 */
@@ -245,13 +246,7 @@ window.__ModuleLoader__.load({
       guideOpen: '查看安装引导（{n} 项待处理）',
       guideReady: '环境已就绪',
       helpOpen: '使用说明',
-      docTitleGuide: '安装引导',
-      docTitleHelp: '使用说明',
-      docLoading: '读取中…',
-      docLoadFailed: '说明页读取失败',
-      docLoadFailedHint: '宿主尚未提供该页面（路由未注册或尚未启用）。页面随插件分发，稍后可重试。',
-      docClose: '收起',
-      docRetry: '重试',
+      docBlocked: '浏览器拦截了新窗口，请手动访问：',
 
       // ── 核心配置（1.1.3：门禁；目录与岗位字段由后续任务填充） ──────
       gateTitle: '先满足最低使用需求',
@@ -269,7 +264,7 @@ window.__ModuleLoader__.load({
       coreDirsTitle: '目录与岗位',
       coreDirsSub: '三项都填写后才能保存；两个目录都要填，保存后按下面的执行链一次做完。',
       coreFieldMemoryDir: '记忆库目录',
-      coreFieldMemoryDirHint: '脚本在此建立 MEMORY.md / PROJECTS / DAILY / ARCHIVE 与首条记忆',
+      coreFieldMemoryDirHint: '必填。推荐新建一个空文件夹专用，或放进长期使用的主工作区；不建议分散在不同盘符 —— 跨文件夹使用时可能受权限范围限制，出现写入失败或同步中断。',
       coreFieldObsidianDir: 'Obsidian 知识库目录',
       coreFieldObsidianDirHint: '脚本在此建立知识库结构，并把记忆镜像区 00_全局记忆 与记忆库关联',
       coreFieldDomain: '工作岗位',
@@ -311,9 +306,9 @@ window.__ModuleLoader__.load({
       importLater: '清单与勾选（条目归类）在后续版本提供；本轮先落定入口与纪律。',
       modalTitle: '新建岗位',
       modalName: '岗位名称',
-      modalNameHint: '会出现在岗位下拉里，建议用中文简称',
+      modalNameHint: '会出现在岗位下拉里，建议用中文简称；10 字以内',
       modalContent: '岗位内容',
-      modalContentHint: '点「自动生成」时，会把岗位名称与你已填的内容交给当前会话的模型；不点就不发送',
+      modalContentHint: '200 字以内。点「自动生成」时，会把岗位名称与你已填的内容交给当前会话的模型；不点就不发送',
       modalGen: '自动生成',
       modalGenRunning: '生成中…',
       modalGenDone: '已生成，可直接编辑或重试',
@@ -324,6 +319,8 @@ window.__ModuleLoader__.load({
       modalSave: '保存岗位',
       modalNameRequired: '请先填写岗位名称',
       modalOver: '内容超过 {n} 字，请精简后再保存',
+      modalNameOver: '岗位名称不超过 {n} 字，请精简后再保存',
+      modalCount: '{n}/{max} 字',
       coreDomainMissing: '请选择工作岗位',
       checking: '检测中…',
       recheck: '重新检测',
@@ -788,13 +785,7 @@ window.__ModuleLoader__.load({
       guideOpen: 'Open install guide ({n} item(s) pending)',
       guideReady: 'Environment ready',
       helpOpen: 'User guide',
-      docTitleGuide: 'Install guide',
-      docTitleHelp: 'User guide',
-      docLoading: 'Loading…',
-      docLoadFailed: 'The page failed to load',
-      docLoadFailedHint: 'The host does not serve this page yet (route not registered or not enabled). The page ships with the plugin; try again later.',
-      docClose: 'Collapse',
-      docRetry: 'Retry',
+      docBlocked: 'The browser blocked the new window — open this address manually: ',
 
       // ── Core setup (1.1.3: gate; fields filled by a later task) ───
       gateTitle: 'Meet the minimum requirements first',
@@ -812,7 +803,7 @@ window.__ModuleLoader__.load({
       coreDirsTitle: 'Directories & job',
       coreDirsSub: 'All three fields are required; saving runs the whole chain below in one go.',
       coreFieldMemoryDir: 'Memory directory',
-      coreFieldMemoryDirHint: 'MEMORY.md / PROJECTS / DAILY / ARCHIVE and the first entry are created here',
+      coreFieldMemoryDirHint: 'Required. Create an empty folder dedicated to the Work Secretary, or put it inside the workspace you use long-term; avoid spreading the two directories across different drives — cross-folder use can hit permission-scope limits, causing failed writes or interrupted sync.',
       coreFieldObsidianDir: 'Obsidian vault directory',
       coreFieldObsidianDirHint: 'The vault structure is created here, and the 00_全局记忆 mirror area is linked to the memory store',
       coreFieldDomain: 'Job',
@@ -854,9 +845,9 @@ window.__ModuleLoader__.load({
       importLater: 'The list and the per-entry selection (how items are categorized) come in a later version; this version settles the entry point and the rules.',
       modalTitle: 'New job',
       modalName: 'Job name',
-      modalNameHint: 'Appears in the job list; a short label works best',
+      modalNameHint: 'Appears in the job list; a short label works best. Up to 10 characters.',
       modalContent: 'Job description',
-      modalContentHint: 'Pressing "Generate" sends the job name and what you have filled in to the current session model; nothing is sent unless you press it',
+      modalContentHint: 'Up to 200 characters. Pressing "Generate" sends the job name and what you have filled in to the current session model; nothing is sent unless you press it',
       modalGen: 'Generate',
       modalGenRunning: 'Generating…',
       modalGenDone: 'Generated — edit it or try again',
@@ -867,6 +858,8 @@ window.__ModuleLoader__.load({
       modalSave: 'Save job',
       modalNameRequired: 'Enter a job name first',
       modalOver: 'Longer than {n} characters — please shorten it before saving',
+      modalNameOver: 'The job name must be at most {n} characters — please shorten it',
+      modalCount: '{n}/{max}',
       coreDomainMissing: 'Choose a job',
       checking: 'Checking…',
       recheck: 'Re-check',
@@ -1360,7 +1353,6 @@ window.__ModuleLoader__.load({
         textDecoration: 'underline', cursor: 'pointer', font: 'inherit', fontSize: '12px', padding: 0,
       },
       groupCount: { marginLeft: 'auto' },
-      docCard: { marginTop: '12px' },
       gatedBody: { opacity: 0.45, pointerEvents: 'none' },
       gateCard: { borderColor: '#f0d9b5', background: '#fffdf7' },
       coreFieldRow: { padding: '8px 0', borderTop: '1px solid #f6f7f9', marginBottom: '2px' },
@@ -1407,8 +1399,10 @@ window.__ModuleLoader__.load({
       btn: {
         appearance: 'none', border: '1px solid #dfe1e5', background: '#fff', borderRadius: '8px',
         padding: '5px 11px', fontSize: '12.5px', fontFamily: 'inherit', cursor: 'pointer',
-        color: '#1f2328', lineHeight: 1.4,
+        color: '#1f2328', lineHeight: 1.4, whiteSpace: 'nowrap',
       },
+      // 「浏览…」这类窄按钮：flex 行里不压缩，保证中文单行（1.1.3 真机反馈：曾被挤成竖排）
+      btnPick: { whiteSpace: 'nowrap', flexShrink: 0, minWidth: '56px' },
       btnPrimary: { background: '#1f2328', borderColor: '#1f2328', color: '#fff', fontWeight: 600 },
       btnOk: { borderColor: '#16794a', color: '#16794a' },
       btnDisabled: { opacity: 0.55, cursor: 'default' },
@@ -1975,42 +1969,6 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 取**随包网页**的 HTML 正文（不走 API 前缀）：GET /work-personal-secretary/guide|help。
-     * 宿主返回 text/html 而非 JSON，所以这里单独一条文本通道（基址分档与 requestJson 一致）。
-     * 之所以是「页内展开」而不是 window.open：桌面外壳的宿主地址是合成 origin
-     * http://dsh.internal，只在外壳内部有效，交给系统浏览器（Electron 对 http/https
-     * 链接走 shell.openExternal）只会打开一个解析不了的页面（设计定稿 §12 决议 12）。
-     */
-    async function requestText(urlPath, timeoutMs) {
-      const rel = String(urlPath)
-      const abs = new URL(rel, HOST_BASE).toString()
-      const attempts = HOST_FALLBACK ? [abs] : [rel, abs]
-      let lastErr = null
-      for (const url of attempts) {
-        let timer = null
-        let ctl = null
-        try {
-          const opts = { headers: { accept: 'text/html' } }
-          if (typeof AbortController === 'function') {
-            ctl = new AbortController()
-            opts.signal = ctl.signal
-            if (timeoutMs) timer = setTimeout(() => { try { ctl.abort() } catch (e) { /* 忽略：仅用于取消 */ } }, timeoutMs)
-          }
-          const res = await fetch(url, opts)
-          if (!res || res.ok === false) throw new Error('HTTP ' + String(res && res.status))
-          const text = await res.text()
-          if (!text || !String(text).trim()) throw new Error('空响应')
-          return String(text)
-        } catch (err) {
-          lastErr = String((err && err.message) || err) + ' @' + url
-        } finally {
-          if (timer) clearTimeout(timer)
-        }
-      }
-      throw new Error(lastErr || 'request failed')
-    }
-
-    /**
      * 需要**读响应体**的写请求（1.1.3 T4 执行链）：基址分档与 postJson 相同，但不把
      * 4xx / 5xx 当传输异常 —— 宿主的 400 / 403 / 503 都带可读中文（error / message），
      * 必须原样回显（例如 503 = profile 未提供模型服务）。返回 { ok, status, body }。
@@ -2211,8 +2169,8 @@ window.__ModuleLoader__.load({
         picked: {}, fixingId: '', batch: null, copyState: null,
         // 1.1.3：子插件分组（GET /plugins）；失败时降级用 /check 的 subPlugins 探针兜底
         plugPhase: 'loading', plugItems: [], plugError: '',
-        // 1.1.3：页内展开的随包网页（null = 未展开）
-        doc: null,
+        // window.open 被拦截时的提示（{ kind, url }；成功打开则为 null）
+        openHint: null,
       })
       const st = state[0]
       const setSt = state[1]
@@ -2256,26 +2214,20 @@ window.__ModuleLoader__.load({
       }
 
       /**
-       * 页内展开随包网页（guide / help）。**不用 window.open**：桌面外壳的宿主地址是合成
-       * origin http://dsh.internal，交给系统浏览器打不开（设计定稿 §12 决议 12）。
-       * 宿主返回 text/html，取回后注入容器内渲染（发布件自己的页面，非外部输入）。
+       * 打开随包网页（guide / help）：**一律交给浏览器**打开完整文档（新标签/新窗口）。
+       * 不做页内降级；window.open 被拦截时只给一行**可手动复制的完整地址**。
+       * 注意：**不要**给 window.open 传 'noopener' feature —— 那会让它固定返回 null，
+       * 把「打开成功」误判成「被拦截」；这里用返回的窗口句柄清 opener 达到同样的隔离。
        */
-      async function openDoc(kind) {
-        setSt((prev) => Object.assign({}, prev, { doc: { kind: kind, phase: 'loading', html: '', error: '' } }))
-        try {
-          const html = await requestText(PAGE_PATHS[kind] + PAGE_EMBED_QUERY, 20000)
-          setSt((prev) => (prev.doc && prev.doc.kind === kind)
-            ? Object.assign({}, prev, { doc: { kind: kind, phase: 'ready', html: html, error: '' } })
-            : prev)
-        } catch (err) {
-          const msg = String((err && err.message) || err)
-          setSt((prev) => (prev.doc && prev.doc.kind === kind)
-            ? Object.assign({}, prev, { doc: { kind: kind, phase: 'error', html: '', error: msg } })
-            : prev)
-        }
-      }
-      function closeDoc() {
-        setSt((prev) => Object.assign({}, prev, { doc: null }))
+      function openDoc(kind) {
+        const path = PAGE_PATHS[kind]
+        if (!path) return
+        // Web 载体用根相对路径；桌面外壳用合成 origin 的绝对地址（两种载体行为一致）
+        const url = HOST_FALLBACK ? new URL(path, HOST_BASE).toString() : path
+        let win = null
+        try { win = window.open(url, PAGE_OPEN_TARGET) } catch (err) { win = null }
+        if (win) { try { win.opener = null } catch (err) { /* 跨源时可能被拒：忽略 */ } }
+        setSt((prev) => Object.assign({}, prev, { openHint: win ? null : { kind: kind, url: url } }))
       }
 
       function setBatchState(id, value) {
@@ -2511,33 +2463,10 @@ window.__ModuleLoader__.load({
           }, loading ? t('checking') : t('recheck')),
           ' · ' + t('readOnlyNote'),
         ]),
-        // ③ 页内展开的随包网页（guide / help）
-        st.doc ? h('div', { key: 'doc', style: S.docCard }, [
-          h('div', { key: 'head', style: S.cardHead }, [
-            h('h3', { key: 'title', style: S.cardTitle }, [
-              st.doc.kind === 'guide' ? t('docTitleGuide') : t('docTitleHelp'),
-              st.doc.phase === 'loading' ? badge(t('docLoading'), S.badgeWarn) : null,
-            ]),
-            h('div', { key: 'tools', style: S.toolbar }, [
-              h('button', { key: 'close', type: 'button', style: S.btn, onClick: closeDoc }, t('docClose')),
-            ]),
-          ]),
-          h('div', { key: 'body', style: S.cardBody }, [
-            st.doc.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
-              h('div', { key: 't', style: S.errorTitle }, t('docLoadFailed')),
-              h('div', { key: 'm', style: S.errorMsg }, st.doc.error),
-              h('div', { key: 'h', style: S.errorHint }, t('docLoadFailedHint')),
-              h('button', {
-                key: 'b', type: 'button',
-                style: Object.assign({}, S.btn, S.btnPrimary),
-                onClick: () => openDoc(st.doc.kind),
-              }, t('docRetry')),
-            ]) : (st.doc.phase === 'ready'
-              // 固定 key + 单一 state 字段 → 重复展开或切换 guide↔help 都复用同一容器（幂等，不叠加）；
-              // 容器本身不带样式（片段自带 .wps-doc 作用域样式），只挂 data 属性便于核对
-              ? h('div', { key: 'html', 'data-embed-doc': st.doc.kind, dangerouslySetInnerHTML: { __html: st.doc.html } })
-              : h('div', { key: 'load', style: S.note }, t('docLoading'))),
-          ]),
+        // ③ window.open 被拦截时的可读提示（不是降级：地址可手动复制后自行访问）
+        st.openHint ? h('div', { key: 'openhint', style: S.warnLine }, [
+          h('span', { key: 'm' }, t('docBlocked')),
+          h('code', { key: 'u', style: S.fixCmd }, String(st.openHint.url)),
         ]) : null,
         // ④ 环境依赖（6 项，只读）
         h('div', { key: 'deps', style: S.card }, [
@@ -2669,8 +2598,33 @@ window.__ModuleLoader__.load({
     ]
     /** 岗位下拉里「新建岗位…」的哨兵值（不是真实岗位 id） */
     const NEW_DOMAIN_VALUE = '__new__'
+    /**
+     * 新建岗位的字数上限（使用者 2026-09-16 裁定）：名称 ≤ 10 字，内容 ≤ 200 字。
+     * 前端三层保证：输入框 maxLength → 变更时截断 → 保存前校验。
+     */
+    const DOMAIN_NAME_MAX = 10
+    const DOMAIN_CONTENT_MAX = 200
     /** 知识库里的记忆镜像区目录名（与宿主 basedeck 的 VAULT_MIRROR_DIR_NAME 一致） */
     const VAULT_MIRROR_NAME = '00_全局记忆'
+
+    /** 「核心配置」页的 state 默认骨架（形状兜底用） */
+    const CORE_STATE_DEFAULT = {
+      phase: 'loading', items: [], error: '',
+      domains: { phase: 'loading', items: [], error: '', maxChars: 200 },
+      memoryDir: '', obsidianDir: '', domainId: '', custom: [],
+      modal: null, run: null, imported: '', pickError: '', openHint: null,
+    }
+    /**
+     * 防御性归一：state 形状异常时（hook 替身槽位错位、热更中途等）退回默认骨架，
+     * 保证读取与 setState 更新都不抛、页面不白屏。真机由 React 保证形状，这里是兜底。
+     */
+    function coreStateSafe(prev) {
+      const base = Object.assign({}, CORE_STATE_DEFAULT, (prev && typeof prev === 'object') ? prev : {})
+      if (!base.domains || typeof base.domains !== 'object') base.domains = CORE_STATE_DEFAULT.domains
+      if (!Array.isArray(base.items)) base.items = []
+      if (!Array.isArray(base.custom)) base.custom = []
+      return base
+    }
 
     /**
      * 「核心配置」页（1.1.3 T4：门禁 + 目录与岗位 + 保存即执行链 + 导入引导卡）。
@@ -2680,18 +2634,15 @@ window.__ModuleLoader__.load({
      */
     function CorePage(props) {
       const t = props.t
-      const state = useState({
-        phase: 'loading', items: [], error: '',
-        domains: { phase: 'loading', items: [], error: '', maxChars: 200 },
-        memoryDir: '', obsidianDir: '', domainId: '',
-        custom: [],
-        modal: null,
-        run: null,
-        imported: '',
-        pickError: '',
+      const state = useState(Object.assign({}, CORE_STATE_DEFAULT))
+      const st = coreStateSafe(state[0])
+      const setRaw = state[1]
+      // 所有更新都经 coreStateSafe 归一：prev 形状不对也能安全合并
+      const setSt = (updater) => setRaw((prev) => {
+        const base = coreStateSafe(prev)
+        const next = (typeof updater === 'function') ? updater(base) : Object.assign({}, base, updater)
+        return coreStateSafe(next)
       })
-      const st = state[0]
-      const setSt = state[1]
 
       async function detect() {
         setSt((prev) => Object.assign({}, prev, { phase: 'loading', error: '' }))
@@ -2757,7 +2708,7 @@ window.__ModuleLoader__.load({
       }
 
       // 岗位选项：预置取自 GET /domain/list（不在前端写死第二份正文）+ 本页新建的自定义岗位
-      const domainOptions = (st.domains.items || [])
+      const domainOptions = (Array.isArray(st.domains.items) ? st.domains.items : [])
         .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
         .filter((d) => d.id)
         .concat(st.custom)
@@ -2805,7 +2756,8 @@ window.__ModuleLoader__.load({
             setModal({ phase: 'idle', message: '', error: t('modalGenFailed') + '：' + String(body.error || body.message || ('HTTP ' + res.status)) })
             return
           }
-          setModal({ phase: 'idle', content: typeof body.content === 'string' ? body.content : '', message: t('modalGenDone'), error: '' })
+          // 二次兜底：服务端已按字数截断，这里再截一次（改用者手改接口 / 口径变化时不溢出）
+          setModal({ phase: 'idle', content: String(body.content || '').slice(0, DOMAIN_CONTENT_MAX), message: t('modalGenDone'), error: '' })
         } catch (err) {
           setModal({ phase: 'idle', message: '', error: t('modalGenFailed') + '：' + String((err && err.message) || err) })
         }
@@ -2815,8 +2767,8 @@ window.__ModuleLoader__.load({
         const name = String(st.modal.name || '').trim()
         const content = String(st.modal.content || '').trim()
         if (!name) { setModal({ error: t('modalNameRequired') }); return }
-        const max = st.domains.maxChars || 200
-        if (content.length > max) { setModal({ error: fill(t('modalOver'), max) }); return }
+        if (name.length > DOMAIN_NAME_MAX) { setModal({ error: fill(t('modalNameOver'), DOMAIN_NAME_MAX) }); return }
+        if (content.length > DOMAIN_CONTENT_MAX) { setModal({ error: fill(t('modalOver'), DOMAIN_CONTENT_MAX) }); return }
         const id = 'custom:' + name
         setSt((prev) => Object.assign({}, prev, {
           custom: prev.custom.filter((d) => d.id !== id).concat([{ id: id, label: name + t('modalCustomSuffix'), content: content }]),
@@ -2979,7 +2931,7 @@ window.__ModuleLoader__.load({
           }),
           h('button', {
             key: 'b', type: 'button', disabled: runRunning,
-            style: Object.assign({}, S.btn, runRunning ? S.btnDisabled : null),
+            style: Object.assign({}, S.btn, S.btnPick, runRunning ? S.btnDisabled : null),
             onClick: () => pickDir(key),
           }, t('initBrowse')),
         ]),
@@ -3078,8 +3030,8 @@ window.__ModuleLoader__.load({
 
       const modalNode = st.modal ? h(NewDomainModal, {
         key: 'modal', t: t, modal: st.modal,
-        onName: (v) => setModal({ name: v }),
-        onContent: (v) => setModal({ content: v }),
+        onName: (v) => setModal({ name: String(v || '').slice(0, DOMAIN_NAME_MAX) }),
+        onContent: (v) => setModal({ content: String(v || '').slice(0, DOMAIN_CONTENT_MAX) }),
         onGenerate: generateDomain,
         onSave: saveModal,
         onCancel: closeModal,
@@ -3102,18 +3054,28 @@ window.__ModuleLoader__.load({
             h('div', { key: 'ni', style: S.inputRow }, [
               h('input', {
                 key: 'i', type: 'text', style: S.input, value: m.name, disabled: busy,
+                maxLength: DOMAIN_NAME_MAX,
+                'data-modal-field': 'name',
                 onChange: (e) => props.onName((e && e.target && e.target.value) || ''),
               }),
             ]),
-            h('div', { key: 'nh', style: S.labelHint }, t('modalNameHint')),
+            h('div', { key: 'nh', style: S.labelHint }, [
+              t('modalNameHint'),
+              h('span', { key: 'c', style: S.actionHint }, ' · ' + fillAll(t('modalCount'), { n: String(m.name || '').length, max: DOMAIN_NAME_MAX })),
+            ]),
             h('div', { key: 'ct', style: S.cardSub }, t('modalContent')),
             h('div', { key: 'ci', style: S.inputRow }, [
               h('textarea', {
                 key: 'a', style: S.textarea, value: m.content, disabled: busy,
+                maxLength: DOMAIN_CONTENT_MAX,
+                'data-modal-field': 'content',
                 onChange: (e) => props.onContent((e && e.target && e.target.value) || ''),
               }),
             ]),
-            h('div', { key: 'ch', style: S.labelHint }, t('modalContentHint')),
+            h('div', { key: 'ch', style: S.labelHint }, [
+              t('modalContentHint'),
+              h('span', { key: 'c', style: S.actionHint }, ' · ' + fillAll(t('modalCount'), { n: String(m.content || '').length, max: DOMAIN_CONTENT_MAX })),
+            ]),
             h('div', { key: 'act', style: S.actions }, [
               h('button', {
                 key: 'g', type: 'button', disabled: busy,
@@ -4286,7 +4248,9 @@ window.__ModuleLoader__.load({
       experts: [
         {
           id: 'primary', titleKey: '', hintKey: '',
-          keys: ['expertsEnabled', 'defaultDomain', 'identityExpert', 'expertInjectDetail', 'expertShowBanner'],
+          // identityExpert 自 dsh-experts 0.3.0「身份退场」起不再由使用者配置（使用者 2026-09-16 裁定）：
+          // 从常显移出、不渲染；设置项本身与 schema 保留，settings.yaml 仍可配。
+          keys: ['expertsEnabled', 'defaultDomain', 'expertInjectDetail', 'expertShowBanner'],
         },
         {
           id: 'advanced', titleKey: 'cfgT5Advanced', hintKey: '', fold: true,
@@ -4673,7 +4637,7 @@ window.__ModuleLoader__.load({
           h('button', {
             key: 'p', type: 'button', disabled: busy,
             'data-cfg-action': 'pick-dir', 'data-cfg-key': key,
-            style: Object.assign({}, S.btn, busy ? S.btnDisabled : null),
+            style: Object.assign({}, S.btn, S.btnPick, busy ? S.btnDisabled : null),
             onClick: () => { if (typeof handlers.pickDir === 'function') handlers.pickDir(nsKey, key) },
           }, t('initBrowse')),
         ]) : textInput
@@ -5372,11 +5336,11 @@ window.__ModuleLoader__.load({
 
     function Section(props) {
       const t = props.t
-      // 默认仍是「关于与致谢」；initialTab 供冒烟测试与深链指定页签。
+      // 默认落在「安装与检查」（1.1.3：打开即从环境检查起步）；initialTab 供冒烟测试与深链指定页签。
       // 1.1.3：页签栏只有四个（install / core / config / about）。旧页签 'plugins' 与 'init'
       // 已从页签栏下线（前者并入 install 的子插件分组，后者由 core 承接）；两个组件暂留并
       // 保持深链可达，等核心配置的目录与岗位落地后与既有回归一起收口。
-      const first = ['install', 'core', 'plugins', 'init', 'config', 'about'].indexOf(props.initialTab) >= 0 ? props.initialTab : 'about'
+      const first = ['install', 'core', 'plugins', 'init', 'config', 'about'].indexOf(props.initialTab) >= 0 ? props.initialTab : 'install'
       const state = useState(first)
       const tab = state[0]
       const setTab = state[1]
