@@ -249,6 +249,30 @@ t('版本对齐：check 给出 Edge 与 puppeteer 期望版本的结论（需运
   assert(out.includes('期望 Chrome'), 'check 未报出 puppeteer 期望的 Chrome 版本');
 });
 
+t('落盘格式校验：云端返回 JPEG 但声明 .png → 自动转码为真 PNG', function () {
+  if (!HAS_PY) return 'skip';
+  const probe = [
+    'import io, sys',
+    'sys.path.insert(0, r"' + MEDIA + '")',
+    'from gen_image import _save_image, detect_image_format',
+    'from pathlib import Path',
+    'from PIL import Image',
+    'buf = io.BytesIO()',
+    'Image.new("RGB", (16, 16), (10, 40, 90)).save(buf, "JPEG")',
+    'raw = buf.getvalue()',
+    'print("detect:", detect_image_format(raw))',
+    'out = Path(r"' + TMP + '") / "fmt.png"',
+    'written, note = _save_image(raw, out)',
+    'head = written.read_bytes()[:8]',
+    'print("png_magic:", head == bytes([137, 80, 78, 71, 13, 10, 26, 10]))',
+    'print("note:", note)',
+  ].join('\n');
+  const r = pyRun('-c', [probe]);
+  assert(r && r.status === 0, '探针失败：' + (r && r.stderr || '').slice(0, 200));
+  assert(r.stdout.includes('png_magic: True'), '未转码为真 PNG：' + r.stdout.trim());
+  assert(r.stdout.includes('转码'), '未在说明里体现转码：' + r.stdout.trim());
+});
+
 console.log('');
 console.log('  媒体链路回归: ' + pass + ' 通过 / ' + fail + ' 失败 / ' + skip + ' 跳过');
 if (fail > 0) process.exit(1);

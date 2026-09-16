@@ -109,19 +109,66 @@ def _explain_http_error(exc, model, endpoint):
     return hint, retryable
 
 
-def _download(url, out, timeout_s, retries):
+def _download_bytes(url, timeout_s, retries):
+    """下载图片字节（**不落盘** —— 落盘统一走 _save_image 做格式校验）。"""
     last = None
     for attempt in range(retries + 1):
         try:
             with urllib.request.urlopen(url, timeout=timeout_s) as resp:
-                out.parent.mkdir(parents=True, exist_ok=True)
-                out.write_bytes(resp.read())
-            return True, None
+                return resp.read(), None
         except Exception as exc:                     # noqa: BLE001
             last = exc
             if attempt < retries:
                 time.sleep(1.5 * (attempt + 1))
-    return False, last
+    return None, last
+
+
+_IMAGE_MAGIC = (
+    (b"\x89PNG\r\n\x1a\n", "PNG", ".png"),
+    (b"\xff\xd8\xff", "JPEG", ".jpg"),
+    (b"GIF87a", "GIF", ".gif"),
+    (b"GIF89a", "GIF", ".gif"),
+)
+
+
+def detect_image_format(raw):
+    """按文件头判断真实图片格式。
+
+    实测（2026-09-16）：方舟返回的**实际是 JPEG**，若按 §--out xxx.png§ 直接落盘，
+    会得到「扩展名是 png、字节是 jpeg」的假 PNG（下游识图/排版会报格式不符）。
+    """
+    for magic, name, ext in _IMAGE_MAGIC:
+        if raw.startswith(magic):
+            return name, ext
+    if raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "WEBP", ".webp"
+    return None, None
+
+
+def _save_image(raw, out):
+    """按 --out 声明的扩展名落盘；**实际格式不符则转码**（缺 Pillow 则改名落盘并告警）。
+
+    返回 (实际写入路径, 说明)。
+    """
+    fmt, ext = detect_image_format(raw)
+    want = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG", ".webp": "WEBP", ".gif": "GIF"}.get(out.suffix.lower())
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if fmt is None or want is None or fmt == want:
+        out.write_bytes(raw)
+        return out, ("" if fmt is None else "（实际格式 %s）" % fmt)
+    try:
+        import io
+        from PIL import Image
+        im = Image.open(io.BytesIO(raw))
+        if want == "JPEG":
+            im.convert("RGB").save(out, want, quality=95)
+        else:
+            im.save(out, want)
+        return out, "（云端返回 %s，已转码为 %s）" % (fmt, want)
+    except Exception as exc:                         # noqa: BLE001
+        alt = out.with_suffix(ext)
+        alt.write_bytes(raw)
+        return alt, "（云端返回 %s，且缺 Pillow 无法转码：%s）" % (fmt, type(exc).__name__)
 
 
 def cmd_check(args):
@@ -183,19 +230,19 @@ def cmd_image(args):
     item = ((payload or {}).get("data") or [{}])[0]
     b64 = item.get("b64_json")
     link = item.get("url")
-    out.parent.mkdir(parents=True, exist_ok=True)
     if b64:
-        out.write_bytes(base64.b64decode(b64))
+        raw = base64.b64decode(b64)
     elif link:
-        ok, exc = _download(link, out, timeout_s, int(args.retries))
-        if not ok:
+        raw, exc = _download_bytes(link, timeout_s, int(args.retries))
+        if raw is None:
             print("错误: 图片下载失败：%s" % type(exc).__name__, file=sys.stderr)
             print("提示: 云端不可用（exit %d，可回退代码矢量绘制）。" % EXIT_FALLBACK, file=sys.stderr)
             return EXIT_FALLBACK
     else:
         print("错误: 云端响应里没有图片数据（既无 b64_json 也无 url）。", file=sys.stderr)
         return EXIT_FALLBACK
-    print("OK: 已生成 %s（%d 字节 · 模型 %s）" % (out, out.stat().st_size, model))
+    written, note = _save_image(raw, out)
+    print("OK: 已生成 %s（%d 字节 · 模型 %s）%s" % (written, written.stat().st_size, model, note))
     return 0
 
 
