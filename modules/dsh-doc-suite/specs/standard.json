@@ -45,7 +45,7 @@
   },
   "pptx": {
     "_note": "PPT 设计令牌（B 线，2026-09-16）。与 word/excel 平级、共用顶层 colors。layouts/components/chart_series 一律用对象（deep_merge 对数组整体替换）。几何真值进度：②a 落 cover/bullets/cards + card 组件；③a 第二批落 toc/section/compare/data/chart/table/quote/closing 八类 + kpi/toc_item/compare_panel 组件（核心 11 类页型几何已齐；chart/table 的绘制在渲染阶段实现）。主题库后置，本段先给一套中性默认值。",
-    "_note_geometry": "几何真值口径（②a，2026-09-16；经独立复核修订）：① 单位一律**英寸**（1 in = 914400 EMU），页面 13.3333×7.5，与 margin 同单位，不再二次换算；② box = {x,y,w,h}，**页面绝对坐标、原点左上**（components.* 例外，见其 coord 字段）；③ 文本元素只引用 sizes_pt 的键与 color_roles 的键（或 6 位 hex），不写死字号与色值，保证换主题不失效；④ autofit = {min_size_pt,max_lines}：**max_lines = 基础字号下该 box 能容纳的行数**（不是「缩到下限后」的行数）；渲染器用 Pillow 按**字符**测量（python-pptx 的 fit_text 对中文不可用），超容量按档缩到 min_size_pt，仍放不下则**告警**（不静默丢字）。容量判据已作为硬校验（③a 起按 WPS 实测行高统一）：`max_lines × (字号pt ÷ 72 × 1.228 × 行距) + (max_lines−1) × 段距in ≤ box.h`；**1.228 = WPS 实测单倍行高系数**（②b 出图像素量得：20pt/行距1.35 → 相邻段起点间距 57px = 行高 44.2px + 段距 10pt；19pt 同段两行 42px = 0.4375 in；旧口径「字号×行距÷72」低约 23%），三处必须一致：`scripts/spec_sync.py`／`scripts/office/ppt_render.py`／`scripts/style-test.mjs`（有门禁断言）；**段距只加在段与段之间，最后一段不加**（`bullet.gap_between_only`）；元素未写 `line_spacing` 时**回退 `pptx.spacing.line_spacing`（1.35）** —— 校验器与渲染器同一口径（②a 探针抓出：校验器原先默认 1.0，会让 card.icon 这类 28pt 元素蒙混过关）。⑤ elements 数组顺序即 z 序（后画在上），\"optional\":true 的元素由 manifest 是否给值决定画不画；⑥ **正文下限 18pt**（依 55 号第十三章 #3「正文 20（下限 18）」；卡片正文 card_body 16pt 为卡片内小字，另有下限 12pt）；⑦ 颜色对比度按 WCAG 2.1 AA 实测（本机脚本计算）：浅底正文 text_on_light 10.37:1 · 页码 text_muted_on_light 7.00:1 · 深底标题 text_on_dark 8.66:1 · 深底次要字 text_muted_on_dark 6.14:1 · 卡片标题 on surface_alt 7.74:1。**accent_decor(ED7D31) 两底均不足 4.5:1（白底 2.77、深底 3.13），只作装饰（色带/线/图形），不作文字色**；故 bullets 项目符号圆点用 accent(B45309，白底 5.02:1)。⑧ **对比度目前只靠人工实测、无门禁**（55 号第九章列为验收项，留待 ②b/③ 补自测）；换主题改了 primary/accent 后必须重跑对比度实测（compact 主题已实测：最低 5.02:1）。⑨ **元素 role 与 manifest 字段的映射（③a 第二批定）**：默认同名 —— title / subtitle / kicker / index / source / text / attribution / value / label / page；仅两处例外：bullets 页的要点数组字段名为 bullets、渲染到 role body；data 页的说明数组字段名为 body、同样渲染到 role body。grid 槽位组件内的字段取自对应条目的同名字段（如 toc_item 取条目的 index/title/page，kpi 取 value/label，compare_panel 取 title/body）。",
+    "_note_geometry": "几何真值口径（②a，2026-09-16；经独立复核修订）：① 单位一律**英寸**（1 in = 914400 EMU），页面 13.3333×7.5，与 margin 同单位，不再二次换算；② box = {x,y,w,h}，**页面绝对坐标、原点左上**（components.* 例外，见其 coord 字段）；③ 文本元素只引用 sizes_pt 的键与 color_roles 的键（或 6 位 hex），不写死字号与色值，保证换主题不失效；④ autofit = {min_size_pt,max_lines}：**max_lines = 基础字号下该 box 能容纳的行数**（不是「缩到下限后」的行数）；渲染器用 Pillow 按**字符**测量（python-pptx 的 fit_text 对中文不可用），超容量按档缩到 min_size_pt，仍放不下则**告警**（不静默丢字）。容量判据已作为硬校验（③a 起按 WPS 实测行高统一）：`max_lines × (字号pt ÷ 72 × 1.228 × 行距) + (max_lines−1) × 段距in ≤ box.h`；**1.228 = WPS 实测单倍行高系数**（②b 出图像素量得：20pt/行距1.35 → 相邻段起点间距 57px = 行高 44.2px + 段距 10pt；19pt 同段两行 42px = 0.4375 in；旧口径「字号×行距÷72」低约 23%），三处必须一致：`scripts/spec_sync.py`／`scripts/office/ppt_render.py`／`scripts/style-test.mjs`（有门禁断言）；**段距只加在段与段之间，最后一段不加**（`bullet.gap_between_only`）；元素未写 `line_spacing` 时**回退 `pptx.spacing.line_spacing`（1.35）** —— 校验器与渲染器同一口径（②a 探针抓出：校验器原先默认 1.0，会让 card.icon 这类 28pt 元素蒙混过关）。⑤ elements 数组顺序即 z 序（后画在上），\"optional\":true 的元素由 manifest 是否给值决定画不画；⑥ **正文下限 18pt**（依 55 号第十三章 #3「正文 20（下限 18）」；卡片正文 card_body 16pt 为卡片内小字，另有下限 12pt）；⑦ 颜色对比度按 WCAG 2.1 AA 实测（本机脚本计算）：浅底正文 text_on_light 10.37:1 · 页码 text_muted_on_light 7.00:1 · 深底标题 text_on_dark 8.66:1 · 深底次要字 text_muted_on_dark 6.14:1 · 卡片标题 on surface_alt 7.74:1。**accent_decor(ED7D31) 两底均不足 4.5:1（白底 2.77、深底 3.13），只作装饰（色带/线/图形），不作文字色**；故 bullets 项目符号圆点用 accent(B45309，白底 5.02:1)。⑧ **对比度目前只靠人工实测、无门禁**（55 号第九章列为验收项，留待 ②b/③ 补自测）；换主题改了 primary/accent 后必须重跑对比度实测（compact 主题已实测：最低 5.02:1）。⑨ **元素 role 与 manifest 字段的映射（③a 第二批定）**：默认同名 —— title / subtitle / kicker / index / source / text / attribution / value / label / page；仅两处例外：bullets 页的要点数组字段名为 bullets、渲染到 role body；data 页的说明数组字段名为 body、同样渲染到 role body。grid 槽位组件内的字段取自对应条目的同名字段（如 toc_item 取条目的 index/title/page，kpi 取 value/label，compare_panel 取 title/body）。⑩ **装饰线的跟随约定（follow_text，2026-09-16 主人目检提出）**：rule 元素可声明 follow_text = {element, pad_chars, min_w_in}，渲染器按被跟随元素（如 title）的**实测文字宽度**动态计算线宽 —— 线宽 = max(min_w_in, 文字宽 + 2 × pad_chars × 字号)，线起点左移 pad_chars × 字号，实现「左右各超出文字半个字符」；并做页内保护（不越出左右安全边）。声明里的 box.w 退化为最小宽度。",
     "slide": {
       "width_emu": 12192000,
       "height_emu": 6858000
@@ -135,7 +135,8 @@
         {
           "role": "rule",
           "box": { "x": 0.8, "y": 1.5, "w": 1.4, "h": 0.05 },
-          "fill": "rule"
+          "fill": "rule",
+          "follow_text": { "element": "title", "pad_chars": 0.5, "min_w_in": 1.4 }
         },
         {
           "role": "page_number",
@@ -399,11 +400,6 @@
             "autofit": { "min_size_pt": 20, "max_lines": 3 }
           },
           {
-            "role": "rule",
-            "box": { "x": 6.1667, "y": 5.15, "w": 1.0, "h": 0.04 },
-            "fill": "rule"
-          },
-          {
             "role": "attribution",
             "box": { "x": 1.6, "y": 5.35, "w": 10.1333, "h": 0.35 },
             "text": { "size": "small", "color": "text_muted_on_light", "align": "center", "valign": "middle" },
@@ -533,13 +529,13 @@
           },
           {
             "role": "title",
-            "box": { "x": 0.7, "y": 0.02, "w": 9.8, "h": 0.48 },
+            "box": { "x": 0.7, "y": 0.02, "w": 9.5, "h": 0.48 },
             "text": { "size": "body", "color": "text_on_light", "align": "left", "valign": "middle" },
             "autofit": { "min_size_pt": 14, "max_lines": 1 }
           },
           {
             "role": "page",
-            "box": { "x": 10.6, "y": 0.02, "w": 1.1333, "h": 0.48 },
+            "box": { "x": 10.35, "y": 0.02, "w": 1.1333, "h": 0.48 },
             "text": { "size": "small", "color": "text_muted_on_light", "align": "right", "valign": "middle" },
             "autofit": { "min_size_pt": 10, "max_lines": 1 }
           },

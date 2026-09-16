@@ -658,23 +658,6 @@ class Renderer:
             return False
         return layout not in (pn.get("skip_layouts") or [])
 
-    def _draw_content_page(self, slide, s, number):
-        """内容页共用骨架（content_page）：先画骨架，本页元素随后覆盖在上面。"""
-        cp = self.pp.get("content_page") or {}
-        for el in cp.get("elements") or []:
-            role = str(el.get("role"))
-            if role == "title":
-                self._draw_text(slide, el, [str(s.get("title") or "")], number=number)
-            elif role == "page_number":
-                if not self._page_number_on(str(s.get("layout"))):
-                    continue
-                fmt = str((self.chrome.get("page_number") or {}).get("format") or "{n}")
-                self._draw_text(slide, el, [fmt.replace("{n}", str(number))], number=number)
-            elif "text" in el:
-                self._draw_text(slide, el, [""], number=number)
-            else:
-                self._add_shape(slide, el["box"], el.get("fill"))
-
     def _draw_standard_page(self, slide, s, number):
         """页型通用绘制（③a）：背景 → 骨架（如 inherits content_page）→ 本页元素。
 
@@ -684,9 +667,14 @@ class Renderer:
         layout = str(s.get("layout") or FALLBACK_LAYOUT)
         lay = self._layout(layout)
         self._paint_bg(slide, lay.get("background"))
+        elements = []
         if lay.get("inherits") == "content_page":
-            self._draw_content_page(slide, s, number)
-        for el in lay.get("elements") or []:
+            elements += list((self.pp.get("content_page") or {}).get("elements") or [])
+        elements += list(lay.get("elements") or [])
+        by_role = {}
+        for el in elements:            # 骨架与富内容同表：rule 的 follow_text 要能引用骨架里的 title
+            by_role.setdefault(str(el.get("role")), el)
+        for el in elements:
             role = str(el.get("role"))
             if role == "grid":
                 self._draw_grid(slide, el, self._grid_items(s), number)
@@ -707,8 +695,35 @@ class Renderer:
                     value = ""
                 paras = value if isinstance(value, list) else [str(value)]
                 self._draw_text(slide, el, [str(x) for x in paras], number=number)
+            elif el.get("follow_text"):
+                self._draw_rule(slide, el, s, by_role)
             else:
                 self._add_shape(slide, el["box"], el.get("fill"))
+
+    def _draw_rule(self, slide, el, s, by_role):
+        """装饰线（③a ⑩）：声明 follow_text 时，按被跟随元素的**实测文字宽度**定宽 ——
+        线宽 = max(min_w_in, 文字宽 + 2 × pad_chars × 字号)，起点左移 pad_chars × 字号
+        （即「左右各超出文字半个字符」），并做页内保护（不越出左右安全边）。"""
+        box = dict(el.get("box") or {})
+        follow = el.get("follow_text")
+        if isinstance(follow, dict) and box:
+            src_role = str(follow.get("element") or "title")
+            src = by_role.get(src_role)
+            text = self._element_value(s, src_role)
+            if isinstance(src, dict) and isinstance(text, str) and text.strip():
+                tspec = src.get("text") or {}
+                pt = float(self.sizes.get(tspec.get("size")) or 0)
+                if pt > 0:
+                    bold = bool(tspec.get("bold")) or str(tspec.get("size")) in TITLE_SIZES
+                    font = self.resolver.load(self.heading_font if bold else self.body_font, pt)
+                    text_w = float(ppt_tool._text_width(font, text)) / PX_PER_INCH
+                    pad = float(follow.get("pad_chars") or 0.0) * pt / 72.0
+                    min_w = float(follow.get("min_w_in") or 0.0) or float(box.get("w") or 0.0)
+                    left = float(src["box"]["x"]) - pad
+                    right = min(left + max(min_w, text_w + 2 * pad), self.page_w - 0.1)
+                    box["x"] = max(0.1, left)
+                    box["w"] = max(0.05, right - box["x"])
+        self._add_shape(slide, box, el.get("fill"))
 
     @staticmethod
     def _grid_items(s):

@@ -75,6 +75,27 @@ function manifest11() {
     ],
   };
 }
+function ruleWidth(p, pageIndex) {
+  const py = pyLine([
+    'import json, sys',
+    'from pptx import Presentation',
+    'EMU = 914400.0',
+    'prs = Presentation(sys.argv[1])',
+    'out = None',
+    'for i, s in enumerate(prs.slides):',
+    '    if i != int(sys.argv[2]):',
+    '        continue',
+    '    for sh in s.shapes:',
+    '        if sh.top is not None and abs(sh.top - int(1.5 * EMU)) < 30000 and sh.height and sh.height < int(0.12 * EMU):',
+    '            out = int(sh.width)',
+    'print(json.dumps({"w": out}))',
+  ]);
+  const r = pyRun('-c', [py, p, String(pageIndex)]);
+  if (!r || r.status !== 0) return null;
+  const lines = r.stdout.trim().split('\n');
+  return JSON.parse(lines[lines.length - 1]).w;
+}
+
 function readPptx(p) {
   const py = pyLine([
     'import json, sys',
@@ -277,6 +298,22 @@ t('render：超容量自动缩字号（依赖本机字体）', function () {
   const r = pyRun(RENDER, ['render', writeJson('overflow.json', m), path.join(TMP, 'overflow.pptx')]);
   assert(r.status === 0, 'exit=' + r.status);
   assert((r.stdout + r.stderr).includes('→') || (r.stdout + r.stderr).includes('17pt'), '未触发缩字号：' + (r.stdout || '').slice(-200));
+});
+
+t('render：装饰线宽跟随标题文字长度（follow_text）', function () {
+  if (!HAS_PPTX) return 'skip';
+  const shortM = manifest11();
+  const longM = manifest11();
+  longM.slides[3].title = '这是一个明显更长的页面标题用来验证装饰线跟随';
+  const a = path.join(TMP, 'rule-short.pptx');
+  const b = path.join(TMP, 'rule-long.pptx');
+  const ra = pyRun(RENDER, ['render', writeJson('rule-s.json', shortM), a]);
+  const rb = pyRun(RENDER, ['render', writeJson('rule-l.json', longM), b]);
+  assert(ra.status === 0 && rb.status === 0, 'render 失败：' + ra.status + '/' + rb.status);
+  const wa = ruleWidth(a, 3);
+  const wb = ruleWidth(b, 3);
+  assert(wa && wb, '未找到装饰线：' + JSON.stringify([wa, wb]));
+  assert(wb > wa + 500000, '长标题的装饰线应明显更宽：' + wa + ' → ' + wb);
 });
 
 t('render：--dry-run 不写文件', function () {
