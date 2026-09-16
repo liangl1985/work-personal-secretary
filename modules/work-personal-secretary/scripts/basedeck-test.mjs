@@ -881,7 +881,17 @@ ok(readdirSync(join(deckVault, '工具', '技能')).length === 0 && readdirSync(
   '工具/ 三个子目录都建出来但**不造内容**')
 const vaultApp = JSON.parse(readFileSync(join(deckVault, '.obsidian', 'app.json'), 'utf8'))
 ok(vaultApp.alwaysUpdateLinks === true, '.obsidian/app.json 为可解析的最小配置')
-ok(readFileSync(join(deckVault, '工具', '00_工具总览.md'), 'utf8').indexOf('同步纪律') > 0, '工具总览写明单向 / 幂等 / 手改不覆盖的同步纪律')
+// 主人 2026-09-16 裁定：这部分本版不做（插件里没有相应设计），但**必须写清现状**——
+// 不能让库里这份总览看起来像「工具已经搬进来了」。
+const overviewText = readFileSync(join(deckVault, '工具', '00_工具总览.md'), 'utf8')
+ok(overviewText.indexOf('没有实现任何同步') > 0 && overviewText.indexOf('预留用途') > 0,
+  '工具总览明确写「本版没有实现任何同步」且上表是预留用途（不留空承诺）')
+ok(overviewText.indexOf('空的') > 0 && overviewText.indexOf('自动同步属后续版本，未立项') > 0,
+  '工具总览写明三个子目录现在是空的、自动同步未立项')
+ok(overviewText.indexOf('未启用') > 0, '表格标题标「尚未启用」（与现状一致）')
+const homeText = readFileSync(join(deckVault, '🏠 主页.md'), 'utf8')
+ok(homeText.indexOf('预留框架') > 0 && homeText.indexOf('未实现同步') > 0,
+  '主页约定段同步改写：工具区本版只是预留框架、未实现同步')
 
 const homeFile = join(deckVault, '🏠 主页.md')
 writeText(homeFile, '# 我自己的主页' + NL)
