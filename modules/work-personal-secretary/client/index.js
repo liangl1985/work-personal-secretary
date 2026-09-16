@@ -262,6 +262,12 @@ window.__ModuleLoader__.load({
       coreFieldObsidianDirHint: '脚本在此建立知识库结构，并把记忆镜像区 00_全局记忆 与记忆库关联',
       coreFieldDomain: '工作岗位',
       coreFieldDomainHint: '五个预置岗位对应信息安全 / 财务 / 人力资源 / 代码编程 / 金融五个行业域，均为可直接写入身份的预置正文；都不是时可自填，新建后自动出现在这里并选中',
+      srcCurrent: '当前生效值',
+      srcDefault: '默认值（未自定义）',
+      srcDerived: '由记忆镜像反推',
+      srcNone: '未配置',
+      setupStateFailed: '未能取到当前生效值（可手动填写）',
+      coreDomainNeedsContent: '已带入当前岗位名称，请补充岗位内容（或点「自动生成」）后再保存',
       coreDomainNew: '都不是（新建岗位…）',
       coreDomainPlaceholder: '请选择…',
       modalCustomSuffix: '（自定义）',
@@ -803,6 +809,12 @@ window.__ModuleLoader__.load({
       coreFieldObsidianDirHint: 'The vault structure is created here, and the 00_全局记忆 mirror area is linked to the memory store',
       coreFieldDomain: 'Job',
       coreFieldDomainHint: 'Five presets cover information security / accounting / HR / coding / finance, each a ready-to-write identity text; choose "None of these" to fill your own — it then appears in this list and is selected',
+      srcCurrent: 'current value',
+      srcDefault: 'default (not customized)',
+      srcDerived: 'inferred from the memory mirror',
+      srcNone: 'not configured',
+      setupStateFailed: 'Could not read the current values (fill them in manually)',
+      coreDomainNeedsContent: 'The current job name was filled in; add the job description (or press Generate) before saving',
       coreDomainNew: 'None of these (new job…)',
       coreDomainPlaceholder: 'Select…',
       modalCustomSuffix: ' (custom)',
@@ -2678,6 +2690,8 @@ window.__ModuleLoader__.load({
       domains: { phase: 'loading', items: [], error: '', maxChars: 200 },
       memoryDir: '', obsidianDir: '', domainId: '', custom: [],
       modal: null, run: null, imported: '', pickError: '', openHint: null,
+      // 当前生效值（GET /setup-state）：用于预填三个字段并标注来源；setupFilled = 已预填过
+      setup: { phase: 'loading', data: null, error: '' }, setupFilled: false,
     }
     /**
      * 防御性归一：state 形状异常时（hook 替身槽位错位、热更中途等）退回默认骨架，
@@ -2745,7 +2759,59 @@ window.__ModuleLoader__.load({
         }
       }
 
-      useEffect(() => { detect(); loadDomains() }, [])
+      /**
+       * 当前生效值（只读）：GET /setup-state → { memoryDir:{value,source}, obsidianDir:{value,source},
+       * domain:{id,label,isPreset,source}, identity:{...}, note }。
+       * 用途：进入页面时**预填**三个字段并标注来源；**绝不**因此触发任何写操作。
+       * 预填只在字段仍为空时进行（不覆盖使用者已输入的内容）；接口不可用时不拦主流程。
+       */
+      async function loadSetupState() {
+        setSt((prev) => Object.assign({}, prev, { setup: Object.assign({}, prev.setup, { phase: 'loading', error: '' }) }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/setup-state', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'setup-state 返回 ok:false'))
+          const mem = (body.memoryDir && typeof body.memoryDir === 'object') ? body.memoryDir : {}
+          const obs = (body.obsidianDir && typeof body.obsidianDir === 'object') ? body.obsidianDir : {}
+          const dom = (body.domain && typeof body.domain === 'object') ? body.domain : {}
+          setSt((prev) => {
+            // 只在**首次**取到生效值时预填：之后（重新检测 / 使用者清空后）不再回填，
+            // 否则「清空字段」会被下一次取数悄悄撤销。用独立标记 setupFilled，
+            // 避免被 loading 态（会覆盖 setup.phase）影响判断。
+            const alreadyFilled = prev.setupFilled === true
+            const next = { setup: { phase: 'ready', data: body, error: '' }, setupFilled: true }
+            if (!alreadyFilled && !String(prev.memoryDir || '').trim() && typeof mem.value === 'string' && mem.value.trim()) {
+              next.memoryDir = mem.value.trim()
+            }
+            if (!alreadyFilled && !String(prev.obsidianDir || '').trim() && typeof obs.value === 'string' && obs.value.trim()) {
+              next.obsidianDir = obs.value.trim()
+            }
+            if (!alreadyFilled && !String(prev.domainId || '').trim() && typeof dom.id === 'string' && dom.id) {
+              if (dom.isPreset === true) {
+                // 预置岗位：直接选中对应项（正文来自 /domain/list）
+                next.domainId = dom.id
+              } else {
+                // 非预置岗位：走「都不是（新建岗位…）」——把当前岗位名带进自定义岗位，
+                // 正文留空（身份正文不能凭空造），保存前需使用者补写或点「自动生成」。
+                const label = (typeof dom.label === 'string' && dom.label.trim()) ? dom.label.trim() : dom.id
+                const id = 'custom:' + label
+                next.custom = (Array.isArray(prev.custom) ? prev.custom : [])
+                  .filter((d) => d && d.id !== id)
+                  .concat([{ id: id, label: label + t('modalCustomSuffix'), content: '' }])
+                next.domainId = id
+              }
+            }
+            return Object.assign({}, prev, next)
+          })
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            setup: { phase: 'error', data: null, error: String((err && err.message) || err) },
+          }))
+        }
+      }
+
+      useEffect(() => { detect(); loadDomains(); loadSetupState() }, [])
 
       // ── 表单（记忆库目录 → Obsidian 目录 → 工作岗位） ──────────────
       function setField(key, value) {
@@ -2987,7 +3053,30 @@ window.__ModuleLoader__.load({
       ])
 
       // ── 渲染：目录与岗位（顺序：记忆库目录 → Obsidian 目录 → 工作岗位）──
-      const dirField = (key, label, hint, value) => h('div', { key: 'f-' + key, style: S.coreFieldRow }, [
+      // 来源标注（setup-state.source，沿用既有 label/hint + actionHint 样式，不新造视觉）
+      const srcText = (src) => {
+        if (src === 'settings') return t('srcCurrent')
+        if (src === 'default') return t('srcDefault')
+        if (src === 'derived') return t('srcDerived')
+        if (src === 'none') return t('srcNone')
+        return ''
+      }
+      const setupData = (st.setup && st.setup.data && typeof st.setup.data === 'object') ? st.setup.data : null
+      const setupSource = (key) => {
+        const item = setupData && setupData[key]
+        return (item && typeof item === 'object') ? srcText(String(item.source || '')) : ''
+      }
+      const setupDomain = (setupData && setupData.domain && typeof setupData.domain === 'object') ? setupData.domain : null
+      // 非预置岗位：已带入岗位名但没有正文（不自动造正文，保存前置灰并提示）
+      const domainNeedsContent = Boolean(setupDomain && setupDomain.isPreset !== true
+        && st.domainId && !String(domainContent || '').trim())
+
+      const hintLine = (hint, source) => h('div', { key: 'h', style: S.labelHint }, [
+        hint,
+        source ? h('span', { key: 's', style: S.actionHint }, ' · ' + source) : null,
+      ])
+
+      const dirField = (key, label, hint, value, source) => h('div', { key: 'f-' + key, style: S.coreFieldRow }, [
         h('div', { key: 'l', style: S.label }, label),
         h('div', { key: 'row', style: S.inputRow }, [
           h('input', {
@@ -3000,7 +3089,7 @@ window.__ModuleLoader__.load({
             onClick: () => pickDir(key),
           }, t('initBrowse')),
         ]),
-        h('div', { key: 'h', style: S.labelHint }, hint),
+        hintLine(hint, source),
       ])
 
       const domainField = h('div', { key: 'f-domain', style: S.coreFieldRow }, [
@@ -3013,7 +3102,7 @@ window.__ModuleLoader__.load({
             .concat(domainOptions.map((d) => h('option', { key: d.id, value: d.id }, d.label)))
             .concat([h('option', { key: '__new', value: NEW_DOMAIN_VALUE }, t('coreDomainNew'))])),
         ]),
-        h('div', { key: 'h', style: S.labelHint }, t('coreFieldDomainHint')),
+        hintLine(t('coreFieldDomainHint'), setupSource('domain')),
       ])
 
       const dirsCard = h('div', { key: 'dirs', style: S.card }, [
@@ -3022,10 +3111,14 @@ window.__ModuleLoader__.load({
           h('div', { key: 'sub', style: S.cardSub }, t('coreDirsSub')),
         ]),
         h('div', { key: 'body', style: S.cardBody }, [
-          dirField('memoryDir', t('coreFieldMemoryDir'), t('coreFieldMemoryDirHint'), st.memoryDir),
-          dirField('obsidianDir', t('coreFieldObsidianDir'), t('coreFieldObsidianDirHint'), st.obsidianDir),
+          dirField('memoryDir', t('coreFieldMemoryDir'), t('coreFieldMemoryDirHint'), st.memoryDir, setupSource('memoryDir')),
+          dirField('obsidianDir', t('coreFieldObsidianDir'), t('coreFieldObsidianDirHint'), st.obsidianDir, setupSource('obsidianDir')),
           domainField,
           st.domains.phase === 'error' ? h('div', { key: 'derr', style: S.warnLine }, t('coreDomainMissing') + '：' + st.domains.error) : null,
+          domainNeedsContent ? h('div', { key: 'dneed', style: S.warnLine }, t('coreDomainNeedsContent')) : null,
+          st.setup.phase === 'error'
+            ? h('div', { key: 'seterr', style: S.note }, t('setupStateFailed') + '：' + String(st.setup.error || ''))
+            : null,
           st.pickError ? h('div', { key: 'perr', style: S.warnLine }, st.pickError) : null,
           h('div', { key: 'place', style: S.note }, t('corePlaceNote') + '：' + t('corePlaceBody')),
           h('div', { key: 'save', style: S.saveBar }, [

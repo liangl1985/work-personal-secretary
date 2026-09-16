@@ -2601,5 +2601,100 @@ const e16Browse = findButtons(e16Core).filter((b) => label(b) === '浏览…')[0
 ok(Boolean(e16Browse) && e16Browse.props.style && e16Browse.props.style.whiteSpace === 'nowrap',
   '「浏览…」按钮不换行（whiteSpace:nowrap；真机反馈曾被挤成竖排）')
 
+// ══════════════════════════════════════════════════════════════════
+// [17] 核心配置：预填当前生效值（GET /setup-state）+ 来源标注 + 兜底
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[17] 核心配置预填（setup-state）')
+
+let s17Payload = {
+  ok: true,
+  memoryDir: { value: 'D:/ws/memories/me', source: 'settings' },
+  obsidianDir: { value: 'D:/ws', source: 'derived' },
+  domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' },
+  identity: { exists: false, entryId: '' },
+  note: 'note-17',
+}
+let s17Ok = true
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  const method = (opts && opts.method) || 'GET'
+  calls.push({ url: u, method: method, body: opts && opts.body })
+  if (u.indexOf('/setup-state') >= 0) {
+    if (!s17Ok) return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+    return jsonRes(s17Payload)
+  }
+  if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+const s17Render = async () => {
+  hookCursor = 0
+  effectQueue = []
+  let t = expand(reg.render({ initialTab: 'core' }))
+  for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+  await tick(50)
+  hookCursor = 0
+  effectQueue = []
+  t = expand(reg.render({ initialTab: 'core' }))
+  return t
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+let s17Tree = await s17Render()
+let s17Text = collect(s17Tree, []).join(' | ')
+const s17Inputs = findAll(s17Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+const s17Select = findAll(s17Tree, (x) => x.type === 'select', [])[0]
+const s17Save = () => findButtons(s17Tree).filter((b) => label(b) === '保存配置并开始')[0]
+
+// ① 预填三值 + 来源标注
+ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/setup-state'),
+  '进入页面 GET /api/setup-state（合成基址）')
+ok(s17Inputs.length === 2 && String(s17Inputs[0].props.value) === 'D:/ws/memories/me',
+  '记忆库目录预填当前生效值（实测 ' + String(s17Inputs[0] && s17Inputs[0].props.value) + '）')
+ok(String(s17Inputs[1] && s17Inputs[1].props.value) === 'D:/ws', 'Obsidian 目录预填当前生效值')
+ok(Boolean(s17Select) && String(s17Select.props.value) === 'infosec', '工作岗位预填为对应预置项（infosec）')
+ok(s17Text.indexOf('当前生效值') >= 0, '标注「当前生效值」（source=settings）')
+ok(s17Text.indexOf('由记忆镜像反推') >= 0, '标注「由记忆镜像反推」（source=derived）')
+ok(Boolean(s17Save()) && s17Save().props.disabled !== true, '预填后三项齐 → 保存按钮可点')
+ok(calls.filter((c) => c.method === 'POST').length === 0, '预填不触发任何写操作（无 POST）')
+
+// ② 清空任一字段 → 保存置灰（既有校验不变）
+s17Inputs[0].props.onChange({ target: { value: '' } })
+s17Tree = await s17Render()
+ok(s17Save().props.disabled === true, '清空记忆库目录 → 保存按钮置灰')
+
+// ③ 非预置岗位：走「都不是（新建岗位…）」+ 带入岗位名（正文留空，保存仍置灰）
+s17Payload = {
+  ok: true,
+  memoryDir: { value: 'D:/ws/memories/me', source: 'settings' },
+  obsidianDir: { value: 'D:/ws', source: 'settings' },
+  domain: { id: 'sales', label: '工控安全售前', isPreset: false, source: 'settings' },
+  identity: { exists: true, entryId: 'id-9' },
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+s17Tree = await s17Render()
+s17Text = collect(s17Tree, []).join(' | ')
+const s17Select2 = findAll(s17Tree, (x) => x.type === 'select', [])[0]
+ok(Boolean(s17Select2) && String(s17Select2.props.value).indexOf('custom:') === 0,
+  '非预置岗位 → 选中「都不是（新建岗位…）」派生的自定义项（实测 ' + String(s17Select2 && s17Select2.props.value) + '）')
+ok(s17Text.indexOf('工控安全售前（自定义）') >= 0, '岗位名带入自定义岗位并出现在下拉里')
+ok(s17Text.indexOf('已带入当前岗位名称') >= 0, '提示需补充岗位内容（不自动造正文）')
+ok(s17Save().props.disabled === true, '非预置且正文为空 → 保存仍置灰（语义不变）')
+
+// ④ 接口不可用 → 字段留空、给可读说明、不拦主流程
+s17Ok = false
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+s17Tree = await s17Render()
+s17Text = collect(s17Tree, []).join(' | ')
+const s17Inputs4 = findAll(s17Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+ok(s17Inputs4.length === 2 && String(s17Inputs4[0].props.value) === '', '接口 404 → 字段保持空（不臆造值）')
+ok(s17Text.indexOf('未能取到当前生效值') >= 0, '接口 404 → 给一行可读说明（不静默）')
+ok(Boolean(s17Save()), '接口 404 不拦主流程：表单与保存按钮仍在')
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
