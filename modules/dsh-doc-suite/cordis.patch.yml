@@ -15,3 +15,10 @@
         docsRoot: ''              # 留空 = 使用模块自带 scripts/ 目录
         wpsRequired: true         # 硬前置声明（doctor 会检查并在缺失时给出修复指引）
         doctorOnStartup: false    # 是否每次启动自检（默认关，避免拖慢启动）
+        # 媒体设置（生图/生视频）：键路径见设置页「dsh-doc-suite」；默认值三处一致 =
+        #   lib/settings.js 的 schema/DEFAULTS ↔ 本注释 ↔ README「一之三」节表
+        #   media.provider=volcengine-ark · media.image.enabled=true
+        #   media.image.model=doubao-seedream-5-0-pro-260628 · size=1K · timeout_ms=60000 · retries=2
+        #   media.image.fallback_to_vector=true · media.video.enabled=false · media.video.model=''
+        #   media.ark.api_key=''（敏感：默认空，发布件永不含）
+        #   media.ark.endpoint=https://ark.cn-beijing.volces.com/api/v3

@@ -28,7 +28,19 @@ modules/dsh-doc-suite/ 下的 Node 侧代码（lib/）、Python 脚本（scripts
   WPS Office —— 使用者自行安装并遵守其许可。本模块仅通过其公开 COM 接口调用
   （比对 / 公式重算 / 数据透视 / 页码与目录域）。
 
+  mermaid 图示运行时（可选能力）—— @mermaid-js/mermaid-cli 与 puppeteer，仅在使用
+  「mermaid 图示」时按需安装到使用者数据目录（~/.dsh/data/dsh-doc-suite/tools/mermaid），
+  **不写入本模块 dependencies、不进发布件**（避免其 postinstall 下载 Chromium 影响插件安装）。
+  由使用者运行 scripts/media/setup_mermaid.ps1 安装或迁移；许可随各上游项目。
+
 四、数据与隐私
 --------------
-本模块全部处理在**本机**完成：不联网、不上传文档内容、无遥测。
-（例外：若使用者自行调用云端服务，属其自主行为，与本模块无关。）
+默认**全程在本机完成**：不联网、不上传文档内容、无遥测。
+
+唯一的云端出口是**生图（ARK）**，且需同时满足两个条件才会发生：
+  1) 使用者显式调用 gen_image.py 的 image 子命令（设置项 media.image.enabled 默认虽为 true，
+     它是「渲染图形元素时优先尝试生图」的开关，仍须由调用方显式发起）；
+  2) 使用者已配置 ARK 密钥（media.ark.api_key 或环境变量 ARK_API_KEY，**默认值为空**）。
+未配置密钥时生图直接返回「不可用」并自动回退代码矢量绘制 —— **不会发生任何网络请求**。
+调用前工具会打印显式告知；使用者须确保 prompt 不含客户信息、报价或涉密内容。
+密钥本身不打印、不落日志、不进报错文本，也不随发布件分发。

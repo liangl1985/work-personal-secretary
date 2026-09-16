@@ -1,3 +1,33 @@
+## 0.7.0 — 2026-09-16（⑦ 收口：技能扩写 + 新增 media-gen + 发布文档三处一致）
+
+### 一、这一步做了什么
+
+把 B 线的能力**写成专家能直接用的契约**，并把发布文档补齐到「可交付形态」。
+
+- `skills/office-ppt/SKILL.md` **重写**（70 → 165 行）：先选路径（成套渲染 / 存量美化 / 轻量生成 / 只读导出）→ ppt_render 命令与 manifest 示例 → **16 类页型字段与容量表** → 容错口径（未知 layout / 缺必填 / 超页数 / 自动缩字号）→ ppt_style（含 exit 3 语义）→ ppt_tool 速查 → 典型工作流 → 注意事项（WPS COM 同名缓存坑 · JSON 禁 BOM · ring 降级 · 复杂版式不做）
+- **新增 `skills/media-gen/SKILL.md`**（104 行）：生图（密钥优先级 / 红线 / exit 4 回退）· 图示（运行时三档查找 / 不自动安装）· setup_mermaid.ps1 三种用法与「为什么不进 dependencies」· 典型工作流 · 云端边界
+- `README.md`（128 → 168 行）：能力表 PPT 行重写 · 新增「**一之三、B 线 PPT 与媒体能力**」（命令矩阵 / 退出码 / manifest 契约 / **media.* 设置表**）· 技能清单 4 → **5** · 插件侧补媒体设置与重启口径 · 已知局限补 3 条（几何口径 / ring 降级 / 生图边界）· 安装自检补 mermaid 运行时（可选能力）
+- `NOTICE`（34 → 46 行）：外部软件补 **mermaid 运行时**（不随包、按需装到使用者数据目录）；「数据与隐私」**改写为准确口径** —— 默认全程本机，唯一云端出口是生图，且需「显式调用 + 已配密钥」两个条件，未配密钥时**不会发生任何网络请求**
+- `cordis.patch.yml`（17 → 24 行）：补 media.* 默认值注释 → **默认值三处一致**（settings schema/DEFAULTS ↔ patch 注释 ↔ README 表）落地
+
+### 二、验证
+
+- 五套回归全绿：style-test **24/0** · ppt-render-test **24/0** · ppt-style-test **11/0** · media-test **14/0** · spec_sync --check **0**
+- 技能文档：office-ppt **165 行** / media-gen **104 行**，**无 BOM**；命令一律用 `<DOC_SUITE_SCRIPTS>` 占位符（不含作者机器绝对路径）
+- 仓库 ↔ profile 逐文件 SHA256 一致
+
+### 三、需要重启 DSH
+
+本步改了 `skills/**`（技能在启动时扫描）→ **必须重启 DSH** 才能在会话里看到新技能 media-gen 与更新后的 office-ppt。
+
+### 四、未做
+
+⑧ T5 专家卡（general-slides 补母版与模板约束）· 主题库与母版导入（后置）· 生图云端实测（需使用者提供密钥）
+
+### 五、回退
+
+版本改回 **0.6.0** 或 git revert 本提交；profile 同步一次并重启 DSH。
+
 ## 0.6.0 — 2026-09-16（⑥：生图（ARK）与图示（mermaid）链路 + 媒体设置项）
 
 ### 一、这一步做了什么

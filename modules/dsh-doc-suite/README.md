@@ -8,11 +8,11 @@
 |---|---|---|
 | **Word** | 处理 + **比对** + **套样式** | 读取（全文/表格/样式，含"带修订文档拒绝裸读"保护）、生成、编辑、转 PDF；**比对**：文本 diff + HTML 对照 + **可用 Word/WPS 打开的"红线修订版"**（字符级）；**套样式**：对**已有** docx 一键套版式（`apply-style` / `table-style`，见「一之二」节） |
 | **Excel** | 处理 + **套样式** | 读写、公式写入、**重算读值**（KET `CalculateFull`）、**数据透视**、条件格式、图表、合并、批量；**套样式**：对**已有** xlsx 一键套样式（`apply-style`，见「一之二」节） |
-| **PPT** | **制作 + 排版** | 生成、模板/母版/版式套用、占位符填充、EMU 级坐标与字号、图表/表格/图片、演讲者备注、批量生成；**排版上限取决于模板预制程度** |
+| **PPT** | **成套渲染 + 存量美化 + 制作** | `成套渲染`：manifest → pptx（**16 类页型**、主题规格驱动几何、原生图表/表格、演讲者备注、超容量自动缩字号）；`存量美化`：`apply-style` 对已有 pptx 统一字体 + **内容零改动断言**（exit 3 拒绝产出）；另有轻量大纲生成（`create`）、母版套用、导出 PDF / 逐页 PNG。详见 `skills/office-ppt/SKILL.md` |
 | **PDF** | **只读精确提取**（附少量组装） | 文字、表格（**带 bbox**）、图片、书签/元数据；合并 / 拆分 / 页面转图 / 图片合成 PDF；**旋转页/合并单元格/扫描件主动告警**（不做版式编辑、不做本地 OCR；`ocr` 子命令已退役，只打印退役说明并 exit 0） |
 
 > **子命令速查**：每个格式的完整子命令、参数形态（位置参数 vs 选项）与易错点，见 `skills/<对应技能>/SKILL.md` 的「子命令速查」表。
-> **技能清单（4 个 DSH 原生技能）**：`office-word`（Word 处理 + 比对）、`office-excel`（Excel 处理）、`office-ppt`（PPT 制作 + 排版）、`pdf-tools`（PDF 只读提取 + 合并/拆分/图片合成）。
+> **技能清单（5 个 DSH 原生技能）**：`office-word`（Word 处理 + 比对）、`office-excel`（Excel 处理）、`office-ppt`（PPT 成套渲染 + 存量美化 + 制作）、`pdf-tools`（PDF 只读提取 + 合并/拆分/图片合成）、`media-gen`（配图生图 + mermaid 图示）。
 > 三个高频坑先记住：`convert <src> <dst>`（**没有** `--to`）、`ppt images <src> <outdir>`（**没有** `--out-dir`）、`merge/make` 的**输出参数在前**。
 
 ## 一之二、样式能力（A 线：给【已有文件】套样式）
@@ -61,6 +61,37 @@ py -3 scripts/spec_sync.py --spec standard    # 只处理指定风格
 
 > `spec_sync.py` 退出码：**0** 成功 / **2** 规格或输入错误 / **3** 同步后发现哈希不一致。它**零新增依赖**，且**不含任何使用者私有路径**（展示文档输出由 `--doc-out` 指定，缺省打印到标准输出）。
 
+## 一之三、B 线 PPT 与媒体能力（2026-09-16）
+
+> 与 A 线（Word/Excel 套样式）同构：**几何 / 字号 / 色值全部来自 `specs/standard.json` 的 `pptx` 段** —— 改版式改规格，不改脚本。
+
+| 路径 | 命令 | 说明 |
+|---|---|---|
+| **成套渲染**（新建） | `office/ppt_render.py render <manifest.json> <out.pptx>` | 16 类页型：cover / toc / section / bullets / cards / compare / data / chart / table / quote / image / process / timeline / case / qa / closing；未知 layout 退化 bullets 并告警；缺必填 exit 2 指名页号；超 max_slides 保留首页+中段+末页；notes 写演讲者备注 |
+| **干跑校验** | `office/ppt_render.py validate <manifest.json>` · `list-layouts` | 契约 + 主题几何 + 容量预演；列页型与组件 |
+| **存量美化** | `office/ppt_style.py apply-style <file.pptx> [--out X] [--dry-run] [--text-color ROLE]` | 逐 run 统一字体（a:latin / a:ea / a:cs，含表格与备注）；**不改字号与位置** |
+| **配图生图** | `media/gen_image.py image --prompt ... --out ...` | 火山引擎 **ARK**（Seedream 5.0 Pro）；**云端服务**（调用前显式告知）；失败/无密钥 → **exit 4 可回退** |
+| **图示渲染** | `media/gen_diagram.py render <in.mmd> <out.png|svg>` | mermaid **本机**渲染（Node + Edge）；运行时不在包内，用 `media/setup_mermaid.ps1` 安装/迁移 |
+
+**退出码**：`0` 成功 ｜ `2` 输入/参数/规格错 ｜ **`3` = 内容零改动断言失败（已拒绝产出、原文件未动）** ｜ `4` = 媒体链路云端不可用或运行时缺失（**可回退**） ｜ `5` 缺字体/Pillow。
+
+**manifest 契约**：`specs/ppt-manifest.schema.json`（JSON Schema；validate 由它驱动）；**字段速查与示例见 `skills/office-ppt/SKILL.md`**。
+
+### 媒体设置（键路径；设置 → 插件 → dsh-doc-suite）
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `media.provider` | `volcengine-ark` | 生图平台（默认火山引擎） |
+| `media.image.enabled` | `true` | 图形元素优先生图（失败自动回退代码矢量） |
+| `media.image.model` | `doubao-seedream-5-0-pro-260628` | 方舟模型 ID（以控制台开通为准） |
+| `media.image.size` / `timeout_ms` / `retries` | `1K` / `60000` / `2` | 尺寸 / 超时 / 重试 |
+| `media.image.fallback_to_vector` | `true` | 失败即回退矢量（不需人工介入） |
+| `media.video.enabled` / `media.video.model` | `false` / 空 | 生视频（默认关；模型 ID 按控制台填） |
+| `media.ark.api_key` | **空** | ARK 密钥（敏感：默认空、不落日志；**发布件永不含**） |
+| `media.ark.endpoint` | `https://ark.cn-beijing.volces.com/api/v3` | 方舟端点 |
+
+> **默认值三处一致**：`lib/settings.js` 的 schema 与 DEFAULTS、`cordis.patch.yml` 的注释、本表（回归用例会比对 schema ↔ DEFAULTS）。
+
 ## 二、硬前置（安装前必须满足）
 
 | 前置 | 要求 | 为什么 |
@@ -82,6 +113,10 @@ py -3 doctor.py            # 人类可读报告
 py -3 doctor.py --json     # 供插件 /doc-doctor 解析
 py -3 doctor.py --fix      # 显式确认后才执行 pip 安装（不装解释器）
 py -3 doctor.py --skip-wps # 跳过 WPS COM 检查（非 Windows 或已知没装 WPS 时）
+
+# 3b) 可选：媒体链路运行时（mermaid 图示用；不进依赖/发布件，按需安装）
+#     powershell -ExecutionPolicy Bypass -File scripts\media\setup_mermaid.ps1            # 体检
+#     powershell -ExecutionPolicy Bypass -File scripts\media\setup_mermaid.ps1 -Install   # 安装（不下载 Chromium）
 
 # 4) 解析技能文档里的路径占位符（对外分发不写死绝对路径）
 py -3 doctor.py --emit-skill-paths   # 输出 JSON：scriptsDir / tools / skills
@@ -105,7 +140,9 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 ```
 
 - 宿主半只注册一个命令：**`/doc-doctor`** —— 执行环境自检并回报结论与修复命令。
-- 配置项（中性默认层，可在设置页用户层覆盖）：`pythonLauncher`（默认 `py -3`）、`docsRoot`、`wpsRequired`、`doctorOnStartup`。
+- 配置项（中性默认层，可在设置页用户层覆盖）：`pythonLauncher`（默认 `py -3`）、`docsRoot`、`wpsRequired`、`doctorOnStartup`；**媒体设置**命名空间 `dsh-doc-suite` 的 `media.*`（见「一之三」节表）。
+- `/doc-doctor` 输出末尾附一行**媒体设置摘要**（不含密钥明文）；`doctor.py` 的 [4] 段报告生图配置来源与 mermaid 运行时状态。
+- **改了 `lib/**`（含设置项 schema）需重启 DSH**；`scripts/**.py` 免重启；`skills/**` 需重启（启动时扫描技能）。
 
 ## 五、已知局限（重要，别踩）
 
@@ -119,6 +156,9 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 | 6 | Excel | `recalc` 对 `.xls` 旧格式未实测；`pivot` 不做小计行识别（源区域含"合计"行会被当行项目） |
 | 7 | ~~技能里的脚本路径~~ **已解决（2026-09-12）** | `skills/*/SKILL.md` 已改用占位符 `<DOC_SUITE_SCRIPTS>`，不再含作者机器绝对路径；解析方式 = `py -3 doctor.py --emit-skill-paths` |
 | 8 | ~~脚本存在两份副本~~ **已解决（2026-09-15）** | 工作区遗留的 doc-suite 脚本副本（`office/`、`pdf/`、`cli_guard.py`）**已删除**；**唯一源 = 模块内 `scripts/`**（工作区只保留技能文档副本，与模块 `skills/` 同步）。路径解析一律以 `py -3 doctor.py --emit-skill-paths` 为准 |
+| 10 | **PPT 几何容量口径** | 行高按 WPS 实测（**字号 ÷ 72 × 1.228 × 行距**）反算，`max_lines` 等容量值据此定；`spec_sync.py`、渲染器、`style-test.mjs` 三处口径由**门禁用例**守住（改其一必改另两处） |
+| 11 | **进度环降级** | `ring` 组件经三次小样（BLOCK_ARC 角度 adjustment）**未标定出可控弧度** → 按预案**降级为数据条**：进度类数据用 **chart 页**表达 |
+| 12 | **生图需密钥且属云端** | 默认密钥为空 → 生图不可用并**自动回退代码矢量**（全程不出网）；显式配密钥后 prompt 会发送到火山引擎 ARK，**须先告知使用者且不得含客户信息/报价/涉密内容** |
 | 9 | 非原生格式"尽力而为" | `word read` / `excel read` 对非 docx/xlsx 文件会回落 WPS COM 读取（读到内容即成功），`ppt read` 则会失败（python-pptx 抛 `PackageNotFoundError`，经 `cli_guard` 转为中文单行错误 + exit 2）；三种行为不完全一致，属有意保留（WPS 能读 .txt/.csv 这类纯文本） |
 
 ## 六、许可与归属
