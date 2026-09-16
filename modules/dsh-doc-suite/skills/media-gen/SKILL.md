@@ -138,4 +138,4 @@ py -3 <DOC_SUITE_SCRIPTS>\..\doctor.py                    :: [4] 段同样给「
 - **云端边界**：只有 `gen_image.py image` 会出网，且**仅在显式调用时**；默认无密钥 → 全程不出网
 - mermaid 渲染在本机（Node + Edge），产物落盘路径由调用方指定
 - 运行时不进包、不进依赖；`doctor.py` 的 [4] 段会报告它与浏览器的状态
-- 密钥与 ``"媒体设置"``：见 `settings` 的 `media*（扁平顶层键）` 键（默认空密钥）；**修改设置项后重启 DSH 才在设置页可见**（lib 层变更）
+- 密钥与「媒体设置」：见 `settings` 的 **`mediaArkApiKey`** 等扁平顶层键（默认空密钥）；设置改动**免重启生效**（`applies: 'live'`）
