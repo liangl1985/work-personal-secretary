@@ -2754,6 +2754,8 @@ s17Payload = {
   identity: { exists: false, entryId: '' },
 }
 const s17TextInputs = (tree) => findAll(tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+/** 反斜杠（避免在源码里写转义，读起来也清楚） */
+const BS = String.fromCharCode(92)
 hookSlots = []
 hookCursor = 0
 effectQueue = []
@@ -2764,6 +2766,21 @@ ok(s17Root.length === 3 && String(s17Root[0].props.value) === 'D:/root',
   '存储根目录预填（只有宿主反推得出才给；实测 ' + String(s17Root[0] && s17Root[0].props.value) + '）')
 ok(String(s17Root[1].props.value) === 'D:/root/memory-data' && String(s17Root[2].props.value) === 'D:/root/obsidian-data',
   '两个目录由根目录派生（<根>/memory-data 与 <根>/obsidian-data）')
+// 分隔符必须跟随根目录自己的写法：真机上「E:\lina」曾被拼成「E:\lina/memory-data」（反斜杠 + 正斜杠混排）。
+// 宿主两种分隔符都收（落盘前 normalizePath → posix 归一），这里管的是**显示一致**。
+s17Root[0].props.onChange({ target: { value: 'D:' + BS + 'work' } })
+s17Tree = await s17Render()
+s17Root = s17TextInputs(s17Tree)
+ok(String(s17Root[1].props.value) === 'D:' + BS + 'work' + BS + 'memory-data' && String(s17Root[2].props.value) === 'D:' + BS + 'work' + BS + 'obsidian-data',
+  '反斜杠根目录 → 派生值也用反斜杠（不出现反斜杠 + 正斜杠混排；实测 ' + String(s17Root[1].props.value) + '）')
+s17Root[0].props.onChange({ target: { value: 'D:/work/' } })
+s17Tree = await s17Render()
+s17Root = s17TextInputs(s17Tree)
+ok(String(s17Root[1].props.value) === 'D:/work/memory-data', '正斜杠根目录（含结尾斜杠）→ 去掉重复分隔符后仍用正斜杠拼接')
+// 通用守卫（不只盯这一处）：页面渲染出来的路径文本里**不许**出现「盘符 + 反斜杠 … 正斜杠」的混排。
+// 以后谁再写一处固定 '/' 的拼接，这条都会红，不必再靠肉眼发现。
+ok(!/[A-Za-z]:\\[^\s|]*\//.test(s17Text),
+  '核心配置页路径文本无「反斜杠 + 正斜杠」混排（实测文本片段：' + String(s17Text).slice(0, 60) + '…）')
 ok(s17Root[1].props.disabled === true && s17Root[2].props.disabled === true,
   '派生值默认只读（要改必须显式点「单独指定」——不做成随手可改，才有「默认不冲突」这个保证）')
 ok(s17Text.indexOf('自动：存储根目录/') >= 0, '派生行标注来源「自动：存储根目录/」')
@@ -2794,6 +2811,15 @@ s17Tree = await s17Render()
 s17Root = s17TextInputs(s17Tree)
 ok(String(s17Root[1].props.value) === 'F:/root2/memory-data' && s17Root[1].props.disabled === true,
   '「跟随根目录」→ 该行回到派生值并恢复只读')
+// 根目录为空时**不能**再给「跟随根目录」：没有可跟随的目标，点下去只会把刚填好的目录清空
+// （真机反馈：「我选择跟随后没有继续」——根目录为空时 joinDir 返回空串，字段被清空）
+s17TextInputs(s17Tree)[0].props.onChange({ target: { value: '' } })
+s17Tree = await s17Render()
+const s17Cust2 = findButtons(s17Tree).filter((b) => label(b) === '单独指定')[0]
+if (s17Cust2) s17Cust2.props.onClick()
+s17Tree = await s17Render()
+ok(findButtons(s17Tree).filter((b) => label(b) === '跟随根目录').length === 0,
+  '根目录为空时不提供「跟随根目录」（没有可跟随的目标，点了只会把目录清空）')
 
 // ══════════════════════════════════════════════════════════════════
 // [18] D 组：环境检测共享（只发一次）+ 加载态不显示「缺失」

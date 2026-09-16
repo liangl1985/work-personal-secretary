@@ -1595,6 +1595,22 @@ window.__ModuleLoader__.load({
       return S.badgeSkip
     }
 
+    /**
+     * 拼文件系统路径：`<base><分隔符><seg>`。
+     *
+     * **分隔符跟随 base 自己的写法**（取 base 里最后出现的那个分隔符）；base 没有任何分隔符时用 `/`。
+     * 为什么必须只有这一份实现：Windows 使用者敲的是反斜杠、宿主回传的是 POSIX 正斜杠，
+     * 两边各写一份拼接就会拼出「反斜杠 + 正斜杠」混排（真机反馈过：形如 `C:\work/memory-data`）。
+     * 本函数只负责**显示与传参一致**；落盘前宿主一律 normalizePath → posix 归一，两种分隔符都收。
+     */
+    function joinFsPath(base, seg) {
+      const b = String(base == null ? '' : base).trim().replace(/[\\/]+$/, '')
+      if (!b) return ''
+      const i = Math.max(b.lastIndexOf('/'), b.lastIndexOf('\\'))
+      const sep = i >= 0 ? b.charAt(i) : '/'
+      return b + sep + String(seg == null ? '' : seg)
+    }
+
     function runStateStyle(state) {
       if (state === 'ok') return S.badgeOk
       if (state === 'run') return S.badgeWarn
@@ -1928,13 +1944,7 @@ window.__ModuleLoader__.load({
       return i >= 0 ? s.slice(i + 1) : s
     }
 
-    /** 拼接路径：沿用工作区自身的分隔符风格（Windows 反斜杠 / 其它正斜杠） */
-    function joinPath(base, seg) {
-      const b = String(base || '').replace(/[\\/]+$/, '')
-      if (!b) return ''
-      const sep = (b.indexOf('\\') >= 0 && b.indexOf('/') < 0) ? '\\' : '/'
-      return b + sep + String(seg || '')
-    }
+    // 路径拼接统一走模块级的 joinFsPath（原来这里另有一份 joinPath，规则与核心配置页不一致 → 已合并）
 
     /** workspaceSource → 工作区字段下方的来源说明键（none 时提示必须选择） */
     function wsSourceNoteKey(source) {
@@ -2984,10 +2994,7 @@ window.__ModuleLoader__.load({
       const rootSubs = (st.rootSubdirs && typeof st.rootSubdirs === 'object') ? st.rootSubdirs : {}
       const SUB_MEM = String(rootSubs.memory || 'memory-data')
       const SUB_VAULT = String(rootSubs.vault || 'obsidian-data')
-      function joinDir(root, name) {
-        const r = String(root == null ? '' : root).trim().replace(/[\\/]+$/, '')
-        return r ? (r + '/' + name) : ''
-      }
+      // 路径拼接统一走模块级的 joinFsPath（全插件唯一一份实现，见文件上方）
       /**
        * 改「存储根目录」：两个**没被单独指定**的目录跟着重算；被指定过的不动（使用者的显式选择优先）。
        */
@@ -2995,8 +3002,8 @@ window.__ModuleLoader__.load({
         const root = String(value == null ? '' : value)
         setSt((prev) => {
           const patch = { rootDir: root }
-          if (prev.memCustom !== true) patch.memoryDir = joinDir(root, SUB_MEM)
-          if (prev.obsCustom !== true) patch.obsidianDir = joinDir(root, SUB_VAULT)
+          if (prev.memCustom !== true) patch.memoryDir = joinFsPath(root, SUB_MEM)
+          if (prev.obsCustom !== true) patch.obsidianDir = joinFsPath(root, SUB_VAULT)
           return Object.assign({}, prev, patch)
         })
       }
@@ -3022,8 +3029,8 @@ window.__ModuleLoader__.load({
         setSt((prev) => {
           const root = String(prev.rootDir || '')
           return Object.assign({}, prev, key === 'memoryDir'
-            ? { memCustom: false, memoryDir: joinDir(root, SUB_MEM) }
-            : { obsCustom: false, obsidianDir: joinDir(root, SUB_VAULT) })
+            ? { memCustom: false, memoryDir: joinFsPath(root, SUB_MEM) }
+            : { obsCustom: false, obsidianDir: joinFsPath(root, SUB_VAULT) })
         })
       }
 
@@ -3189,7 +3196,9 @@ window.__ModuleLoader__.load({
           // work-memory.obsidianSyncDir（后者 = <Obsidian 目录>/00_全局记忆）。
           // 走 basedeck 的 settings 项：lib/basedeck.js 的 planSettings 用
           // overrides.memoryDir / overrides.obsidianSyncDir 覆盖这两键（basedeck.js:1331-1333）。
-          const mirror = form.obsidianDir.replace(/[\\/]+$/, '') + '/' + VAULT_MIRROR_NAME
+          // 用 joinFsPath：这里的值会写进 settings.yaml 的 work-memory.obsidianSyncDir，
+          // 固定用 '/' 拼会在反斜杠目录下写出混排（与核心配置页同一类缺陷）
+          const mirror = joinFsPath(form.obsidianDir, VAULT_MIRROR_NAME)
           const res = await postFull('/basedeck', {
             ids: ['settings'],
             dryRun: false,
@@ -3325,6 +3334,9 @@ window.__ModuleLoader__.load({
        * 为什么默认只读：本页的设计就是「选一个文件夹，两边各自建自己的子文件夹」——派生值随手可改
        * 就把「默认不冲突」这个保证丢了。要改是**例外路径**，得显式点一下。
        */
+      // 根目录为空时**不能**给「跟随根目录」：没有可跟随的目标，`joinFsPath('')` 会返回空串，
+      // 点下去的结果是把使用者刚填好的目录清空（真机反馈「点跟随没有继续」）。
+      const rootFilled = String(st.rootDir || '').trim() !== ''
       const derivedDirField = (key, label, hint, value, custom) => h('div', { key: 'f-' + key, style: S.coreFieldRow }, [
         h('div', { key: 'l', style: S.label }, label),
         h('div', { key: 'row', style: S.inputRow }, [
@@ -3345,7 +3357,7 @@ window.__ModuleLoader__.load({
               'data-dir-custom': key,
               onClick: () => makeCustom(key),
             }, t('coreDirCustomize')),
-          custom
+          (custom && rootFilled)
             ? h('button', {
               key: 'r', type: 'button', disabled: runRunning,
               style: Object.assign({}, S.btn, runRunning ? S.btnDisabled : null),
@@ -4512,7 +4524,7 @@ window.__ModuleLoader__.load({
             st.pickError ? h('div', { key: 'pe', style: S.warnLine }, st.pickError) : null,
             h('div', { key: 'f1', style: S.field }, [
               h('label', { key: 'l', style: S.label }, [t('initFieldWorkspace'), h('span', { key: 'r', style: S.reqMark }, ' *')]),
-              dirRow('workspace', form.workspace, 'C:/work/space'),
+              dirRow('workspace', form.workspace, 'C:\\work\\space'),
               h('div', { key: 'h', style: S.labelHint }, t('initFieldWorkspaceHint')),
               st.workspaceSource
                 ? h('div', { key: 'src', style: wsNone ? S.warnLine : S.labelHint },
@@ -4554,9 +4566,9 @@ window.__ModuleLoader__.load({
                 h('div', { key: 'cand', style: S.candRow }, [
                   candidate('obsidianSyncDir', 'off', t('initCandNoMirror'), '', true, st.obsidianOff, chooseNoMirror),
                   candidate('obsidianSyncDir', 'all', t('initCandMirrorAll'),
-                    st.workspace ? joinPath(st.workspace, '00_全局记忆') : '', Boolean(st.workspace), false),
+                    st.workspace ? joinFsPath(st.workspace, '00_全局记忆') : '', Boolean(st.workspace), false),
                   candidate('obsidianSyncDir', 'work', t('initCandMirrorWork'),
-                    st.workspace ? joinPath(st.workspace, 'work-memory') : '', Boolean(st.workspace), false),
+                    st.workspace ? joinFsPath(st.workspace, 'work-memory') : '', Boolean(st.workspace), false),
                 ]),
               ])),
             ]),
