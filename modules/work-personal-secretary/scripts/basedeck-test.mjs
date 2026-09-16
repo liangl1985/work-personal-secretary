@@ -76,11 +76,16 @@ import {
   isMigrateNoise,
   sameFsPath,
   walkFilesForMigrate,
+  ROOT_SUBDIR_MEMORY,
+  ROOT_SUBDIR_VAULT,
+  deriveRootChildren,
+  inferRootDir,
+  memoryTopSegmentInVault,
 } from '../lib/basedeck.js'
 import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
 import { NESTING_DETAIL, isSameOrNested, pathChecks, relationOf, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
-import { resolveMigrateSource } from '../lib/setup-state.js'
+import { buildSetupState, resolveMigrateSource } from '../lib/setup-state.js'
 import { isFullyQualifiedPath, listDirectories } from '../lib/dirs.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -1471,6 +1476,51 @@ ok(rMig.status === 200 && rMig.body.migrateFromSource === 'settings' && rMig.bod
 const rMigItem = (rMig.body.items || []).filter((i) => i.id === 'migrateMemory')[0]
 ok(rMigItem && typeof rMigItem.status === 'string' && typeof rMigItem.migrateSourceText === 'string' && rMigItem.internal === undefined,
   'GET /basedeck 的 migrateMemory 项有状态 + 来源说明，且内部字段 internal 不对外')
+
+section('[24] 根目录模型：memory-data / obsidian-data（主人 2026-09-16 定）')
+// 模型：使用者只选**一个**存储根目录，记忆体与知识库各自在它下面新建自己的子文件夹。
+// 这样两个目录天然是兄弟、默认不可能互相嵌套——「目标冲突」不再是常态问题。
+ok(ROOT_SUBDIR_MEMORY === 'memory-data' && ROOT_SUBDIR_VAULT === 'obsidian-data',
+  '两个固定子目录名：memory-data / obsidian-data')
+const dRoot = deriveRootChildren('E:/work')
+ok(dRoot.memoryDir === 'E:/work/memory-data' && dRoot.obsidianDir === 'E:/work/obsidian-data',
+  '由存储根目录派生两个工作目录（实测 ' + dRoot.memoryDir + ' / ' + dRoot.obsidianDir + '）')
+ok(deriveRootChildren('').memoryDir === '' && deriveRootChildren('   ').obsidianDir === '',
+  '根目录为空 / 全空白 → 两个派生目录都为空串（不猜盘符、不拼相对路径）')
+ok(inferRootDir('E:/work/memory-data', 'E:/work/obsidian-data') === 'E:/work',
+  '反推：两个目录正好是同一父目录下的 memory-data / obsidian-data → 根目录 = 该父目录')
+ok(inferRootDir('E:/work/MEMORY-DATA', 'E:/work/obsidian-data') === 'E:/work',
+  '反推大小写不敏感（Windows 路径不区分大小写）')
+ok(inferRootDir('C:/Users/me/.dsh/memories/me', 'E:/lina') === '' && inferRootDir('E:/a/memory-data', 'E:/b/obsidian-data') === '',
+  '既有散落配置（不同父目录 / 恰好同名）→ 推不出根目录就留空，不猜')
+ok(inferRootDir('', 'E:/work/obsidian-data') === '', '一半为空 → 不反推')
+// 记忆库若被放进知识库（「单独指定」时可能），它不是业务模块，不该登记进主页
+ok(memoryTopSegmentInVault('E:/vault/memory-data', 'E:/vault') === 'memory-data'
+  && memoryTopSegmentInVault('E:/vault/data/mem', 'E:/vault') === 'data'
+  && memoryTopSegmentInVault('E:/other/memory-data', 'E:/vault') === ''
+  && memoryTopSegmentInVault('E:/vault', 'E:/vault') === '',
+  '取「记忆库在知识库里的第一级目录名」；不在库内 / 同一目录 → 空串')
+const mvVault = join(TMP_ROOT, 'modelvault')
+mkdirSync(join(mvVault, '知识库-天地'), { recursive: true })
+mkdirSync(join(mvVault, ROOT_SUBDIR_MEMORY), { recursive: true })
+mkdirSync(join(mvVault, VAULT_MIRROR_DIR_NAME), { recursive: true })
+ok(listVaultModules(mvVault).indexOf(ROOT_SUBDIR_MEMORY) >= 0, '默认扫描会看到记忆库目录（这是待排除的现象）')
+ok(listVaultModules(mvVault, [memoryTopSegmentInVault(join(mvVault, ROOT_SUBDIR_MEMORY), mvVault)]).indexOf(ROOT_SUBDIR_MEMORY) < 0,
+  '传入排除项后，记忆库目录不再被当作业务模块登记')
+ok(VAULT_MIRROR_DIR_NAME && listVaultModules(mvVault, [ROOT_SUBDIR_MEMORY]).indexOf('00_全局记忆') < 0,
+  '受管目录 00_全局记忆 始终排除（不受新增排除项影响）')
+
+// setup-state：把根目录与子目录名一并暴露给客户端（客户端不硬编码这两个名字）
+const stRoot = buildSetupState({
+  memoryDirValue: 'E:/work/memory-data', obsidianSyncValue: 'E:/work/obsidian-data/00_全局记忆',
+})
+ok(stRoot.root && stRoot.root.value === 'E:/work' && stRoot.root.source === 'derived',
+  'setup-state.root：由两个目录反推为 E:/work（source=derived）')
+ok(stRoot.rootSubdirs && stRoot.rootSubdirs.memory === 'memory-data' && stRoot.rootSubdirs.vault === 'obsidian-data',
+  'setup-state.rootSubdirs：把子目录名交给客户端（唯一真相源在宿主）')
+const stNoRoot = buildSetupState({ memoryDirValue: 'C:/Users/me/mem', obsidianSyncValue: '' })
+ok(stNoRoot.root && stNoRoot.root.value === '' && stNoRoot.root.source === 'none',
+  '既有配置推不出根目录 → root.value 为空、source=none（页面据此显示「已单独指定」）')
 
 section('[23] 目录选择：ctx.directoryPicker 的 browse 原语代理（GET /dirs · POST /dirs/new）')
 // 反斜杠统一用 [22] 段已声明的 BS（String.fromCharCode(92)），本段不再重复声明

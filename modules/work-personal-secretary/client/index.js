@@ -255,11 +255,16 @@ window.__ModuleLoader__.load({
       gateChecking: '检测中…',
       gateLoadFailed: '未能取到环境检测结果',
       coreDirsTitle: '目录与岗位',
-      coreDirsSub: '三项都填写后才能保存；两个目录都要填，保存后按下面的执行链一次做完。',
+      coreDirsSub: '选一个存储根目录，记忆体与知识库各自在它下面新建自己的文件夹；岗位与三项齐备后才能保存。',
+      coreFieldRoot: '存储根目录',
+      coreFieldRootHint: '选一个文件夹。记忆体与知识库会在这个文件夹下各自新建一个自己的子文件夹（下面的两个目录），各自要建立的东西只放在自己的文件夹里，互不干扰。',
       coreFieldMemoryDir: '记忆库目录',
-      coreFieldMemoryDirHint: '必填。推荐新建一个空文件夹专用，或放进长期使用的主工作区；不建议分散在不同盘符 —— 跨文件夹使用时可能受权限范围限制，出现写入失败或同步中断。',
+      coreFieldMemoryDirHint: '记忆体结构（MEMORY.md / USER.md / GRAPH.json / PROJECTS / DAILY / ARCHIVE）建在这里；原来已有记忆库时，保存后只把旧库里还没有的文件补过来，旧目录原样保留。',
       coreFieldObsidianDir: 'Obsidian 知识库目录',
-      coreFieldObsidianDirHint: '脚本在此建立知识库结构，并把记忆镜像区 00_全局记忆 与记忆库关联',
+      coreFieldObsidianDirHint: '知识库结构（🏠 主页.md / 00_全局记忆 / 工具 / .obsidian）建在这里；已有知识库不会被动，要搬请用下面的导入入口，由你指定后再逐项对照。',
+      coreDirCustomize: '单独指定',
+      coreDirFollowRoot: '跟随根目录',
+      coreDirAuto: '自动：存储根目录/',
       coreFieldDomain: '工作岗位',
       coreFieldDomainHint: '五个预置岗位对应信息安全 / 财务 / 人力资源 / 代码编程 / 金融五个行业域，均为可直接写入身份的预置正文；都不是时可自填，新建后自动出现在这里并选中',
       setupStateFailed: '未能取到当前生效值（可手动填写）',
@@ -297,9 +302,9 @@ window.__ModuleLoader__.load({
       chainRetry: '重试',
       chainRetryHint: '从失败的那一步继续（已完成的部分保留；重复执行只补缺失）',
       importTitle: '已有旧内容要带过来？',
-      importSub: '本机已有知识库或记忆文件时，可选文件夹带过来',
+      importSub: '本机已有知识库或记忆文件时，由你指定文件夹后再搬 —— 知识库不会自动搬，指定后逐项对照；记忆库的迁移在上面第 1 步自动做',
       importBrowse: '浏览… 选择知识库或记忆文件夹',
-      importNote: '纪律：只读源目录、只补缺失、不覆盖现有文件、先给预览再落盘。',
+      importNote: '纪律：只读源目录、只补还没有的文件、不覆盖现有文件、先给预览再逐项对照确认后才落盘。',
       importPlaceholder: '选择后先列清单，由你勾选要带过来的条目，确认后才写入。',
       importPicked: '已选目录：',
       importLater: '清单与勾选（条目归类）在后续版本提供；本轮先落定入口与纪律。',
@@ -816,11 +821,16 @@ window.__ModuleLoader__.load({
       gateChecking: 'Checking…',
       gateLoadFailed: 'Could not read the environment check',
       coreDirsTitle: 'Directories & job',
-      coreDirsSub: 'All three fields are required; saving runs the whole chain below in one go.',
+      coreDirsSub: 'Pick one storage root; the memory store and the vault each create their own subfolder under it. A job and all three fields are required to save.',
+      coreFieldRoot: 'Storage root',
+      coreFieldRootHint: 'Pick a folder. The memory store and the vault each create their own subfolder inside it (the two directories below), and everything each one builds stays inside its own folder.',
       coreFieldMemoryDir: 'Memory directory',
-      coreFieldMemoryDirHint: 'Required. Create an empty folder dedicated to the Work Secretary, or put it inside the workspace you use long-term; avoid spreading the two directories across different drives — cross-folder use can hit permission-scope limits, causing failed writes or interrupted sync.',
+      coreFieldMemoryDirHint: 'The memory structure (MEMORY.md / USER.md / GRAPH.json / PROJECTS / DAILY / ARCHIVE) is created here. If an older memory store exists, its files are copied over on save — missing files only; the old directory is left untouched.',
       coreFieldObsidianDir: 'Obsidian vault directory',
-      coreFieldObsidianDirHint: 'The vault structure is created here, and the 00_全局记忆 mirror area is linked to the memory store',
+      coreFieldObsidianDirHint: 'The vault structure (🏠 主页.md / 00_全局记忆 / 工具 / .obsidian) is created here. An existing vault is never touched; to bring one in, use the import entry below after picking it yourself.',
+      coreDirCustomize: 'Set separately',
+      coreDirFollowRoot: 'Follow root',
+      coreDirAuto: 'Auto: storage-root/',
       coreFieldDomain: 'Job',
       coreFieldDomainHint: 'Five presets cover information security / accounting / HR / coding / finance, each a ready-to-write identity text; choose "None of these" to fill your own — it then appears in this list and is selected',
       setupStateFailed: 'Could not read the current values (fill them in manually)',
@@ -858,7 +868,7 @@ window.__ModuleLoader__.load({
       chainRetry: 'Retry',
       chainRetryHint: 'Continues from the failed step (finished parts are kept; re-running only fills what is missing)',
       importTitle: 'Bring existing content over?',
-      importSub: 'If you already have a vault or memory files on this machine, pick the folder to bring them in',
+      importSub: 'If you already have a vault or memory files here, pick the folder and it is brought over — a vault is never moved automatically, and each item is compared before writing; the memory store migrates automatically in step 1 above',
       importBrowse: 'Browse… choose a vault or memory folder',
       importNote: 'Rules: read the source only, add what is missing, never overwrite existing files, show a preview before writing.',
       importPlaceholder: 'After choosing, a list appears and you tick the entries to bring over; nothing is written before you confirm.',
@@ -2729,6 +2739,9 @@ window.__ModuleLoader__.load({
       phase: 'loading', items: [], error: '',
       domains: { phase: 'loading', items: [], error: '', maxChars: 200 },
       memoryDir: '', obsidianDir: '', domainId: '', custom: [],
+      // 「一个存储根目录 + 各自新建自己的子文件夹」模型：rootDir 是使用者唯一要选的目录，
+      // 两个派生目录默认只读跟随；memCustom / obsCustom = 该目录已被「单独指定」改写，不再跟随。
+      rootDir: '', memCustom: false, obsCustom: false, rootSubdirs: null,
       modal: null, run: null, imported: '', pickError: '', openHint: null,
       // 当前生效值（GET /setup-state）：用于预填三个字段并标注来源；setupFilled = 已预填过
       setup: { phase: 'loading', data: null, error: '' }, setupFilled: false,
@@ -2807,6 +2820,7 @@ window.__ModuleLoader__.load({
           const mem = (body.memoryDir && typeof body.memoryDir === 'object') ? body.memoryDir : {}
           const obs = (body.obsidianDir && typeof body.obsidianDir === 'object') ? body.obsidianDir : {}
           const dom = (body.domain && typeof body.domain === 'object') ? body.domain : {}
+          const rootState = (body.root && typeof body.root === 'object') ? body.root : {}
           setSt((prev) => {
             // 只在**首次**取到生效值时预填：之后（重新检测 / 使用者清空后）不再回填，
             // 否则「清空字段」会被下一次取数悄悄撤销。用独立标记 setupFilled，
@@ -2818,6 +2832,22 @@ window.__ModuleLoader__.load({
             }
             if (!alreadyFilled && !String(prev.obsidianDir || '').trim() && typeof obs.value === 'string' && obs.value.trim()) {
               next.obsidianDir = obs.value.trim()
+            }
+            // 存储根目录：**只有宿主反推得出**（两个目录正好是同一父目录下的 memory-data /
+            // obsidian-data）才预填，此时两个目录都归「自动派生」；反推不出来就把两个目录
+            // 按「已单独指定」处理，原文照显 —— 绝不擅自改写使用者既有的路径。
+            if (!alreadyFilled) {
+              const rootValue = (rootState && typeof rootState.value === 'string') ? rootState.value.trim() : ''
+              if (rootValue) {
+                next.rootDir = rootValue
+                next.memCustom = false
+                next.obsCustom = false
+              } else {
+                next.memCustom = Boolean(String(next.memoryDir || prev.memoryDir || '').trim())
+                next.obsCustom = Boolean(String(next.obsidianDir || prev.obsidianDir || '').trim())
+              }
+              const subs = (body.rootSubdirs && typeof body.rootSubdirs === 'object') ? body.rootSubdirs : null
+              next.rootSubdirs = subs
             }
             if (!alreadyFilled && !String(prev.domainId || '').trim() && typeof dom.id === 'string' && dom.id) {
               if (dom.isPreset === true) {
@@ -2886,7 +2916,9 @@ window.__ModuleLoader__.load({
         const target = (browseSt.target && typeof browseSt.target === 'object') ? browseSt.target : {}
         const path = String(browseSt.path || '')
         if (!path) return
-        if (target.key) setField(target.key, path)
+        // 存储根目录走 setRoot：两个派生目录要跟着一起重算（其余字段仍是直接写值）
+        if (target.key === 'rootDir') setRoot(path)
+        else if (target.key) setField(target.key, path)
         if (target.import) setSt((prev) => Object.assign({}, prev, { imported: path, browse: null }))
         else setSt((prev) => Object.assign({}, prev, { browse: null }))
         setPickError('')
@@ -2946,6 +2978,52 @@ window.__ModuleLoader__.load({
           const msg = String((err && err.message) || err)
           if (msg.indexOf('native capability') >= 0 || msg.indexOf('系统目录选择器') >= 0) { openDirBrowser({ import: true }); return }
           setPickError(t('initPickFailed') + msg)
+        })
+      }
+      /** 子目录名与路径拼接：名字来自宿主 GET /setup-state 的 rootSubdirs（前端不硬编码） */
+      const rootSubs = (st.rootSubdirs && typeof st.rootSubdirs === 'object') ? st.rootSubdirs : {}
+      const SUB_MEM = String(rootSubs.memory || 'memory-data')
+      const SUB_VAULT = String(rootSubs.vault || 'obsidian-data')
+      function joinDir(root, name) {
+        const r = String(root == null ? '' : root).trim().replace(/[\\/]+$/, '')
+        return r ? (r + '/' + name) : ''
+      }
+      /**
+       * 改「存储根目录」：两个**没被单独指定**的目录跟着重算；被指定过的不动（使用者的显式选择优先）。
+       */
+      function setRoot(value) {
+        const root = String(value == null ? '' : value)
+        setSt((prev) => {
+          const patch = { rootDir: root }
+          if (prev.memCustom !== true) patch.memoryDir = joinDir(root, SUB_MEM)
+          if (prev.obsCustom !== true) patch.obsidianDir = joinDir(root, SUB_VAULT)
+          return Object.assign({}, prev, patch)
+        })
+      }
+      /** 浏览… 选存储根目录（与两个派生目录同一套降级：native → 应用内浏览器） */
+      function pickRoot() {
+        const fn = props.pickDirectory
+        if (typeof fn !== 'function') { openDirBrowser({ key: 'rootDir' }); return }
+        setPickError('')
+        Promise.resolve().then(() => fn()).then((dir) => {
+          if (typeof dir === 'string' && dir.trim()) setRoot(dir.trim())
+        }).catch((err) => {
+          const msg = String((err && err.message) || err)
+          if (msg.indexOf('native capability') >= 0 || msg.indexOf('系统目录选择器') >= 0) { openDirBrowser({ key: 'rootDir' }); return }
+          setPickError(t('initPickFailed') + msg)
+        })
+      }
+      /** 该派生目录改成可编辑（脱离自动派生；已有值原样保留，不覆盖使用者已填的路径） */
+      function makeCustom(key) {
+        setSt((prev) => Object.assign({}, prev, key === 'memoryDir' ? { memCustom: true } : { obsCustom: true }))
+      }
+      /** 重新跟随根目录（丢掉单独指定的值，按当前根目录重算） */
+      function followRoot(key) {
+        setSt((prev) => {
+          const root = String(prev.rootDir || '')
+          return Object.assign({}, prev, key === 'memoryDir'
+            ? { memCustom: false, memoryDir: joinDir(root, SUB_MEM) }
+            : { obsCustom: false, obsidianDir: joinDir(root, SUB_VAULT) })
         })
       }
 
@@ -3222,20 +3300,61 @@ window.__ModuleLoader__.load({
 
       const hintLine = (hint) => h('div', { key: 'h', style: S.labelHint }, hint)
 
-      const dirField = (key, label, hint, value) => h('div', { key: 'f-' + key, style: S.coreFieldRow }, [
-        h('div', { key: 'l', style: S.label }, label),
+      /**
+       * 存储根目录：使用者**唯一**要选的那个文件夹。记忆体与知识库各自在它下面新建自己的子文件夹，
+       * 所以两个目录默认由它派生、天然不会互相嵌套。
+       */
+      const rootField = h('div', { key: 'f-rootDir', style: S.coreFieldRow }, [
+        h('div', { key: 'l', style: S.label }, t('coreFieldRoot')),
         h('div', { key: 'row', style: S.inputRow }, [
           h('input', {
-            key: 'i', type: 'text', style: S.input, value: value, disabled: runRunning,
-            onChange: (e) => setField(key, (e && e.target && e.target.value) || ''),
+            key: 'i', type: 'text', style: S.input, value: st.rootDir || '', disabled: runRunning,
+            onChange: (e) => setRoot((e && e.target && e.target.value) || ''),
           }),
           h('button', {
             key: 'b', type: 'button', disabled: runRunning,
             style: Object.assign({}, S.btn, S.btnPick, runRunning ? S.btnDisabled : null),
-            onClick: () => pickDir(key),
+            onClick: () => pickRoot(),
           }, t('initBrowse')),
         ]),
-        hintLine(hint),
+        hintLine(t('coreFieldRootHint')),
+      ])
+
+      /**
+       * 派生目录行：默认只读显示 `<存储根目录>/<子目录>`；点「单独指定」才可编辑，编辑过给「跟随根目录」回来。
+       * 为什么默认只读：本页的设计就是「选一个文件夹，两边各自建自己的子文件夹」——派生值随手可改
+       * 就把「默认不冲突」这个保证丢了。要改是**例外路径**，得显式点一下。
+       */
+      const derivedDirField = (key, label, hint, value, custom) => h('div', { key: 'f-' + key, style: S.coreFieldRow }, [
+        h('div', { key: 'l', style: S.label }, label),
+        h('div', { key: 'row', style: S.inputRow }, [
+          h('input', {
+            key: 'i', type: 'text', value: value, disabled: runRunning || !custom,
+            style: Object.assign({}, S.input, custom ? null : { color: '#8a8f98' }),
+            onChange: (e) => setField(key, (e && e.target && e.target.value) || ''),
+          }),
+          custom
+            ? h('button', {
+              key: 'b', type: 'button', disabled: runRunning,
+              style: Object.assign({}, S.btn, S.btnPick, runRunning ? S.btnDisabled : null),
+              onClick: () => pickDir(key),
+            }, t('initBrowse'))
+            : h('button', {
+              key: 'c', type: 'button', disabled: runRunning,
+              style: Object.assign({}, S.btn, runRunning ? S.btnDisabled : null),
+              'data-dir-custom': key,
+              onClick: () => makeCustom(key),
+            }, t('coreDirCustomize')),
+          custom
+            ? h('button', {
+              key: 'r', type: 'button', disabled: runRunning,
+              style: Object.assign({}, S.btn, runRunning ? S.btnDisabled : null),
+              'data-dir-follow': key,
+              onClick: () => followRoot(key),
+            }, t('coreDirFollowRoot'))
+            : null,
+        ]),
+        hintLine((custom ? '' : t('coreDirAuto') + ' ') + hint),
       ])
 
       const domainField = h('div', { key: 'f-domain', style: S.coreFieldRow }, [
@@ -3257,8 +3376,9 @@ window.__ModuleLoader__.load({
           h('div', { key: 'sub', style: S.cardSub }, t('coreDirsSub')),
         ]),
         h('div', { key: 'body', style: S.cardBody }, [
-          dirField('memoryDir', t('coreFieldMemoryDir'), t('coreFieldMemoryDirHint'), st.memoryDir),
-          dirField('obsidianDir', t('coreFieldObsidianDir'), t('coreFieldObsidianDirHint'), st.obsidianDir),
+          rootField,
+          derivedDirField('memoryDir', t('coreFieldMemoryDir'), t('coreFieldMemoryDirHint'), st.memoryDir, st.memCustom === true),
+          derivedDirField('obsidianDir', t('coreFieldObsidianDir'), t('coreFieldObsidianDirHint'), st.obsidianDir, st.obsCustom === true),
           domainField,
           st.domains.phase === 'error' ? h('div', { key: 'derr', style: S.warnLine }, t('coreDomainMissing') + '：' + st.domains.error) : null,
           domainNeedsContent ? h('div', { key: 'dneed', style: S.warnLine }, t('coreDomainNeedsContent')) : null,

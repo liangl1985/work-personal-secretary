@@ -21,7 +21,7 @@ import { statSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { posix } from './install.js'
-import { DEFAULT_MEMORY_SUBDIR, LEGACY_MEMORY_SUBDIR, deriveVaultRootFromMirror, resolveDshHome } from './basedeck.js'
+import { DEFAULT_MEMORY_SUBDIR, LEGACY_MEMORY_SUBDIR, ROOT_SUBDIR_MEMORY, ROOT_SUBDIR_VAULT, deriveVaultRootFromMirror, inferRootDir, resolveDshHome } from './basedeck.js'
 import { DOMAIN_PRESETS } from './domain.js'
 import { readIdentity } from './identity.js'
 import { buildSettingsView } from './settings-api.js'
@@ -97,7 +97,18 @@ export function buildSetupState(input = {}) {
     entryId: typeof identityIn.entryId === 'string' ? identityIn.entryId : '',
   }
 
-  return { ok: true, memoryDir, obsidianDir, domain, identity, note: buildNote(memoryDir, obsidianDir, domain) }
+  // 「存储根目录」：两个目录正好是同一父目录下的 memory-data / obsidian-data 时才反推得出来。
+  // 推不出来就留空 —— **不猜**：页面据此把两个目录显示成「已单独指定」而不是自动派生。
+  const inferredRoot = inferRootDir(memoryDir.value, obsidianDir.value)
+  const root = inferredRoot ? { value: inferredRoot, source: 'derived' } : { value: '', source: 'none' }
+
+  return {
+    ok: true, memoryDir, obsidianDir, domain, identity,
+    root: root,
+    // 子目录名的**唯一真相源**（客户端不硬编码这两个名字）
+    rootSubdirs: { memory: ROOT_SUBDIR_MEMORY, vault: ROOT_SUBDIR_VAULT },
+    note: buildNote(memoryDir, obsidianDir, domain),
+  }
 }
 
 /** 一行来源说明（给使用者看；不出现任何个人路径之外的隐私内容） */

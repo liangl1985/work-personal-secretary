@@ -2361,6 +2361,61 @@ export const VAULT_TOOL_OVERVIEW_FILE = '00_工具总览.md'
 export const VAULT_OBSIDIAN_DIR_NAME = '.obsidian'
 export const VAULT_APP_JSON_FILE = 'app.json'
 
+/**
+ * 「选一个存储根目录，记忆体与知识库各自在它下面新建自己的文件夹」模型的两个固定子目录名。
+ * **唯一真相源**：客户端不硬编码这两个名字，走 `GET /setup-state` 的 `rootSubdirs` 取值。
+ * 使用者仍可单独改写任一目录（改写后即脱离自动派生）；本模型只保证**默认不冲突**。
+ */
+export const ROOT_SUBDIR_MEMORY = 'memory-data'
+export const ROOT_SUBDIR_VAULT = 'obsidian-data'
+
+/**
+ * 由存储根目录派生两个工作目录（纯函数，只拼接、不碰磁盘）。
+ * @param {string} rootDir 使用者选的那个文件夹
+ * @returns {{memoryDir:string, obsidianDir:string}} 根目录为空时两项都为空串
+ */
+export function deriveRootChildren(rootDir) {
+  const root = typeof rootDir === 'string' ? rootDir.trim() : ''
+  if (!root) return { memoryDir: '', obsidianDir: '' }
+  return {
+    memoryDir: posix(join(root, ROOT_SUBDIR_MEMORY)),
+    obsidianDir: posix(join(root, ROOT_SUBDIR_VAULT)),
+  }
+}
+
+/**
+ * 反向推断：两个目录是否正好是**同一个父目录**下的 memory-data / obsidian-data（大小写不敏感）。
+ * 用途只有一个：页面载入时若既有配置本来就是这套布局，就把「存储根目录」填回去，
+ * 让使用者看到自己填的是根目录而不是两个散落的绝对路径；推不出来就留空（**不猜**）。
+ * @returns {string} 推断出的根目录（POSIX 风格），推不出返回空串
+ */
+export function inferRootDir(memoryDir, obsidianDir) {
+  const m = typeof memoryDir === 'string' ? posix(memoryDir.trim()) : ''
+  const v = typeof obsidianDir === 'string' ? posix(obsidianDir.trim()) : ''
+  if (!m || !v) return ''
+  const pm = dirname(m)
+  const pv = dirname(v)
+  if (!pm || pm !== pv) return ''
+  if (basename(m).toLowerCase() !== ROOT_SUBDIR_MEMORY) return ''
+  if (basename(v).toLowerCase() !== ROOT_SUBDIR_VAULT) return ''
+  return posix(pm)
+}
+
+/**
+ * 记忆库目录落在知识库里的**第一级目录名**（不在知识库内返回空串）。
+ * 用途：记忆库不是业务模块，它若被放进知识库（使用者「单独指定」时可能），
+ * 不该被 `listVaultModules` 登记进 `🏠 主页.md` 的「业务模块」段。
+ */
+export function memoryTopSegmentInVault(memoryDir, vaultDir) {
+  const m = typeof memoryDir === 'string' ? posix(memoryDir.trim()).toLowerCase().replace(/[\\/]+$/, '') : ''
+  const v = typeof vaultDir === 'string' ? posix(vaultDir.trim()).toLowerCase().replace(/[\\/]+$/, '') : ''
+  if (!m || !v) return ''
+  if (m === v) return '' // 同一个目录：交给别的检查说，这里不猜是哪一级
+  if (m.indexOf(v + '/') !== 0) return ''
+  const seg = m.slice(v.length + 1).split('/')[0]
+  return seg || ''
+}
+
 /** .obsidian 最小配置（只放一个中性键；使用者已有配置一律不覆盖） */
 export const VAULT_APP_JSON_TEXT = '{\n  "alwaysUpdateLinks": true\n}\n'
 
@@ -2570,12 +2625,17 @@ function planMemoryDeck(ctx) {
 
 // ── ⑦ 知识库结构 ──
 
-/** 扫描知识库根下已存在的一级业务模块目录（排除受管目录与点目录） */
-export function listVaultModules(vaultDir) {
+/**
+ * 扫描知识库根下已存在的一级业务模块目录（排除受管目录、点目录，以及额外排除项）。
+ * @param {string} vaultDir 知识库根
+ * @param {string[]} [extraExclude] 额外不登记的目录名（如被误放进库里的记忆库目录）
+ */
+export function listVaultModules(vaultDir, extraExclude) {
+  const extra = Array.isArray(extraExclude) ? extraExclude : []
   let ents = []
   try { ents = readdirSync(vaultDir, { withFileTypes: true }) } catch (e) { return [] }
   return ents
-    .filter((d) => d.isDirectory() && d.name[0] !== '.' && VAULT_MANAGED_DIRS.indexOf(d.name) < 0)
+    .filter((d) => d.isDirectory() && d.name[0] !== '.' && VAULT_MANAGED_DIRS.indexOf(d.name) < 0 && extra.indexOf(d.name) < 0)
     .map((d) => d.name)
     .sort()
 }
@@ -2664,7 +2724,8 @@ function planKnowledgeDeck(ctx) {
     return { key: t.key, label: t.label, dir: posix(t.dir), state: exists ? 'exists' : 'missing', detail: exists ? '已存在，跳过' : '缺失，将创建' }
   })
 
-  const modules = listVaultModules(vault)
+  // 记忆库目录若被放进知识库（使用者「单独指定」时可能），它不是业务模块，不登记进主页
+  const modules = listVaultModules(vault, [memoryTopSegmentInVault(ctx.memoryDir, vault)])
   const files = []
   const writes = []
   let broken = ''

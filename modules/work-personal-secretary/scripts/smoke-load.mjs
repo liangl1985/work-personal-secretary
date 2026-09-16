@@ -2182,18 +2182,19 @@ ok(iMem >= 0 && iObs > iMem && iJob > iObs, '字段顺序：记忆库目录 → 
 const findSave = () => findButtons(t4Tree).filter((b) => label(b) === '保存配置并开始')[0]
 ok(Boolean(findSave()) && findSave().props.disabled === true, '三项未齐时保存按钮 disabled')
 
-const t4Inputs = findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
-ok(t4Inputs.length === 2, '两个必填目录输入框（实测 ' + t4Inputs.length + '）')
-t4Inputs[0].props.onChange({ target: { value: 'D:/ws/.dsh/memories/me' } })
+// 新模型（主人 2026-09-16 定）：使用者只选**一个存储根目录**，两个目录由它派生；
+// 本夹具的 /setup-state 是 404（没有生效值），所以根目录为空、两个目录按「自动派生」显示为只读空值。
+const t4Inputs = () => findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+ok(t4Inputs().length === 3, '存储根目录 + 两个派生目录共 3 个输入框（实测 ' + t4Inputs().length + '）')
+ok(t4Inputs()[1].props.disabled === true && t4Inputs()[2].props.disabled === true,
+  '两个派生目录默认只读（由存储根目录自动生成，须显式点「单独指定」才能改）')
+t4Inputs()[0].props.onChange({ target: { value: 'D:/ws' } })
 hookCursor = 0
 effectQueue = []
 t4Tree = expand(reg.render({ initialTab: 'core' }))
-findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])[1]
-  .props.onChange({ target: { value: 'D:/ws' } })
-hookCursor = 0
-effectQueue = []
-t4Tree = expand(reg.render({ initialTab: 'core' }))
-ok(findSave().props.disabled === true, '只填两个目录、未选岗位时仍 disabled')
+ok(t4Inputs()[1].props.value === 'D:/ws/memory-data' && t4Inputs()[2].props.value === 'D:/ws/obsidian-data',
+  '填根目录 → 两个目录自动派生为 <根>/memory-data 与 <根>/obsidian-data（实测 ' + t4Inputs()[1].props.value + ' / ' + t4Inputs()[2].props.value + '）')
+ok(findSave().props.disabled === true, '只填目录、未选岗位时仍 disabled')
 
 const t4Sel = findAll(t4Tree, (x) => x.type === 'select', [])[0]
 ok(Boolean(t4Sel), '岗位下拉存在')
@@ -2231,14 +2232,15 @@ ok(bdWrites.length === 4 && bdWrites.every((b) => b.dryRun === false),
 const t4Link = bdCalls.filter((b) => (b.ids || []).indexOf('settings') >= 0)[0]
 ok(Boolean(t4Link) && String(t4Link.overrides.obsidianSyncDir).indexOf('00_全局记忆') >= 0,
   '第 3 步关联：basedeck settings 的 overrides.obsidianSyncDir = <Obsidian 目录>/00_全局记忆（实测 ' + (t4Link && t4Link.overrides.obsidianSyncDir) + '）')
-ok(Boolean(t4Link) && t4Link.overrides.memoryDir === 'D:/ws/.dsh/memories/me', '第 3 步关联：overrides.memoryDir 取表单值')
+ok(Boolean(t4Link) && t4Link.overrides.memoryDir === 'D:/ws/memory-data', '第 3 步关联：overrides.memoryDir 取派生值（<根>/memory-data）')
 ok(Boolean(identityPayload) && identityPayload.dryRun === false && identityPayload.content === 'me-domain-infosec',
   '写入身份：dryRun:false，content 为岗位正文（不含「使用者身份：」前缀）')
-ok(Boolean(identityPayload) && identityPayload.memoryDir === 'D:/ws/.dsh/memories/me', '写入身份带上 memoryDir')
+ok(Boolean(identityPayload) && identityPayload.memoryDir === 'D:/ws/memory-data', '写入身份带上 memoryDir（派生值）')
 ok(t4Text.indexOf('建立两者关联') >= 0 && t4Text.indexOf('已完成') >= 0, '执行链五项全绿（徽标「已完成」）')
 ok(t4Text.indexOf('已有旧内容要带过来？') >= 0 && t4Text.indexOf('浏览… 选择知识库或记忆文件夹') >= 0,
   '全绿后出现导入引导卡（入口 + 标题）')
-ok(t4Text.indexOf('只读源目录、只补缺失、不覆盖现有文件、先给预览再落盘') >= 0, '导入卡含纪律说明')
+ok(t4Text.indexOf('只读源目录、只补还没有的文件、不覆盖现有文件、先给预览再逐项对照确认后才落盘') >= 0,
+  '导入卡含纪律说明（逐项对照确认后才落盘）')
 
 failKnowledge = true
 calls.length = 0
@@ -2305,8 +2307,9 @@ t4Tree = expand(reg.render({ initialTab: 'core' }))
 t4Text = collect(t4Tree, []).join(' | ')
 ok(t4Text.indexOf('请先填写岗位名称') >= 0, '名称为空时保存被拒绝并给出提示')
 const t4ModalInputs = findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
-ok(t4ModalInputs.length === 3, '对话框出现后共 3 个文本框（表单 2 + 岗位名称 1）')
-t4ModalInputs[2].props.onChange({ target: { value: '工控安全售前' } })
+ok(t4ModalInputs.length === 4, '对话框出现后共 4 个文本框（存储根目录 + 两个派生目录 + 岗位名称）')
+// 岗位名称固定在末尾（前面是目录字段；按位置取会随字段增减而错位）
+t4ModalInputs[t4ModalInputs.length - 1].props.onChange({ target: { value: '工控安全售前' } })
 hookCursor = 0
 effectQueue = []
 t4Tree = expand(reg.render({ initialTab: 'core' }))
@@ -2628,12 +2631,14 @@ hookCursor = 0
 effectQueue = []
 e16Core = expand(reg.render({ initialTab: 'core' }))
 const e16CoreText = collect(e16Core, []).join(' | ')
-ok(e16CoreText.indexOf('必填。推荐新建一个空文件夹专用，或放进长期使用的主工作区') >= 0,
-  '记忆库目录说明改为定稿 §3.2 口径（选目录注意事项）')
-ok(e16CoreText.indexOf('脚本在此建立 MEMORY.md / PROJECTS / DAILY / ARCHIVE 与首条记忆') < 0,
-  '旧的「会建哪些文件」说明已移除')
-ok(e16CoreText.indexOf('脚本在此建立知识库结构，并把记忆镜像区 00_全局记忆 与记忆库关联') >= 0,
-  'Obsidian 目录说明保持定稿口径（未改）')
+// 主人 2026-09-16 改口径：一个存储根目录 + 两边各自新建自己的子文件夹；
+// 知识库**只新建不搬迁**（要搬必须由使用者指定、逐项对照），记忆体才自动迁移。
+ok(e16CoreText.indexOf('存储根目录') >= 0 && e16CoreText.indexOf('各自新建一个自己的子文件夹') >= 0,
+  '目录卡出现「存储根目录」主字段并说明两个子文件夹各自新建')
+ok(e16CoreText.indexOf('只把旧库里还没有的文件补过来，旧目录原样保留') >= 0,
+  '记忆库目录说明写明：旧库只补还没有的文件、旧目录保留')
+ok(e16CoreText.indexOf('已有知识库不会被动，要搬请用下面的导入入口，由你指定后再逐项对照') >= 0,
+  '知识库目录说明写明：只新建不搬迁，要搬须使用者指定后逐项对照')
 const e16Browse = findButtons(e16Core).filter((b) => label(b) === '浏览…')[0]
 ok(Boolean(e16Browse) && e16Browse.props.style && e16Browse.props.style.whiteSpace === 'nowrap',
   '「浏览…」按钮不换行（whiteSpace:nowrap；真机反馈曾被挤成竖排）')
@@ -2688,9 +2693,13 @@ const s17Save = () => findButtons(s17Tree).filter((b) => label(b) === '保存配
 // ① 预填三值（来源标注按使用者反馈已删，这里做反向断言）
 ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/setup-state'),
   '进入页面 GET /api/setup-state（合成基址）')
-ok(s17Inputs.length === 2 && String(s17Inputs[0].props.value) === 'D:/ws/memories/me',
-  '记忆库目录预填当前生效值（实测 ' + String(s17Inputs[0] && s17Inputs[0].props.value) + '）')
-ok(String(s17Inputs[1] && s17Inputs[1].props.value) === 'D:/ws', 'Obsidian 目录预填当前生效值')
+ok(s17Inputs.length === 3 && String(s17Inputs[1].props.value) === 'D:/ws/memories/me',
+  '记忆库目录预填当前生效值（实测 ' + String(s17Inputs[1] && s17Inputs[1].props.value) + '）')
+ok(String(s17Inputs[2] && s17Inputs[2].props.value) === 'D:/ws', 'Obsidian 目录预填当前生效值')
+// 这两个目录**不是**同一父目录下的 memory-data / obsidian-data → 反推不出根目录，
+// 于是根目录留空、两个目录按「已单独指定」可编辑照显（绝不擅自改写既有路径）。
+ok(String(s17Inputs[0].props.value) === '' && s17Inputs[1].props.disabled === false && s17Inputs[2].props.disabled === false,
+  '既有配置推不出存储根目录 → 根目录留空、两个目录按「已单独指定」可编辑（不改写使用者路径）')
 ok(Boolean(s17Select) && String(s17Select.props.value) === 'infosec', '工作岗位预填为对应预置项（infosec）')
 ok(s17Text.indexOf('当前生效值') < 0 && s17Text.indexOf('由记忆镜像反推') < 0,
   'A2：来源标注不再显示（预填功能保留）')
@@ -2698,7 +2707,7 @@ ok(Boolean(s17Save()) && s17Save().props.disabled !== true, '预填后三项齐 
 ok(calls.filter((c) => c.method === 'POST').length === 0, '预填不触发任何写操作（无 POST）')
 
 // ② 清空任一字段 → 保存置灰（既有校验不变）
-s17Inputs[0].props.onChange({ target: { value: '' } })
+s17Inputs[1].props.onChange({ target: { value: '' } })
 s17Tree = await s17Render()
 ok(s17Save().props.disabled === true, '清空记忆库目录 → 保存按钮置灰')
 
@@ -2730,9 +2739,62 @@ effectQueue = []
 s17Tree = await s17Render()
 s17Text = collect(s17Tree, []).join(' | ')
 const s17Inputs4 = findAll(s17Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
-ok(s17Inputs4.length === 2 && String(s17Inputs4[0].props.value) === '', '接口 404 → 字段保持空（不臆造值）')
+ok(s17Inputs4.length === 3 && s17Inputs4.every((x) => String(x.props.value) === ''), '接口 404 → 三个目录字段保持空（不臆造值）')
 ok(s17Text.indexOf('未能取到当前生效值') >= 0, '接口 404 → 给一行可读说明（不静默）')
 ok(Boolean(s17Save()), '接口 404 不拦主流程：表单与保存按钮仍在')
+// ⑤ 新模型：宿主反推出存储根目录 → 根目录预填、两个目录只读派生；「单独指定」/「跟随根目录」可用
+s17Ok = true
+s17Payload = {
+  ok: true,
+  memoryDir: { value: 'D:/root/memory-data', source: 'settings' },
+  obsidianDir: { value: 'D:/root/obsidian-data', source: 'derived' },
+  root: { value: 'D:/root', source: 'derived' },
+  rootSubdirs: { memory: 'memory-data', vault: 'obsidian-data' },
+  domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' },
+  identity: { exists: false, entryId: '' },
+}
+const s17TextInputs = (tree) => findAll(tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+s17Tree = await s17Render()
+s17Text = collect(s17Tree, []).join(' | ')
+let s17Root = s17TextInputs(s17Tree)
+ok(s17Root.length === 3 && String(s17Root[0].props.value) === 'D:/root',
+  '存储根目录预填（只有宿主反推得出才给；实测 ' + String(s17Root[0] && s17Root[0].props.value) + '）')
+ok(String(s17Root[1].props.value) === 'D:/root/memory-data' && String(s17Root[2].props.value) === 'D:/root/obsidian-data',
+  '两个目录由根目录派生（<根>/memory-data 与 <根>/obsidian-data）')
+ok(s17Root[1].props.disabled === true && s17Root[2].props.disabled === true,
+  '派生值默认只读（要改必须显式点「单独指定」——不做成随手可改，才有「默认不冲突」这个保证）')
+ok(s17Text.indexOf('自动：存储根目录/') >= 0, '派生行标注来源「自动：存储根目录/」')
+// 改根目录 → 两个派生值跟着重算
+s17Root[0].props.onChange({ target: { value: 'E:/work' } })
+s17Tree = await s17Render()
+s17Root = s17TextInputs(s17Tree)
+ok(String(s17Root[1].props.value) === 'E:/work/memory-data' && String(s17Root[2].props.value) === 'E:/work/obsidian-data',
+  '改存储根目录 → 两个派生目录跟着重算')
+// 「单独指定」：只放开该行，另一行仍只读；此后改根目录它不再跟随
+const s17Cust = findButtons(s17Tree).filter((b) => label(b) === '单独指定')[0]
+ok(Boolean(s17Cust), '派生行有「单独指定」按钮')
+if (s17Cust) s17Cust.props.onClick()
+s17Tree = await s17Render()
+s17Root = s17TextInputs(s17Tree)
+ok(s17Root[1].props.disabled === false && s17Root[2].props.disabled === true,
+  '「单独指定」只放开被点的那一行（记忆库行可编辑，知识库行仍只读）')
+s17Root[0].props.onChange({ target: { value: 'F:/root2' } })
+s17Tree = await s17Render()
+s17Root = s17TextInputs(s17Tree)
+ok(String(s17Root[1].props.value) === 'E:/work/memory-data' && String(s17Root[2].props.value) === 'F:/root2/obsidian-data',
+  '已单独指定的目录不再跟随根目录，未指定的继续跟随')
+// 「跟随根目录」→ 回到派生值并恢复只读
+const s17Follow = findButtons(s17Tree).filter((b) => label(b) === '跟随根目录')[0]
+ok(Boolean(s17Follow), '单独指定后出现「跟随根目录」按钮')
+if (s17Follow) s17Follow.props.onClick()
+s17Tree = await s17Render()
+s17Root = s17TextInputs(s17Tree)
+ok(String(s17Root[1].props.value) === 'F:/root2/memory-data' && s17Root[1].props.disabled === true,
+  '「跟随根目录」→ 该行回到派生值并恢复只读')
+
 // ══════════════════════════════════════════════════════════════════
 // [18] D 组：环境检测共享（只发一次）+ 加载态不显示「缺失」
 // ══════════════════════════════════════════════════════════════════
@@ -2980,9 +3042,10 @@ hookCursor = 0
 effectQueue = []
 let d20Tree = await d20Render()
 const d20Btns = d20Browse(d20Tree)
-ok(d20Btns.length === 2, '核心配置页两个目录字段各有「浏览…」按钮（实测 ' + d20Btns.length + '）')
+ok(d20Btns.length === 3, '存储根目录 + 两个（推不出根目录、按「已单独指定」显示的）目录各有「浏览…」（实测 ' + d20Btns.length + '）')
 calls.length = 0
-if (d20Btns[0]) d20Btns[0].props.onClick()
+// 用**记忆库目录**那一行（索引 1；索引 0 是存储根目录）
+if (d20Btns[1]) d20Btns[1].props.onClick()
 await tick(60)
 hookCursor = 0
 effectQueue = []
@@ -3016,13 +3079,13 @@ effectQueue = []
 d20Tree = expand(reg.render({ initialTab: 'core' }))
 ok(!d20Layer(d20Tree), '选用后弹层关闭')
 const d20Inputs = findAll(d20Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
-ok(d20Inputs.length === 2 && String(d20Inputs[0].props.value) === 'D:/ws/memories',
-  '选中的路径写回记忆库目录字段（实测 ' + String(d20Inputs[0] && d20Inputs[0].props.value) + '）')
+ok(d20Inputs.length === 3 && String(d20Inputs[1].props.value) === 'D:/ws/memories',
+  '选中的路径写回记忆库目录字段（实测 ' + String(d20Inputs[1] && d20Inputs[1].props.value) + '）')
 
 // ④ 新建目录：POST /api/dirs/new body 正确；失败时给可读原因
 calls.length = 0
 d20NewBodies.length = 0
-if (d20Browse(d20Tree)[0]) d20Browse(d20Tree)[0].props.onClick()
+if (d20Browse(d20Tree)[1]) d20Browse(d20Tree)[1].props.onClick()
 await tick(60)
 hookCursor = 0
 effectQueue = []
@@ -3062,7 +3125,7 @@ d20Kind = 'native'
 hookCursor = 0
 effectQueue = []
 d20Tree = expand(reg.render({ initialTab: 'core' }))
-if (d20Browse(d20Tree)[0]) d20Browse(d20Tree)[0].props.onClick()
+if (d20Browse(d20Tree)[1]) d20Browse(d20Tree)[1].props.onClick()
 await tick(60)
 hookCursor = 0
 effectQueue = []
@@ -3075,7 +3138,7 @@ d20NoService = true
 hookCursor = 0
 effectQueue = []
 d20Tree = expand(reg.render({ initialTab: 'core' }))
-if (d20Browse(d20Tree)[0]) d20Browse(d20Tree)[0].props.onClick()
+if (d20Browse(d20Tree)[1]) d20Browse(d20Tree)[1].props.onClick()
 await tick(60)
 hookCursor = 0
 effectQueue = []
@@ -3100,7 +3163,7 @@ if (d20bGate) d20bGate.props.onClick()
 hookCursor = 0
 effectQueue = []
 d20bTree = expand(pickReg.render({ initialTab: 'core' }))
-if (d20Browse(d20bTree)[0]) d20Browse(d20bTree)[0].props.onClick()
+if (d20Browse(d20bTree)[1]) d20Browse(d20bTree)[1].props.onClick()
 await tick(60)
 hookCursor = 0
 effectQueue = []
