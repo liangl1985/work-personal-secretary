@@ -100,6 +100,14 @@ window.__ModuleLoader__.load({
      */
     const DEP_ITEM_IDS = ['host', 'node', 'python', 'pythonDeps', 'wps', 'obsidian']
     /**
+     * 环境依赖里的**硬项**（1.1.3 返工 R-1）：Obsidian 与桌面形象是可选件
+     * （defaults/install.zh-CN.md 明说可选），不参与「环境已就绪」的判定 ——
+     * 否则没装 Obsidian 的使用者永远等不到「环境已就绪」。
+     */
+    const DEP_REQUIRED_IDS = ['host', 'node', 'python', 'pythonDeps', 'wps']
+    /** 可选项（未就绪时用「可选」措辞，不当故障显示） */
+    const DEP_OPTIONAL_IDS = ['obsidian']
+    /**
      * 两个随包网页（宿主侧同波实现，路径冻结）：安装引导 / 使用说明。
      * 打开方式统一为**页内展开**：桌面外壳的宿主地址是合成 origin http://dsh.internal
      * （见 HOST_BASE），它只在外壳内部有效 —— 交给系统浏览器（Electron 对 http/https
@@ -195,7 +203,6 @@ window.__ModuleLoader__.load({
       tabCore: '核心配置',
       tabConfig: '配置',
       tabAbout: '关于与致谢',
-      aboutSect: '关于与致谢',
       integrator: '集成体本体',
       includes: '本集成体包含的插件（5 个）',
       colPlugin: '插件',
@@ -319,6 +326,7 @@ window.__ModuleLoader__.load({
       loadFailedHint: '未能从本机服务取到数据：可能集成体尚未在宿主侧启用，或该路由还没注册。确认后点「重试」。',
       emptyList: '接口未返回环境项。',
       statusUnknown: '未知',
+      statusOptional: '可选',
       statusOk: '正常',
       statusWarn: '警告',
       statusMissing: '缺失',
@@ -564,31 +572,17 @@ window.__ModuleLoader__.load({
       cfgWritableNo: '该命名空间当前不可写（只读）。',
       cfgNsUnavailable:
         '本机服务未提供该能力的设置命名空间 —— 子插件可能尚未安装或未启用。装好后这里会自动出现设置项。',
-      cfgGroupOther: '其它设置项',
       cfgOn: '开',
       cfgOff: '关',
       cfgRevision: '版本 r{n}',
       cfgAppliedLive: '改动免重启生效',
+      cfgT5Advanced: '高级设置（{n} 项）',
 
       cfgGroupMemory: '记忆库',
       cfgMemoryLead: '执行层长期记忆（dsh-work-memory）。改动免重启生效；未覆盖的键取部署默认值。',
-      cfgMemGInject: '注入与快照',
-      cfgMemGInjectHint: '每轮注入记忆的总开关与快照容量',
-      cfgMemGArchive: '冷热与归档',
-      cfgMemGArchiveHint: '热记忆到期转冷（ARCHIVE）的期限；关键条目不转冷',
-      cfgMemGTriage: '转冷预审',
-      cfgMemGTriageHint: '到期不等于立即转冷：先结合近期日志与热记忆自动判断',
-      cfgMemGOps: '备份与运维',
-      cfgMemGOpsHint: '自动备份、告警提醒与自动记录行为',
-      cfgMemGDirs: '目录',
-      cfgMemGDirsHint: '记忆库根目录与 Obsidian 镜像目录；留空取默认',
 
       cfgGroupExperts: '专家库',
       cfgExpertsLead: '岗位专家库（dsh-experts）。默认一位都不常驻（身份由 work-memory 记忆承担）；其余由「问题归属判断」决定是否补位，注入上限写死 4。',
-      cfgExpGCore: '专家与匹配范围',
-      cfgExpGCoreHint: '身份专家、岗位域与参与自动匹配的范围',
-      cfgExpGThreshold: '注入阈值与形态',
-      cfgExpGThresholdHint: '决定每轮注入几位、注入多完整（精简卡还是全文）、字符预算与通用专家门槛',
       cfgExpPreview: '实时预览',
       cfgExpPreviewHint: '输入一段任务文本，按当前阈值试算注入名单与打分理由（只读，不产生写入）',
       cfgExpPreviewPlaceholder: '例如：这份合同的付款节点与税务怎么处理？',
@@ -611,12 +605,6 @@ window.__ModuleLoader__.load({
       cfgGroupDocs: '文档能力',
       cfgDocLead: '文档能力（dsh-doc-suite）没有独立设置项，这里展示自检与依赖状态。',
       cfgDocSettingsLead: '同一组设置也能在此配置 —— 写入 dsh-doc-suite 命名空间的用户层；密钥不回显明文。',
-      cfgDocGImage: '生图',
-      cfgDocGImageHint: '图形元素优先生图；失败或无密钥时自动回退代码矢量绘制（单张约 40–45 秒）',
-      cfgDocGVideo: '生视频',
-      cfgDocGVideoHint: '默认关闭；方舟生视频模型另有余额门槛（以控制台为准）',
-      cfgDocGArk: '密钥与端点',
-      cfgDocGArkHint: '密钥默认空：留空则生图不可用并自动回退矢量；环境变量 ARK_API_KEY 优先于本项',
       cfgProviderArk: '火山引擎（方舟）',
       cfgFMediaProvider: '生图平台',
       cfgFMediaImageEnabled: '优先生图',
@@ -758,7 +746,6 @@ window.__ModuleLoader__.load({
       tabCore: 'Core setup',
       tabConfig: 'Settings',
       tabAbout: 'About & Credits',
-      aboutSect: 'About & Credits',
       integrator: 'Integrator',
       includes: 'Bundled plugins (5)',
       colPlugin: 'Plugin',
@@ -882,6 +869,7 @@ window.__ModuleLoader__.load({
       loadFailedHint: 'No data from the local service: the integrator may be disabled on the host side, or the route is not registered yet. Confirm, then press Retry.',
       emptyList: 'The service returned no environment items.',
       statusUnknown: 'unknown',
+      statusOptional: 'optional',
       statusOk: 'ok',
       statusWarn: 'warn',
       statusMissing: 'missing',
@@ -1124,31 +1112,17 @@ window.__ModuleLoader__.load({
       cfgWritableNo: 'This namespace is read-only right now.',
       cfgNsUnavailable:
         'The local service does not expose this namespace — the sub-plugin may not be installed or enabled yet. Its settings appear here once it is ready.',
-      cfgGroupOther: 'Other settings',
       cfgOn: 'on',
       cfgOff: 'off',
       cfgRevision: 'revision r{n}',
       cfgAppliedLive: 'applies without a restart',
+      cfgT5Advanced: 'Advanced ({n})',
 
       cfgGroupMemory: 'Memory',
       cfgMemoryLead: 'Long-term execution memory (dsh-work-memory). Changes apply without a restart; keys you do not override keep the deployment defaults.',
-      cfgMemGInject: 'Injection & snapshot',
-      cfgMemGInjectHint: 'The per-turn injection switch and snapshot capacity',
-      cfgMemGArchive: 'Hot/cold & archive',
-      cfgMemGArchiveHint: 'When hot entries turn cold (ARCHIVE); key entries never do',
-      cfgMemGTriage: 'Cold-triage pre-check',
-      cfgMemGTriageHint: 'Due does not mean cold: recent logs and hot memory are weighed first',
-      cfgMemGOps: 'Backup & operations',
-      cfgMemGOpsHint: 'Auto backup, warning reminders and auto logging',
-      cfgMemGDirs: 'Directories',
-      cfgMemGDirsHint: 'Memory root and the Obsidian mirror directory; empty uses defaults',
 
       cfgGroupExperts: 'Experts',
       cfgExpertsLead: 'Domain expert library (dsh-experts). Nobody is resident by default (identity comes from work-memory); experts join when the task calls for them, with the cap hard-wired to 4.',
-      cfgExpGCore: 'Experts & match scope',
-      cfgExpGCoreHint: 'Identity expert, job domain and the domains/experts that may match automatically',
-      cfgExpGThreshold: 'Injection limits & detail',
-      cfgExpGThresholdHint: 'How many experts are injected, how detailed (card or full), the character budget, and general-expert cutoffs',
       cfgExpPreview: 'Live preview',
       cfgExpPreviewHint: 'Type a task and preview the injected roster with scoring reasons (read-only, nothing is written)',
       cfgExpPreviewPlaceholder: 'e.g. How should the payment milestones and taxes of this contract be handled?',
@@ -1171,12 +1145,6 @@ window.__ModuleLoader__.load({
       cfgGroupDocs: 'Documents',
       cfgDocLead: 'The document suite (dsh-doc-suite) has no settings of its own, so this shows self-check and dependency status.',
       cfgDocSettingsLead: 'The same settings can be configured here — written to the user layer of the dsh-doc-suite namespace; secrets are never echoed back.',
-      cfgDocGImage: 'Image generation',
-      cfgDocGImageHint: 'Image first for graphic elements; falls back to vector drawing when unavailable (about 40-45s per image)',
-      cfgDocGVideo: 'Video generation',
-      cfgDocGVideoHint: 'Off by default; Ark video models have their own balance threshold (see console)',
-      cfgDocGArk: 'Key & endpoint',
-      cfgDocGArkHint: 'Key is empty by default — leave it empty to fall back to vector drawing; ARK_API_KEY env var takes precedence',
       cfgProviderArk: 'Volcengine (Ark)',
       cfgFMediaProvider: 'Image provider',
       cfgFMediaImageEnabled: 'Prefer image generation',
@@ -1545,6 +1513,9 @@ window.__ModuleLoader__.load({
       cfgRowActions: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', marginTop: '4px' },
       cfgDirty: { fontSize: '11.5px', color: '#2b4c9b' },
       cfgSaveBar: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '10px', paddingTop: '8px', borderTop: '1px dashed #e6e7ea' },
+      cfgFold: { border: '1px solid #eef0f2', borderRadius: '10px', marginTop: '10px', background: '#fcfcfd' },
+      cfgFoldSummary: { cursor: 'pointer', padding: '9px 12px', fontSize: '12.5px', fontWeight: 600, color: '#4b5563' },
+      cfgFoldBody: { padding: '0 12px 10px' },
       cfgPreviewBox: { marginTop: '10px', border: '1px solid #eef0f2', borderRadius: '10px', padding: '10px 12px', background: '#fbfbfc' },
       cfgPreviewHead: { fontSize: '12.5px', fontWeight: 650, color: '#374151', marginBottom: '2px' },
       cfgPreviewInput: { display: 'flex', gap: '6px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' },
@@ -2079,6 +2050,7 @@ window.__ModuleLoader__.load({
       return h('div', { style: S.tabs }, items.map((it) =>
         h('button', {
           key: it[0], type: 'button', style: S.tab(props.tab === it[0]),
+          'data-tab': it[0],
           onClick: () => props.setTab(it[0]),
         }, it[1])))
     }
@@ -2091,10 +2063,14 @@ window.__ModuleLoader__.load({
       const t = props.t
       const item = props.item
       if (!item) return null
+      // 可选件（Obsidian）未就绪时用「可选」措辞 + 中性徽标，不当故障显示（返工 R-1）
+      const optional = item.optional === true && item.status !== 'ok'
       const nodes = [
         h('div', { key: 'head', style: S.rowHead }, [
           h('span', { key: 'nm', style: S.itemName }, item.name),
-          h('span', { key: 'st', style: Object.assign({}, S.badge, statusStyle(item.status)) }, statusLabel(t, item.status)),
+          optional
+            ? h('span', { key: 'st', style: Object.assign({}, S.badge, S.badgeSkip) }, t('statusOptional'))
+            : h('span', { key: 'st', style: Object.assign({}, S.badge, statusStyle(item.status)) }, statusLabel(t, item.status)),
           h('span', { key: 'vl', style: S.itemValue }, String(item.value || '—')),
         ]),
       ]
@@ -2467,9 +2443,16 @@ window.__ModuleLoader__.load({
       const pickedIds = fixableIds.filter((id) => (st.picked[id] !== undefined ? st.picked[id] : true))
       // ── 1.1.3 分组派生量（设计定稿 §2） ────────────────────────────
       // 环境依赖：六项；「正常」= status ok（warn / missing / skip 都算待处理）
-      const depRows = DEP_ITEM_IDS.map((id) => rows.filter((r) => r.id === id)[0]).filter(Boolean)
+      const depRows = DEP_ITEM_IDS.map((id) => {
+        const row = rows.filter((r) => r.id === id)[0]
+        return row ? Object.assign({}, row, { optional: DEP_OPTIONAL_IDS.indexOf(id) >= 0 }) : row
+      }).filter(Boolean)
       const depOkCount = depRows.filter((r) => r.status === 'ok').length
-      const depPending = DEP_ITEM_IDS.length - depOkCount
+      // 主按钮只数**硬项**（返工 R-1）：可选件未装不算「待处理」；徽标仍如实显示 N/6
+      const depPending = DEP_REQUIRED_IDS.filter((id) => {
+        const row = depRows.filter((r) => r.id === id)[0]
+        return !row || row.status !== 'ok'
+      }).length
       // 依赖安装工具：只列可代执行 / 可给命令的四项（FIX_ORDER 固定顺序）
       const fixRows = FIX_ORDER.map((id) => rows.filter((r) => r.id === id)[0]).filter(Boolean)
       // 子插件：/plugins 就绪时按清单渲染；不可达时降级用 subPlugins 探针（/check 的第 7 项）
@@ -4276,69 +4259,68 @@ window.__ModuleLoader__.load({
       mediaArkEndpoint: { type: 'str' },
     }
 
-    /** 记忆库 24 键的语义分组（顺序即展示顺序，与契约第三节一致） */
-    const CFG_MEMORY_GROUPS = [
-      {
-        id: 'inject', titleKey: 'cfgMemGInject', hintKey: 'cfgMemGInjectHint',
-        keys: ['personaLabel', 'injectMemory', 'snapshotOrder', 'snapshotMaxChars',
-          'snapshotLimitGlobal', 'snapshotLimitUser', 'snapshotLimitProject', 'snapshotLimitDaily'],
-      },
-      {
-        id: 'archive', titleKey: 'cfgMemGArchive', hintKey: 'cfgMemGArchiveHint',
-        keys: ['archiveEnabled', 'dailyRetentionDays', 'projectTtlDays', 'userTtlDays'],
-      },
-      {
-        id: 'triage', titleKey: 'cfgMemGTriage', hintKey: 'cfgMemGTriageHint',
-        keys: ['triageEnabled', 'triageGraceDays', 'triageAskInSnapshot'],
-      },
-      {
-        id: 'ops', titleKey: 'cfgMemGOps', hintKey: 'cfgMemGOpsHint',
-        keys: ['backupEnabled', 'backupDir', 'backupKeep', 'maintainWarnDays', 'globalWarnCount',
-          'reviewEnabled', 'dailyAutoLog'],
-      },
-      {
-        id: 'dirs', titleKey: 'cfgMemGDirs', hintKey: 'cfgMemGDirsHint',
-        keys: ['memoryDir', 'obsidianSyncDir'],
-      },
-    ]
+    /**
+     * T5（1.1.3）配置页键位口径 —— 本页键位的**唯一定义处**。
+     * 依据：0.产出物/2026-09-16-02_工作秘书UI改版预览/T5-配置页键位施工表.md（设计定稿 §12.1）。
+     * primary = 常显；advanced = 高级（折叠）。**未列出的键一律不渲染** ——
+     * 「不放出 ≠ 删除」：settings.yaml 与 profile 覆盖层仍可配，只是不出现在本页。
+     * 计数：记忆库 5+8（不放出 11）· 专家库 5+5（不放出 9）· 文档能力 4+5（不放出 2）。
+     */
+    const CFG_T5_GROUPS = {
+      'work-memory': [
+        {
+          id: 'primary', titleKey: '', hintKey: '',
+          keys: ['injectMemory', 'personaLabel', 'snapshotMaxChars', 'memoryDir', 'obsidianSyncDir'],
+        },
+        {
+          id: 'advanced', titleKey: 'cfgT5Advanced', hintKey: '', fold: true,
+          keys: ['snapshotLimitGlobal', 'snapshotLimitUser', 'snapshotLimitProject', 'snapshotLimitDaily',
+            'backupDir', 'reviewEnabled', 'triageAskInSnapshot', 'backupEnabled'],
+        },
+      ],
+      experts: [
+        {
+          id: 'primary', titleKey: '', hintKey: '',
+          keys: ['expertsEnabled', 'defaultDomain', 'identityExpert', 'expertInjectDetail', 'expertShowBanner'],
+        },
+        {
+          id: 'advanced', titleKey: 'cfgT5Advanced', hintKey: '', fold: true,
+          keys: ['expertInjectBudgetChars', 'skillBudgetChars',
+            'expertCatalogEnabled', 'disciplineEnabled', 'skillInjectEnabled'],
+        },
+      ],
+      'dsh-doc-suite': [
+        {
+          id: 'primary', titleKey: '', hintKey: '',
+          keys: ['mediaImageEnabled', 'mediaArkApiKey', 'mediaImageModel', 'mediaVideoEnabled'],
+        },
+        {
+          id: 'advanced', titleKey: 'cfgT5Advanced', hintKey: '', fold: true,
+          keys: ['mediaImageSize', 'mediaImageTimeoutMs', 'mediaImageRetries', 'mediaVideoModel',
+            'mediaImageFallbackToVector'],
+        },
+      ],
+    }
 
-    /** 专家库：范围 / 注入阈值与预算两小节（阈值与预算渲染成滑块） */
-    const CFG_EXPERT_GROUPS = [
-      {
-        id: 'core', titleKey: 'cfgExpGCore', hintKey: 'cfgExpGCoreHint',
-        keys: ['expertsEnabled', 'expertCatalogEnabled', 'disciplineEnabled', 'disciplineMemoryDir',
-          'defaultDomain', 'identityExpert', 'enabledDomains',
-          'enabledExperts', 'injectOrder', 'expertShowBanner', 'expertSetupDone'],
-      },
-      {
-        id: 'threshold', titleKey: 'cfgExpGThreshold', hintKey: 'cfgExpGThresholdHint', slider: true,
-        keys: ['expertInjectDetail', 'expertInjectBudgetChars',
-          'expertFullHitMax',
-          'expertSecondThreshold', 'expertGeneralMax', 'expertGeneralMinEvidence',
-          'skillInjectEnabled', 'skillBudgetChars'],
-      },
-    ]
+    /** ns → 分组定义（= T5 键位计划） */
+    const CFG_GROUPS = CFG_T5_GROUPS
 
-    /** ns → 分组定义 / 卡片标题 / 卡片引言 */
-
-    /** 文档能力（dsh-doc-suite）的媒体设置分组（键为扁平顶层键，与插件 schema 一一对应） */
-    const CFG_DOC_GROUPS = [
-      {
-        id: 'image', titleKey: 'cfgDocGImage', hintKey: 'cfgDocGImageHint',
-        keys: ['mediaProvider', 'mediaImageEnabled', 'mediaImageModel', 'mediaImageSize',
-          'mediaImageTimeoutMs', 'mediaImageRetries', 'mediaImageFallbackToVector'],
+    /**
+     * 逐键控件覆盖（施工表「控件」列）：
+     * - password：密钥类，输入框 type=password（不打印、不落日志、不进报错）
+     * - dir：路径类，文本框 +「浏览…」目录入口
+     * - options：select 选项（[值, 字典键]）；不覆盖时回落岗位域表
+     */
+    const CFG_FIELD_OVERRIDE = {
+      mediaArkApiKey: { control: 'password' },
+      memoryDir: { control: 'dir' },
+      obsidianSyncDir: { control: 'dir' },
+      backupDir: { control: 'dir' },
+      defaultDomain: { options: DOMAIN_OPTIONS },
+      expertInjectDetail: {
+        options: [['auto', 'cfgDetailAuto'], ['card', 'cfgDetailCard'], ['full', 'cfgDetailFull']],
       },
-      {
-        id: 'video', titleKey: 'cfgDocGVideo', hintKey: 'cfgDocGVideoHint',
-        keys: ['mediaVideoEnabled', 'mediaVideoModel'],
-      },
-      {
-        id: 'ark', titleKey: 'cfgDocGArk', hintKey: 'cfgDocGArkHint',
-        keys: ['mediaArkApiKey', 'mediaArkEndpoint'],
-      },
-    ]
-
-    const CFG_GROUPS = { 'work-memory': CFG_MEMORY_GROUPS, experts: CFG_EXPERT_GROUPS, 'dsh-doc-suite': CFG_DOC_GROUPS }
+    }
     const CFG_NS_TITLE_KEY = { 'work-memory': 'cfgGroupMemory', experts: 'cfgGroupExperts', 'dsh-doc-suite': 'cfgGroupDocs' }
 
     /**
@@ -4591,6 +4573,7 @@ window.__ModuleLoader__.load({
       const drafts = props.drafts
       const handlers = props.handlers
       const meta = CFG_FIELD_META[key] || {}
+      const override = CFG_FIELD_OVERRIDE[key] || null
       const draft = drafts ? drafts[key] : undefined
       const rawValue = cfgDisplayValue(nsState, drafts, key)
       const type = cfgFieldType(nsState, key, rawValue)
@@ -4657,8 +4640,10 @@ window.__ModuleLoader__.load({
         ])
       } else if (type === 'select') {
         const value = rawValue === undefined || rawValue === null ? '' : String(rawValue)
-        // 选项来源：字段自带 options（[值, 字典 key] 对）优先，否则回落到岗位域表
-        const opts = Array.isArray(meta.options) && meta.options.length > 0 ? meta.options : DOMAIN_OPTIONS
+        // 选项来源：T5 覆盖表 → 字段自带 options（[值, 字典 key] 对）→ 回落到岗位域表
+        const opts = (override && Array.isArray(override.options) && override.options.length > 0)
+          ? override.options
+          : (Array.isArray(meta.options) && meta.options.length > 0 ? meta.options : DOMAIN_OPTIONS)
         const known = opts.some((o) => o[0] === value)
         control = h('select', Object.assign({
           key: 's', style: S.select, value: value,
@@ -4670,10 +4655,23 @@ window.__ModuleLoader__.load({
         // 复杂类型（契约：标记 type:"complex" 并降级只读）
         control = h('div', { key: 'c', style: S.itemValue }, String(JSON.stringify(rawValue === undefined ? null : rawValue)).slice(0, 200))
       } else {
-        control = h('input', Object.assign({
-          key: 'i', type: 'text', style: S.input,
+        // T5 控件覆盖：密钥 → password（不回显明文、不进报错）；路径 → 文本 + 目录入口
+        const isSecret = Boolean(override && override.control === 'password')
+        const isDir = Boolean(override && override.control === 'dir')
+        const textInput = h('input', Object.assign({
+          key: 'i', type: isSecret ? 'password' : 'text', style: S.input,
+          autoComplete: isSecret ? 'new-password' : 'off',
           value: rawValue === undefined || rawValue === null ? '' : String(rawValue),
         }, inputProps('set')))
+        control = isDir ? h('div', { key: 'd', style: S.inputRow }, [
+          textInput,
+          h('button', {
+            key: 'p', type: 'button', disabled: busy,
+            'data-cfg-action': 'pick-dir', 'data-cfg-key': key,
+            style: Object.assign({}, S.btn, busy ? S.btnDisabled : null),
+            onClick: () => { if (typeof handlers.pickDir === 'function') handlers.pickDir(nsKey, key) },
+          }, t('initBrowse')),
+        ]) : textInput
       }
 
       const actions = []
@@ -4709,14 +4707,20 @@ window.__ModuleLoader__.load({
         .map((key) => ConfigFieldRow({ t: t, nsKey: nsKey, nsState: nsState, drafts: drafts, key: key, handlers: handlers }))
         .filter(Boolean)
       if (!rows.length) return null
-      // 注入上限自 2026-09-15 起写死 4（设置页不提供该项），原「>1 提示 TOKEN 代价」的就地提示随之移除
-      return h('div', { key: 'sec-' + def.id, style: S.cfgSection }, [
-        h('div', { key: 't', style: S.cfgSectionTitle }, [
+      // 标题留空的小节（T5 常显档）直接渲染字段，不再套一层小节头
+      const head = def.titleKey
+        ? h('div', { key: 't', style: S.cfgSectionTitle }, [
           t(def.titleKey),
           def.slider ? badge(t('cfgAppliedLive'), S.badgeOk) : null,
-        ]),
-        def.hintKey ? h('div', { key: 'h', style: S.cfgSectionHint }, t(def.hintKey)) : null,
-        h('div', { key: 'b' }, rows),
+        ])
+        : null
+      const hint = def.hintKey ? h('div', { key: 'h', style: S.cfgSectionHint }, t(def.hintKey)) : null
+      const body = h('div', { key: 'b' }, rows)
+      // 高级档（T5）：同样的字段，只是默认折叠；计数写进标题，避免使用者以为少放了键
+      if (!def.fold) return h('div', { key: 'sec-' + def.id, style: S.cfgSection }, [head, hint, body])
+      return h('details', { key: 'sec-' + def.id, style: S.cfgFold }, [
+        h('summary', { key: 's', style: S.cfgFoldSummary }, fill(t('cfgT5Advanced'), rows.length)),
+        h('div', { key: 'b', style: S.cfgFoldBody }, [head, hint, body]),
       ])
     }
 
@@ -5187,6 +5191,21 @@ window.__ModuleLoader__.load({
       const handlers = {
         busy: Boolean(st.busyNs),
         setDraft: setDraft,
+        // 路径类键的目录入口（T5）：与「核心配置」页同源，不可用时给可读提示
+        pickDir: (ns, key) => {
+          const fn = props.pickDirectory
+          if (typeof fn !== 'function') {
+            setSt((prev) => Object.assign({}, prev, { notice: t('initBrowseUnavailable'), noticeKind: 'warn' }))
+            return
+          }
+          Promise.resolve().then(() => fn()).then((dir) => {
+            if (typeof dir === 'string' && dir.trim()) setDraft(ns, key, dir.trim())
+          }).catch((err) => {
+            setSt((prev) => Object.assign({}, prev, {
+              notice: t('initPickFailed') + String((err && err.message) || err), noticeKind: 'warn',
+            }))
+          })
+        },
         unsetKey: unsetKey,
         restoreKey: restoreKey,
         saveNs: saveNs,
@@ -5200,8 +5219,6 @@ window.__ModuleLoader__.load({
         const nsState = st.namespaces[nsKey] || null
         const drafts = st.drafts[nsKey] || {}
         const groups = CFG_GROUPS[nsKey] || []
-        const known = {}
-        for (const def of groups) for (const k of def.keys) known[k] = true
         const nodes = []
         // 不可用有两种形态：① 响应里根本没有该 ns；② 宿主给的占位条目 installed:false
         // （子插件未安装时宿主不省略 ns，而是给 fields/value 全空的占位）。
@@ -5216,19 +5233,8 @@ window.__ModuleLoader__.load({
             const sec = cfgRenderSection(t, nsKey, nsState, drafts, def, handlers)
             if (sec) nodes.push(sec)
           }
-          // 接口多出来的键（后续版本新增）单独成组，保证「看得见」而不是被静默吞掉
-          const extra = []
-          const seen = {}
-          const candidates = Object.keys(nsState.fields).concat(Object.keys(nsState.value))
-          for (const k of candidates) {
-            if (!k || known[k] || seen[k]) continue
-            seen[k] = true
-            if (CFG_FIELD_META[k]) continue
-            extra.push(k)
-          }
-          if (extra.length) {
-            nodes.push(cfgRenderSection(t, nsKey, nsState, drafts, { id: 'other', titleKey: 'cfgGroupOther', keys: extra }, handlers))
-          }
+          // T5：**只渲染键位计划内的键**。宿主 schema 里其余键（算法常数 / 运维阈值 /
+          // 固定技术值）一律不渲染 —— 不是删除，settings.yaml 与 profile 覆盖层仍可配。
           nodes.push(h('div', { key: 'save', style: S.cfgSaveBar }, [
             h('button', {
               key: 'b', type: 'button', disabled: st.busyNs === nsKey || dirtyCount === 0,
@@ -5370,7 +5376,8 @@ window.__ModuleLoader__.load({
       const tab = state[0]
       const setTab = state[1]
       // P3 首用引导：只在**未显式指定页签**时探测 setupNeeded（显式深链/冒烟不额外发请求）；
-      // setupNeeded 缺失按 false 处理（向后兼容），为 true 时默认落到「初始化」页。
+      // setupNeeded 缺失按 false 处理（向后兼容），为 true 时默认落到「核心配置」页
+      //（1.1.3：原「初始化」页签已下线，其职能由「核心配置」承接，见 setTab('core')）。
       const setup = useState({ needed: false, count: 0 })
       const setupSt = setup[0]
       const setSetup = setup[1]
@@ -5395,7 +5402,7 @@ window.__ModuleLoader__.load({
         pickDirectory: props.pickDirectory,
         onConfigured: () => setSetup({ needed: false, count: 0 }),
       })
-      else if (tab === 'config') page = h(ConfigPage, { key: 'c', t: t, openSection: props.openSection })
+      else if (tab === 'config') page = h(ConfigPage, { key: 'c', t: t, openSection: props.openSection, pickDirectory: props.pickDirectory })
       else page = h(AboutPage, { key: 'a', t: t })
       return h('div', { style: S.wrap }, [
         h('h1', { key: 'h', style: S.h1 }, t('title')),

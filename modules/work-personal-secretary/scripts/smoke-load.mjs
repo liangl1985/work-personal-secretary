@@ -244,7 +244,7 @@ installTree = expand(reg.render({ initialTab: 'install' }))
 itexts = collect(installTree, []).join(' | ')
 ok(itexts.includes('3.10.0') && itexts.includes('v22.14.0'), '渲染接口证据值')
 ok(itexts.includes('警告') && itexts.includes('缺失') && itexts.includes('正常'), '渲染状态徽标（ok / warn / missing）')
-ok(itexts.includes('查看安装引导（4 项待处理）'), '有缺项时主按钮为「查看安装引导（4 项待处理）」')
+ok(itexts.includes('查看安装引导（3 项待处理）'), '有缺项时主按钮为「查看安装引导（3 项待处理）」（R-1：只数硬项 host/node/python/pythonDeps/wps，Obsidian 可选不计）')
 ok(itexts.includes('补齐选中项（4）'), '底部主按钮为「补齐选中项（4）」')
 ok(itexts.includes('将安装：') && itexts.includes('Python 解释器（3.12）') && itexts.includes('Obsidian（可选组件）'), '确认文案列出将安装内容（含 Obsidian）')
 ok(itexts.includes('WPS Office 为第三方商业软件') && itexts.includes('许可协议'), 'WPS 项显示许可协议提示')
@@ -1618,25 +1618,26 @@ const cfSwitchTo = async (gid) => {
   cfText = collect(cfTree, []).join(' | ')
   return cfTree
 }
-ok(['注入与快照', '冷热与归档', '转冷预审', '备份与运维', '目录'].every((x) => cfText.includes(x)),
-  '记忆库按语义分五个小节（注入与快照 / 冷热与归档 / 转冷预审 / 备份与运维 / 目录）')
+ok(['每轮注入记忆', '快照标题词', '快照字符上限', '记忆库根目录', 'Obsidian 镜像目录'].every((x) => cfText.includes(x)),
+  'T5 记忆库常显 5 键齐全（注入开关 / 标题词 / 字符上限 / 记忆库目录 / 镜像目录）')
+ok(cfText.includes('高级设置（8 项）'), 'T5 记忆库高级档折叠为 8 项')
 ok(cfText.includes('快照字符上限') && cfText.includes('Obsidian 镜像目录'), '默认只渲染记忆库（顶部标签默认选中记忆库）')
 ok(cfText.includes('已覆盖'), 'user 层含该键 → 显示「已覆盖」标记')
 const cfNum0 = findByAttr(cfTree, 'data-cfg-key', 'snapshotMaxChars').filter((x) => x.type === 'input')[0]
 ok(cfNum0 && String(cfNum0.props.value) === '6000', '数字字段用输入框并回显覆盖值 6000')
 const cfUnsetBtns = findByAttr(cfTree, 'data-cfg-action', 'unset')
 const cfRestoreBtns = findByAttr(cfTree, 'data-cfg-action', 'restore')
-ok(cfUnsetBtns.length === 24, '记忆库 24 个设置项各有「清除覆盖」（实测 ' + cfUnsetBtns.length + '）')
-ok(cfRestoreBtns.length === 24, '记忆库 24 个设置项各有「恢复默认」（实测 ' + cfRestoreBtns.length + '）')
+ok(cfUnsetBtns.length === 13, 'T5 记忆库渲染 5 常显 + 8 高级 = 13 项，各有「清除覆盖」（实测 ' + cfUnsetBtns.length + '）')
+ok(cfRestoreBtns.length === 13, 'T5 记忆库 13 项各有「恢复默认」（实测 ' + cfRestoreBtns.length + '）')
 ok(cfUnsetBtns.filter((b) => b.props.disabled !== true).length === 2, '只有用户层覆盖过的两个键「清除覆盖」可用')
 
 // 切到专家库标签：只渲染专家库
 await cfSwitchTo('experts')
 ok(cfText.includes('注入形态') && !cfText.includes('快照字符上限'), '切到专家库后只渲染专家库（记忆库字段不再出现）')
 const cfUnsetExp = findByAttr(cfTree, 'data-cfg-action', 'unset')
-ok(cfUnsetExp.length === 17, '专家库 17 个设置项各有「清除覆盖」（schema 18 键 − expertInjectMax（设置页已移除，实测 ' + cfUnsetExp.length + '））')
+ok(cfUnsetExp.length === 10, 'T5 专家库渲染 5 常显 + 5 高级 = 10 项，各有「清除覆盖」（实测 ' + cfUnsetExp.length + '）')
 const cfRanges = findAll(cfTree, (x) => x.type === 'input' && x.props && x.props.type === 'range', [])
-ok(cfRanges.length === 4, '专家库四个阈值/预算渲染为滑块（实测 ' + cfRanges.length + '）')
+ok(cfRanges.length === 2, 'T5 专家库只剩两个预算渲染为滑块（注入字符预算 / 能力层指针预算；实测 ' + cfRanges.length + '）')
 ok(findByAttr(cfTree, 'data-cfg-key', 'expertInjectMax').length === 0,
   'expertInjectMax 已从设置页移除（写死 4，不再渲染任何控件；实测 '
   + findByAttr(cfTree, 'data-cfg-key', 'expertInjectMax').length + '）')
@@ -1836,7 +1837,7 @@ await tick(60)
 hookCursor = 0
 effectQueue = []
 cfTree = expand(reg.render({ initialTab: 'config' }))
-findByAttr(cfTree, 'data-cfg-key', 'backupKeep').filter((x) => x.type === 'input')[0]
+findByAttr(cfTree, 'data-cfg-key', 'snapshotLimitGlobal').filter((x) => x.type === 'input')[0]
   .props.onChange({ target: { value: '9' } })
 hookCursor = 0
 effectQueue = []
@@ -1851,7 +1852,7 @@ cfTree = expand(reg.render({ initialTab: 'config' }))
 cfText = collect(cfTree, []).join(' | ')
 ok(cfText.includes('仍按试运行处理'), '服务端 dryRun:true → 明确提示未真正写入（不谎报「已保存」）')
 ok(cfText.indexOf('已保存（') < 0, '试运行场景不显示成功回执')
-ok(String(findByAttr(cfTree, 'data-cfg-key', 'backupKeep').filter((x) => x.type === 'input')[0].props.value) === '9',
+ok(String(findByAttr(cfTree, 'data-cfg-key', 'snapshotLimitGlobal').filter((x) => x.type === 'input')[0].props.value) === '9',
   '试运行场景草稿保留（改动不丢）')
 
 // ── 段 9：服务完全不可用 —— 页面不崩、四组仍在 ──────────────────
@@ -1986,9 +1987,13 @@ let nTree = expand(reg.render({ initialTab: 'install' }))
 let nText = collect(nTree, []).join(' | ')
 ok(nText.includes('检查运行环境、安装五个子插件、完成首次配置，并集中调整各子插件的设置。'), '首屏描述为 A 版原文（设计定稿 §1）')
 ok(nText.includes('work-personal-secretary v1.1.3'), '状态条 BUILD 与包版本对齐（v1.1.3）')
+// R-4：页签要**恰等四项**（按 data-tab 取全集，不再只数白名单内的标签）
 const wantTabs = ['安装与检查', '核心配置', '配置', '关于与致谢']
-const tabLabels = findButtons(nTree).map((b) => label(b)).filter((x) => wantTabs.indexOf(x) >= 0)
-ok(tabLabels.length === wantTabs.length, '页签栏恰有四项（' + wantTabs.join(' / ') + '）')
+const tabEls = findAll(nTree, (x) => Boolean(x.props && x.props['data-tab']), [])
+ok(tabEls.length === 4, '页签恰有四项（实测 ' + tabEls.length + '）')
+ok(String(tabEls.map((b) => b.props['data-tab']).join(',')) === 'install,core,config,about',
+  '页签顺序与 id 固定（实测 ' + String(tabEls.map((b) => b.props['data-tab']).join(',')) + '）')
+ok(tabEls.every((b) => wantTabs.indexOf(label(b)) >= 0), '四个页签文案都在白名单内')
 ok(!nText.includes('安装子插件') && !nText.includes('能力配置'), '旧页签文案不再出现（安装子插件 / 能力配置）')
 
 // 主按钮置灰（依赖组 + 子插件组全正常）
@@ -2269,6 +2274,129 @@ ok(t4Text.indexOf('保存岗位') < 0, '保存后对话框关闭')
 ok(t4Text.indexOf('工控安全售前（自定义）') >= 0, '新建岗位进入下拉并选中')
 ok(findSave().props.disabled !== true, '自定义岗位选定后保存按钮仍可点')
 
+
+// ══════════════════════════════════════════════════════════════════
+// [15] T5 配置页键位（常显 / 高级 / 未放出不渲染 / 控件类型）+ R-1 置灰口径
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[15] T5 键位口径（记忆库 5+8 / 专家库 5+5 / 文档能力 4+5）')
+
+const CFG_DOC_DEFAULTS = {
+  mediaProvider: 'volcengine-ark', mediaImageEnabled: true, mediaImageModel: 'doubao-seedream',
+  mediaImageSize: '1K', mediaImageTimeoutMs: 60000, mediaImageRetries: 2,
+  mediaImageFallbackToVector: true, mediaVideoEnabled: false, mediaVideoModel: '',
+  mediaArkApiKey: '', mediaArkEndpoint: 'https://ark.cn-beijing.volces.com/api/v3',
+}
+const t5Fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (!/^https?:/i.test(u)) throw new Error('relative URL unavailable in desktop shell')
+  if (u.indexOf('/settings/write') >= 0) return jsonRes({ ok: true, ns: 'work-memory', revision: 13, value: cfgMemValue, user: cfgMemUser })
+  if (u.indexOf('/experts/preview') >= 0) return jsonRes(CFG_PREVIEW_PAYLOAD)
+  if (u.indexOf('/settings') >= 0) {
+    return jsonRes({ ok: true, namespaces: [
+      { ns: 'work-memory', revision: 12, writable: true, applies: 'live', installed: true, value: cfgMemValue, user: cfgMemUser, fields: cfgFieldsOf(CFG_MEM_DEFAULTS) },
+      { ns: 'experts', revision: 12, writable: true, applies: 'live', installed: true, value: CFG_EXP_DEFAULTS, user: {}, fields: cfgFieldsOf(CFG_EXP_DEFAULTS) },
+      { ns: 'dsh-doc-suite', revision: 12, writable: true, applies: 'live', installed: true, value: CFG_DOC_DEFAULTS, user: {}, fields: cfgFieldsOf(CFG_DOC_DEFAULTS) },
+    ] })
+  }
+  if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+globalThis.fetch = t5Fetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+expand(reg.render({ initialTab: 'config' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(80)
+hookCursor = 0
+effectQueue = []
+cfTree = expand(reg.render({ initialTab: 'config' }))
+cfText = collect(cfTree, []).join(' | ')
+
+// ── 记忆库：常显 5 + 高级 8 + 未放出 11 ──────────────────────────
+const MEM_PRIMARY = ['injectMemory', 'personaLabel', 'snapshotMaxChars', 'memoryDir', 'obsidianSyncDir']
+const MEM_ADV = ['snapshotLimitGlobal', 'snapshotLimitUser', 'snapshotLimitProject', 'snapshotLimitDaily',
+  'backupDir', 'reviewEnabled', 'triageAskInSnapshot', 'backupEnabled']
+const MEM_HIDDEN = ['snapshotOrder', 'maintainWarnDays', 'dailyRetentionDays', 'projectTtlDays', 'userTtlDays',
+  'triageGraceDays', 'globalWarnCount', 'dailyAutoLog', 'archiveEnabled', 'triageEnabled', 'backupKeep']
+ok(MEM_PRIMARY.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '记忆库常显 5 键全部渲染')
+ok(MEM_ADV.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '记忆库高级 8 键全部渲染（折叠档内）')
+ok(cfText.indexOf('高级设置（8 项）') >= 0, '记忆库高级档标题计数 8 项')
+const memHiddenHit = MEM_HIDDEN.filter((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0)
+ok(memHiddenHit.length === 0, '记忆库 11 个未放出键均不渲染（命中：' + String(memHiddenHit) + '）')
+const pickKeys = findByAttr(cfTree, 'data-cfg-action', 'pick-dir').map((b) => b.props['data-cfg-key'])
+ok(['memoryDir', 'obsidianSyncDir', 'backupDir'].every((k) => pickKeys.indexOf(k) >= 0),
+  '路径类键各有目录入口（实测 ' + String(pickKeys) + '）')
+
+// ── 专家库：常显 5 + 高级 5 + 未放出 9 ───────────────────────────
+await cfSwitchTo('experts')
+const EXP_PRIMARY = ['expertsEnabled', 'defaultDomain', 'identityExpert', 'expertInjectDetail', 'expertShowBanner']
+const EXP_ADV = ['expertInjectBudgetChars', 'skillBudgetChars', 'expertCatalogEnabled', 'disciplineEnabled', 'skillInjectEnabled']
+const EXP_HIDDEN = ['enabledDomains', 'enabledExperts', 'expertInjectMax', 'disciplineMemoryDir', 'expertSetupDone',
+  'expertFullHitMax', 'expertSecondThreshold', 'expertGeneralMax', 'expertGeneralMinEvidence']
+ok(EXP_PRIMARY.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '专家库常显 5 键全部渲染')
+ok(EXP_ADV.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '专家库高级 5 键全部渲染（折叠档内）')
+ok(cfText.indexOf('高级设置（5 项）') >= 0, '专家库高级档标题计数 5 项')
+const expHiddenHit = EXP_HIDDEN.filter((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0)
+ok(expHiddenHit.length === 0, '专家库 9 个未放出键均不渲染（命中：' + String(expHiddenHit) + '）')
+const expSelects = findSelects(cfTree)
+ok(expSelects.length === 2, '专家库两个下拉（工作岗位域 / 注入形态）')
+const expDomText = collect(expSelects[0] || null, []).join(' | ')
+ok(['信息安全', '财务', '人力资源', '代码编程', '金融', '通用职能'].every((x) => expDomText.indexOf(x) >= 0),
+  'defaultDomain 保留 6 个域（含通用职能）；这是专家匹配先验，与核心配置页的 5 个岗位无关')
+const expDetailText = collect(expSelects[1] || null, []).join(' | ')
+ok(expDetailText.indexOf('auto') >= 0 && expDetailText.indexOf('card') >= 0 && expDetailText.indexOf('full') >= 0,
+  'expertInjectDetail 渲染 auto / card / full 三选项（未回落到岗位域表）')
+
+// ── 文档能力：常显 4 + 高级 5 + 未放出 2 ─────────────────────────
+await cfSwitchTo('docs')
+const DOC_PRIMARY = ['mediaImageEnabled', 'mediaArkApiKey', 'mediaImageModel', 'mediaVideoEnabled']
+const DOC_ADV = ['mediaImageSize', 'mediaImageTimeoutMs', 'mediaImageRetries', 'mediaVideoModel', 'mediaImageFallbackToVector']
+const DOC_HIDDEN = ['mediaProvider', 'mediaArkEndpoint']
+ok(DOC_PRIMARY.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '文档能力常显 4 键全部渲染')
+ok(DOC_ADV.every((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0), '文档能力高级 5 键全部渲染（折叠档内）')
+ok(cfText.indexOf('高级设置（5 项）') >= 0, '文档能力高级档标题计数 5 项')
+const docHiddenHit = DOC_HIDDEN.filter((k) => findByAttr(cfTree, 'data-cfg-key', k).length > 0)
+ok(docHiddenHit.length === 0, '文档能力 2 个未放出键均不渲染（命中：' + String(docHiddenHit) + '）')
+const arkInput = findByAttr(cfTree, 'data-cfg-key', 'mediaArkApiKey').filter((x) => x.type === 'input')[0]
+ok(Boolean(arkInput) && arkInput.props.type === 'password', 'ARK 密钥渲染为 password（不回显明文）')
+
+// ── R-1：硬项全绿 + Obsidian 未装 → 主按钮仍「环境已就绪」 ───────
+const CHECK_HARD_OK = {
+  ok: true, checkedAt: '2026-09-16T12:00:00+08:00',
+  items: [
+    { id: 'host', label: 'DSH 宿主', status: 'ok', value: '2.0.10', detail: '', fixKind: 'none', fixCommand: '', autoFixable: false },
+    { id: 'node', label: 'Node.js', status: 'ok', value: 'v24.18.1', detail: '', fixKind: 'none', fixCommand: '', autoFixable: false },
+    { id: 'python', label: 'Python', status: 'ok', value: '3.12.10', detail: '', fixKind: 'winget', fixCommand: 'c', autoFixable: true },
+    { id: 'pythonDeps', label: 'Python 依赖', status: 'ok', value: '8/8 就绪', detail: '', fixKind: 'pip', fixCommand: 'c', autoFixable: true },
+    { id: 'wps', label: 'WPS Office', status: 'ok', value: 'KWPS.Application', detail: '', fixKind: 'winget', fixCommand: 'c', autoFixable: true },
+    { id: 'obsidian', label: 'Obsidian', status: 'warn', value: '未检测到', detail: '可选组件', fixKind: 'winget', fixCommand: 'c', autoFixable: true },
+    { id: 'subPlugins', label: '子插件', status: 'ok', value: '5/5 已装', detail: 'dsh-work-memory@1.0.5', fixKind: 'none', fixCommand: '', autoFixable: false },
+  ],
+  summary: { ok: 6, warn: 1, missing: 0, skip: 0 },
+}
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/check') >= 0) return jsonRes(CHECK_HARD_OK)
+  if (u.indexOf('/plugins') >= 0) return jsonRes(OK_PLUGINS)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let r1Tree = expand(reg.render({ initialTab: 'install' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+r1Tree = expand(reg.render({ initialTab: 'install' }))
+const r1Text = collect(r1Tree, []).join(' | ')
+const r1Btn = findButtons(r1Tree).filter((b) => label(b) === '环境已就绪')[0]
+ok(Boolean(r1Btn) && r1Btn.props.disabled === true, 'R-1：硬项全绿 + Obsidian 未装 → 主按钮置灰「环境已就绪」')
+ok(r1Text.indexOf('5/6 正常') >= 0, 'R-1：分组徽标仍如实显示 5/6 正常')
+ok(r1Text.indexOf('可选') >= 0, 'R-1：Obsidian 未就绪显示「可选」而非「缺失 / 警告」')
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
