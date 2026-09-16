@@ -16,7 +16,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { installSettings, mediaSummary } from './settings.js'
+import { installSettings, mediaSummary, SETTINGS_NS } from './settings.js'
 
 export const name = 'dsh-doc-suite'
 export const inject = ['commands', 'settings']
@@ -47,6 +47,7 @@ export function apply(ctx, config = {}) {
       '生图 ' + (s.imageEnabled ? '开' : '关') + '（模型 ' + s.model + ' / 尺寸 ' + s.size + '）',
       'ARK 密钥 ' + (s.hasApiKey ? '已配置（不显示明文）' : '未配置 → 生图将回退代码矢量绘制'),
       '生视频 ' + (s.videoEnabled ? '开' : '关'),
+      '设置命名空间 ' + SETTINGS_NS + ' ' + (settings.available ? '已注册（设置 → 插件 → dsh-doc-suite）' : '不可用（已降级为默认值，功能仍可用）'),
     ].join(' ｜ ')
   }
 

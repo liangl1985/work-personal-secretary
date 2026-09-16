@@ -108,7 +108,9 @@ export function installSettings(ctx, baseConfig = {}) {
   let scope = null
   let current = toConfig(base)
   try {
-    scope = ctx.settings.register(SETTINGS_NS, SETTINGS_SCHEMA, { base })
+    // applies: 'live' —— 设置改动**免重启生效**（与集成体「记忆库 / 专家库」的形态一致）。
+    // 服务端若不认识该字段会抛错 → 由下面的 catch 降级，不影响插件启动。
+    scope = ctx.settings.register(SETTINGS_NS, SETTINGS_SCHEMA, { base, applies: 'live' })
     current = toConfig(scope.get())
     scope.watch(() => { current = toConfig(scope.get()) })
     ctx.logger?.debug?.('dsh-doc-suite: 设置命名空间已注册（设置 → 插件 → dsh-doc-suite）')
