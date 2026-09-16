@@ -202,7 +202,8 @@ const depsGarbage = interpretPipList(cmdRes({ stdout: 'bogus output' }), ['py', 
 ok(depsGarbage.status === 'warn' && /无法解析/.test(depsGarbage.detail), 'pip list 非法输出 → warn 不崩')
 
 const wpsOk = interpretWps(cmdRes({ stdout: 'WPS_OK' }), ['py', '-3'], { ok: true })
-ok(wpsOk.status === 'ok' && wpsOk.detail.indexOf(WPS_LICENSE_NOTE) >= 0, 'wps ok 且 detail 含许可提示')
+ok(wpsOk.status === 'ok' && wpsOk.detail.indexOf('只做实例化与退出，未打开任何文档') >= 0 && wpsOk.detail.indexOf(WPS_LICENSE_NOTE) < 0,
+  'wps ok 行只保留技术事实、不再重复许可提示（许可提示由界面黄条统一承担）：' + wpsOk.detail)
 const wpsMiss = interpretWps(cmdRes({ code: 3, stdout: 'WPS_MISSING:Invalid class string' }), ['py', '-3'], { ok: true })
 ok(wpsMiss.status === 'missing' && wpsMiss.fixKind === 'winget' && wpsMiss.autoFixable === true, 'WPS 未安装 → 可代执行安装')
 ok(wpsMiss.fixCommand === 'winget install -e --id Kingsoft.WPSOffice.CN --accept-source-agreements --accept-package-agreements --silent',
@@ -222,6 +223,14 @@ ok(obsMiss.fixKind === 'winget' && obsMiss.autoFixable === true && obsMiss.fixCo
   'obsidian 修复命令逐字正确')
 const obsMissNoWinget = interpretObsidian([], { ok: false })
 ok(obsMissNoWinget.fixKind === 'manual' && obsMissNoWinget.fixCommand === 'https://obsidian.md/', 'obsidian 降级给官网地址')
+const OBS_NOTE = '知识库组件：承载知识库与记忆镜像；未安装不影响其它能力'
+const obsOkItem = interpretObsidian([{ kind: 'registry' }], { ok: true })
+ok(obsOkItem.detail.indexOf(OBS_NOTE) >= 0, 'obsidian 已装行用「知识库组件」口径：' + obsOkItem.detail)
+ok(obsMiss.detail.indexOf(OBS_NOTE) >= 0, 'obsidian 未装（winget 可用）行同口径：' + obsMiss.detail)
+ok(obsMissNoWinget.detail.indexOf(OBS_NOTE) >= 0, 'obsidian 未装（无 winget）行同口径：' + obsMissNoWinget.detail)
+const OBS_OLD_NOTES = ['可选组件：用于知识库镜像', '可选组件：知识库镜像用']
+ok([obsOkItem, obsMiss, obsMissNoWinget].every((it) => OBS_OLD_NOTES.every((s) => it.detail.indexOf(s) < 0)),
+  'obsidian 三处都不再出现旧「可选组件」口径（标签与正文一致）')
 
 const tmpProfile = mkdtempSync(join(tmpdir(), 'wps-probe-'))
 mkdirSync(join(tmpProfile, 'node_modules', 'dsh-work-memory'), { recursive: true })

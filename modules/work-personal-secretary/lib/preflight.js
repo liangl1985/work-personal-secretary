@@ -11,7 +11,9 @@
  * 判定口径：
  *   - 环境就绪三项**复用 /check 的探针结果**（不新增探针）：记忆库子插件 / Python ≥3.10 / 8 个 pip 包；
  *   - 路径：绝对路径 + 不是用户主目录 + 目标（或其最近存在的上级）可写；
- *   - 同工作区：两个目标目录必须同盘（跨盘写入与同步会受权限范围限制，决议 9 判「拦截并给出理由」）；
+ *   - 同工作区：两个目标目录**建议**同盘。设计定稿决议 9 原写「跨盘 → 拦截并给出理由」，
+ *     但**使用者 2026-09-16 真机验收时修正为「仅提示不拦截」**（跨盘只是不建议，不构成实际限制）：
+ *     该项判 'warn'，不参与 ready 判定，执行链可以继续；确实出现写入失败或同步中断时再考虑同盘。
  *   - 无冲突：两目录不得相同或互相嵌套；既有 MEMORY.md 必须能被解析为条目结构，否则拒绝（绝不覆盖使用者数据）。
  *
  * @module work-personal-secretary/preflight
@@ -174,8 +176,10 @@ export function pathChecks(options = {}) {
   if (memOk && obsOk) {
     const vm = volumeOf(memoryDir)
     const vo = volumeOf(obsidianDir)
-    out.push(check('sameVolume', '同工作区', vm === vo ? 'ok' : 'block',
-      vm === vo ? '两个目录在同一卷（' + vm + '）' : '两个目录跨盘（' + vm + ' vs ' + vo + '）：跨盘写入与镜像同步可能受权限范围限制，请改到同一盘符下'))
+    out.push(check('sameVolume', '同工作区', vm === vo ? 'ok' : 'warn',
+      vm === vo
+        ? '两个目录在同一卷（' + vm + '）'
+        : '两个目录跨盘（' + vm + ' vs ' + vo + '）：不建议跨盘——跨盘写入与镜像同步可能受权限范围限制（不阻断，可继续；若后续出现写入失败或同步中断，再考虑改到同一盘符）'))
 
     const nested = isSameOrNested(memoryDir, obsidianDir)
     if (nested) {

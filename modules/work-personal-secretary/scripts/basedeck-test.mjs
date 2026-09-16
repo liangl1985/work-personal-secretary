@@ -69,7 +69,7 @@ import {
   sha256Text,
 } from '../lib/basedeck.js'
 import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
-import { isSameOrNested, runPreflight, volumeOf } from '../lib/preflight.js'
+import { isSameOrNested, pathChecks, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -922,6 +922,23 @@ ok(pfNested.ready === false, '一目录嵌在另一目录里 → 拦截')
 ok(isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'a', 'b')) === true && isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'ab')) === false,
   '嵌套判定不误伤同前缀目录')
 ok(volumeOf(deckMem) === volumeOf(deckVault), 'volumeOf：同盘返回同一卷标识')
+
+// 2026-09-16 使用者修正：跨盘只是**不建议**，不再判 block（原为 block，会把执行链卡在第一步）
+const crossChecks = pathChecks({ memoryDir: 'C:\\x', obsidianDir: 'D:\\y', env: {} })
+const crossSame = crossChecks.filter((c) => c.id === 'sameVolume')[0]
+ok(Boolean(crossSame) && crossSame.level === 'warn', '跨盘 → level=warn（不再判 block）')
+ok(Boolean(crossSame) && /不建议跨盘/.test(crossSame.detail) && /不阻断/.test(crossSame.detail),
+  '跨盘文案改成「不建议」措辞并说明可继续：' + String(crossSame && crossSame.detail).slice(0, 46) + '…')
+if (existsSync('E:/lina')) {
+  const crossVault = join(TMP_ROOT, 'crossvault')
+  mkdirSync(crossVault, { recursive: true })
+  const pfCross = runPreflight({ report: okReport, memoryDir: 'E:/lina', obsidianDir: crossVault, env: {} })
+  const sv = pfCross.checks.filter((c) => c.id === 'sameVolume')[0]
+  ok(Boolean(sv) && sv.level === 'warn', '真实跨盘目录（E: 记忆库 vs C: 知识库）→ sameVolume=warn')
+  ok(pfCross.ready === true && pfCross.summary.block === 0, '跨盘不再阻断：ready 仍为 true、block 计数为 0（执行链可继续）')
+} else {
+  console.log('  · 本机没有第二个可写卷，跳过「跨盘 ready=true」正向断言（上面的分级断言已覆盖）')
+}
 
 section('[20] 1.1.3 新路由契约（preflight / identity / domain）+ 随包网页')
 const home13 = join(TMP_ROOT, 'home13', '.dsh')

@@ -1089,7 +1089,9 @@ export function interpretWps(res, pythonExec, winget) {
     return makeItem('wps', 'warn', '', joinDetail('WPS COM 探测超时（20s）', WPS_LICENSE_NOTE), 'manual', WPS_MANUAL_URL, false)
   }
   if (/WPS_OK/.test(out)) {
-    return makeItem('wps', 'ok', WPS_PROGID + ' 可实例化', joinDetail('只做实例化与退出，未打开任何文档', WPS_LICENSE_NOTE))
+    // ok 行只保留技术事实：许可提示由界面既有黄条（wpsLicense）承担，此处不再重复第三次。
+    // ⚠️ WPS_LICENSE_NOTE 常量仍保留给其它分支（超时 / 未装 / pywin32 缺失 / 不可用 / 跳过），不要删。
+    return makeItem('wps', 'ok', WPS_PROGID + ' 可实例化', joinDetail('只做实例化与退出，未打开任何文档'))
   }
   if (/PYWIN32_MISSING/.test(out)) {
     return makeItem('wps', 'missing', '',
@@ -1172,16 +1174,16 @@ export function interpretObsidian(hits, winget) {
   if (hits && hits.length > 0) {
     const viaRegistry = hits.some((h) => h && h.kind === 'registry')
     return makeItem('obsidian', 'ok', viaRegistry ? '已安装（协议已注册）' : '已安装',
-      '可选组件：用于知识库镜像，缺失不影响核心能力')
+      '知识库组件：承载知识库与记忆镜像；未安装不影响其它能力')
   }
   const w = winget || { ok: false }
   if (w.ok) {
     return makeItem('obsidian', 'warn', '未检测到',
-      '未检测到安装痕迹（可选组件：知识库镜像用，缺失不影响核心能力）',
+      '未检测到安装痕迹（知识库组件：承载知识库与记忆镜像；未安装不影响其它能力）',
       'winget', wingetInstallCommand('obsidian'), true)
   }
   return makeItem('obsidian', 'warn', '未检测到',
-    joinDetail('未检测到安装痕迹（可选组件：知识库镜像用，缺失不影响核心能力）', NO_WINGET_NOTE),
+    joinDetail('未检测到安装痕迹（知识库组件：承载知识库与记忆镜像；未安装不影响其它能力）', NO_WINGET_NOTE),
     'manual', OBSIDIAN_MANUAL_URL, false)
 }
 
