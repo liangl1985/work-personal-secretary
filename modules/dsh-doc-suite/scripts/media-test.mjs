@@ -216,6 +216,38 @@ t('doctor --json 含 media 段，且明确不对密钥做自检', function () {
   assert(d.media.image.probe_key === false, 'doctor 不应对密钥做自检');
 });
 
+t('随包运行时清单与 lock：版本一致且锁定主依赖', function () {
+  const runtimeDir = path.join(MEDIA, 'runtime');
+  const pkg = JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8'));
+  const lock = JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package-lock.json'), 'utf8'));
+  assert(pkg.dependencies['@mermaid-js/mermaid-cli'] === '11.17.0', 'package.json 未锁定 mermaid-cli');
+  assert(pkg.dependencies.puppeteer === '25.11.0', 'package.json 未锁定 puppeteer');
+  const rootDeps = (lock.packages && lock.packages[''] && lock.packages[''].dependencies) || {};
+  const keys = Object.keys(pkg.dependencies).sort();
+  assert(JSON.stringify(Object.keys(rootDeps).sort()) === JSON.stringify(keys),
+    'lock 的依赖键与 package.json 不一致：' + JSON.stringify(Object.keys(rootDeps)));
+  for (const k of keys) assert(rootDeps[k] === pkg.dependencies[k], '依赖版本不一致：' + k);
+  assert(lock.packages['node_modules/@mermaid-js/mermaid-cli'].version === '11.17.0', 'lock 里 mermaid-cli 版本不符');
+  assert(lock.packages['node_modules/puppeteer'].version === '25.11.0', 'lock 里 puppeteer 版本不符');
+  assert(lock.name === 'dsh-doc-suite-mermaid', 'lock 的 name 应与随包清单一致');
+});
+
+t('setup_mermaid.ps1：优先 npm ci（严格复现）并可回退', function () {
+  const src = fs.readFileSync(SETUP_PS1, 'utf8');
+  for (const k of ['runtime', 'package-lock.json', 'npm ci --ignore-scripts', '回退 npm install', 'PUPPETEER_SKIP_DOWNLOAD']) {
+    assert(src.includes(k), '缺少 ' + k);
+  }
+});
+
+t('版本对齐：check 给出 Edge 与 puppeteer 期望版本的结论（需运行时）', function () {
+  if (!HAS_PY || !MERMAID_DIR) return 'skip';
+  const r = pyRun(GEN_DIAGRAM, ['check', '--tools-dir', MERMAID_DIR]);
+  assert(r.status === 0, 'exit=' + r.status);
+  const out = (r.stdout || '') + (r.stderr || '');
+  assert(out.includes('对齐'), 'check 未输出对齐结论');
+  assert(out.includes('期望 Chrome'), 'check 未报出 puppeteer 期望的 Chrome 版本');
+});
+
 console.log('');
 console.log('  媒体链路回归: ' + pass + ' 通过 / ' + fail + ' 失败 / ' + skip + ' 跳过');
 if (fail > 0) process.exit(1);

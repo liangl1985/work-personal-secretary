@@ -174,17 +174,22 @@ def check_media():
     这里只报告「环境变量是否已设置」，绝不读取/回显密钥值。
     """
     media_dir = SCRIPTS_DIR / "media"
-    graph = {"ok": False, "runtime": "", "browser": "", "fix": ""}
+    graph = {"ok": False, "runtime": "", "browser": "", "fix": "",
+             "expected_chrome": "", "aligned": None, "align_note": ""}
     try:
         if str(media_dir) not in sys.path:
             sys.path.insert(0, str(media_dir))
-        import gen_diagram as gd            # 复用同一套运行时查找逻辑（单一真值）
+        import gen_diagram as gd            # 复用同一套运行时查找 + 版本对齐判断（单一真值）
         tools, cli = gd.find_runtime()
         if tools and cli:
             graph["ok"] = True
             graph["runtime"] = str(tools)
-        edge = gd._edge_path()
-        graph["browser"] = edge or "未找到 Edge（不下载 Chromium 时必须用本机 Edge）"
+        align = gd.edge_alignment()
+        graph["browser"] = align["edge"] or "未找到 Edge（不下载 Chromium 时必须用本机 Edge）"
+        graph["expected_chrome"] = align["expected_chrome"] or ""
+        graph["edge_path"] = align["edge_path"] or ""
+        graph["aligned"] = align["aligned"]
+        graph["align_note"] = align["note"]
         if not graph["ok"]:
             graph["fix"] = ("powershell -ExecutionPolicy Bypass -File "
                             "%s%s" % (media_dir, os.sep + "setup_mermaid.ps1 -Install"))
@@ -280,11 +285,17 @@ def main():
     print("              模型：" + img["model"])
     if graph["ok"]:
         print("    图示(mermaid) ✅ 运行时：" + graph["runtime"])
-        print("                  浏览器：" + graph["browser"])
+        print("                  浏览器：" + graph["browser"]
+              + ((" @ " + graph["edge_path"]) if graph.get("edge_path") else "")
+              + (("（puppeteer 期望 Chrome %s）" % graph["expected_chrome"])
+                 if graph["expected_chrome"] else ""))
+        if graph["align_note"]:
+            print("                  对齐：" + graph["align_note"])
     else:
         print("    图示(mermaid) ⚠️ 未就绪（属可选能力；缺它不影响文档四格式处理）")
         if graph["browser"]:
-            print("                  浏览器：" + graph["browser"])
+            print("                  浏览器：" + graph["browser"]
+                  + ((" @ " + graph["edge_path"]) if graph.get("edge_path") else ""))
         if graph["fix"]:
             print("    修复：" + graph["fix"])
 

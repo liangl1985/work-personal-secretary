@@ -1,3 +1,30 @@
+## 0.7.1 — 2026-09-16（运行时安装可复现 + 浏览器版本对齐提示）
+
+### 一、这一步做了什么（三条加固）
+
+1. **随包 lock + npm ci（严格复现）**：新增 scripts/media/runtime/ 下的 package.json 与 package-lock.json（lock 取自本机**已验证**的那份运行时，仅修改 name 与根依赖声明使其与清单一致）；setup_mermaid.ps1 的 -Install 改为**优先**复制随包清单与 lock 后执行 npm ci --ignore-scripts；lock 缺失或 ci 失败时**回退** npm install 并打印提示
+   - 为什么加 --ignore-scripts：明确**不跑 install scripts**（防 puppeteer 的 postinstall 去下载 Chromium），不再依赖 npm 版本的默认行为；同时保留 PUPPETEER_SKIP_DOWNLOAD=1 作双保险
+2. **Edge 主版本 vs puppeteer 期望 Chrome 的对齐提示**：gen_diagram.py 新增 expected_chrome()（从 puppeteer-core 的 revisions 读期望版本，字符串解析实现）与 edge_alignment()（比对主版本并给结论）；check 与 doctor.py 的 [4] 段都会打印「Edge 版本 @ 路径（puppeteer 期望 Chrome X）」+ 对齐结论
+3. **技能文档补处置**：skills/media-gen/SKILL.md 新增「Edge 大版本升级后图示失效的处置」（三条路径：退 SVG / 指定匹配浏览器 / 装匹配 Chrome for Testing）；README.md 已知局限补第 13 条
+
+### 二、实测（本机）
+
+- 随包 lock 被接受：npm ci --dry-run 退出码 0，报告 added 190 packages（与 55 号记录一致）
+- **真装真渲染**：npm ci --ignore-scripts **17.9 秒 / 190 包 / 384.5 MB**，目录内**无任何浏览器可执行文件**（确实没下载 Chromium），随后用这份新装运行时**真渲染成功**（PNG 13,431 字节，与已验证那份一致）
+- 对齐结论：本机 Edge **153.0.4234.32** vs puppeteer 期望 Chrome **153.0.8010.36** → **主版本一致**
+
+### 三、回归
+
+scripts/media-test.mjs 11 → **17 例**（新增：随包清单与 lock 一致性 · setup 脚本走 npm ci 并可回退 · 对齐结论输出），本机 **17/0**。
+
+### 四、验证
+
+spec_sync --check 0 · style-test 24/0 · ppt-render-test 24/0 · ppt-style-test 11/0 · media-test **17/0** · 仓库 ↔ profile 逐文件 SHA256 一致
+
+### 五、回退
+
+版本改回 **0.7.0** 或 git revert 本提交；profile 同步一次（scripts/** 免重启、skills/** 需重启）。
+
 ## 0.7.0 — 2026-09-16（⑦ 收口：技能扩写 + 新增 media-gen + 发布文档三处一致）
 
 ### 一、这一步做了什么

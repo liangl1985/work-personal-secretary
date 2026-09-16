@@ -159,6 +159,7 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 | 10 | **PPT 几何容量口径** | 行高按 WPS 实测（**字号 ÷ 72 × 1.228 × 行距**）反算，`max_lines` 等容量值据此定；`spec_sync.py`、渲染器、`style-test.mjs` 三处口径由**门禁用例**守住（改其一必改另两处） |
 | 11 | **进度环降级** | `ring` 组件经三次小样（BLOCK_ARC 角度 adjustment）**未标定出可控弧度** → 按预案**降级为数据条**：进度类数据用 **chart 页**表达 |
 | 12 | **生图需密钥且属云端** | 默认密钥为空 → 生图不可用并**自动回退代码矢量**（全程不出网）；显式配密钥后 prompt 会发送到火山引擎 ARK，**须先告知使用者且不得含客户信息/报价/涉密内容** |
+| 13 | **Edge 大版本升级可能让图示暂时失效** | mermaid-cli 经 puppeteer 驱动本机 Edge，puppeteer 与浏览器主版本有对应关系（本机当前 puppeteer 25.11 ↔ Edge 153）。`gen_diagram.py check` 与 `doctor.py` 的 [4] 段会比对「Edge 主版本 vs puppeteer 期望 Chrome 主版本」并给结论；不一致时按 `skills/media-gen/SKILL.md`「Edge 大版本升级后」处置（退 SVG / 指定浏览器 / 装匹配 Chrome for Testing）。**失败形态是 exit 4 + 可回退，不连累其它能力** |
 | 9 | 非原生格式"尽力而为" | `word read` / `excel read` 对非 docx/xlsx 文件会回落 WPS COM 读取（读到内容即成功），`ppt read` 则会失败（python-pptx 抛 `PackageNotFoundError`，经 `cli_guard` 转为中文单行错误 + exit 2）；三种行为不完全一致，属有意保留（WPS 能读 .txt/.csv 这类纯文本） |
 
 ## 六、许可与归属

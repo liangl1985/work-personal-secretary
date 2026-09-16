@@ -1,0 +1,11 @@
+{
+  "name": "dsh-doc-suite-mermaid",
+  "version": "1.0.0",
+  "private": true,
+  "description": "dsh-doc-suite mermaid 图示运行时清单（随包提供，仅用于 npm ci 复现安装；Node 依赖不写进插件 dependencies）",
+  "license": "ISC",
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "11.17.0",
+    "puppeteer": "25.11.0"
+  }
+}

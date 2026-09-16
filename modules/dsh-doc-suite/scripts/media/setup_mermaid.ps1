@@ -4,6 +4,10 @@
   为什么单独一个脚本：Node 依赖**不进 dependencies / files** ——
   puppeteer 的 postinstall 可能下载 Chromium，网络失败会连累整个插件装不上。
 
+  复现性（2026-09-17 加固）：随包提供 scripts/media/runtime/{package.json,package-lock.json}，
+  安装优先用 npm ci --ignore-scripts（严格按 lock 复现；明确不跑 install scripts，防 puppeteer
+  下载 Chromium）；lock 缺失或 npm ci 失败时回退 npm install。
+
   用法（默认只打印现状与将执行的命令，不动系统）：
     powershell -ExecutionPolicy Bypass -File setup_mermaid.ps1                 # 体检：Node / npm / Edge / 运行时
     powershell -ExecutionPolicy Bypass -File setup_mermaid.ps1 -Install        # 在标准位置安装（不下载 Chromium）
@@ -57,16 +61,37 @@ if ($Install) {
   if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw "未找到 npm（需 Node >= 18）。" }
   New-Item -ItemType Directory -Force -Path $ToolsDir | Out-Null
   Set-Location $ToolsDir
-  $pkgPath = Join-Path $ToolsDir 'package.json'
-  if (-not (Test-Path $pkgPath)) {
-    $pkgJson = '{"name":"dsh-doc-suite-mermaid","private":true,"description":"mermaid runtime (not shipped; installed by setup_mermaid.ps1)","dependencies":{"@mermaid-js/mermaid-cli":"11.17.0","puppeteer":"25.11.0"}}'
-    [System.IO.File]::WriteAllText($pkgPath, $pkgJson, (New-Object System.Text.UTF8Encoding($false)))
+  # 优先用随包提供的「运行时清单 + lock」：npm ci 严格按 lock 复现（依赖树与已验证状态一致）
+  $srcDir = Join-Path $PSScriptRoot 'runtime'
+  $srcPkg = Join-Path $srcDir 'package.json'
+  $srcLock = Join-Path $srcDir 'package-lock.json'
+  $useCi = $false
+  if ((Test-Path $srcPkg) -and (Test-Path $srcLock)) {
+    Copy-Item $srcPkg (Join-Path $ToolsDir 'package.json') -Force
+    Copy-Item $srcLock (Join-Path $ToolsDir 'package-lock.json') -Force
+    $useCi = $true
+  } else {
+    $pkgPath = Join-Path $ToolsDir 'package.json'
+    if (-not (Test-Path $pkgPath)) {
+      $pkgJson = '{"name":"dsh-doc-suite-mermaid","private":true,"description":"mermaid runtime (installed by setup_mermaid.ps1)","dependencies":{"@mermaid-js/mermaid-cli":"11.17.0","puppeteer":"25.11.0"}}'
+      [System.IO.File]::WriteAllText($pkgPath, $pkgJson, (New-Object System.Text.UTF8Encoding($false)))
+    }
+    Write-Output "注意：未找到随包的 runtime/package-lock.json → 退回 npm install（依赖树不可完全复现）"
   }
   $cfg = '{"executablePath":"' + ($edge -replace '\\', '/') + '"}'
   [System.IO.File]::WriteAllText((Join-Path $ToolsDir 'puppeteer.json'), $cfg, (New-Object System.Text.UTF8Encoding($false)))
   $env:PUPPETEER_SKIP_DOWNLOAD = '1'
-  Write-Output "执行：npm install（PUPPETEER_SKIP_DOWNLOAD=1，不下载 Chromium）"
-  & npm install --no-audit --no-fund
+  if ($useCi) {
+    Write-Output "执行：npm ci --ignore-scripts（按随包 lock 复现；不跑 install scripts、不下载 Chromium）"
+    & npm ci --ignore-scripts --no-audit --no-fund
+    if ($LASTEXITCODE -ne 0) {
+      Write-Output ("npm ci 失败（exit " + $LASTEXITCODE + "）→ 回退 npm install（依赖树可能与 lock 不同）")
+      & npm install --no-audit --no-fund
+    }
+  } else {
+    Write-Output "执行：npm install（PUPPETEER_SKIP_DOWNLOAD=1，不下载 Chromium）"
+    & npm install --no-audit --no-fund
+  }
   Write-Output "安装完成。"
   Show-Status
   exit 0

@@ -107,6 +107,73 @@ def _puppeteer_cfg(tools_dir: Path, tmp_out: Path):
     return tmp_out, edge
 
 
+def expected_chrome(tools_dir):
+    """读 puppeteer-core 的 revisions，取它期望的 Chrome 版本（字符串解析，不用正则）。"""
+    for rel in ("node_modules/puppeteer-core/lib/puppeteer/revisions.js",
+                "node_modules/puppeteer-core/lib/esm/puppeteer/revisions.js",
+                "node_modules/puppeteer-core/src/revisions.ts"):
+        p = Path(tools_dir) / rel
+        if not p.is_file():
+            continue
+        try:
+            body = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        idx = body.find("chrome:")
+        if idx < 0:
+            continue
+        digits = ""
+        for ch in body[idx + len("chrome:"): idx + 60]:
+            if ch.isdigit() or ch == ".":
+                digits += ch
+            elif digits:
+                break
+        digits = digits.strip(".")
+        if digits:
+            return digits
+    return None
+
+
+def _file_version(path):
+    """Windows 下读 PE 文件版本（pywin32 属本模块必需依赖；非 Windows 或失败返回 None）。"""
+    try:
+        import win32api
+        info = win32api.GetFileVersionInfo(str(path), "\\")
+        ms, ls = info["FileVersionMS"], info["FileVersionLS"]
+        return "%d.%d.%d.%d" % (ms >> 16, ms & 0xFFFF, ls >> 16, ls & 0xFFFF)
+    except Exception:
+        return None
+
+
+def edge_alignment(tools_dir=None):
+    """Edge 主版本 vs puppeteer 期望 Chrome 主版本的对齐结论（check 与 doctor 共用）。"""
+    tools, _cli = find_runtime(tools_dir)
+    edge = _edge_path()
+    expected = expected_chrome(tools) if tools else None
+    edge_ver = _file_version(edge) if edge else None
+
+    def major(v):
+        return str(v).split(".")[0] if v else None
+    em, xm = major(edge_ver), major(expected)
+    if not edge:
+        note = "未找到 Edge：不下载 Chromium 的装载方式必须用本机 Edge"
+        aligned = False
+    elif not expected:
+        note = "无法判定（读不到 puppeteer 期望的 Chrome 版本）"
+        aligned = None
+    elif em == xm:
+        note = "主版本一致 ✅"
+        aligned = True
+    else:
+        note = ("⚠️ 主版本不一致：Edge %s vs puppeteer 期望 Chrome %s —— 图示可能渲染失败（exit 4 可回退）；"
+                "处置见 skills/media-gen/SKILL.md" % (em, xm))
+        aligned = False
+    return {"tools": str(tools) if tools else "", "edge": edge_ver or (edge or ""),
+            "edge_path": edge or "", "edge_major": em,
+            "expected_chrome": expected, "expected_major": xm,
+            "aligned": aligned, "note": note}
+
+
 def cmd_check(args):
     tools, cli = find_runtime(args.tools_dir)
     if not tools:
@@ -115,8 +182,10 @@ def cmd_check(args):
         return EXIT_FALLBACK
     print("运行时: %s" % tools)
     print("入口  : %s" % cli)
-    edge = _edge_path()
-    print("Edge  : %s" % (edge or "未找到（mermaid-cli 需浏览器；未下载 Chromium 时必须用 Edge）"))
+    align = edge_alignment(args.tools_dir)
+    print("Edge  : %s%s" % (align["edge"] or "未找到（mermaid-cli 需浏览器；未下载 Chromium 时必须用 Edge）",
+                            ("（puppeteer 期望 Chrome %s）" % align["expected_chrome"]) if align["expected_chrome"] else ""))
+    print("对齐  : " + align["note"])
     pkg = Path(tools) / "node_modules" / "puppeteer" / "package.json"
     if pkg.is_file():
         try:
