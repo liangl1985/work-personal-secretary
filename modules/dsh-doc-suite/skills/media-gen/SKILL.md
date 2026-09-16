@@ -25,6 +25,13 @@ description: 为演示文稿生成图形素材：ARK（火山引擎方舟）生�
 
 **退出码**：`0` 成功 ｜ `2` 参数/输入错 ｜ **`4` = 云端不可用或调用失败（可回退：改用代码矢量 / mermaid / 公司素材）**
 
+### 官方口径（2026-09-16 按官方《快速入门(新手版)》核对）
+
+- **API Key 两种格式**：新格式 `ark-<uuid>-<suffix>`（本次实测用的就是这种）与历史 UUID 格式，官方脚本**两者都兼容** —— 我们按 Bearer 原样使用，不做格式校验
+- **环境变量名就是 `ARK_API_KEY`**（官方原文："建议先配置 ARK_API_KEY，这样后续运行脚本时无需重复输入密钥"）—— 与本模块的读取口径**一致**
+- 官方入口：API Key 管理 `https://ark.volcengine.com/region:cn-beijing/apikey` · 模型开通管理 `https://ark.volcengine.com/region:cn-beijing/openManagement` · 模型广场 `https://ark.volcengine.com/region:cn-beijing/model`
+- **模型需开通**：新用户有免费额度，额度用完要在上面第二个入口开通（生视频类如 Seedance 2.0 另有余额 > 200 元或资源包的门槛 —— 本模块生视频默认关）
+
 ### 密钥与平台（口径）
 
 - 密钥来源优先级：`--api-key` > 环境变量 `ARK_API_KEY` > 设置项 `media.ark.api_key`（设置 → 插件 → dsh-doc-suite）
