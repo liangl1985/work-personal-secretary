@@ -48,7 +48,8 @@ const HAS_PPTX = HAS_PY && (function () { const r = pyProbe('import pptx; print(
 const FONT = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts', 'msyh.ttc');
 const HAS_FONT = fs.existsSync(FONT);
 
-const NEED = ['cover', 'bullets', 'cards', 'toc', 'section', 'compare', 'data', 'chart', 'table', 'quote', 'closing'];
+const NEED = ['cover', 'bullets', 'cards', 'toc', 'section', 'compare', 'data', 'chart', 'table', 'quote', 'closing',
+  'image', 'process', 'timeline', 'case', 'qa'];
 
 function writeJson(name, obj) {
   const p = path.join(TMP, name);
@@ -75,6 +76,19 @@ function manifest11() {
     ],
   };
 }
+function manifest16() {
+  const m = manifest11();
+  m.slides = m.slides.concat([
+    { layout: 'image', title: '图文', image: 'assets/icons/shield.png', caption: '图注', body: ['要点一', '要点二'] },
+    { layout: 'process', title: '步骤', steps: [{ index: '01', title: 'A', body: 'a' }, { index: '02', title: 'B', body: 'b' }] },
+    { layout: 'timeline', title: '时间线', milestones: [{ when: 'W1', title: 'X', body: 'x' }] },
+    { layout: 'case', title: '案例', cases: [{ title: '客户甲', body: '项目说明', tag: '2025' }] },
+    { layout: 'qa', title: '问答', items: [{ question: '问一', answer: '答一' }] },
+  ]);
+  m.notes = m.notes.concat(['n12', 'n13', 'n14', 'n15', 'n16']);
+  return m;
+}
+
 function ruleWidth(p, pageIndex) {
   const py = pyLine([
     'import json, sys',
@@ -147,7 +161,7 @@ t('实现页型与组件集合 = 规格集合', function () {
   if (!r) return 'skip';
   assert(r.status === 0, 'Python 读取失败：' + (r.stderr || '').slice(0, 200));
   const d = JSON.parse(r.stdout.trim().split('\n').pop());
-  assert(d.sl.length === 11, '规格页型应为 11 类，实得 ' + d.sl.length);
+  assert(d.sl.length === 16, '规格页型应为 16 类，实得 ' + d.sl.length);
   for (const k of d.sl) assert(d.il.includes(k), '实现未覆盖页型 ' + k);
   for (const k of d.ic) assert(d.sc.includes(k), '实现组件不在规格内：' + k);
 });
@@ -185,7 +199,7 @@ t('validate：chart series values 为空 → exit 2（minItems）', function () 
 });
 
 t('validate：未知 layout → 退化 bullets 并告警', function () {
-  const m = manifest11(); m.slides[3].layout = 'timeline';
+  const m = manifest11(); m.slides[3].layout = 'roadmap';   // 真正未实现的页型（timeline 已在 ③b 实现）
   const r = pyRun(RENDER, ['validate', writeJson('unknown.json', m)]);
   if (!r) return 'skip';
   assert(r.status === 0, 'exit=' + r.status);
@@ -222,7 +236,7 @@ t('list-layouts：11 类已实现 + 5 类未实现', function () {
   if (!r) return 'skip';
   assert(r.status === 0, 'exit=' + r.status);
   const txt = r.stdout;
-  assert((txt.match(/✔/g) || []).length >= 14, '✔ 数量不足（页型 11 + 组件 4）');
+  assert((txt.match(/✔/g) || []).length >= 20, '✔ 数量不足（页型 16 + 组件 8）');
   for (const k of NEED) assert(txt.includes(k), 'list-layouts 未列出 ' + k);
 });
 
@@ -298,6 +312,48 @@ t('render：超容量自动缩字号（依赖本机字体）', function () {
   const r = pyRun(RENDER, ['render', writeJson('overflow.json', m), path.join(TMP, 'overflow.pptx')]);
   assert(r.status === 0, 'exit=' + r.status);
   assert((r.stdout + r.stderr).includes('→') || (r.stdout + r.stderr).includes('17pt'), '未触发缩字号：' + (r.stdout || '').slice(-200));
+});
+
+t('render：16 页整册（含扩展 5 类）→ exit 0 且页数正确', function () {
+  if (!HAS_PPTX) return 'skip';
+  const out = path.join(TMP, 'deck16.pptx');
+  const r = pyRun(RENDER, ['render', writeJson('deck16.json', manifest16()), out]);
+  assert(r.status === 0, 'exit=' + r.status + ' ' + (r.stderr || '').slice(0, 200));
+  const d = readPptx(out);
+  assert(d && d.pages === 16, '页数应为 16，实得 ' + (d ? d.pages : 'null'));
+});
+
+t('render：image 图缺失 → 占位并告警；图存在则无告警', function () {
+  if (!HAS_PPTX) return 'skip';
+  const miss = manifest16();
+  miss.slides[11].image = 'assets/icons/__nope__.png';
+  const r1 = pyRun(RENDER, ['render', writeJson('img-miss.json', miss), path.join(TMP, 'img-miss.pptx')]);
+  assert(r1.status === 0, 'exit=' + r1.status);
+  assert((r1.stdout + r1.stderr).includes('占位框'), '缺图未告警：' + (r1.stdout || '').slice(-160));
+  const r2 = pyRun(RENDER, ['render', writeJson('img-ok.json', manifest16()), path.join(TMP, 'img-ok.pptx')]);
+  assert(r2.status === 0 && !(r2.stdout + r2.stderr).includes('占位框'), '图存在时不应出现占位告警');
+});
+
+t('render：qa 页固定文本 Q 写入圆标', function () {
+  if (!HAS_PPTX) return 'skip';
+  const out = path.join(TMP, 'qa.pptx');
+  const r = pyRun(RENDER, ['render', writeJson('qa16.json', manifest16()), out]);
+  assert(r.status === 0, 'exit=' + r.status);
+  const py = pyLine([
+    'import json, sys',
+    'from pptx import Presentation',
+    'prs = Presentation(sys.argv[1])',
+    'texts = []',
+    'for s in prs.slides:',
+    '    for sh in s.shapes:',
+    '        if sh.has_text_frame:',
+    '            texts.append(sh.text_frame.text)',
+    'print(json.dumps({"has_q": any(t.strip() == "Q" for t in texts)}))',
+  ]);
+  const rr = pyRun('-c', [py, out]);
+  assert(rr && rr.status === 0, '读回失败：' + (rr && rr.stderr));
+  const d = JSON.parse(rr.stdout.trim().split('\n').pop());
+  assert(d.has_q, '未找到固定文本 Q');
 });
 
 t('render：装饰线宽跟随标题文字长度（follow_text）', function () {

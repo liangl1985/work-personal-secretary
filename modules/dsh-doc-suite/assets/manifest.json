@@ -1,10 +1,59 @@
 {
   "schema": "dsh-doc-suite/assets@1",
-  "note": "内置素材清单（③a ⑤ 步）。内置层只放可随包分发的素材；公司 Logo / 产品图一律放使用者自定义层。",
-  "icons": [],
+  "note": "内置素材清单（③a ⑤ 步 + ③b 图标最小集）。内置层只放可随包分发的素材；公司 Logo / 产品图一律放使用者自定义层。",
+  "icons": [
+    {
+      "name": "shield",
+      "file": "icons/shield.png",
+      "size_px": 64,
+      "source": "自绘（Pillow 几何绘制，2026-09-16）",
+      "license": "MIT（随本仓库）",
+      "redistributable": true
+    },
+    {
+      "name": "eye",
+      "file": "icons/eye.png",
+      "size_px": 64,
+      "source": "自绘（Pillow 几何绘制，2026-09-16）",
+      "license": "MIT（随本仓库）",
+      "redistributable": true
+    },
+    {
+      "name": "lock",
+      "file": "icons/lock.png",
+      "size_px": 64,
+      "source": "自绘（Pillow 几何绘制，2026-09-16）",
+      "license": "MIT（随本仓库）",
+      "redistributable": true
+    },
+    {
+      "name": "server",
+      "file": "icons/server.png",
+      "size_px": 64,
+      "source": "自绘（Pillow 几何绘制，2026-09-16）",
+      "license": "MIT（随本仓库）",
+      "redistributable": true
+    },
+    {
+      "name": "network",
+      "file": "icons/network.png",
+      "size_px": 64,
+      "source": "自绘（Pillow 几何绘制，2026-09-16）",
+      "license": "MIT（随本仓库）",
+      "redistributable": true
+    },
+    {
+      "name": "doc",
+      "file": "icons/doc.png",
+      "size_px": 64,
+      "source": "自绘（Pillow 几何绘制，2026-09-16）",
+      "license": "MIT（随本仓库）",
+      "redistributable": true
+    }
+  ],
   "shapes": [],
   "policy": {
-    "icon_fallback": "图标名无素材时，渲染器用内置几何标记（见 scripts/office/ppt_render.py 的 ICON_MARKS / ICON_MARK_SCALE）；assets/icons/<name>.png|.jpg 存在则优先贴图。",
+    "icon_fallback": "图标名无素材时，渲染器用内置几何标记（见 scripts/office/ppt_render.py 的 ICON_MARKS / ICON_MARK_SCALE）；assets/icons/<name>.png 存在则优先贴图（保持比例居中）。",
     "registration": "每条素材必须记录 name / file / source / license / redistributable；未登记的素材不得进内置层。",
     "license": "只收可再分发素材（MIT / Apache-2.0 / CC0 / 自绘）；不确定的进自定义层并标注不可外发。",
     "size_budget_mb": 2

@@ -82,9 +82,11 @@ ALL_LAYOUTS = ("cover", "toc", "section", "bullets", "cards", "compare", "data",
                "chart", "table", "quote", "closing",
                "image", "process", "timeline", "case", "qa")
 IMPLEMENTED_LAYOUTS = ("cover", "toc", "section", "bullets", "cards", "compare", "data",
-                       "chart", "table", "quote", "closing")
+                       "chart", "table", "quote", "closing",
+                       "image", "process", "timeline", "case", "qa")
 ALL_COMPONENTS = ("card", "chip", "kpi", "bar", "ring", "icon", "toc_item", "compare_panel")
-IMPLEMENTED_COMPONENTS = ("card", "kpi", "toc_item", "compare_panel")
+IMPLEMENTED_COMPONENTS = ("card", "kpi", "toc_item", "compare_panel",
+                        "step", "milestone", "case_card", "qa_item")
 FALLBACK_LAYOUT = "bullets"
 
 # 标题性字号键 → 用 fonts.heading；其余用 fonts.body
@@ -682,6 +684,8 @@ class Renderer:
                 self._draw_chart(slide, el, s, number)
             elif role == "table":
                 self._draw_table(slide, el, s, number)
+            elif role == "image":
+                self._draw_image(slide, el, s, number)
             elif role == "page_number":
                 if not self._page_number_on(layout):
                     continue
@@ -699,6 +703,50 @@ class Renderer:
                 self._draw_rule(slide, el, s, by_role)
             else:
                 self._add_shape(slide, el["box"], el.get("fill"))
+
+    def _draw_image(self, slide, el, s, number):
+        """图文页的图片元素（③b）：本地路径优先（contain 居中，不拉伸）；gen: 前缀属生图链路，
+        未接入或文件缺失时用占位框并**告警**（绝不静默留白）。"""
+        box = el["box"]
+        spec = str(s.get("image") or el.get("image") or "").strip()
+        path = None
+        if spec and not spec.startswith("gen:"):
+            cand = Path(spec)
+            if not cand.is_file() and not cand.is_absolute():
+                alt = MODULE / spec                # 相对路径再按模块根兜一次（技能文档口径）
+                if alt.is_file():
+                    cand = alt
+            path = cand
+        if path is not None and path.is_file():
+            if not self.dry:
+                self._add_picture_fit(slide, path, box)
+            return
+        if not spec:
+            why = "manifest 未给 image 字段"
+        elif spec.startswith("gen:"):
+            why = "gen: 生图链路未接入（⑥ 步）"
+        else:
+            why = "图片文件不存在：%s" % spec
+        self.warnings.append("第 %d 页 image：%s → 已用占位框" % (number, why))
+        self._add_shape(slide, box, el.get("placeholder_fill") or "surface_alt")
+
+    def _add_picture_fit(self, slide, path, box):
+        """插入图片：contain（保持比例、居中），避免非等比槽位把图拉变形。"""
+        x, y = float(box["x"]), float(box["y"])
+        w, h = float(box["w"]), float(box["h"])
+        try:
+            from PIL import Image as _Image
+            with _Image.open(str(path)) as img:
+                w_px, h_px = img.size
+            if w_px > 0 and h_px > 0:
+                ratio = min(w / float(w_px), h / float(h_px))
+                nw, nh = w_px * ratio, h_px * ratio
+                x += (w - nw) / 2.0
+                y += (h - nh) / 2.0
+                w, h = nw, nh
+        except Exception:
+            pass
+        slide.shapes.add_picture(str(path), Inches(x), Inches(y), Inches(w), Inches(h))
 
     def _draw_rule(self, slide, el, s, by_role):
         """装饰线（③a ⑩）：声明 follow_text 时，按被跟随元素的**实测文字宽度**定宽 ——
@@ -729,11 +777,11 @@ class Renderer:
     def _grid_items(s):
         """网格槽位的数据来源：compare 用左右两栏，cards 用 cards，其余页型用 items。"""
         layout = str(s.get("layout") or "")
+        field = {"compare": None, "cards": "cards", "process": "steps",
+                 "timeline": "milestones", "case": "cases"}.get(layout, "items")
         if layout == "compare":
             return [x for x in (s.get("left"), s.get("right")) if isinstance(x, dict)]
-        if layout == "cards":
-            return [x for x in (s.get("cards") or []) if isinstance(x, dict)]
-        return [x for x in (s.get("items") or []) if isinstance(x, dict)]
+        return [x for x in (s.get(field) or []) if isinstance(x, dict)]
 
     @staticmethod
     def _element_value(s, role):
@@ -781,7 +829,8 @@ class Renderer:
 
     def _draw_component(self, slide, comp, ox, oy, slot_w, slot_h, values, number):
         """组件实例：values 为「role → 文本（str / list）」映射，role 默认与条目字段同名。"""
-        if not self.dry:
+        if not self.dry and (comp.get("fill") or comp.get("line")):
+            # 底板只在**显式声明** fill / line 时画：几何是真值，渲染器不替规格做主
             shp = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
                                          *self._geo({"x": ox, "y": oy, "w": slot_w, "h": slot_h}))
             shp.fill.solid()
@@ -821,7 +870,7 @@ class Renderer:
                 self._draw_icon(slide, el, ox, oy, value, number)
                 continue
             if "text" in el:
-                value = values.get(role)
+                value = el.get("fixed_text") if el.get("fixed_text") is not None else values.get(role)
                 if value is None or value == "" or value == []:
                     if el.get("optional"):
                         continue
@@ -829,11 +878,23 @@ class Renderer:
                 paras = value if isinstance(value, list) else [str(value)]
                 self._draw_text(slide, el, [str(x) for x in paras], offset=(ox, oy), number=number)
                 continue
-            # 无文本的装饰元素（分隔线 / 序号底板 等）
+            # 无文本的装饰元素（分隔线 / 序号底板 / 圆点 等）：按 shape 声明取形状
             box = {"x": ox + el["box"]["x"], "y": oy + el["box"]["y"],
                    "w": el["box"]["w"], "h": el["box"]["h"]}
-            shape = MSO_SHAPE.ROUNDED_RECTANGLE if el.get("radius_in") else MSO_SHAPE.RECTANGLE
-            self._add_shape(slide, box, el.get("fill"), shape)
+            declared = str(el.get("shape") or "").lower()
+            if declared == "oval":
+                shape = MSO_SHAPE.OVAL
+            elif declared == "rounded" or el.get("radius_in"):
+                shape = MSO_SHAPE.ROUNDED_RECTANGLE
+            else:
+                shape = MSO_SHAPE.RECTANGLE
+            shp = self._add_shape(slide, box, el.get("fill"), shape)
+            if shape == MSO_SHAPE.ROUNDED_RECTANGLE and el.get("radius_in") and shp is not None:
+                try:
+                    shp.adjustments[0] = min(0.5, float(el["radius_in"])
+                                             / max(0.01, min(float(box["w"]), float(box["h"]))))
+                except Exception:
+                    pass
 
     def _find_icon(self, name):
         for d in self.asset_dirs:
@@ -850,7 +911,7 @@ class Renderer:
                "w": el["box"]["w"], "h": el["box"]["h"]}
         image = self._find_icon(name) if name else None
         if image is not None and not self.dry:
-            slide.shapes.add_picture(str(image), *self._geo(box))
+            self._add_picture_fit(slide, image, box)
             return
         self._add_shape(slide, box, el.get("fill") or "panel_dark", MSO_SHAPE.OVAL)
         if not name:
@@ -1142,7 +1203,7 @@ def cmd_list_layouts(args):
              float(slide.get("height_emu") or 0) / EMU_PER_INCH,
              (pp_fonts.get("heading") or {}).get("ea"),
              (pp_fonts.get("body") or {}).get("ea")))
-    print("页型（③a 已实现 %d / 共 %d 类）：" % (len(IMPLEMENTED_LAYOUTS), len(ALL_LAYOUTS)))
+    print("页型（已实现 %d / 共 %d 类）：" % (len(IMPLEMENTED_LAYOUTS), len(ALL_LAYOUTS)))
     for name in ALL_LAYOUTS:
         lay = (pp.get("layouts") or {}).get(name)
         if name in IMPLEMENTED_LAYOUTS and isinstance(lay, dict):
@@ -1153,7 +1214,7 @@ def cmd_list_layouts(args):
             print("   ✔ %-9s %s" % (name, note))
         else:
             note = "规格已就位 · " if isinstance(lay, dict) else ""
-            print("   ✘ %-9s %s未实现（③b 补齐：扩展 5 类；当前落 %s 兜底）" % (name, note, FALLBACK_LAYOUT))
+            print("   ✘ %-9s %s未实现（后续扩展位；当前落 %s 兜底）" % (name, note, FALLBACK_LAYOUT))
     print("组件：")
     for name in ALL_COMPONENTS:
         comp = (pp.get("components") or {}).get(name)

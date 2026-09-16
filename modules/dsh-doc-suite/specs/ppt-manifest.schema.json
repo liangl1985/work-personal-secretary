@@ -118,6 +118,26 @@
         {
           "if": { "required": ["layout"], "properties": { "layout": { "const": "closing" } } },
           "then": { "$ref": "#/$defs/closing" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "image" } } },
+          "then": { "$ref": "#/$defs/image" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "process" } } },
+          "then": { "$ref": "#/$defs/process" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "timeline" } } },
+          "then": { "$ref": "#/$defs/timeline" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "case" } } },
+          "then": { "$ref": "#/$defs/case" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "qa" } } },
+          "then": { "$ref": "#/$defs/qa" }
         }
       ]
     },
@@ -289,6 +309,88 @@
       "description": "结束页：title 致谢大字 / subtitle 副标题（可选）。",
       "properties": {
         "subtitle": { "type": "string" }
+      }
+    },
+    "step_item": {
+      "type": "object",
+      "required": ["title"],
+      "description": "实施步骤：index 步骤号（可选）/ title 步骤名 / body 说明（可选）。",
+      "properties": {
+        "index": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" }
+      }
+    },
+    "milestone_item": {
+      "type": "object",
+      "required": ["when", "title"],
+      "description": "里程碑：when 时间标签 / title 名称 / body 说明（可选）。",
+      "properties": {
+        "when": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" }
+      }
+    },
+    "case_item": {
+      "type": "object",
+      "required": ["title"],
+      "description": "案例：title 客户/项目名 / body 项目要点 / tag 底部标签（如时间·规模）。",
+      "properties": {
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "tag": { "type": "string" }
+      }
+    },
+    "qa_pair": {
+      "type": "object",
+      "required": ["question", "answer"],
+      "description": "问答条目：question 问题 / answer 回答。",
+      "properties": {
+        "question": { "type": "string" },
+        "answer": { "type": "string" }
+      }
+    },
+    "image": {
+      "type": "object",
+      "required": ["image"],
+      "description": "图文页：image 为本地图片路径，或 gen:<标识> 交给生图链路（⑥ 步接入前由渲染器占位并告警）；可选 caption 图注。",
+      "properties": {
+        "image": { "type": "string" },
+        "caption": { "type": "string" }
+      }
+    },
+    "process": {
+      "type": "object",
+      "required": ["steps"],
+      "description": "实施步骤页：横向最多 4 步（超出由渲染器省略并告警）。",
+      "properties": {
+        "steps": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/step_item" } },
+        "body": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "timeline": {
+      "type": "object",
+      "required": ["milestones"],
+      "description": "时间线页：横向最多 4 个里程碑。",
+      "properties": {
+        "milestones": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/milestone_item" } }
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": ["cases"],
+      "description": "案例业绩页：最多 3 个案例卡。",
+      "properties": {
+        "cases": { "type": "array", "minItems": 1, "maxItems": 3, "items": { "$ref": "#/$defs/case_item" } },
+        "body": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "required": ["items"],
+      "description": "问答页：最多 4 组问答（2×2）。",
+      "properties": {
+        "items": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/qa_pair" } }
       }
     }
   }

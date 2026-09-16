@@ -443,6 +443,165 @@
             "format": "{n}"
           }
         ]
+      },
+      "image": {
+        "_note": "图文页（③b）：标题骨架 + 左侧图片区（7.2×4.6，约 3:2）+ 右侧要点（20pt，最多 8 行）+ 图注（页脚带上方，14pt）+ 来源行。图片来自 manifest 的 image 字段：本地路径优先；gen: 前缀属生图链路（⑥ 步），未接入前渲染器占位并告警（不静默空白）。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "image",
+            "box": { "x": 0.8, "y": 1.8, "w": 7.2, "h": 4.6 },
+            "fit": "contain",
+            "placeholder_fill": "surface_alt"
+          },
+          {
+            "role": "body",
+            "box": { "x": 8.3, "y": 1.8, "w": 4.2333, "h": 4.6 },
+            "text": { "size": "body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
+            "bullet": { "char": "•", "indent_in": 0.28, "hanging_in": 0.28, "gap_after_pt": 8, "gap_between_only": true, "color": "accent" },
+            "autofit": { "min_size_pt": 14, "max_lines": 8 }
+          },
+          {
+            "role": "caption",
+            "box": { "x": 0.8, "y": 6.45, "w": 7.2, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "process": {
+        "_note": "实施步骤页（③b）：标题骨架 + 横向 4 步（槽 2.7083×2.9）+ 下方说明要点（14pt，最多 4 行）+ 来源行。步骤样式由 components.step 定义。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 2.0, "w": 11.7333, "h": 2.9 },
+            "cols": 4,
+            "max_rows": 1,
+            "gap_in": 0.3,
+            "col_w_in": 2.7083,
+            "row_h_in": 2.9,
+            "fill_order": "row",
+            "valign": "top",
+            "slot": "step"
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.8, "y": 5.2, "w": 11.7333, "h": 1.6 },
+            "text": { "size": "small", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
+            "bullet": { "char": "•", "indent_in": 0.28, "hanging_in": 0.28, "gap_after_pt": 6, "gap_between_only": true, "color": "accent" },
+            "autofit": { "min_size_pt": 12, "max_lines": 4 },
+            "optional": true
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "timeline": {
+        "_note": "里程碑时间线（③b）：标题骨架 + 横向轴线（y=2.69，穿过节点圆心）+ 4 个节点（槽 2.7083×2.4）+ 来源行。节点样式由 components.milestone 定义（圆点圆心在槽顶 0.09，与轴线对齐）。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "rule",
+            "box": { "x": 0.8, "y": 2.675, "w": 11.7333, "h": 0.03 },
+            "fill": "card_line"
+          },
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 2.6, "w": 11.7333, "h": 2.4 },
+            "cols": 4,
+            "max_rows": 1,
+            "gap_in": 0.3,
+            "col_w_in": 2.7083,
+            "row_h_in": 2.4,
+            "fill_order": "row",
+            "valign": "top",
+            "slot": "milestone"
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "case": {
+        "_note": "案例业绩页（③b）：标题骨架 + 3 个案例卡（槽 3.6777×3.9，单行）+ 可选补充要点（14pt，最多 2 行）+ 来源行。案例卡样式由 components.case_card 定义。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 1.9, "w": 11.7333, "h": 3.9 },
+            "cols": 3,
+            "max_rows": 1,
+            "gap_in": 0.35,
+            "col_w_in": 3.6777,
+            "row_h_in": 3.9,
+            "fill_order": "row",
+            "valign": "top",
+            "slot": "case_card"
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.8, "y": 5.95, "w": 11.7333, "h": 0.75 },
+            "text": { "size": "small", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
+            "bullet": { "char": "•", "indent_in": 0.28, "hanging_in": 0.28, "gap_after_pt": 6, "gap_between_only": true, "color": "accent" },
+            "autofit": { "min_size_pt": 12, "max_lines": 2 },
+            "optional": true
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "qa": {
+        "_note": "问答页（③b，备用问答）：标题骨架 + 2×2 问答格（槽 5.6916×2.2）+ 来源行。问答样式由 components.qa_item 定义。",
+        "inherits": "content_page",
+        "background": "surface",
+        "elements": [
+          {
+            "role": "grid",
+            "box": { "x": 0.8, "y": 1.9, "w": 11.7333, "h": 4.78 },
+            "cols": 2,
+            "max_rows": 2,
+            "gap_in": 0.35,
+            "col_w_in": 5.6916,
+            "row_h_in": 2.2,
+            "fill_order": "row",
+            "valign": "top",
+            "slot": "qa_item"
+          },
+          {
+            "role": "source",
+            "box": { "x": 0.8, "y": 6.95, "w": 10.0, "h": 0.33 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
       }
     },
     "components": {
@@ -510,8 +669,11 @@
       },
       "bar": {},
       "toc_item": {
-        "_note": "目录条目（相对坐标，toc 页 grid 槽位 11.7333×0.52）：序号块 + 标题 + 页码 + 细分隔线。标题 20pt 单行 0.4605 ≤ box.h 0.48；序号与页码 14pt 单行 0.3223 ≤ 0.48；元素右下不超槽位。",
+        "_note": "目录条目（相对坐标，toc 页 grid 槽位 11.7333×0.52）：浅底条目板 + 序号块 + 标题 + 页码 + 细分隔线。标题 20pt 单行 0.4605 ≤ box.h 0.48；序号与页码 14pt 单行 0.3223 ≤ 0.48；元素右下不超槽位。",
         "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.05,
         "pad_in": 0.0,
         "elements": [
           {
@@ -572,6 +734,150 @@
             "text": { "size": "body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
             "bullet": { "char": "•", "indent_in": 0.28, "hanging_in": 0.28, "gap_after_pt": 8, "gap_between_only": true, "color": "accent" },
             "autofit": { "min_size_pt": 14, "max_lines": 5 }
+          }
+        ]
+      },
+      "step": {
+        "_note": "实施步骤（相对坐标，槽 2.7083×2.9）：浅底步骤卡 + 序号块 + 步骤标题 + 分隔线 + 说明。序号 14pt 单行 0.3223 ≤ 0.56；标题 22pt×1.2 单行 0.4503 ≤ 0.5；说明 16pt×1.25 × 4 行 = 1.3644 ≤ 1.4。",
+        "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.06,
+        "pad_in": 0.0,
+        "elements": [
+          {
+            "role": "index_box",
+            "box": { "x": 0.0, "y": 0.0, "w": 0.56, "h": 0.56 },
+            "fill": "panel_dark",
+            "radius_in": 0.1,
+            "shape": "rounded"
+          },
+          {
+            "role": "index",
+            "box": { "x": 0.0, "y": 0.0, "w": 0.56, "h": 0.56 },
+            "text": { "size": "small", "color": "text_on_dark", "bold": true, "align": "center", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 }
+          },
+          {
+            "role": "title",
+            "box": { "x": 0.0, "y": 0.72, "w": 2.7083, "h": 0.5 },
+            "text": { "size": "card_title", "color": "text_heading", "bold": true, "align": "left", "valign": "top", "line_spacing": 1.2 },
+            "autofit": { "min_size_pt": 16, "max_lines": 1 }
+          },
+          {
+            "role": "divider",
+            "box": { "x": 0.0, "y": 1.3, "w": 2.7083, "h": 0.008 },
+            "fill": "card_line"
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.0, "y": 1.42, "w": 2.7083, "h": 1.4 },
+            "text": { "size": "card_body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.25 },
+            "autofit": { "min_size_pt": 12, "max_lines": 4 }
+          }
+        ]
+      },
+      "milestone": {
+        "_note": "里程碑节点（相对坐标，槽 2.7083×2.4）：浅底节点卡 + 圆点（槽顶，圆心 y=0.09，与 timeline 轴线中心 2.69 对齐）+ 日期 + 标题 + 说明。日期 14pt 0.3223 ≤ 0.4；标题 20pt 单行 0.4605 ≤ 0.5；说明 16pt×1.25 × 3 行 = 1.0233 ≤ 1.05。",
+        "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.06,
+        "pad_in": 0.0,
+        "elements": [
+          {
+            "role": "dot",
+            "box": { "x": 1.2642, "y": 0.0, "w": 0.18, "h": 0.18 },
+            "fill": "accent",
+            "shape": "oval"
+          },
+          {
+            "role": "when",
+            "box": { "x": 0.0, "y": 0.3, "w": 2.7083, "h": 0.4 },
+            "text": { "size": "small", "color": "text_heading", "bold": true, "align": "center", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 }
+          },
+          {
+            "role": "title",
+            "box": { "x": 0.0, "y": 0.72, "w": 2.7083, "h": 0.5 },
+            "text": { "size": "body", "color": "text_on_light", "align": "center", "valign": "top" },
+            "autofit": { "min_size_pt": 14, "max_lines": 1 }
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.0, "y": 1.28, "w": 2.7083, "h": 1.05 },
+            "text": { "size": "card_body", "color": "text_muted_on_light", "align": "center", "valign": "top", "line_spacing": 1.25 },
+            "autofit": { "min_size_pt": 12, "max_lines": 3 }
+          }
+        ]
+      },
+      "case_card": {
+        "_note": "案例卡（相对坐标，槽 3.6777×3.9）：顶部色带 + 客户/项目名 + 分隔线 + 正文（最多 6 行）+ 底部标签。标题 22pt×1.2 单行 0.4503 ≤ 0.5；正文 16pt×1.25 × 6 行 = 2.0466 ≤ 2.2；标签 14pt 0.3223 ≤ 0.34。",
+        "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.06,
+        "accent_bar": { "edge": "top", "size_in": 0.055, "fill": "rule" },
+        "pad_in": 0.28,
+        "elements": [
+          {
+            "role": "title",
+            "box": { "x": 0.28, "y": 0.35, "w": 3.1177, "h": 0.5 },
+            "text": { "size": "card_title", "color": "text_heading", "bold": true, "align": "left", "valign": "top", "line_spacing": 1.2 },
+            "autofit": { "min_size_pt": 16, "max_lines": 1 }
+          },
+          {
+            "role": "divider",
+            "box": { "x": 0.28, "y": 0.95, "w": 3.1177, "h": 0.008 },
+            "fill": "card_line"
+          },
+          {
+            "role": "body",
+            "box": { "x": 0.28, "y": 1.1, "w": 3.1177, "h": 2.2 },
+            "text": { "size": "card_body", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.25 },
+            "autofit": { "min_size_pt": 12, "max_lines": 6 }
+          },
+          {
+            "role": "tag",
+            "box": { "x": 0.28, "y": 3.4, "w": 3.1177, "h": 0.34 },
+            "text": { "size": "small", "color": "text_muted_on_light", "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 },
+            "optional": true
+          }
+        ]
+      },
+      "qa_item": {
+        "_note": "问答条目（相对坐标，槽 5.6916×2.2）：圆角底 + Q 圆标 + 问题（16pt 加粗单行）+ 答案（14pt，最多 3 行）。问题 16pt×1.35 单行 0.3411 ≤ 0.4；答案 14pt×1.35 × 3 行 = 0.9669 ≤ 1.3。",
+        "coord": "relative",
+        "fill": "surface_alt",
+        "line": { "color": "card_line", "width_pt": 0.75 },
+        "radius_in": 0.06,
+        "pad_in": 0.24,
+        "elements": [
+          {
+            "role": "q_dot",
+            "box": { "x": 0.24, "y": 0.22, "w": 0.36, "h": 0.36 },
+            "fill": "panel_dark",
+            "shape": "oval"
+          },
+          {
+            "role": "q_mark",
+            "box": { "x": 0.24, "y": 0.22, "w": 0.36, "h": 0.36 },
+            "fixed_text": "Q",
+            "text": { "size": "small", "color": "text_on_dark", "bold": true, "align": "center", "valign": "middle" },
+            "autofit": { "min_size_pt": 10, "max_lines": 1 }
+          },
+          {
+            "role": "question",
+            "box": { "x": 0.72, "y": 0.2, "w": 4.9716, "h": 0.4 },
+            "text": { "size": "card_body", "color": "text_heading", "bold": true, "align": "left", "valign": "middle" },
+            "autofit": { "min_size_pt": 12, "max_lines": 1 }
+          },
+          {
+            "role": "answer",
+            "box": { "x": 0.24, "y": 0.72, "w": 5.2116, "h": 1.3 },
+            "text": { "size": "small", "color": "text_on_light", "align": "left", "valign": "top", "line_spacing": 1.35 },
+            "autofit": { "min_size_pt": 10, "max_lines": 3 }
           }
         ]
       }
