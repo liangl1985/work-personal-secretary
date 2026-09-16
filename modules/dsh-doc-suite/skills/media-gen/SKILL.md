@@ -38,14 +38,14 @@ description: 为演示文稿生成图形素材：ARK（火山引擎方舟）生�
 2. prompt **不含客户信息、报价、涉密内容**；产品实拍与拓扑图**用公司素材**，不要生图
 3. 使用者的密钥不外传、不复述；报错信息里也**不得出现密钥**
 
-`§bat
+```bat
 :: 先看配置状态（不调用云端）
 py -3 <DOC_SUITE_SCRIPTS>\media\gen_image.py check
 :: 生成一张概念插图（失败 → exit 4，回退代码矢量）
 py -3 <DOC_SUITE_SCRIPTS>\media\gen_image.py image --prompt "工业厂区网络拓扑的概念插画，扁平风格，深蓝主色" --out "素材\cover-ai.png" --size 1K
 :: 带参考图（保身份/画风）
 py -3 <DOC_SUITE_SCRIPTS>\media\gen_image.py image --prompt "同上风格，改为夜间厂区" --ref "素材\ref.png" --out "素材\b.png"
-`§
+```
 
 ## 二、gen_diagram.py（mermaid 本地渲染）
 
@@ -66,27 +66,27 @@ py -3 <DOC_SUITE_SCRIPTS>\media\gen_image.py image --prompt "同上风格，改�
 
 > **本脚本不自动安装任何依赖**：找不到运行时 → 打印安装命令 + `exit 4`。
 
-`§bat
+```bat
 py -3 <DOC_SUITE_SCRIPTS>\media\gen_diagram.py check
 py -3 <DOC_SUITE_SCRIPTS>\media\gen_diagram.py render "架构.mmd" "架构.png"
 py -3 <DOC_SUITE_SCRIPTS>\media\gen_diagram.py render "架构.mmd" "架构.svg" --theme neutral --scale 2
-`§
+```
 
 **坑**：`.mmd` 文件**禁 BOM**（用 Python/Node 写，PowerShell 会带 BOM → mmdc 挂在 JSON.parse）；
 mermaid-cli 需要一个浏览器：本机用 **Edge**（`puppeteer.json` 指向它），主版本不匹配时会渲染失败（`exit 4`）。
 
 ## 三、安装 / 迁移 mermaid 运行时
 
-`§powershell
+```powershell
 # 体检（Node / npm / Edge / 运行时；默认只报告不安装）
 powershell -ExecutionPolicy Bypass -File <DOC_SUITE_SCRIPTS>\media\setup_mermaid.ps1
 # 在标准位置安装（不下载 Chromium，用本机 Edge）
 powershell -ExecutionPolicy Bypass -File <DOC_SUITE_SCRIPTS>\media\setup_mermaid.ps1 -Install
 # 把别处已有的运行时迁到标准位置
 powershell -ExecutionPolicy Bypass -File <DOC_SUITE_SCRIPTS>\media\setup_mermaid.ps1 -MoveFrom "D:\某处\mermaid"
-`§
+```
 
-**为什么不进插件包**：`@mermaid-js/mermaid-cli` 与 `puppeteer` **不写进 `dependencies`、不进 §files` 白名单** ——
+**为什么不进插件包**：`@mermaid-js/mermaid-cli` 与 `puppeteer` **不写进 `dependencies`、不进 ``files` 白名单** ——
 puppeteer 的 postinstall 可能下载 Chromium，网络失败会**连累整个插件装不上**。安装命令里固定带 `PUPPETEER_SKIP_DOWNLOAD=1`。
 
 ## 四、Edge 大版本升级后图示失效的处置
@@ -98,10 +98,10 @@ puppeteer 的 postinstall 可能下载 Chromium，网络失败会**连累整个�
 
 **先确认（两条命令都会给出结论）**：
 
-`§bat
+```bat
 py -3 <DOC_SUITE_SCRIPTS>\media\gen_diagram.py check     :: 打印 Edge 版本 / puppeteer 期望版本 / 是否对齐
 py -3 <DOC_SUITE_SCRIPTS>\..\doctor.py                    :: [4] 段同样给「对齐」结论
-`§
+```
 
 **三条处置（成本从低到高）**：
 
@@ -123,4 +123,4 @@ py -3 <DOC_SUITE_SCRIPTS>\..\doctor.py                    :: [4] 段同样给「
 - **云端边界**：只有 `gen_image.py image` 会出网，且**仅在显式调用时**；默认无密钥 → 全程不出网
 - mermaid 渲染在本机（Node + Edge），产物落盘路径由调用方指定
 - 运行时不进包、不进依赖；`doctor.py` 的 [4] 段会报告它与浏览器的状态
-- 密钥与 §"媒体设置"§：见 `settings` 的 `media.*` 键（默认空密钥）；**修改设置项后重启 DSH 才在设置页可见**（lib 层变更）
+- 密钥与 ``"媒体设置"``：见 `settings` 的 `media.*` 键（默认空密钥）；**修改设置项后重启 DSH 才在设置页可见**（lib 层变更）

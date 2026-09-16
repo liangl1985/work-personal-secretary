@@ -134,6 +134,8 @@ EXIT_NO_FONT = 5
 FONT_FILE_HINTS = {
     "微软雅黑": "msyh.ttc",
     "microsoft yahei": "msyh.ttc",
+    "microsoft yahei ui": "msyh.ttc",     # 母版里常见写法（与微软雅黑同一字体文件，实测 msyh.ttc）
+    "微软雅黑 ui": "msyh.ttc",
     "黑体": "simhei.ttf",
     "simhei": "simhei.ttf",
     "宋体": "simsun.ttc",
@@ -144,6 +146,7 @@ FONT_FILE_HINTS = {
     "仿宋": "simfang.ttf",
     "arial": "arial.ttf",
     "calibri": "calibri.ttf",
+    "calibri light": "calibril.ttf",      # 实测本机存在 calibril.ttf
 }
 
 EMU_PER_INCH = 914400.0

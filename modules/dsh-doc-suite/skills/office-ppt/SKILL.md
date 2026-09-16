@@ -34,7 +34,7 @@ description: 处理 PowerPoint 演示文稿（.pptx/.ppt/.dps）：按 manifest 
 
 ### manifest 最小示例
 
-`§jsonc
+```jsonc
 {
   "schema": "dsh-doc-suite/ppt-manifest@1",
   "theme": "standard",
@@ -59,7 +59,7 @@ description: 处理 PowerPoint 演示文稿（.pptx/.ppt/.dps）：按 manifest 
     { "layout": "closing",  "title": "谢谢", "subtitle": "落款" }
   ]
 }
-`§
+```
 
 ### 16 类页型与容量上限（超出由渲染器省略或缩字号并**告警**）
 
@@ -92,7 +92,7 @@ description: 处理 PowerPoint 演示文稿（.pptx/.ppt/.dps）：按 manifest 
 
 ### 常用命令
 
-`§bat
+```bat
 :: 先干跑校验（推荐：先 validate 再 render）
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_render.py validate "方案.manifest.json"
 :: 渲染（--dry-run 可先看每页字号决策）
@@ -100,11 +100,11 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_render.py render "方案.manifest.json" "�
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_render.py render "方案.manifest.json" "方案.pptx" --dry-run
 :: 看看有哪些页型可用
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_render.py list-layouts
-`§
+```
 
 ## 三、ppt_style.py（给【已有 PPT】套样式）
 
-`§bat
+```bat
 :: 先看会改什么（不写盘）
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_style.py apply-style "客户来的.pptx" --dry-run
 :: 另存（原文件不动）
@@ -113,7 +113,7 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_style.py apply-style "客户来的.pptx" --
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_style.py apply-style "客户来的.pptx"
 :: 顺带统一文字色（只改「未显式设色」的 run，慎用）
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_style.py apply-style "客户来的.pptx" --text-color text_on_light
-`§
+```
 
 - 作用范围：**逐 run 统一字体**（`a:latin / a:ea / a:cs` 三属性，覆盖正文、**表格单元格**、**演讲者备注**）；**不改字号、不改位置**
 - **退出码**：`0` 成功 ｜ `2` 输入 / 参数 / 规格错 ｜ **`3` = 内容零改动断言失败 → 已拒绝产出、原文件未动**（安全拦截，不是工具坏了）
@@ -131,21 +131,21 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_style.py apply-style "客户来的.pptx" --
 | `images` | `images <src> <outdir>` | **没有 `--out-dir`**，输出目录是第二个位置参数 |
 | `autofit` | `autofit <file.pptx> [--out o.pptx] [--slide 1,3-5] [--font 微软雅黑] [--font-file 字体文件] [--max-size 40] [--min-size 8] [--dry-run]` | **文本框自动缩字号**（中文友好）；默认**就地改并备份**，到下限仍放不下会告警 |
 
-`§bat
+```bat
 :: 导出 PDF / 逐页 PNG（WPS COM，保真度高、较慢）
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_tool.py convert "输入.pptx" "输出.pdf"
 py -3 <DOC_SUITE_SCRIPTS>\office\ppt_tool.py images "输入.pptx" "输出目录\slides"
-`§
+```
 
 ## 五、Markdown → 幻灯片（仅 `create` 路径）
 
-`§
+```
 # 季度工作汇报        → 新一页，标题
 ## 重点项目进展       → 正文中的小节行（◆ 前缀）
 - 完成了 X            → 项目符号
 1. 第一步             → 编号步骤
 普通段落              → 正文段落
-`§
+```
 
 ## 六、典型工作流
 
@@ -155,7 +155,26 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_tool.py images "输入.pptx" "输出目录\
 4. **页面核对 / 发图**：`images` 导出 PNG → 交给基座原生识图或直接发图。
 5. **文字溢出**：`autofit --dry-run` 看会缩到多少；到下限仍放不下 → 建议**拆页或精简**，不要继续缩。
 
-## 七、注意事项（踩过的坑）
+## 七、主题库（含公司母版导入）
+
+```bat
+:: 看有哪些主题（内置 + 自定义层）
+py -3 <DOC_SUITE_SCRIPTS>\office\ppt_theme.py list
+:: 只读检视一份 pptx 的母版与主题（色板 / 字体 / 版式 / 页面尺寸），**不写文件**
+py -3 <DOC_SUITE_SCRIPTS>\office\ppt_theme.py inspect "公司母版.pptx"
+:: 从母版提取 → 生成自定义层主题（写入 ~/.dsh/data/dsh-doc-suite/templates/<id>.json）
+py -3 <DOC_SUITE_SCRIPTS>\office\ppt_theme.py import "公司母版.pptx" --id tdhx --name "公司母版"
+:: 用主题渲染
+py -3 <DOC_SUITE_SCRIPTS>\office\ppt_render.py render "方案.manifest.json" "方案.pptx" --theme tdhx
+```
+
+- **只搬视觉令牌，不搬内容**：提取色板（dk2→primary、accent1→secondary / accent_decor）、字体（major / minorFont 的中英文名）、页面尺寸；**不提取母版的文字、图片与版式内容**
+- **文字强调色自动压暗到 WCAG AA**：品牌亮色直接作文字通常只有 2–3:1；脚本按固定步长压暗，**白底与备用底 F2F2F2 同时达标**，系数记进主题的 `_note`；导入时自动跑一次对比度体检（不达标 → exit 4 并指名条目）
+- **导入的字体并入 `allowed_fonts`**（否则 `apply-style` 会因「字体不在白名单」拒绝产出）；母版里常见的 `Microsoft YaHei UI` 与 `Calibri Light` 已在字体映射表内
+- **多母版 deck 的选择**：`inspect` 会列出每套主题与每个母版挂了多少版式，并给出建议（默认取「挂载版式最多且非 Office 默认色板」的那套）；也可用 `--theme` / `--master` 指定
+- 内置主题：`standard`（标准商务）· `compact`（内部纪要）· `graphite`（石墨工程）· `teal`（青蓝技术）· `wine`（酒红正式）；自定义层放 `~/.dsh/data/dsh-doc-suite/templates/`（**不进发布件**）
+
+## 八、注意事项（踩过的坑）
 
 - **WPS COM 导出同名文件会返回上一次的缓存画面**：重渲染后出图**必须换输出文件名或换目录**，否则会误判「改了没生效」；出图后按**启动时间**清理残留的 `wpp`/`wps` 进程，**绝不盲杀使用者自己开着的 WPS**。
 - **JSON 禁 BOM**：manifest 与规格一律用 Python/Node 写（PowerShell 会带 BOM，工具会直接拒绝并给中文提示）。

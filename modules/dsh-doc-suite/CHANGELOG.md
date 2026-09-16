@@ -1,3 +1,37 @@
+## 0.7.3 — 2026-09-16（母版导入：从公司母版 pptx 提取主题）
+
+### 一、新增：母版导入（scripts/office/ppt_theme.py）
+
+三条子命令，**只搬视觉令牌、不搬内容**：
+
+- `list`：列出可用主题（内置 + 自定义层）
+- `inspect <pptx>`：**只读**检视母版与主题 —— 每套主题的色板与字体、每个母版挂载的版式数与版式名、页面尺寸，并给出「建议采用哪套」，**不写任何文件**
+- `import <pptx> --id <id>`：提取 → 生成**自定义层**主题（`~/.dsh/data/dsh-doc-suite/templates/<id>.json`，**不进发布件**）
+
+映射口径（写进主题 `_note`，可追溯）：primary←dk2 · secondary / accent_decor←accent1 · **accent(文字)←accent1 压暗至 WCAG AA**（白底与备用底**同时**达标，系数记录在案）· fonts←major / minorFont 的中英文名 · 页面尺寸←sldSz · chart_series←accent1..5 · **字体并入 allowed_fonts**
+
+### 二、实测（用使用者提供的公司母版）
+
+- 结构：**4 个母版 / 5 套主题 / 50 个版式 / 29 页**，16:9；脚本正确区分 **2 套 Office 默认色板**与 **3 套品牌色板**（dk2=0F1423 · accent1=6096E6 · accent2=58B6E5 · accent6=EC5F74；字体 Microsoft YaHei UI / Arial）
+- 建议并采用：**slideMaster2（theme2「tdhx2」，20 个版式）**；版式名完整导出（「两栏内容」「关键文字页」「分隔页 1」…）
+- 导入产物 `tdhx.json`：primary 0F1423 · secondary / accent_decor 6096E6 · accent 41669C（压暗系数 0.6815）· allowed_fonts = Arial / Microsoft YaHei UI → **对比度 14 项全部达标**
+- **端到端**：`ppt_render.py render ... --theme tdhx` → 11 页成功，封面填充色 = **0F1423 + 6096E6**（母版品牌色真的生效）
+
+### 三、顺带修的两处
+
+1. **字体映射补充**（`ppt_tool.FONT_FILE_HINTS`）：母版里常见的 `Microsoft YaHei UI` → msyh.ttc、`Calibri Light` → calibril.ttf（**实测本机存在**才写）；补之前渲染直接 **exit 5（缺字体）**
+2. **修正我自己的替换脚本 bug**：文档里三个反引号围栏在占位替换后残留单个 § 号（office-ppt 11 处、media-gen 12 处，共 23 处）→ 已全量还原为反引号
+
+### 四、回归与验证
+
+- 新增 `scripts/ppt-theme-test.mjs` **7 例**（实现要点 / list / inspect / import 结构 / 已存在 exit 3 / 压暗双背景达标 / 导入结果过门禁）；**不依赖任何使用者业务文件**（用自造 pptx 当母版样本）
+- 全套绿：`spec_sync` 0 · `ppt_contrast` 6 套全达标 · `style-test` 24/0 · `ppt-render-test` 24/0 · `ppt-style-test` 11/0 · `media-test` 17/0 · `ppt-theme-test` **7/0**
+- 仓库 ↔ profile 逐文件 SHA256 一致；**工作区技能目录**（`E:\lina\.dsh\skills\`）同步更新
+
+### 五、回退
+
+版本改回 **0.7.2** 或 git revert 本提交；自定义层主题（`tdhx.json`）不在仓库内，删除即还原。
+
 ## 0.7.2 — 2026-09-16（PPT 主题库：3 套内置主题 + 对比度门禁 + 5 处实测修正）
 
 ### 一、新增：主题库（色板层）
