@@ -70,7 +70,7 @@ dsh plugin --profile <profile> add <模块目录或包名>
 ### 卸载与数据留存
 
 - 卸载插件：`dsh plugin --profile <profile> remove <包名>`，随后重启 DSH。
-- **记忆数据不随插件卸载而删除**：默认位于 `~/.dsh/memories/work-memory/`（Markdown 正文 + 索引/状态文件），默认备份目录 `~/.dsh/memories/work-memory-backup/`。需要彻底清除时手动删除这两个目录。
+- **记忆数据不随插件卸载而删除**：默认位于 `~/.dsh/data/dsh-work-memory/memory/`（Markdown 正文 + 索引/状态文件），默认备份目录 `~/.dsh/data/dsh-work-memory/backup/`。需要彻底清除时手动删除这两个目录。
 - **外部知识库镜像**（如已配置）是一份可读的 Markdown 副本，卸载后保留，可继续当资料使用。
 - 桌宠**形象素材**位于 `~/.dsh/data/workspace-tokenpet/skins/`，属使用者自有资产，卸载插件不受影响（模块内 `skins/` 是随包副本，运行时用的是部署后的那一份；安装器只补缺失、不覆盖你改过的套装）。**旧目录 `~/.dsh/data/dsh-token-pet/skins/` 的数据不删除**：装新模块时新址缺哪套就从旧址**复制**哪套（旧数据保留、新址已有内容不覆盖）。
 - 全部数据**本地存放、明文、不联网、无遥测**；除使用者自己配置的模型服务外，本集成体不向外发送任何内容。

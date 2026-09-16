@@ -1,7 +1,7 @@
 /**
  * work-memory — 记忆库自动备份。
  *
- * 全量复制记忆库到备份目录（默认 ~/.dsh/memories/work-memory-backup，
+ * 全量复制记忆库到备份目录（默认 <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/backup，
  * 与主库分离，防误删/故障），按天目录 backup-YYYY-MM-DD，
  * 保留最近 backupKeep 份（默认 7）。
  * 与归档同一节奏：写库懒触发（每天至多一次，当天目录存在即跳过）。
@@ -14,14 +14,18 @@ import { homedir } from 'node:os'
 import { todayStamp } from './clock.js'
 
 /**
- * 默认备份根目录：~/.dsh/memories/work-memory-backup（可在设置里改 backupDir）。
+ * 默认备份根目录：<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/backup（可在设置里改 backupDir）。
+ * 与记忆库默认（`store.js` 的 `defaultMemoryRoot()`）同级、同在 data/dsh-work-memory/ 下；
+ * 1.0.6 前是 ~/.dsh/memories/work-memory-backup。
  *
  * 只**返回路径**、不建目录——建目录由真正写备份时做（`backupMemory` 里 mkdirSync）。
  * 早前这里顺手 mkdir 会留下空目录（回归测试用 `backupDir: null` 走默认路径时就会凭空造一个）。
  * 注意：不要把盘符绝对路径写进默认值——非 Windows 平台会把带盘符的路径当相对路径，凭空建出怪目录。
  */
 export function defaultBackupDir() {
-  return join(homedir(), '.dsh', 'memories', 'work-memory-backup')
+  const dshHome = process.env.DSH_HOME?.trim()
+  const base = dshHome && dshHome.length > 0 ? dshHome : join(homedir(), '.dsh')
+  return join(base, 'data', 'dsh-work-memory', 'backup')
 }
 
 /**

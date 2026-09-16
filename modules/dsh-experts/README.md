@@ -135,7 +135,7 @@ L1 卡只取「交付与自检」**前 2 条、每条 clip(90)**，所以每位�
 | `expertFullHitMax` | `2` | 干活轮给**全文**的位数：按本轮证据取**最大 + 次大**（并列取任意两位，**不设固定门槛**，硬边界 4）—— 使用者 2026-09-16 定：「最相关的两人全文」 |
 | `expertShowBanner` | `true` | 注入时显示「当前专家视角」标识 |
 | `disciplineEnabled` | `true` | 是否注入**交付层·纪律块**（`context`，order 481）：从项目记忆读 `【纪律块 v1】`，每轮注入、不随裁剪丢弃 |
-| `disciplineMemoryDir` | 空 | 纪律块的记忆库根；留空 = 取 work-memory 设置里的 `memoryDir`，再退 `$DSH_HOME/memories/work-memory`（**只读，绝不写记忆**） |
+| `disciplineMemoryDir` | 空 | 纪律块的记忆库根；留空 = 取 work-memory 设置里的 `memoryDir`，再退 `<DSH_HOME>/data/dsh-work-memory/memory`（**只读，绝不写记忆**） |
 | `expertSetupDone` | `false` | 安装引导是否已完成（问过「你的工作方向是？」并写入 `defaultDomain`）；重置为关可让引导下次再问一次 |
 
 ## 目录结构

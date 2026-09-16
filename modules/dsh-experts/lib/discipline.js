@@ -79,8 +79,8 @@ export function parseDiscipline(text) {
  * 记忆库根目录解析（只读；优先级与 dsh-work-memory 对齐）：
  *   ① 本模块设置项 disciplineMemoryDir（手填最高优先）；
  *   ② ctx.settings.get('work-memory').memoryDir（宿主 settings 服务，未注册 ns 返回 undefined）；
- *   ③ $DSH_HOME/memories/work-memory；
- *   ④ ~/.dsh/memories/work-memory。
+ *   ③ $DSH_HOME/data/dsh-work-memory/memory；
+ *   ④ ~/.dsh/data/dsh-work-memory/memory。
  * @param {object} ctx - cordis context
  * @param {object} cfg - 归一化设置
  * @returns {string} 记忆库根目录
@@ -97,10 +97,10 @@ export function resolveMemoryRoot(ctx, cfg = {}) {
   }
   const dshHome = String(process.env.DSH_HOME || '').trim()
   const base = dshHome.length > 0 ? dshHome : join(homedir(), '.dsh')
-  // 兜底：真实记忆库未必叫 work-memory（本机是 memories/lina，由 work-memory 的 memoryDir 指定）。
-  // 读不到对方设置时，扫 <base>/memories/* 里**含 PROJECTS 子目录**的目录当候选。
+  // 兜底：真实记忆库未必叫 memory —— 使用者在 work-memory 设置里可以指向任意目录名。
+  // 读不到对方设置时，扫 <base>/memories/*（1.0.6 之前的老位置）里**含 PROJECTS 子目录**的目录当候选。
   for (const dir of memoryDirs(base)) return dir
-  return join(base, 'memories', 'work-memory')
+  return join(base, 'data', 'dsh-work-memory', 'memory')
 }
 
 /** 扫描记忆根下的候选记忆库（含 PROJECTS 子目录者为真库）；结果缓存 60 秒，避免每轮 readdir */

@@ -23,7 +23,7 @@
         injectOrder: 480          # runtime 快照顺序：略早于记忆快照(500)，让"专家视角"先立起来（改动需重启）
         expertCatalogEnabled: true # 专家库目录段（systemPrompt.section，order 10150）：稳定段，列出六域成员与可用能力；不占每轮注入预算
         disciplineEnabled: true   # 交付层纪律块（systemPrompt.context，order 481）：从项目记忆读【纪律块 v1】，每轮注入、不随裁剪丢弃
-        disciplineMemoryDir: ''   # 纪律块的记忆库根；留空 = 取 work-memory 的 memoryDir，再退 $DSH_HOME/memories/work-memory
+        disciplineMemoryDir: ''   # 纪律块的记忆库根；留空 = 取 work-memory 的 memoryDir，再退 $DSH_HOME/data/dsh-work-memory/memory
         defaultDomain: 'infosec' # 本人岗位默认域（安装引导会问一次）。取值：infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融 / general 通用职能
         identityExpert: ''        # 可选常驻的身份专家（id）；**留空 = 不常驻**（身份由 work-memory 记忆承担）
         enabledDomains: ''        # 把匹配范围收窄到这些域（逗号分隔）；留空 = 全量参与（岗位只作排序先验）

@@ -125,8 +125,12 @@ export const SEED_DEFAULT_TAG = '常规'
  * （见本文件末尾的 `LEGACY_MEMORY_SUBDIR`），不再是任何新建目标。
  */
 export const DEFAULT_MEMORY_SUBDIR = join('data', 'dsh-work-memory', 'memory')
-/** 备份目录默认（与 dsh-work-memory 的 `backup.js` `defaultBackupDir()` 同口径，未随记忆库默认一起搬家） */
-export const DEFAULT_BACKUP_SUBDIR = join('memories', 'work-memory-backup')
+/**
+ * 备份目录默认（与 dsh-work-memory 的 `backup.js` `defaultBackupDir()` 同口径）：
+ *   <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/backup
+ * 与记忆库同级、同在 data/dsh-work-memory/ 下；1.0.6 前是 <base>/memories/work-memory-backup。
+ */
+export const DEFAULT_BACKUP_SUBDIR = join('data', 'dsh-work-memory', 'backup')
 
 /** 桌宠素材目录（与 workspace-tokenpet 的 skinsDir 一致：<dsh home>/data/workspace-tokenpet/skins） */
 export const PET_SKINS_SUBDIR = join('data', 'workspace-tokenpet', 'skins')
@@ -907,10 +911,15 @@ export function resolveDeckContext(options = {}) {
       commonCandidates: options.commonCandidates,
     })
 
+  // 记忆库目录（**只有一个默认**）：显式填值 → 设置里的 memoryDir → 唯一默认
+  //   <DSH_HOME>/data/dsh-work-memory/memory（与 dsh-work-memory 的 defaultMemoryRoot() 同口径）
+  // 1.1.3 之前还有一条「不填就按工作区名分库：<DSH_HOME>/memories/<工作区名>」的推导，已废弃 ——
+  // 上游记忆库自己只有一个默认位置，这里再留一个工作区名默认就是**两个默认**。
+  // 要按工作区分库的使用者，在「核心配置」里显式填 memoryDir（引导会把它写进 settings 的 work-memory.memoryDir）。
   const memoryDir = normalizePath(ovMemoryDir)
     || normalizePath(options.memoryDir)
     || normalizePath(values['work-memory.memoryDir'])
-    || (workspace ? join(dshHome, 'memories', basename(workspace)) : join(dshHome, DEFAULT_MEMORY_SUBDIR))
+    || join(dshHome, DEFAULT_MEMORY_SUBDIR)
   const backupDir = normalizePath(options.backupDir)
     || normalizePath(values['work-memory.backupDir'])
     || join(dshHome, DEFAULT_BACKUP_SUBDIR)
@@ -1344,12 +1353,11 @@ function planSettings(ctx) {
 
   // 路径类值统一写正斜杠（Windows 路径在 YAML 里更安全，也与既有 settings.yaml 风格一致）
   const asPath = (v) => (v ? posix(v) : '')
-  // memoryDir 与 ctx.memoryDir **同源**：显式传入的记忆库目录优先于「工作区目录名」推导。
-  // 否则种子条目会写进 A 目录（ctx.memoryDir），settings 却声明 B 目录（工作区目录名推导），
-  // 插件按 settings 去 B 处读取 → 首装即「记忆库为空」。优先级链见 resolveDeckContext。
-  const suggestedMemoryDir = ctx.memoryDir
-    ? posix(ctx.memoryDir)
-    : (ctx.workspace ? posix(join(ctx.dshHome, 'memories', basename(ctx.workspace))) : '')
+  // memoryDir 与 ctx.memoryDir **严格同源**：种子 / 记忆体结构写进哪个目录，settings 就声明哪个目录。
+  // 否则种子条目会写进 A 目录（ctx.memoryDir），settings 却声明 B 目录，插件按 settings 去 B 处读取
+  // → 首装即「记忆库为空」。ctx.memoryDir 为空时这里也给空串（宁可不写，也不猜第二个默认）。
+  // 优先级链见 resolveDeckContext（唯一默认 = <DSH_HOME>/data/dsh-work-memory/memory，不再按工作区名推导）。
+  const suggestedMemoryDir = ctx.memoryDir ? posix(ctx.memoryDir) : ''
   // 1.1.3：填了知识库根目录时，镜像目录的**建议值**改为 <知识库根>/00_全局记忆
   //（设计定稿 §3.3 第 3 步「把记忆镜像写入知识库的 00_全局记忆 区」）。
   // 未提供 obsidianDir 时保持 1.1.2 的口径（<工作区>/work-memory），既有测试与行为一字不变。
@@ -2785,7 +2793,10 @@ function applyDeckFilesLocked(ctx, item, internal, io, dryRun, base) {
       } catch (e) { /* best-effort */ }
     }
     for (const d of createdDirs.slice().reverse()) {
-      try { io.rmSync(d, { recursive: false, force: true }) } catch (e) { /* 非空则保留，best-effort */ }
+      // fs.rmSync 删目录**必须**带 recursive，否则抛 EISDIR（空目录也删不掉）——
+      // 不带 recursive 会让「已回滚」留下空目录，回滚不彻底等于回滚失败。
+      // 这里删的都是本轮新建的目录，其中的文件已在上一步删掉，不会碰到使用者原有内容。
+      try { io.rmSync(d, { recursive: true, force: true }) } catch (e) { /* best-effort */ }
     }
   }
 

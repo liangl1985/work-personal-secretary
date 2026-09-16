@@ -809,7 +809,8 @@ ok(memSetVal.indexOf('/custom-lib') > 0, '显式 options.memoryDir → settings 
 ok(memSetVal === memSeedItem.target.replace(/\/MEMORY\.md$/, ''), 'settings 声明目录 = 种子路径去掉 /MEMORY.md（两者严格同源）')
 const memPlanDefault = planBaseDeck(opts({ workspace: wsMem, settingsFile: join(FAKE_DSH, 'settings-memdir2.yaml'), memoryDir: undefined }))
 const memSetDefault = ((memPlanDefault.items.filter((i) => i.id === 'settings')[0].settingsKeys || []).filter((k) => k.key === 'memoryDir')[0] || {}).value || ''
-ok(memSetDefault.endsWith('/memdir'), '不传 memoryDir → 回落「工作区目录名」推导（真机即 memories/lina）')
+ok(memSetDefault.replace(/\\/g, '/').endsWith('/data/dsh-work-memory/memory'),
+  '不传 memoryDir → 回落**唯一默认** <DSH_HOME>/data/dsh-work-memory/memory（不再按工作区名推导）：' + memSetDefault)
 
 section('[18] 1.1.3 记忆体结构 / 知识库结构生成器（T6）')
 const deckWs = makeWorkspace('deck')
@@ -879,6 +880,19 @@ const againDeck = applyBaseDeck(['memoryDeck', 'knowledgeDeck'], Object.assign({
 ok(againDeck.results.every((r) => r.status === 'up_to_date' && r.wroteAny === false), '再跑一次幂等：两项都 up_to_date 且不写盘')
 ok(readFileSync(homeFile, 'utf8').indexOf('我自己的主页') > 0, '被手改过的主页**不被覆盖**')
 ok(readFileSync(join(deckMem, 'MEMORY.md'), 'utf8') === memSnapBefore, 'MEMORY.md 一字未动')
+
+// 裁决 2：回滚必须彻底 —— 本轮新建的骨架目录在失败回滚后不得残留（EISDIR 缺陷回归锁）
+const rbMem = join(TMP_ROOT, 'rollbackmem')
+const rbVault = join(TMP_ROOT, 'rollbackvault')
+const rbBase = opts({ workspace: deckWs, dshHome: deckHome, settingsFile: join(deckHome, 'settings.yaml'), memoryDir: rbMem, obsidianDir: rbVault, moduleDir: MODULE_DIR })
+let rbWrites = 0
+const rbIo = { writeFileSync: (p, d, o) => { rbWrites += 1; if (rbWrites >= 2) throw new Error('EACCES 模拟'); writeFileSync(p, d, o) } }
+const rbRes = applyBaseDeckItem('memoryDeck', Object.assign({}, rbBase, { dryRun: false, io: rbIo }))
+ok(rbRes.ok === false && /已回滚/.test(rbRes.detail), 'memoryDeck 第 2 个文件写入失败 → ok:false + 「已回滚」说明：' + rbRes.detail)
+ok(!existsSync(join(rbMem, 'PROJECTS')) && !existsSync(join(rbMem, 'DAILY')) && !existsSync(join(rbMem, 'ARCHIVE')),
+  '回滚后本轮新建的骨架目录**不存在**（fs.rmSync 删目录必须带 recursive，否则 EISDIR）')
+ok(!existsSync(rbMem) || readdirSync(rbMem).length === 0, '回滚后目标目录里没有任何残留文件（实测 ' + JSON.stringify(existsSync(rbMem) ? readdirSync(rbMem) : []) + '）')
+
 
 writeText(projFile, projEntries[0] + NL)
 const appendDeck = applyBaseDeckItem('memoryDeck', Object.assign({}, deckOpts, { dryRun: false }))
@@ -1387,8 +1401,8 @@ ok(migMissing.status === 'up_to_date' && /不存在/.test(migMissing.detail), '�
 const migNoSrc = migItemOf(migOpts({ migrateFrom: '', migrateFromSource: 'none' }))
 ok(migNoSrc.status === 'up_to_date' && migNoSrc.migrateSource === 'none' && migNoSrc.migrateStats.copy === 0, '未解析到来源 → up_to_date + source=none')
 const migWsFallback = migItemOf(migOpts({ memoryDir: '' }))
-ok(migWsFallback.status === 'append' && migWsFallback.target[1].indexOf('memories/migrate') > 0 && migWsFallback.migrateStats.copy === 6,
-  'memoryDir 留空 → 目标按既有口径回退到 <DSH_HOME>/memories/<工作区名>（引导必经显式填值，这里只验证回退口径）')
+ok(migWsFallback.status === 'append' && migWsFallback.target[1].indexOf('data/dsh-work-memory/memory') > 0 && migWsFallback.migrateStats.copy === 6,
+  'memoryDir 留空 → 目标回退到唯一默认 <DSH_HOME>/data/dsh-work-memory/memory（不再按工作区名推导）')
 
 // 回滚：第二个文件复制失败 → 本次已复制文件全部撤回，旧目录不动
 const migNew2 = join(TMP_ROOT, 'mignew2')

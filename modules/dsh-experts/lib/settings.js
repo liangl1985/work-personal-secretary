@@ -73,7 +73,7 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
     .description('是否注入「交付层·纪律块」（走 systemPrompt.context，order 481）：从项目记忆里读【纪律块 v1】条目，每轮注入、不随专家裁剪丢弃。自检红线的新家 —— 红线写在记忆里（真相源），插件只读不改'),
 
   disciplineMemoryDir: z.string().default('')
-    .description('纪律块的记忆库根目录；留空 = 自动取 work-memory 设置里的 memoryDir（本机为 ~/.dsh/memories/lina），再退到 $DSH_HOME/memories/work-memory。读取的是 <根>/PROJECTS/dsh-experts.md 里的【纪律块 v1】条目（只读，绝不写）'),
+    .description('纪律块的记忆库根目录；留空 = 自动取 work-memory 设置里的 memoryDir，再退到 <DSH_HOME>/data/dsh-work-memory/memory。读取的是 <根>/PROJECTS/dsh-experts.md 里的【纪律块 v1】条目（只读，绝不写）'),
 
   defaultDomain: z.string().default('infosec')
     .description('本人岗位默认域 —— 安装引导会问一次。取值：infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融 / general 通用职能。它决定任务优先从哪个专业角度被拆解（给会计岗同事用时改成 accounting 即可，无需改代码）'),
