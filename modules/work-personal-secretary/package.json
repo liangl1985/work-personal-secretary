@@ -39,7 +39,8 @@
     "install": "node scripts/install-test.mjs",
     "basedeck": "node scripts/basedeck-test.mjs",
     "identity": "node scripts/identity-test.mjs",
-    "defaults": "node scripts/defaults-test.mjs"
+    "defaults": "node scripts/defaults-test.mjs",
+    "build:defaults": "node scripts/build-defaults-html.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

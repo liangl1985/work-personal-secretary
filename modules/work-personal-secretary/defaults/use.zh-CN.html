@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作秘书 · 使用说明</title>
+<style>
+.wps-doc{--ink:#1f2328;--ink3:#6b7280;--line:#eef0f2;--brand:#1d4ed8}
+.wps-doc{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff;max-width:760px;margin:0 auto;padding:28px 28px 40px}
+.wps-doc,.wps-doc h1,.wps-doc h2,.wps-doc h3,.wps-doc p,.wps-doc ul,.wps-doc ol,.wps-doc li,.wps-doc table,.wps-doc th,.wps-doc td,.wps-doc pre,.wps-doc code,.wps-doc .callout{box-sizing:border-box}
+.wps-doc h1{font-size:22px;margin:0 0 6px}
+.wps-doc h2{font-size:17px;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.wps-doc h3{font-size:15px;margin:16px 0 4px}
+.wps-doc p{margin:8px 0}
+.wps-doc ul,.wps-doc ol{margin:8px 0;padding-left:24px}
+.wps-doc li{margin:4px 0}
+.wps-doc code{font-family:Consolas,"Courier New",monospace;font-size:13px;background:#f2f4f7;padding:1px 5px;border-radius:4px}
+.wps-doc pre{background:#20242b;color:#e6e9ee;padding:12px 14px;border-radius:9px;overflow-x:auto;font-size:13px;margin:10px 0}
+.wps-doc pre code{background:transparent;color:inherit;padding:0;font-size:13px}
+.wps-doc table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}
+.wps-doc th,.wps-doc td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+.wps-doc th{color:var(--ink3);font-weight:600;font-size:13px}
+.wps-doc .callout{border-left:3px solid #cfd8e3;background:#fbfcfd;padding:9px 13px;margin:12px 0;border-radius:0 6px 6px 0}
+.wps-doc .callout p{margin:4px 0}
+.wps-doc a{color:var(--brand)}
+body{margin:0;padding:0;background:#f4f6f8}
+</style>
+</head>
+<body>
+<article class="wps-doc" aria-label="工作秘书 · 使用说明">
+<h1>工作秘书 · 使用说明</h1>
+<p>五分钟上手，以及五个子插件各自做什么。</p>
+<h2>一、这个插件是什么</h2>
+<p>一个集成体把五套能力装到一起：记忆、文档、专家、图表、桌面形象。它不替你做业务判断，负责把重复动作接过去——记东西、翻资料、出文档、按专业角度拆问题。</p>
+<h2>二、第一次使用</h2>
+<ol><li><strong>安装与检查</strong>：看环境与子插件是否齐，有缺项时点「查看安装引导」。</li><li><strong>核心配置</strong>：填记忆库目录与 Obsidian 目录，选工作岗位，点「保存配置并开始」生成目录骨架、入口与首条内容。</li><li><strong>配置</strong>：按需调整子插件设置；不确定的保持默认。</li></ol>
+<h2>三、五个子插件各做什么</h2>
+<table><thead><tr><th>子插件</th><th>做什么</th><th>怎么用</th></tr></thead><tbody><tr><td>记忆库</td><td>三级记忆：全局永不遗忘、热记忆按周期转冷、冷归档用到即转热</td><td>自动注入，无需操作；右侧边栏可查看与整理</td></tr><tr><td>专家库</td><td>按岗位组织的专家视角，命中关键词才注入</td><td>直接提问；跨领域任务会说清用了哪几位</td></tr><tr><td>文档能力</td><td>Word / Excel / PPT / PDF 的读取、生成、比对与转换</td><td>把文件交给助手，说清要做什么</td></tr><tr><td>思维链与图表</td><td>把 Mermaid 代码块渲染成流程图与时序图</td><td>代码块写在回复里自动出图</td></tr><tr><td>桌面形象</td><td>桌面上显示形象与用量面板</td><td>拖动、点击；设置在自己的分区里</td></tr></tbody></table>
+<h2>四、默认约定</h2>
+<p>首装即生效的两条：回答与推理使用简体中文；主对话负责拆解与核对，具体工作交专家子代理执行。两条写在随包的指令模板与记忆种子里，可由使用者改写。</p>
+<h2>五、数据与隐私</h2>
+<ul><li>全部数据本地存放、明文、不联网、无遥测。</li><li>除使用者自己配置的模型服务外，不向外发送任何内容。</li><li>卸载插件不删除记忆数据与形象素材。</li></ul>
+<h2>六、常见问题</h2>
+<h3>配置里改了没生效？</h3>
+<p>多数设置即时生效；快照顺序一类需要重启 DSH 的项，说明里会标注。</p>
+<h3>文档任务报错？</h3>
+<p>先看「安装与检查」的 Python 依赖与 WPS 两项，再到文档能力组跑一次自检。</p>
+<h3>专家没有注入？</h3>
+<p>零命中不注入是设计如此。需要特定视角时直接点名，例如「用等保测评专家看这个」。</p>
+<p>---</p>
+<p>本页随插件分发，不含任何个人信息与外部跳转。</p>
+</article>
+</body>
+</html>

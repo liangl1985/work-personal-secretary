@@ -68,7 +68,7 @@ import {
   safeWorkspaceParam,
   sha256Text,
 } from '../lib/basedeck.js'
-import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi } from '../lib/api.js'
+import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
 import { isSameOrNested, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
 
@@ -934,7 +934,7 @@ installApi(ctx13, {
   env: {}, now: FIXED_NOW, dshHome: home13,
   probeOptions: { skip: ['host', 'node', 'python', 'pythonDeps', 'wps', 'obsidian', 'subPlugins'] },
 })
-ok(ctx13.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length, 'exact = API_PATHS + 随包网页 + 新增 JSON 五条')
+ok(ctx13.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length, 'exact = API_PATHS + 随包网页 + 新增 JSON ' + CORE_API_EXACT_PATHS.length + ' 条')
 const h13 = (ctx13.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
 async function call13(method, sub, body, headers) {
   const res = makeRes()
@@ -1079,6 +1079,61 @@ ok(r7.body.name === LONG_NAME.slice(0, 10) && r7.body.nameMaxChars === 10, '⑦�
 ok(s7.seen[0].messages[0].content[0].text.indexOf(LONG_NAME.slice(0, 10)) >= 0
   && s7.seen[0].messages[0].content[0].text.indexOf(LONG_NAME.slice(0, 11)) < 0,
   '⑦进入提示词的岗位名称同样是前 10 个字（不会把全名喂给模型）')
+
+// ⑧⑨ 说明文件接口：GET /docs（只读）+ POST /open-doc（白名单 + 系统默认程序打开）
+async function callRoute(handler, method, sub, body, headers) {
+  const res = makeRes()
+  await handler(makeReq({ method: method, url: API_ROOT + sub, body: body, headers: headers }), res)
+  let json = null
+  try { json = JSON.parse(res.body) } catch (e) { json = null }
+  return { status: res.status, body: json }
+}
+function installDocsCtx(docsDir) {
+  const calls = []
+  const ctx = makeMockCtx()
+  installApi(ctx, {
+    platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'),
+    env: {}, now: FIXED_NOW, dshHome: home13, docsDir: docsDir,
+    openDoc: (file, opts) => { calls.push({ file: file, opts: opts }); return { ok: true, command: 'explorer.exe ' + file, code: '', error: '' } },
+  })
+  return { calls: calls, handler: (ctx.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler }
+}
+
+const d1 = installDocsCtx(join(MODULE_DIR, 'defaults'))
+const docsGet = await callRoute(d1.handler, 'GET', '/docs')
+ok(docsGet.status === 200 && docsGet.body.ok === true && docsGet.body.items.length === 2 && docsGet.body.ready === true,
+  'GET /docs → 两个随包说明文件都存在，ready=true')
+ok(docsGet.body.items.filter((i) => i.doc === 'guide')[0].path.indexOf('defaults/install.zh-CN.html') > 0,
+  'guide 解析到 defaults/install.zh-CN.html（路径由服务端拼，客户端不传路径）')
+
+const openOk = await callRoute(d1.handler, 'POST', '/open-doc', { doc: 'help' }, REQ_HEADERS)
+ok(openOk.status === 200 && openOk.body.ok === true && d1.calls.length === 1, 'POST /open-doc { doc: "help" } → 调用系统打开器一次')
+ok(d1.calls[0].file.indexOf('use.zh-CN.html') > 0, '打开的是白名单解析出的绝对路径：' + d1.calls[0].file)
+ok(String(openOk.body.path).indexOf('use.zh-CN.html') > 0 && String(openOk.body.command).indexOf('explorer.exe') === 0,
+  '响应回显 path 与实际 command：' + openOk.body.command)
+
+const openBad = await callRoute(d1.handler, 'POST', '/open-doc', { doc: 'whatever' }, REQ_HEADERS)
+ok(openBad.status === 400 && openBad.body.ok === false && openBad.body.code === 'unknown-doc', '未知 doc → 400 + code=unknown-doc')
+ok(d1.calls.length === 1, '未知 doc 时**一条命令都不执行**')
+const openPath = await callRoute(d1.handler, 'POST', '/open-doc', { doc: '../../secret.html' }, REQ_HEADERS)
+ok(openPath.status === 400 && openPath.body.code === 'unknown-doc' && d1.calls.length === 1, '路径形态的 doc 同样被拒（只认白名单键）')
+const openCross = await callRoute(d1.handler, 'POST', '/open-doc', { doc: 'guide' }, CROSS_HEADERS)
+ok(openCross.status === 403 && d1.calls.length === 1, '跨站 POST /open-doc → 403 且未执行打开')
+
+const emptyDocs = join(TMP_ROOT, 'emptydocs')
+mkdirSync(emptyDocs, { recursive: true })
+const d2 = installDocsCtx(emptyDocs)
+const docsEmpty = await callRoute(d2.handler, 'GET', '/docs')
+ok(docsEmpty.body.ready === false && docsEmpty.body.items.every((i) => i.exists === false), 'GET /docs 在缺失目录下如实报告 exists=false / ready=false')
+const openMissing = await callRoute(d2.handler, 'POST', '/open-doc', { doc: 'guide' }, REQ_HEADERS)
+ok(openMissing.status === 200 && openMissing.body.ok === false && openMissing.body.code === 'file-missing' && /重装|内嵌/.test(openMissing.body.error),
+  '文件缺失 → 可读中文失败（不抛异常）')
+ok(d2.calls.length === 0, '文件缺失时未调用打开器（先校验存在性）')
+
+const spawnMissing = await openWithSystem('C:/nonexistent-xyz.html', { platform: 'linux', exec: (cmd, args, opts, cb) => { const e = new Error('missing'); e.code = 'ENOENT'; cb(e) } })
+ok(spawnMissing.ok === false && spawnMissing.code === 'ENOENT', 'openWithSystem：进程无法启动（ENOENT）→ ok:false（不谎报成功）')
+const spawnExit1 = await openWithSystem('C:/x.html', { platform: 'win32', exec: (cmd, args, opts, cb) => { const e = new Error('exit 1'); e.code = 1; cb(e) } })
+ok(spawnExit1.ok === true && spawnExit1.command.indexOf('explorer.exe') === 0, 'openWithSystem：explorer.exe 退出码 1 视为已交给系统（不判失败）')
 
 const pageGuide = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/guide')[0] || {}).handler
 const pageHelp = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/help')[0] || {}).handler

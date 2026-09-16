@@ -186,6 +186,23 @@ ok(linkHtml.indexOf('evil.example.com') < 0, '协议相对地址（//host/…）
 ok(linkHtml.indexOf('javascript:') < 0, 'javascript: 被拒绝')
 ok(linkHtml.indexOf('https://ok.example.com/y') > 0 && linkHtml.indexOf('href="/local"') > 0, 'https 与根相对路径仍放行')
 
+section('[9] 随包 HTML 说明页：与 md 现渲染逐字节一致 + 中立')
+const HTML_PAIRS = [
+  { md: 'use.zh-CN.md', html: 'use.zh-CN.html', title: '工作秘书 · 使用说明' },
+  { md: 'install.zh-CN.md', html: 'install.zh-CN.html', title: '工作秘书 · 安装引导' },
+]
+for (const p of HTML_PAIRS) {
+  const file = join(DEFAULTS, p.html)
+  ok(existsSync(file) && statSync(file).isFile(), 'defaults/' + p.html + ' 随包存在（files 白名单含 defaults）')
+  const onDisk = readFileSync(file, 'utf8')
+  const expected = renderPage(p.title, renderMarkdown(texts[p.md]))
+  ok(onDisk === expected, 'defaults/' + p.html + ' === 用 md.js 现渲染的结果（逐字节；改了 md 忘重生成即红）')
+  ok(onDisk.indexOf('<!DOCTYPE html>') === 0 && onDisk.indexOf('<article class="wps-doc"') > 0, 'defaults/' + p.html + ' 是完整 HTML 文档（供系统默认程序打开）')
+  const hits = BANNED.filter((k) => onDisk.indexOf(k) >= 0)
+  ok(hits.length === 0, 'defaults/' + p.html + ' 不含发布件禁用串' + (hits.length ? '（命中：' + hits.join(' / ') + '）' : ''))
+  ok(onDisk.indexOf('<script') < 0 && onDisk.indexOf('src=') < 0 && onDisk.indexOf('<link') < 0, 'defaults/' + p.html + ' 无脚本与外部资源')
+}
+
 section('[6] package.json：files / exports 覆盖 defaults')
 const pkg = JSON.parse(readFileSync(join(MODULE_DIR, 'package.json'), 'utf8'))
 ok(Array.isArray(pkg.files) && pkg.files.indexOf('defaults') >= 0, 'package.json files 白名单含 defaults')

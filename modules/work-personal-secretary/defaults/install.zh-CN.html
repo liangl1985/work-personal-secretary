@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作秘书 · 安装引导</title>
+<style>
+.wps-doc{--ink:#1f2328;--ink3:#6b7280;--line:#eef0f2;--brand:#1d4ed8}
+.wps-doc{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff;max-width:760px;margin:0 auto;padding:28px 28px 40px}
+.wps-doc,.wps-doc h1,.wps-doc h2,.wps-doc h3,.wps-doc p,.wps-doc ul,.wps-doc ol,.wps-doc li,.wps-doc table,.wps-doc th,.wps-doc td,.wps-doc pre,.wps-doc code,.wps-doc .callout{box-sizing:border-box}
+.wps-doc h1{font-size:22px;margin:0 0 6px}
+.wps-doc h2{font-size:17px;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.wps-doc h3{font-size:15px;margin:16px 0 4px}
+.wps-doc p{margin:8px 0}
+.wps-doc ul,.wps-doc ol{margin:8px 0;padding-left:24px}
+.wps-doc li{margin:4px 0}
+.wps-doc code{font-family:Consolas,"Courier New",monospace;font-size:13px;background:#f2f4f7;padding:1px 5px;border-radius:4px}
+.wps-doc pre{background:#20242b;color:#e6e9ee;padding:12px 14px;border-radius:9px;overflow-x:auto;font-size:13px;margin:10px 0}
+.wps-doc pre code{background:transparent;color:inherit;padding:0;font-size:13px}
+.wps-doc table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}
+.wps-doc th,.wps-doc td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+.wps-doc th{color:var(--ink3);font-weight:600;font-size:13px}
+.wps-doc .callout{border-left:3px solid #cfd8e3;background:#fbfcfd;padding:9px 13px;margin:12px 0;border-radius:0 6px 6px 0}
+.wps-doc .callout p{margin:4px 0}
+.wps-doc a{color:var(--brand)}
+body{margin:0;padding:0;background:#f4f6f8}
+</style>
+</head>
+<body>
+<article class="wps-doc" aria-label="工作秘书 · 安装引导">
+<h1>工作秘书 · 安装引导</h1>
+<p>本页由插件自带（不是外链）。按顺序做完，回到「设置 → 工作秘书 → 安装与检查」点一次「重新检测」。</p>
+<div class="callout"><p>先看结论：<strong>Python 与 Python 依赖</strong>是文档能力的硬前置，<strong>WPS Office</strong> 是比对、重算、透视与格式转换的执行环境；<strong>Obsidian</strong> 与<strong>桌面形象</strong>可选。子插件可只装需要的。</p></div>
+<h2>一、Python（3.10 以上，建议 3.12）</h2>
+<p>Windows 统一用 <code>py -3</code> 调用，不要用 <code>python</code>，它可能是应用商店的占位程序。</p>
+<pre><code>winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements --silent</code></pre>
+<p>安装后新开一个窗口验证：</p>
+<pre><code>py -3 --version</code></pre>
+<p>若从官网下载安装，安装向导第一步要勾选「Add Python to PATH」。</p>
+<h2>二、Python 依赖（8 个包）</h2>
+<pre><code>py -3 -m pip install python-docx openpyxl python-pptx PyMuPDF pdfplumber pypdf Pillow pywin32</code></pre>
+<table><thead><tr><th>包</th><th>用途</th></tr></thead><tbody><tr><td><code>python-docx</code> / <code>openpyxl</code> / <code>python-pptx</code></td><td>Word / Excel / PPT 读写与样式</td></tr><tr><td><code>PyMuPDF</code> / <code>pdfplumber</code> / <code>pypdf</code></td><td>PDF 文本、表格与页操作</td></tr><tr><td><code>Pillow</code></td><td>图片处理（插图与导出）</td></tr><tr><td><code>pywin32</code></td><td>调用 WPS COM（比对、重算、导出）</td></tr></tbody></table>
+<p>网络不稳定时可在命令后加 <code>-i https://pypi.tuna.tsinghua.edu.cn/simple</code>。</p>
+<h2>三、WPS Office</h2>
+<pre><code>winget install -e --id Kingsoft.WPSOffice.CN --accept-source-agreements --accept-package-agreements --silent</code></pre>
+<p>装完无需额外配置。文档能力通过 COM 调用本机 WPS，实测 ProgID 为 <code>KWPS.Application</code>。</p>
+<div class="callout"><p>文档能力依赖 WPS 的商用许可，本集成体不做任何代理或破解动作。</p></div>
+<h2>四、Obsidian（可选）</h2>
+<p>只用于知识库与记忆镜像，不装不影响其他能力。</p>
+<h2>五、五个子插件</h2>
+<pre><code>dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-work-memory
+dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-doc-suite
+dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-experts
+dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-mermaid
+dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/workspace-tokenpet</code></pre>
+<p>或在「安装与检查」页逐个安装。<strong>装完需要重启 DSH</strong>。</p>
+<h2>六、自检</h2>
+<p>回到「安装与检查」点「重新检测」。六项依赖全绿、五个子插件全部「已装」即完成。</p>
+<p>---</p>
+<p>本页随插件分发，不含任何个人信息与外部跳转。</p>
+</article>
+</body>
+</html>

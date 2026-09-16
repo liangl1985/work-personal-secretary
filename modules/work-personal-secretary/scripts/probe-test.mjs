@@ -393,7 +393,7 @@ const expectedExacts = API_PATHS.map((p) => API_ROOT + p)
   .concat(PAGE_PATHS.map((p) => PAGE_ROOT + p))
   .sort()
 ok(exacts.join(',') === expectedExacts.join(','),
-  'exact 路由 = API 七条 + 新增 JSON 五条 + 随包网页两条（共 ' + expectedExacts.length + ' 条）：' + exacts.join(', '))
+  'exact 路由 = API ' + API_PATHS.length + ' 条 + 新增 JSON ' + CORE_API_EXACT_PATHS.length + ' 条 + 随包网页 ' + PAGE_PATHS.length + ' 条（共 ' + expectedExacts.length + ' 条）：' + exacts.join(', '))
 
 const resCheck = makeRes()
 await handler(makeReq({ method: 'GET', url: API_ROOT + '/check' }), resCheck)
@@ -541,7 +541,8 @@ ok(readVersion() === pkgVersion, 'readVersion 与 package.json 一致：v' + pkg
 const banned = ['莉娜', '主人', '天地和兴', '知识库-天地', 'lina', 'C:\\Users']
 for (const rel of ['lib/probe.js', 'lib/api.js', 'lib/index.js', 'lib/install.js', 'lib/basedeck.js',
   'lib/md.js', 'lib/preflight.js', 'lib/identity.js', 'lib/domain.js',
-  'defaults/use.zh-CN.md', 'defaults/install.zh-CN.md']) {
+  'defaults/use.zh-CN.md', 'defaults/install.zh-CN.md',
+  'defaults/use.zh-CN.html', 'defaults/install.zh-CN.html']) {
   const src = readFileSync(join(MODULE_DIR, rel), 'utf8')
   const hit = banned.filter((k) => src.indexOf(k) >= 0)
   ok(hit.length === 0, rel + ' 无私有信息' + (hit.length ? '（命中：' + hit.join(', ') + '）' : ''))

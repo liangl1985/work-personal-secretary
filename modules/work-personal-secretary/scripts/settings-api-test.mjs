@@ -538,7 +538,7 @@ installApi(ctxR, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: FAKE_MODUL
 ok(ctxR.routes.filter((x) => x.kind === 'prefix').length === 1, 'prefix 路由仍为 1 条（既有断言不破）')
 ok(ctxR.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length,
   'installApi 的 exact 路由数 = API_PATHS + PAGE_PATHS + CORE_API_EXACT_PATHS = '
-  + (API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length) + '（API 七条 + 随包网页两条 + 新增 JSON 五条；basedeck-test [13] 段同一口径）')
+  + (API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length) + '（API ' + API_PATHS.length + ' 条 + 随包网页 ' + PAGE_PATHS.length + ' 条 + 新增 JSON ' + CORE_API_EXACT_PATHS.length + ' 条；basedeck-test [13] 段同一口径）')
 const disposeExact = installSettingsExactRoutes(ctxR, { repoRoot: FAKE_REPO, moduleDir: FAKE_MODULE, profileDir: FAKE_PROFILE, env: {}, commonCandidates: [] })
 ok(ctxR.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length + SETTINGS_API_PATHS.length,
   '补注册后 exact = API_PATHS + 页面 + 新增 JSON + P4 = '
@@ -556,7 +556,7 @@ const ctxApply = makeMockCtx(makeMockSettings().settings)
 const disposeApply = hostModule.apply(ctxApply, {})
 const EXPECTED_TOTAL = API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length + SETTINGS_API_PATHS.length + 1
 ok(ctxApply.routes.length === EXPECTED_TOTAL,
-  'apply 注册总数 = 1 prefix + 17 exact = ' + EXPECTED_TOTAL + '（与 probe-test 同一口径）')
+  'apply 注册总数 = 1 prefix + ' + (EXPECTED_TOTAL - 1) + ' exact = ' + EXPECTED_TOTAL + '（与 probe-test 同一口径）')
 ok(ctxApply.routes.filter((x) => x.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length + SETTINGS_API_PATHS.length,
   'apply 的 exact = API_PATHS + 页面 + 新增 JSON + P4 三条（P4 已接线，不再是「未新增」）')
 ok(ctxApply.routes.filter((x) => x.kind === 'prefix').length === 1, 'apply 的 prefix 仍为 1 条')

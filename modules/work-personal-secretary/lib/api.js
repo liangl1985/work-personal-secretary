@@ -50,7 +50,7 @@
 
 import { URL } from 'node:url'
 import { execFile } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import {
   FIX_WHITELIST,
@@ -120,20 +120,34 @@ export const PAGE_PATHS = ['/guide', '/help']
  * 所以在 installApi 内与 API_PATHS、PAGE_PATHS 一起注册；不含 P4 三条
  * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
  */
-export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate']
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc']
 
 /**
- * 两个网页的**单一真相源**映射（T9）：页面正文只来自 defaults 下的 md，
- * 同一份 md 也被写进记忆条目 PROJECTS/工作秘书.md 的前两条，杜绝两处措辞漂移。
+ * 两个说明文档的**唯一映射**（单一真相源 = defaults 下的 md）：
+ *   md   —— 真相源，网页渲染与记忆条目都取它；
+ *   html —— **受校验的产物**，由 `node scripts/build-defaults-html.mjs` 用 lib/md.js 渲染生成，
+ *           defaults-test 会逐字节比对「磁盘 html」与「现渲染结果」；
+ *   title—— 页面标题。
+ * PAGE_SPECS（网页路由）与 open-doc 的白名单都从这一张表派生，杜绝两处漂移。
+ */
+export const DOC_SPECS = {
+  guide: { md: 'install.zh-CN.md', html: 'install.zh-CN.html', title: '工作秘书 · 安装引导' },
+  help: { md: 'use.zh-CN.md', html: 'use.zh-CN.html', title: '工作秘书 · 使用说明' },
+}
+
+/**
+ * 两个随包网页的路径映射（1.1.3 返工 R1-3，**接口已冻结**）。
+ * ⚠️ 真机上浏览器直接导航这两个地址会拿到 403（宿主门禁 isTrustedApiRequest 不带 GUI 会话 cookie，
+ * 见 node_modules/@deepseek-ai/dsh-client-connection/lib/index.js:553-556）；
+ * **主路径已改为 POST /open-doc 打开插件目录里的物理 HTML**，本映射只为兼容与页内取用而保留。
  *
- * 两种输出形态（1.1.3 返工 R1-3，**接口已冻结**）：
- *   不带 embed（默认）→ 完整 HTML 文档（浏览器直接访问）
- *   ?embed=1          → **片段**：无 <html>/<head>/<body>，样式全部作用域在 .wps-doc，
- *                       供客户端用 innerHTML 注入宿主 GUI（不污染全局样式）
+ * 两种输出形态：
+ *   不带 embed（默认）→ 完整 HTML 文档
+ *   ?embed=1          → **片段**：无 <html>/<head>/<body>，样式全部作用域在 .wps-doc
  */
 export const PAGE_SPECS = {
-  '/guide': { file: 'install.zh-CN.md', title: '工作秘书 · 安装引导' },
-  '/help': { file: 'use.zh-CN.md', title: '工作秘书 · 使用说明' },
+  '/guide': DOC_SPECS.guide,
+  '/help': DOC_SPECS.help,
 }
 
 /**
@@ -257,6 +271,45 @@ function isPathWithin(child, parent) {
   if (a === b) return true
   return a.indexOf(b + '/') === 0
 }
+
+/**
+ * 用**系统默认程序**打开一个本地文件（不经过 Web 路由、不需要任何浏览器凭据）。
+ *
+ * 平台写法与依据：
+ *   · Windows：`explorer.exe <绝对路径>` —— 等价于在资源管理器里双击该文件，交给文件关联决定用哪个程序；
+ *     调用一律走 `execFile` + **参数数组**，**不经 shell**（不启用 child_process 的 shell 选项），
+ *     路径不会被解释成命令或参数分隔符。
+ *     ⚠️ `explorer.exe` 的退出码不可靠（成功也常返回 1），所以**只把「进程无法启动」
+ *     （ENOENT / EACCES / EPERM）判为失败**，其余一律视为已交给系统。
+ *   · macOS：`open <file>`；Linux：`xdg-open <file>`（同样只用参数数组）。
+ *
+ * @param {string} file 绝对路径（调用方已做白名单查表 + 存在性校验）
+ * @param {object} [options] { platform, exec }（exec 仅供测试注入）
+ * @returns {Promise<{ok:boolean, command:string, code:string, error:string}>}
+ */
+export function openWithSystem(file, options = {}) {
+  const platform = options.platform || process.platform
+  const run = typeof options.exec === 'function' ? options.exec : execFile
+  const spec = platform === 'win32'
+    ? { cmd: 'explorer.exe', args: [file] }
+    : (platform === 'darwin' ? { cmd: 'open', args: [file] } : { cmd: 'xdg-open', args: [file] })
+  const command = spec.cmd + ' ' + spec.args.join(' ')
+  return new Promise((resolve) => {
+    try {
+      run(spec.cmd, spec.args, { windowsHide: true, timeout: 10000 }, (err) => {
+        const code = err && err.code ? String(err.code) : ''
+        if (code === 'ENOENT' || code === 'EACCES' || code === 'EPERM') {
+          resolve({ ok: false, command: command, code: code, error: '系统命令不可用（' + code + '）：' + spec.cmd })
+          return
+        }
+        resolve({ ok: true, command: command, code: '', error: '' })
+      })
+    } catch (err) {
+      resolve({ ok: false, command: command, code: String((err && err.code) || 'spawn-failed'), error: String(err && err.message ? err.message : err) })
+    }
+  })
+}
+
 
 // ───────────────────────────── 白名单解析（纯函数，可单测） ─────────────────────────────
 
@@ -584,6 +637,14 @@ export function installApi(ctx, deps = {}) {
     }
   }
 
+  // ---- 随包说明文件（1.1.3 / T9b）：白名单查表 + 用系统默认程序打开 ----
+  // doc → 固定文件名（绝不接受客户端传路径）；docsDir 只在测试里注入，运行期恒为 <模块>/defaults。
+  const docsDir = (typeof deps.docsDir === 'string' && deps.docsDir) ? deps.docsDir : join(installModuleDir, 'defaults')
+  const openDocImpl = typeof deps.openDoc === 'function' ? deps.openDoc : openWithSystem
+  const docSpecOf = (doc) => DOC_SPECS[doc] || null
+  const docFilePath = (doc) => { const s = docSpecOf(doc); return s ? join(docsDir, s.html) : '' }
+  const fileIsFile = (p) => { try { return statSync(p).isFile() } catch (e) { return false } }
+
   /**
    * 当前记忆库目录（1.1.3）：从设置 / 工作区推导解析，**只读**。
    * 客户端未显式传 memoryDir 时用它兜底；解析不到返回空串（由调用方给可读错误）。
@@ -732,6 +793,55 @@ export function installApi(ctx, deps = {}) {
         return sendJson(res, result.code === 'no-model-service' ? 503 : 502, {
           ok: false, error: result.error, channel: result.channel, code: result.code,
           name: result.name || name, maxChars: DOMAIN_MAX_CHARS, nameMaxChars: DOMAIN_NAME_MAX_CHARS,
+        })
+      }
+
+      // GET /docs —— 两个随包说明文件的存在性与绝对路径（只读；客户端据此判断可用性）
+      if (req.method === 'GET' && (sub === '/docs' || sub === '/docs/')) {
+        const items = Object.keys(DOC_SPECS).map((doc) => {
+          const file = docFilePath(doc)
+          return {
+            doc: doc, title: DOC_SPECS[doc].title, file: DOC_SPECS[doc].html,
+            path: slash(file), exists: fileIsFile(file),
+          }
+        })
+        return sendJson(res, 200, {
+          ok: true, dir: slash(docsDir), items: items, ready: items.every((it) => it.exists),
+        })
+      }
+
+      // POST /open-doc { doc: 'guide' | 'help' } —— 用**系统默认程序**打开随包 HTML（同源保护）
+      // doc 只做白名单查表（沿用 FIX_WHITELIST 的纪律：**绝不接受客户端传路径或命令**）
+      if (req.method === 'POST' && (sub === '/open-doc' || sub === '/open-doc/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const doc = typeof body.doc === 'string' ? body.doc.trim().slice(0, 32) : ''
+        const spec = docSpecOf(doc)
+        if (!spec) {
+          return sendJson(res, 400, {
+            ok: false, doc: doc, code: 'unknown-doc',
+            error: '只有 ' + Object.keys(DOC_SPECS).join(' / ') + ' 两个说明文件可打开；已拒绝：' + (doc || '（空）'),
+          })
+        }
+        const file = docFilePath(doc)
+        if (!fileIsFile(file)) {
+          return sendJson(res, 200, {
+            ok: false, doc: doc, path: slash(file), code: 'file-missing',
+            error: '随包说明文件不存在（安装可能不完整）：' + slash(file) + '；可重装集成体，或改用页面内嵌说明',
+          })
+        }
+        const opened = await openDocImpl(file, { platform: platform })
+        if (!opened || opened.ok !== true) {
+          return sendJson(res, 200, {
+            ok: false, doc: doc, path: slash(file), command: (opened && opened.command) || '',
+            code: (opened && opened.code) || 'open-failed',
+            error: '无法用系统默认程序打开说明文件：' + ((opened && opened.error) || '未知原因') + '；可手动打开：' + slash(file),
+          })
+        }
+        return sendJson(res, 200, {
+          ok: true, doc: doc, title: spec.title, path: slash(file), command: opened.command,
         })
       }
 
@@ -1096,7 +1206,7 @@ export function installApi(ctx, deps = {}) {
       // embed=1 → 只回**片段**（无 html/head/body + 作用域化样式），供客户端注入宿主 GUI；
       // 不带 embed（默认）→ 完整文档，浏览器直接访问。
       const embed = String(url.searchParams.get('embed') || '') === '1'
-      const raw = readFileSync(join(installModuleDir, 'defaults', spec.file), 'utf8')
+      const raw = readFileSync(join(installModuleDir, 'defaults', spec.md), 'utf8')
       const body = renderMarkdown(raw)
       return sendHtml(res, 200, embed ? renderFragment(spec.title, body) : renderPage(spec.title, body))
     } catch (err) {
