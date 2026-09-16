@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.0.0'
+    const BUILD = 'v1.1.3'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -93,16 +93,20 @@ window.__ModuleLoader__.load({
      */
     const FIX_ORDER = ['python', 'pythonDeps', 'wps', 'obsidian']
     /**
-     * 四步安装流程。当前步由页面用 props.current 指定：
-     * 「安装与检查」页 = env，「安装子插件」页 = plugins，「初始化」页 = init；
-     * 未被当前页选中的后续步骤标注「后续版本」。
+     * 1.1.3：四步进度条随页签一并下线（设计定稿 §2「删除」）。「安装与检查」页改为
+     * 分组卡片：环境依赖（6 项，只读）→ 依赖安装工具 → 子插件（5 项）。
+     * 注意：host / node / python / pythonDeps / wps / obsidian 就是原来的「环境」六项；
+     * 第七项 subPlugins 探针仍在 /check 里，用于子插件组的降级兜底（见 InstallPage）。
      */
-    const STEPS = [
-      ['env', 'stepEnv', ''],
-      ['deps', 'stepDeps', ''],
-      ['plugins', 'stepPlugins', ''],
-      ['init', 'stepInit', 'later'],
-    ]
+    const DEP_ITEM_IDS = ['host', 'node', 'python', 'pythonDeps', 'wps', 'obsidian']
+    /**
+     * 两个随包网页（宿主侧同波实现，路径冻结）：安装引导 / 使用说明。
+     * 打开方式统一为**页内展开**：桌面外壳的宿主地址是合成 origin http://dsh.internal
+     * （见 HOST_BASE），它只在外壳内部有效 —— 交给系统浏览器（Electron 对 http/https
+     * 链接走 shell.openExternal）只会打开一个解析不了的页面；Web 载体虽能 window.open，
+     * 但两种载体统一成一种行为最稳（设计定稿 §12 决议 12）。
+     */
+    const PAGE_PATHS = { guide: '/work-personal-secretary/guide', help: '/work-personal-secretary/help' }
     /** 状态 → 文案键（ok | warn | missing | skip） */
     const STATUS_KEYS = { ok: 'statusOk', warn: 'statusWarn', missing: 'statusMissing', skip: 'statusSkip' }
     /** 批量执行状态 → 文案键 / 徽标样式 */
@@ -185,9 +189,11 @@ window.__ModuleLoader__.load({
     const ZH = {
       nav: '工作秘书',
       title: '工作秘书',
-      lead: '一个集成体统一五套能力。环境检查、依赖补齐、子插件安装与配置引导已可用；能力配置在后续版本提供。',
+      // 1.1.3 首屏描述（设计定稿 §1 决议 1：A 版原文）
+      lead: '检查运行环境、安装五个子插件、完成首次配置，并集中调整各子插件的设置。',
       tabInstall: '安装与检查',
-      tabConfig: '能力配置',
+      tabCore: '核心配置',
+      tabConfig: '配置',
       tabAbout: '关于与致谢',
       aboutSect: '关于与致谢',
       integrator: '集成体本体',
@@ -209,14 +215,51 @@ window.__ModuleLoader__.load({
         '能力配置将把五个子插件的设置集中到这一个分区里读写：记忆库、专家库、文档能力、桌面形象各自分组。子插件的配置命名空间保持独立，单独安装时仍可各自配置。',
       back: '返回',
 
-      // ── 安装与检查 ────────────────────────────────────────────────
-      stepEnv: '环境检查',
-      stepDeps: '补齐依赖',
-      stepPlugins: '安装子插件',
-      stepInit: '初始化',
-      stepLater: '后续版本',
-      stepNow: '当前',
-      envTitle: '环境清单',
+      // ── 安装与检查（1.1.3：分组卡片 + 页内展开的两个随包网页） ────
+      depsGroupTitle: '环境依赖',
+      depsGroupSub: '运行环境与文档能力的前置条件',
+      depsCount: '{done}/{total} 正常',
+      fixToolTitle: '依赖安装工具',
+      fixToolBadge: '内置白名单',
+      fixToolSub: '上面检测出缺项时，可在这里逐项补齐；命令来自内置白名单，客户端只上报编号',
+      fixToolNote: '逐项串行执行，每步回显命令、退出码与输出末尾；WPS 为第三方商业软件，安装即接受其许可。不可代执行的项只提供复制命令。',
+      plugGroupTitle: '子插件',
+      plugGroupSub: '五个子插件可独立安装，装完需重启 DSH',
+      plugGroupCount: '{done}/{total} 已装',
+      plugGroupUnavailable: '未能读取子插件清单（可点「重新检测」再试）。',
+      readOnlyNote: '本页只读检测，不自动改动系统',
+      guideOpen: '查看安装引导（{n} 项待处理）',
+      guideReady: '环境已就绪',
+      helpOpen: '使用说明',
+      docTitleGuide: '安装引导',
+      docTitleHelp: '使用说明',
+      docLoading: '读取中…',
+      docLoadFailed: '说明页读取失败',
+      docLoadFailedHint: '宿主尚未提供该页面（路由未注册或尚未启用）。页面随插件分发，稍后可重试。',
+      docClose: '收起',
+      docRetry: '重试',
+
+      // ── 核心配置（1.1.3：门禁；目录与岗位字段由后续任务填充） ──────
+      gateTitle: '先满足最低使用需求',
+      gatePending: '未就绪',
+      gateSub: '核心配置要调用本机 Python 工具来生成结构、读写旧资料，并把身份写进记忆体；下面三项就绪后本页自动解锁',
+      gateItemMemory: '记忆库插件',
+      gateItemPython: 'Python 解释器',
+      gateItemDeps: 'Python 工具',
+      gatePythonHint: '需 3.10 以上（建议 3.12）',
+      gateDepsHint: '8 个包（docx / xlsx / pptx / PDF / 图片 / COM）',
+      gateGo: '去安装与检查',
+      gateNote: '三项都在「安装与检查」页检测与处理。记忆库工作目录在本页填写，不作为解锁条件。',
+      gateChecking: '检测中…',
+      gateLoadFailed: '未能取到环境检测结果',
+      coreDirsTitle: '目录与岗位',
+      coreDirsSub: '填好记忆库目录、Obsidian 目录与工作岗位后保存：先做可用性检查，再依次建立两个目录、建立关联、写入岗位身份。',
+      coreFieldMemoryDir: '记忆库目录',
+      coreFieldMemoryDirHint: '脚本在此建立 MEMORY.md / PROJECTS / DAILY / ARCHIVE 与首条记忆',
+      coreFieldObsidianDir: 'Obsidian 知识库目录',
+      coreFieldObsidianDirHint: '脚本在此建立知识库结构，并把记忆镜像区 00_全局记忆 与记忆库关联',
+      coreFieldDomain: '工作岗位',
+      coreFieldDomainHint: '五个预置岗位 +「都不是（新建岗位…）」，选定后写入使用者身份',
       checking: '检测中…',
       recheck: '重新检测',
       checkedAt: '检测时间',
@@ -236,8 +279,6 @@ window.__ModuleLoader__.load({
       itemWps: 'WPS Office',
       itemObsidian: 'Obsidian',
       itemSubPlugins: '子插件',
-      conclusionStale: '检测到 {n} 项环境未就绪。',
-      fixAllTop: '一键补齐全部（{n} 项）',
       fixSelected: '补齐选中项（{n}）',
       fixOne: '补齐',
       fixing: '补齐中…',
@@ -273,7 +314,6 @@ window.__ModuleLoader__.load({
         '默认只读检测；只有你点补齐才会执行安装。命令来自内置白名单（Python 解释器 / Python 依赖 / WPS / Obsidian 四项），不接受外部输入。',
 
       // ── 安装子插件（P2） ──────────────────────────────────────────
-      tabPlugins: '安装子插件',
       pluginsTitle: '子插件清单',
       pluginsLoading: '读取中…',
       pluginsLoadFailed: '子插件清单读取失败',
@@ -341,8 +381,6 @@ window.__ModuleLoader__.load({
         '从集成体仓库内置副本安装（离线可用）；安装会更新当前 profile 的插件清单，需重启 DSH 生效。',
 
       // ── 初始化 / 配置引导（P3） ────────────────────────────────────
-      tabInit: '初始化',
-      initTitle: '配置引导',
       initLead: '填好首用必配项，检查无误后一次性把配置底座写入。',
       initLoading: '检测中…',
       initLoadFailed: '初始化信息读取失败',
@@ -663,9 +701,11 @@ window.__ModuleLoader__.load({
     const EN = {
       nav: 'Work Secretary',
       title: 'Work Secretary',
-      lead: 'One integrator for five capabilities. Environment check, dependency completion, sub-plugin installation and the setup wizard are ready; capability config arrives in a later version.',
+      // 1.1.3 lead (design decision 1, variant A)
+      lead: 'Check the runtime environment, install the five sub-plugins, finish the first-run setup, and adjust the settings of every sub-plugin in one place.',
       tabInstall: 'Install & Check',
-      tabConfig: 'Capabilities',
+      tabCore: 'Core setup',
+      tabConfig: 'Settings',
       tabAbout: 'About & Credits',
       aboutSect: 'About & Credits',
       integrator: 'Integrator',
@@ -687,14 +727,51 @@ window.__ModuleLoader__.load({
         'Capabilities will gather the five sub-plugins settings into this one section, grouped per module. Each sub-plugin keeps its own settings namespace so it still works standalone.',
       back: 'Back',
 
-      // ── Install & Check ───────────────────────────────────────────
-      stepEnv: 'Environment check',
-      stepDeps: 'Complete dependencies',
-      stepPlugins: 'Install sub-plugins',
-      stepInit: 'Initialize',
-      stepLater: 'Later version',
-      stepNow: 'Current',
-      envTitle: 'Environment list',
+      // ── Install & Check (1.1.3: grouped cards + in-page docs) ─────
+      depsGroupTitle: 'Environment dependencies',
+      depsGroupSub: 'Prerequisites for the runtime and the document capability',
+      depsCount: '{done}/{total} ok',
+      fixToolTitle: 'Dependency installer',
+      fixToolBadge: 'Built-in allow-list',
+      fixToolSub: 'When the checks above find something missing, install it item by item here; every command comes from the built-in allow-list and the client only reports ids',
+      fixToolNote: 'Runs one item at a time, echoing the command, exit code and the tail of the output. WPS is third-party commercial software; installing it means accepting its license. Items that cannot be run automatically only offer a command to copy.',
+      plugGroupTitle: 'Sub-plugins',
+      plugGroupSub: 'The five sub-plugins install independently; restart DSH afterwards',
+      plugGroupCount: '{done}/{total} installed',
+      plugGroupUnavailable: 'Could not read the sub-plugin list (press Re-check to try again).',
+      readOnlyNote: 'This page only inspects; it never changes the system on its own',
+      guideOpen: 'Open install guide ({n} item(s) pending)',
+      guideReady: 'Environment ready',
+      helpOpen: 'User guide',
+      docTitleGuide: 'Install guide',
+      docTitleHelp: 'User guide',
+      docLoading: 'Loading…',
+      docLoadFailed: 'The page failed to load',
+      docLoadFailedHint: 'The host does not serve this page yet (route not registered or not enabled). The page ships with the plugin; try again later.',
+      docClose: 'Collapse',
+      docRetry: 'Retry',
+
+      // ── Core setup (1.1.3: gate; fields filled by a later task) ───
+      gateTitle: 'Meet the minimum requirements first',
+      gatePending: 'Not ready',
+      gateSub: 'Core setup uses the local Python tools to generate structure, read and write existing material, and write the identity into the memory store. This page unlocks automatically once all three items below are ready',
+      gateItemMemory: 'Memory sub-plugin',
+      gateItemPython: 'Python interpreter',
+      gateItemDeps: 'Python tools',
+      gatePythonHint: '3.10 or newer required (3.12 recommended)',
+      gateDepsHint: '8 packages (docx / xlsx / pptx / PDF / images / COM)',
+      gateGo: 'Go to Install & Check',
+      gateNote: 'All three are checked and handled on the Install & Check page. The memory directory is filled in on this page and is not an unlock condition.',
+      gateChecking: 'Checking…',
+      gateLoadFailed: 'Could not read the environment check',
+      coreDirsTitle: 'Directories & job',
+      coreDirsSub: 'Fill in the memory directory, the Obsidian directory and the job, then save: availability check first, then create both directories, link them and write the job identity.',
+      coreFieldMemoryDir: 'Memory directory',
+      coreFieldMemoryDirHint: 'MEMORY.md / PROJECTS / DAILY / ARCHIVE and the first entry are created here',
+      coreFieldObsidianDir: 'Obsidian vault directory',
+      coreFieldObsidianDirHint: 'The vault structure is created here, and the 00_全局记忆 mirror area is linked to the memory store',
+      coreFieldDomain: 'Job',
+      coreFieldDomainHint: 'Five presets plus "None of these (new job…)"; the choice is written into the user identity',
       checking: 'Checking…',
       recheck: 'Re-check',
       checkedAt: 'Checked at',
@@ -714,8 +791,6 @@ window.__ModuleLoader__.load({
       itemWps: 'WPS Office',
       itemObsidian: 'Obsidian',
       itemSubPlugins: 'Sub-plugins',
-      conclusionStale: '{n} environment item(s) need attention.',
-      fixAllTop: 'Install everything ({n})',
       fixSelected: 'Install selected ({n})',
       fixOne: 'Install',
       fixing: 'Installing…',
@@ -751,7 +826,6 @@ window.__ModuleLoader__.load({
         'Read-only by default: this page only inspects the machine. Nothing is installed until you press an install button, and every command comes from a built-in allow-list (Python interpreter / Python packages / WPS / Obsidian) — no external input is accepted.',
 
       // ── Install sub-plugins (P2) ──────────────────────────────────
-      tabPlugins: 'Install sub-plugins',
       pluginsTitle: 'Sub-plugin list',
       pluginsLoading: 'Loading…',
       pluginsLoadFailed: 'Sub-plugin list failed to load',
@@ -819,8 +893,6 @@ window.__ModuleLoader__.load({
         'Installs from the bundled copy inside the integrator repository (works offline); installation updates the current profile plugin list and requires a DSH restart to take effect.',
 
       // ── Initialize / setup wizard (P3) ────────────────────────────
-      tabInit: 'Initialize',
-      initTitle: 'Setup wizard',
       initLead: 'Fill in the required first-run fields, review the plan, then write the configuration base in one go.',
       initLoading: 'Checking…',
       initLoadFailed: 'Setup information failed to load',
@@ -1203,28 +1275,21 @@ window.__ModuleLoader__.load({
       mono: { fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px', background: '#f4f5f7', borderRadius: '4px', padding: '0 4px' },
       placeholder: { border: '1px dashed #dfe1e5', borderRadius: '12px', padding: '22px 18px', background: '#fcfcfd', color: '#5b6068', fontSize: '13px' },
 
-      // ── 安装与检查（新增键） ──────────────────────────────────────
-      steps: { display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' },
-      step: {
-        flex: '1 1 150px', minWidth: '132px', display: 'flex', gap: '9px', alignItems: 'flex-start',
-        border: '1px solid #eef0f2', background: '#fbfbfc', borderRadius: '10px', padding: '9px 11px',
+      // ── 安装与检查 / 核心配置（1.1.3：分组卡片 · 页内展开 · 门禁） ──
+      actionsTop: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', margin: '0 0 6px' },
+      metaNote: { fontSize: '12px', color: '#8a8f98', margin: '0 0 12px' },
+      metaLink: {
+        appearance: 'none', border: 0, background: 'transparent', color: '#1d4ed8',
+        textDecoration: 'underline', cursor: 'pointer', font: 'inherit', fontSize: '12px', padding: 0,
       },
-      stepOn: { borderColor: '#c7d2fe', background: '#f3f6ff' },
-      stepLater: { opacity: 0.72 },
-      stepNo: {
-        flex: '0 0 auto', width: '20px', height: '20px', borderRadius: '50%', background: '#e8eaf0',
-        color: '#4b5563', fontSize: '11.5px', fontWeight: 650, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      groupCount: { marginLeft: 'auto' },
+      docCard: { marginTop: '12px' },
+      docBody: {
+        border: '1px solid #eef0f2', borderRadius: '10px', background: '#fbfcfd',
+        padding: '10px 14px', fontSize: '12.5px', lineHeight: 1.7, maxHeight: '420px', overflow: 'auto',
       },
-      stepNoOn: { background: '#1d4ed8', color: '#fff' },
-      stepName: { fontSize: '13px', fontWeight: 600, color: '#1f2328' },
-      stepNameOn: { color: '#1d4ed8' },
-      stepState: { fontSize: '11.5px', color: '#8a8f98', marginTop: '1px', minHeight: '14px' },
-      conclusion: {
-        display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap',
-        background: '#fff9ef', border: '1px solid #f6e3c4', borderRadius: '12px', padding: '10px 12px', marginBottom: '12px',
-      },
-      conclusionText: { fontSize: '13px', color: '#8a5300', fontWeight: 550 },
-      conclusionActions: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' },
+      gatedBody: { opacity: 0.45, pointerEvents: 'none' },
+      gateCard: { borderColor: '#f0d9b5', background: '#fffdf7' },
       toolbar: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' },
       row: { padding: '10px 0', borderBottom: '1px solid #f6f7f9' },
       rowHead: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
@@ -1814,6 +1879,42 @@ window.__ModuleLoader__.load({
       return requestJson(sub, { headers: { accept: 'application/json' } }, timeoutMs)
     }
 
+    /**
+     * 取**随包网页**的 HTML 正文（不走 API 前缀）：GET /work-personal-secretary/guide|help。
+     * 宿主返回 text/html 而非 JSON，所以这里单独一条文本通道（基址分档与 requestJson 一致）。
+     * 之所以是「页内展开」而不是 window.open：桌面外壳的宿主地址是合成 origin
+     * http://dsh.internal，只在外壳内部有效，交给系统浏览器（Electron 对 http/https
+     * 链接走 shell.openExternal）只会打开一个解析不了的页面（设计定稿 §12 决议 12）。
+     */
+    async function requestText(urlPath, timeoutMs) {
+      const rel = String(urlPath)
+      const abs = new URL(rel, HOST_BASE).toString()
+      const attempts = HOST_FALLBACK ? [abs] : [rel, abs]
+      let lastErr = null
+      for (const url of attempts) {
+        let timer = null
+        let ctl = null
+        try {
+          const opts = { headers: { accept: 'text/html' } }
+          if (typeof AbortController === 'function') {
+            ctl = new AbortController()
+            opts.signal = ctl.signal
+            if (timeoutMs) timer = setTimeout(() => { try { ctl.abort() } catch (e) { /* 忽略：仅用于取消 */ } }, timeoutMs)
+          }
+          const res = await fetch(url, opts)
+          if (!res || res.ok === false) throw new Error('HTTP ' + String(res && res.status))
+          const text = await res.text()
+          if (!text || !String(text).trim()) throw new Error('空响应')
+          return String(text)
+        } catch (err) {
+          lastErr = String((err && err.message) || err) + ' @' + url
+        } finally {
+          if (timer) clearTimeout(timer)
+        }
+      }
+      throw new Error(lastErr || 'request failed')
+    }
+
     /** 补齐用长超时：pip / winget 安装可能耗时数分钟，但也不能无限挂起 */
     function postJson(sub, body) {
       return requestJson(sub, {
@@ -1833,10 +1934,11 @@ window.__ModuleLoader__.load({
 
     function Tabs(props) {
       const t = props.t
+      // 1.1.3：页签 5 → 4（安装与检查 / 核心配置 / 配置 / 关于与致谢）。
+      // 原「安装子插件」并入「安装与检查」的子插件分组；原「初始化」由「核心配置」承接。
       const items = [
         ['install', t('tabInstall')],
-        ['plugins', t('tabPlugins')],
-        ['init', t('tabInit')],
+        ['core', t('tabCore')],
         ['config', t('tabConfig')],
         ['about', t('tabAbout')],
       ]
@@ -1847,27 +1949,46 @@ window.__ModuleLoader__.load({
         }, it[1])))
     }
 
-    /** 四步进度条：current 指定当前步（默认 env），kind=later 的项标注「后续版本」 */
-    function Steps(props) {
+    /**
+     * 环境依赖分组的一行（1.1.3，**只读**）：名称 · 状态徽标 · 证据值 · 说明。
+     * 与「依赖安装工具」里的 EnvRow 分开：本组只呈现探针结果，不带复选框与命令。
+     */
+    function DepRow(props) {
       const t = props.t
-      const current = props.current || 'env'
-      return h('div', { style: S.steps }, STEPS.map((s, i) => {
-        const isCurrent = s[0] === current
-        // P3：「初始化」是最后一步，也是唯一带 later 标记却可能成为当前步的一步；
-        // 只有它真的成为当前步时才取消「后续版本」标记（P1/P2 的显示不变）。
-        const later = s[2] === 'later' && !isCurrent
-        const on = !later && isCurrent
-        return h('div', {
-          key: s[0],
-          style: Object.assign({}, S.step, on ? S.stepOn : null, later ? S.stepLater : null),
-        }, [
-          h('div', { key: 'n', style: Object.assign({}, S.stepNo, on ? S.stepNoOn : null) }, String(i + 1)),
-          h('div', { key: 'b', style: { minWidth: 0 } }, [
-            h('div', { key: 'nm', style: Object.assign({}, S.stepName, on ? S.stepNameOn : null) }, t(s[1])),
-            h('div', { key: 'st', style: S.stepState }, later ? t('stepLater') : (on ? t('stepNow') : '')),
-          ]),
-        ])
-      }))
+      const item = props.item
+      if (!item) return null
+      const nodes = [
+        h('div', { key: 'head', style: S.rowHead }, [
+          h('span', { key: 'nm', style: S.itemName }, item.name),
+          h('span', { key: 'st', style: Object.assign({}, S.badge, statusStyle(item.status)) }, statusLabel(t, item.status)),
+          h('span', { key: 'vl', style: S.itemValue }, String(item.value || '—')),
+        ]),
+      ]
+      if (item.detail) nodes.push(h('div', { key: 'dt', style: S.itemDetail }, renderDetail(item.detail)))
+      return h('div', { style: S.row }, nodes)
+    }
+
+    /**
+     * 子插件分组的一行（1.1.3，**只读**）：id · 中文名 · 三态徽标 · 已装/内置版本。
+     * 状态沿用既有三态文案（已是最新 / 可安装 / 可更新），接口没给状态时按「未检测」。
+     */
+    function PluginListRow(props) {
+      const t = props.t
+      const item = props.item
+      const meta = PLUGIN_META[item.id] || {}
+      const nameKey = meta.nameKey
+      const nameText = (nameKey && t(nameKey) !== nameKey) ? t(nameKey) : ''
+      const statusKey = PLUG_STATUS_KEYS[item.status]
+      const stateStyle = item.status === 'upToDate' ? S.badgeOk : (item.status ? S.badgeWarn : S.badgeSkip)
+      const versionText = item.installed || item.builtin || t('notInstalled')
+      return h('div', { style: S.row }, [
+        h('div', { key: 'head', style: S.rowHead }, [
+          h('span', { key: 'id', style: S.itemName }, item.id),
+          nameText ? h('span', { key: 'nm', style: S.actionHint }, nameText) : null,
+          h('span', { key: 'st', style: Object.assign({}, S.badge, stateStyle) }, statusKey ? t(statusKey) : t('cfgDocSkillUnknown')),
+          h('span', { key: 'vl', style: S.itemValue }, versionText),
+        ]),
+      ])
     }
 
     /** 环境清单一行：复选框（可代执行项）· 中文名 · 状态徽标 · 证据值 · 说明 · 命令与操作 */
@@ -1975,6 +2096,10 @@ window.__ModuleLoader__.load({
       const state = useState({
         phase: 'loading', items: [], checkedAt: '', error: '',
         picked: {}, fixingId: '', batch: null, copyState: null,
+        // 1.1.3：子插件分组（GET /plugins）；失败时降级用 /check 的 subPlugins 探针兜底
+        plugPhase: 'loading', plugItems: [], plugError: '',
+        // 1.1.3：页内展开的随包网页（null = 未展开）
+        doc: null,
       })
       const st = state[0]
       const setSt = state[1]
@@ -1995,6 +2120,49 @@ window.__ModuleLoader__.load({
         } catch (err) {
           setSt((prev) => Object.assign({}, prev, { phase: 'error', error: String((err && err.message) || err) }))
         }
+      }
+
+      /** 子插件清单（GET /plugins，只读）：失败不阻塞页面，子插件组降级用 subPlugins 探针 */
+      async function detectPlugins() {
+        setSt((prev) => Object.assign({}, prev, { plugPhase: 'loading', plugError: '' }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/plugins', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'plugins 返回 ok:false'))
+          setSt((prev) => Object.assign({}, prev, { plugPhase: 'ready', plugError: '', plugItems: pluginList(body) }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, { plugPhase: 'error', plugError: String((err && err.message) || err) }))
+        }
+      }
+
+      /** 「重新检测」= 两份只读清单一起刷新（门禁判定与 /check 同源，见 CorePage） */
+      async function recheck() {
+        setSt((prev) => Object.assign({}, prev, { batch: null, copyState: null }))
+        await Promise.all([detect(), detectPlugins()])
+      }
+
+      /**
+       * 页内展开随包网页（guide / help）。**不用 window.open**：桌面外壳的宿主地址是合成
+       * origin http://dsh.internal，交给系统浏览器打不开（设计定稿 §12 决议 12）。
+       * 宿主返回 text/html，取回后注入容器内渲染（发布件自己的页面，非外部输入）。
+       */
+      async function openDoc(kind) {
+        setSt((prev) => Object.assign({}, prev, { doc: { kind: kind, phase: 'loading', html: '', error: '' } }))
+        try {
+          const html = await requestText(PAGE_PATHS[kind], 20000)
+          setSt((prev) => (prev.doc && prev.doc.kind === kind)
+            ? Object.assign({}, prev, { doc: { kind: kind, phase: 'ready', html: html, error: '' } })
+            : prev)
+        } catch (err) {
+          const msg = String((err && err.message) || err)
+          setSt((prev) => (prev.doc && prev.doc.kind === kind)
+            ? Object.assign({}, prev, { doc: { kind: kind, phase: 'error', html: '', error: msg } })
+            : prev)
+        }
+      }
+      function closeDoc() {
+        setSt((prev) => Object.assign({}, prev, { doc: null }))
       }
 
       function setBatchState(id, value) {
@@ -2138,7 +2306,7 @@ window.__ModuleLoader__.load({
         })
       }
 
-      useEffect(() => { detect() }, [])
+      useEffect(() => { detect(); detectPlugins() }, [])
 
       const byId = {}
       for (const it of (st.items || [])) { if (it && it.id) byId[it.id] = it }
@@ -2163,8 +2331,30 @@ window.__ModuleLoader__.load({
       const busy = batchRunning || st.fixingId !== ''
       const fixableIds = rows.filter((r) => r.autoFixable).map((r) => r.id)
       const pickedIds = fixableIds.filter((id) => (st.picked[id] !== undefined ? st.picked[id] : true))
-      const pendingCount = rows.filter((r) => r.status === 'missing' || r.status === 'warn').length
-      const needsWork = st.phase === 'ready' && pendingCount > 0 && fixableIds.length > 0
+      // ── 1.1.3 分组派生量（设计定稿 §2） ────────────────────────────
+      // 环境依赖：六项；「正常」= status ok（warn / missing / skip 都算待处理）
+      const depRows = DEP_ITEM_IDS.map((id) => rows.filter((r) => r.id === id)[0]).filter(Boolean)
+      const depOkCount = depRows.filter((r) => r.status === 'ok').length
+      const depPending = DEP_ITEM_IDS.length - depOkCount
+      // 依赖安装工具：只列可代执行 / 可给命令的四项（FIX_ORDER 固定顺序）
+      const fixRows = FIX_ORDER.map((id) => rows.filter((r) => r.id === id)[0]).filter(Boolean)
+      // 子插件：/plugins 就绪时按清单渲染；不可达时降级用 subPlugins 探针（/check 的第 7 项）
+      const plugById = {}
+      for (const raw of (st.plugPhase === 'ready' ? st.plugItems : [])) { if (raw && raw.id) plugById[raw.id] = raw }
+      const plugRows = INSTALL_ORDER.map((id) => normalizePlugin(plugById[id] || null, id, t))
+      const plugKnown = st.plugPhase === 'ready'
+      const subPlugProbe = byId['subPlugins'] || null
+      const plugOkCount = plugKnown
+        ? plugRows.filter((r) => r.status === 'upToDate').length
+        : (subPlugProbe && subPlugProbe.status === 'ok' ? INSTALL_ORDER.length : 0)
+      // 清单不可达时：探针 ok → 0 项待处理；skip（读不到 profile）→ 不计；其余 → 至少 1 项
+      const plugPending = plugKnown
+        ? (INSTALL_ORDER.length - plugOkCount)
+        : (subPlugProbe && subPlugProbe.status !== 'ok' && subPlugProbe.status !== 'skip' ? 1 : 0)
+      // 主按钮：依赖组（6）+ 子插件组（5）全部正常 → 置灰（文案「环境已就绪」）
+      const pendingCount = depPending + plugPending
+      const allReady = st.phase === 'ready' && pendingCount === 0
+      const guideDisabled = loading || allReady
       const willInstall = t('willInstall') + pickedIds
         .filter((id) => INSTALL_DESC_KEYS[id])
         .map((id) => t(INSTALL_DESC_KEYS[id]))
@@ -2177,38 +2367,67 @@ window.__ModuleLoader__.load({
 
       return h('div', null, [
         h('style', { key: 'kf' }, KEYFRAMES),
-        h(Steps, { key: 'steps', t: t }),
-        needsWork ? h('div', { key: 'concl', style: S.conclusion }, [
-          h('span', { key: 'x', style: S.conclusionText }, fill(t('conclusionStale'), pendingCount)),
-          h('div', { key: 'act', style: S.conclusionActions }, [
-            h('span', { key: 'h', style: S.actionHint }, t('batchHint')),
-            h('button', {
-              key: 'b', type: 'button',
-              disabled: busy,
-              style: Object.assign({}, S.btn, S.btnPrimary, busy ? S.btnDisabled : null),
-              onClick: () => runBatch(fixableIds),
-            }, busy
-              ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), progressText]
-              : fill(t('fixAllTop'), fixableIds.length)),
-          ]),
-        ]) : null,
-        h('div', { key: 'card', style: S.card }, [
+        // ① 置顶按钮组（设计定稿 §2：主按钮最显眼）。两个入口都指向随包网页，页内展开。
+        h('div', { key: 'top', style: S.actionsTop }, [
+          h('button', {
+            key: 'guide', type: 'button',
+            disabled: guideDisabled,
+            style: Object.assign({}, S.btn, S.btnPrimary, guideDisabled ? S.btnDisabled : null),
+            onClick: () => openDoc('guide'),
+          }, allReady ? t('guideReady') : fill(t('guideOpen'), pendingCount)),
+          h('button', {
+            key: 'help', type: 'button',
+            style: S.btn,
+            onClick: () => openDoc('help'),
+          }, t('helpOpen')),
+        ]),
+        // ② 检测元信息：检测时间 · 重新检测 · 只读声明
+        h('div', { key: 'meta', style: S.metaNote }, [
+          st.checkedAt ? (t('checkedAt') + ' ' + st.checkedAt + ' · ') : null,
+          h('button', {
+            key: 're', type: 'button', disabled: loading,
+            style: Object.assign({}, S.metaLink, loading ? { opacity: 0.6, cursor: 'default' } : null),
+            onClick: () => recheck(),
+          }, loading ? t('checking') : t('recheck')),
+          ' · ' + t('readOnlyNote'),
+        ]),
+        // ③ 页内展开的随包网页（guide / help）
+        st.doc ? h('div', { key: 'doc', style: S.docCard }, [
           h('div', { key: 'head', style: S.cardHead }, [
             h('h3', { key: 'title', style: S.cardTitle }, [
-              t('envTitle'),
-              loading ? badge(t('checking'), S.badgeWarn) : null,
-              st.checkedAt ? badge(t('checkedAt') + ' ' + st.checkedAt) : null,
+              st.doc.kind === 'guide' ? t('docTitleGuide') : t('docTitleHelp'),
+              st.doc.phase === 'loading' ? badge(t('docLoading'), S.badgeWarn) : null,
             ]),
             h('div', { key: 'tools', style: S.toolbar }, [
-              h('button', {
-                key: 'recheck', type: 'button',
-                disabled: loading,
-                style: Object.assign({}, S.btn, loading ? S.btnDisabled : null),
-                onClick: () => { setSt((prev) => Object.assign({}, prev, { batch: null, copyState: null })); detect() },
-              }, loading
-                ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), t('recheck')]
-                : t('recheck')),
+              h('button', { key: 'close', type: 'button', style: S.btn, onClick: closeDoc }, t('docClose')),
             ]),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            st.doc.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
+              h('div', { key: 't', style: S.errorTitle }, t('docLoadFailed')),
+              h('div', { key: 'm', style: S.errorMsg }, st.doc.error),
+              h('div', { key: 'h', style: S.errorHint }, t('docLoadFailedHint')),
+              h('button', {
+                key: 'b', type: 'button',
+                style: Object.assign({}, S.btn, S.btnPrimary),
+                onClick: () => openDoc(st.doc.kind),
+              }, t('docRetry')),
+            ]) : (st.doc.phase === 'ready'
+              ? h('div', { key: 'html', style: S.docBody, dangerouslySetInnerHTML: { __html: st.doc.html } })
+              : h('div', { key: 'load', style: S.note }, t('docLoading'))),
+          ]),
+        ]) : null,
+        // ④ 环境依赖（6 项，只读）
+        h('div', { key: 'deps', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, [
+              t('depsGroupTitle'),
+              loading ? badge(t('checking'), S.badgeWarn) : null,
+              h('span', { key: 'cnt', style: S.groupCount }, badge(
+                fillAll(t('depsCount'), { done: depOkCount, total: DEP_ITEM_IDS.length }),
+                depOkCount === DEP_ITEM_IDS.length ? S.badgeOk : S.badgeWarn)),
+            ]),
+            h('div', { key: 'sub', style: S.cardSub }, t('depsGroupSub')),
           ]),
           h('div', { key: 'body', style: S.cardBody }, [
             st.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
@@ -2221,29 +2440,203 @@ window.__ModuleLoader__.load({
                 onClick: () => detect(),
               }, t('retry')),
             ]) : null,
-            h('div', { key: 'list' }, rows.map((item) => h(EnvRow, {
+            h('div', { key: 'list' }, depRows.map((item) => h(DepRow, { key: item.id, t: t, item: item }))),
+            emptyList ? h('div', { key: 'empty', style: S.note }, t('emptyList')) : null,
+          ]),
+        ]),
+        // ⑤ 依赖安装工具（位于环境依赖**下方**）：逐项 POST /fix，请求层失败才兜底 /fix-all。
+        //    客户端只上报 id；命令与白名单全在宿主侧。
+        h('div', { key: 'tool', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, [
+              t('fixToolTitle'),
+              h('span', { key: 'cnt', style: S.groupCount }, badge(t('fixToolBadge'), S.badgeSkip)),
+            ]),
+            h('div', { key: 'sub', style: S.cardSub }, t('fixToolSub')),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            h('div', { key: 'list' }, fixRows.map((item) => h(EnvRow, {
               key: item.id, t: t, item: item,
               picked: st.picked[item.id] !== undefined ? st.picked[item.id] : item.autoFixable,
               fixingId: st.fixingId, copyState: st.copyState, busy: busy,
               onFix: runFix, onCopy: copyCommand, onToggle: togglePick,
             }))),
-            emptyList ? h('div', { key: 'empty', style: S.note }, t('emptyList')) : null,
+            h('div', { key: 'act', style: S.actions }, [
+              h('button', {
+                key: 'batch', type: 'button',
+                disabled: busy || pickedIds.length === 0,
+                style: Object.assign({}, S.btn, S.btnPrimary, (busy || pickedIds.length === 0) ? S.btnDisabled : null),
+                onClick: () => runBatch(pickedIds),
+              }, busy
+                ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), progressText]
+                : fill(t('fixSelected'), pickedIds.length)),
+              h('span', { key: 'note', style: S.actionHint }, pickedIds.length ? (willInstall + ' · ' + t('batchHint')) : t('pickHint')),
+            ]),
+            h('div', { key: 'note2', style: S.note }, t('fixToolNote')),
           ]),
         ]),
-        h('div', { key: 'action', style: S.actionBar }, [
-          h('button', {
-            key: 'batch', type: 'button',
-            disabled: busy || pickedIds.length === 0,
-            style: Object.assign({}, S.btn, S.btnPrimary, (busy || pickedIds.length === 0) ? S.btnDisabled : null),
-            onClick: () => runBatch(pickedIds),
-          }, busy
-            ? [h('span', { key: 'sp', className: 'wps-spin', style: Object.assign({}, S.spinner, { animation: 'wpsSpin .9s linear infinite' }) }, '⟳'), progressText]
-            : fill(t('fixSelected'), pickedIds.length)),
-          h('span', { key: 'note', style: S.actionNote }, pickedIds.length ? (willInstall + ' · ' + t('batchHint')) : t('pickHint')),
+        // ⑥ 子插件（吸收原「安装子插件」页的清单内容）
+        h('div', { key: 'plugs', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, [
+              t('plugGroupTitle'),
+              h('span', { key: 'cnt', style: S.groupCount }, badge(
+                fillAll(t('plugGroupCount'), { done: plugOkCount, total: INSTALL_ORDER.length }),
+                plugOkCount === INSTALL_ORDER.length ? S.badgeOk : S.badgeWarn)),
+            ]),
+            h('div', { key: 'sub', style: S.cardSub }, t('plugGroupSub')),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            h('div', { key: 'list' }, plugRows.map((item) => h(PluginListRow, { key: item.id, t: t, item: item }))),
+            !plugKnown ? h('div', { key: 'deg', style: S.note }, t('plugGroupUnavailable')) : null,
+          ]),
         ]),
         st.batch ? h(FixReport, { key: 'fix', t: t, batch: st.batch, rows: rows }) : null,
         h('div', { key: 'foot', style: S.note }, t('footNote')),
       ])
+    }
+
+    /**
+     * 门禁三项（设计定稿 §3.1）——与「安装与检查」页**同源**：都读同一份 GET /check 响应。
+     * ① 记忆库插件 dsh-work-memory 已装（探针 detail 逐项列出「名字@版本 / 名字（未安装）」）
+     * ② Python 解释器 ≥ 3.10（探针已按 MIN_PYTHON 判定，ok 即达标）
+     * ③ Python 工具 8 个包齐全（pythonDeps 探针 ok）
+     * **记忆库工作目录不在此列**：它就在本页填写，否则会死锁。
+     */
+    function gateRows(t, byId) {
+      const py = byId['python'] || null
+      const pd = byId['pythonDeps'] || null
+      const sp = byId['subPlugins'] || null
+      const spDetail = sp ? String(sp.detail || '') : ''
+      let memOk = false
+      if (spDetail) {
+        // detail 形如「dsh-work-memory@1.0.5、dsh-experts（未安装）」——只看记忆库那一项
+        memOk = spDetail.indexOf('dsh-work-memory') >= 0
+          && spDetail.indexOf('dsh-work-memory（未安装）') < 0
+      } else if (sp) {
+        memOk = sp.status === 'ok'
+      }
+      const pyOk = Boolean(py && py.status === 'ok')
+      const pdOk = Boolean(pd && pd.status === 'ok')
+      return [
+        {
+          id: 'memory', label: t('gateItemMemory'), ok: memOk,
+          state: sp ? (memOk ? 'ok' : (sp.status === 'skip' ? 'skip' : 'missing')) : 'missing',
+          value: 'dsh-work-memory',
+        },
+        {
+          id: 'python', label: t('gateItemPython'), ok: pyOk,
+          state: py ? py.status : 'missing',
+          value: (py && py.value) ? py.value : t('gatePythonHint'),
+        },
+        {
+          id: 'deps', label: t('gateItemDeps'), ok: pdOk,
+          state: pd ? pd.status : 'missing',
+          value: (pd && pd.value) ? pd.value : t('gateDepsHint'),
+        },
+      ]
+    }
+
+    /**
+     * 「核心配置」页（1.1.3：门禁 + 骨架）。
+     * 任一门禁项不满足 → 整页灰化（opacity + pointer-events:none）+ 门禁卡（逐项状态 +
+     * 「去安装与检查」）；三项就绪 → 自动解锁（门禁卡消失）。
+     * 目录与岗位字段由后续任务填充：本轮只给出可辨识的骨架与说明。
+     */
+    function CorePage(props) {
+      const t = props.t
+      const state = useState({ phase: 'loading', items: [], error: '' })
+      const st = state[0]
+      const setSt = state[1]
+
+      async function detect() {
+        setSt((prev) => Object.assign({}, prev, { phase: 'loading', error: '' }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/check', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'check 返回 ok:false'))
+          setSt((prev) => Object.assign({}, prev, {
+            phase: 'ready', error: '',
+            items: Array.isArray(body.items) ? body.items : [],
+          }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, { phase: 'error', error: String((err && err.message) || err) }))
+        }
+      }
+      useEffect(() => { detect() }, [])
+
+      const byId = {}
+      for (const it of (st.items || [])) { if (it && it.id) byId[it.id] = it }
+      const rows = gateRows(t, byId)
+      const loading = st.phase === 'loading'
+      const gated = st.phase !== 'ready' || rows.some((r) => !r.ok)
+      const gateState = loading
+        ? t('gateChecking')
+        : (st.phase === 'error' ? t('gateLoadFailed') : t('gatePending'))
+
+      const gateCard = h('div', { key: 'gate', style: Object.assign({}, S.card, S.gateCard) }, [
+        h('div', { key: 'head', style: S.cardHead }, [
+          h('h3', { key: 'title', style: S.cardTitle }, [
+            t('gateTitle'),
+            h('span', { key: 'cnt', style: S.groupCount }, badge(gateState, S.badgeWarn)),
+          ]),
+          h('div', { key: 'sub', style: S.cardSub }, t('gateSub')),
+        ]),
+        h('div', { key: 'body', style: S.cardBody }, [
+          st.phase === 'error' ? h('div', { key: 'err', style: S.error }, [
+            h('div', { key: 't', style: S.errorTitle }, t('loadFailed')),
+            h('div', { key: 'm', style: S.errorMsg }, st.error),
+            h('div', { key: 'h', style: S.errorHint }, t('loadFailedHint')),
+            h('button', {
+              key: 'b', type: 'button',
+              style: Object.assign({}, S.btn, S.btnPrimary),
+              onClick: () => detect(),
+            }, t('retry')),
+          ]) : null,
+          h('div', { key: 'list' }, rows.map((r) => h('div', { key: r.id, style: S.row }, [
+            h('div', { key: 'head', style: S.rowHead }, [
+              h('span', { key: 'nm', style: S.itemName }, r.label),
+              h('span', { key: 'st', style: Object.assign({}, S.badge, statusStyle(r.state)) }, statusLabel(t, r.state)),
+              h('span', { key: 'vl', style: S.itemValue }, String(r.value || '—')),
+            ]),
+          ]))),
+          h('div', { key: 'act', style: S.actions }, [
+            h('button', {
+              key: 'go', type: 'button',
+              style: Object.assign({}, S.btn, S.btnPrimary),
+              onClick: () => { if (typeof props.onGoInstall === 'function') props.onGoInstall() },
+            }, t('gateGo')),
+          ]),
+          h('div', { key: 'note', style: S.note }, t('gateNote')),
+        ]),
+      ])
+
+      // 骨架：目录与岗位（字段与执行链由后续任务填充；这里先给出可辨识的结构与口径）
+      const coreBody = h('div', { key: 'core', style: gated ? S.gatedBody : null }, [
+        h('div', { key: 'dirs', style: S.card }, [
+          h('div', { key: 'head', style: S.cardHead }, [
+            h('h3', { key: 'title', style: S.cardTitle }, t('coreDirsTitle')),
+            h('div', { key: 'sub', style: S.cardSub }, t('coreDirsSub')),
+          ]),
+          h('div', { key: 'body', style: S.cardBody }, [
+            h('div', { key: 'f1', style: S.row }, [
+              h('div', { key: 'l', style: S.label }, t('coreFieldMemoryDir')),
+              h('div', { key: 'h', style: S.labelHint }, t('coreFieldMemoryDirHint')),
+            ]),
+            h('div', { key: 'f2', style: S.row }, [
+              h('div', { key: 'l', style: S.label }, t('coreFieldObsidianDir')),
+              h('div', { key: 'h', style: S.labelHint }, t('coreFieldObsidianDirHint')),
+            ]),
+            h('div', { key: 'f3', style: S.row }, [
+              h('div', { key: 'l', style: S.label }, t('coreFieldDomain')),
+              h('div', { key: 'h', style: S.labelHint }, t('coreFieldDomainHint')),
+            ]),
+          ]),
+        ]),
+      ])
+
+      return h('div', null, gated ? [gateCard, coreBody] : [coreBody])
     }
 
     /** 子插件清单一行：复选框 · 中文名 · 性质 · 状态 · 内置版本 · 已装版本 · 安装方式 · 单项安装 */
@@ -2600,7 +2993,6 @@ window.__ModuleLoader__.load({
 
       return h('div', null, [
         h('style', { key: 'kf' }, KEYFRAMES),
-        h(Steps, { key: 'steps', t: t, current: 'plugins' }),
         h('div', { key: 'card', style: S.card }, [
           h('div', { key: 'head', style: S.cardHead }, [
             h('h3', { key: 'title', style: S.cardTitle }, [
@@ -3079,7 +3471,6 @@ window.__ModuleLoader__.load({
 
       return h('div', null, [
         h('style', { key: 'kf' }, KEYFRAMES),
-        h(Steps, { key: 'steps', t: t, current: 'init' }),
         h(WizSteps, { key: 'wiz', t: t, stage: st.stage }),
 
         // ── 段 1：填写配置 ──────────────────────────────────────────
@@ -4460,8 +4851,11 @@ window.__ModuleLoader__.load({
 
     function Section(props) {
       const t = props.t
-      // 默认仍是「关于与致谢」；initialTab 供冒烟测试与深链指定页签
-      const first = ['install', 'plugins', 'init', 'config', 'about'].indexOf(props.initialTab) >= 0 ? props.initialTab : 'about'
+      // 默认仍是「关于与致谢」；initialTab 供冒烟测试与深链指定页签。
+      // 1.1.3：页签栏只有四个（install / core / config / about）。旧页签 'plugins' 与 'init'
+      // 已从页签栏下线（前者并入 install 的子插件分组，后者由 core 承接）；两个组件暂留并
+      // 保持深链可达，等核心配置的目录与岗位落地后与既有回归一起收口。
+      const first = ['install', 'core', 'plugins', 'init', 'config', 'about'].indexOf(props.initialTab) >= 0 ? props.initialTab : 'about'
       const state = useState(first)
       const tab = state[0]
       const setTab = state[1]
@@ -4478,12 +4872,13 @@ window.__ModuleLoader__.load({
           if (!alive || !body || typeof body !== 'object' || body.ok === false) return
           if (body.setupNeeded !== true) return
           setSetup({ needed: true, count: setupCount(body) })
-          setTab('init')
+          setTab('core')
         }).catch(() => { /* 探测失败不打扰：默认页保持原样 */ })
         return () => { alive = false }
       }, [])
       let page = null
       if (tab === 'install') page = h(InstallPage, { key: 'i', t: t })
+      else if (tab === 'core') page = h(CorePage, { key: 'c0', t: t, onGoInstall: () => setTab('install') })
       else if (tab === 'plugins') page = h(PluginsPage, { key: 'g', t: t })
       else if (tab === 'init') page = h(InitPage, {
         key: 'n', t: t,
@@ -4501,7 +4896,7 @@ window.__ModuleLoader__.load({
           h('button', {
             key: 'go', type: 'button',
             style: Object.assign({}, S.btn, S.btnPrimary),
-            onClick: () => setTab('init'),
+            onClick: () => setTab('core'),
           }, t('setupGo')),
         ]) : null,
         h(Tabs, { key: 't', t: t, tab: tab, setTab: setTab }),

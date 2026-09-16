@@ -5,8 +5,9 @@
  * 验证「注册了什么」与「渲染出什么」。用法：node scripts/smoke-load.mjs
  *
  * [1]-[6] 是既有断言（注册 / 关于与致谢 / 中立性），不得削弱；
- * [7] 是「安装与检查」页新增断言：在无 location、可控 fetch 的替身环境里，
- * 验证七项骨架、四步进度、复选框与批量补齐请求（含桌面载体基址回退）。
+ * [7] 是「安装与检查」页断言：在无 location、可控 fetch 的替身环境里，
+ * 验证分组骨架（环境依赖 / 依赖安装工具 / 子插件）、复选框与批量补齐请求（含基址回退）；
+ * 1.1.3 起四步进度条已删除，改由 [13] 段覆盖新骨架与门禁。
  * [11] 是「初始化」页（P3：配置引导 setup wizard）新增断言：四段式向导、首用必配表单、
  * 检查与预览（GET /basedeck?workspace=…）、逐项 POST /basedeck（dryRun:false + overrides）、
  * 结果回显与「需重启 DSH 生效」、dryRun:false 不支持时的可读失败、setupNeeded 默认落页与引导条。
@@ -221,8 +222,9 @@ const expectItems = ['DSH 宿主', 'Node.js', 'Python', 'Python 依赖', 'WPS Of
 let foundAll = true
 for (const name of expectItems) if (!itexts.includes(name)) foundAll = false
 ok(foundAll, '七项清单骨架齐全（' + expectItems.join(' / ') + '）')
-ok(itexts.includes('环境检查') && itexts.includes('补齐依赖') && itexts.includes('安装子插件') && itexts.includes('初始化'), '四步进度条齐全')
-ok(itexts.includes('后续版本'), '后两步标注「后续版本」')
+ok(itexts.includes('查看安装引导') && itexts.includes('使用说明'), '按钮组置顶：查看安装引导（N 项待处理）+ 使用说明')
+ok(itexts.includes('环境依赖') && itexts.includes('依赖安装工具') && itexts.includes('子插件'), '分组卡片：环境依赖 + 依赖安装工具 + 子插件')
+ok(!itexts.includes('后续版本') && !itexts.includes('环境检查'), '四步进度条与其文案已删除')
 ok(itexts.includes('重新检测'), '含「重新检测」按钮')
 ok(itexts.includes('检测中'), '首次进入显示「检测中…」')
 ok(itexts.includes('只读') && itexts.includes('内置白名单') && itexts.includes('不接受外部输入'), '底部说明：只读 + 白名单 + 不接受外部输入')
@@ -242,7 +244,7 @@ installTree = expand(reg.render({ initialTab: 'install' }))
 itexts = collect(installTree, []).join(' | ')
 ok(itexts.includes('3.10.0') && itexts.includes('v22.14.0'), '渲染接口证据值')
 ok(itexts.includes('警告') && itexts.includes('缺失') && itexts.includes('正常'), '渲染状态徽标（ok / warn / missing）')
-ok(itexts.includes('一键补齐全部（4 项）'), '结论条给出「一键补齐全部（4 项）」')
+ok(itexts.includes('查看安装引导（4 项待处理）'), '有缺项时主按钮为「查看安装引导（4 项待处理）」')
 ok(itexts.includes('补齐选中项（4）'), '底部主按钮为「补齐选中项（4）」')
 ok(itexts.includes('将安装：') && itexts.includes('Python 解释器（3.12）') && itexts.includes('Obsidian（可选组件）'), '确认文案列出将安装内容（含 Obsidian）')
 ok(itexts.includes('WPS Office 为第三方商业软件') && itexts.includes('许可协议'), 'WPS 项显示许可协议提示')
@@ -479,8 +481,7 @@ hookCursor = 0
 effectQueue = []
 let pTree = expand(reg.render({ initialTab: 'plugins' }))
 let ptexts = collect(pTree, []).join(' | ')
-ok(ptexts.includes('安装子插件') && ptexts.includes('当前'), '「安装子插件」为当前步（标「当前」）')
-ok(ptexts.includes('初始化') && ptexts.includes('后续版本'), '「初始化」仍标「后续版本」')
+ok(ptexts.includes('子插件清单') && ptexts.includes('重新检测'), '旧「安装子插件」页已下线页签，深链仍可渲染（组件留待与核心配置一起收口）')
 ok(ptexts.includes('子插件清单') && ptexts.includes('读取中'), '首次进入显示「子插件清单 / 读取中…」')
 const pnames = ['记忆库', '文档能力', '专家库', '思维链与图表', '桌面形象']
 ok(pnames.every((n) => ptexts.includes(n)), '骨架列出五个子插件（' + pnames.join(' / ') + '）')
@@ -637,7 +638,7 @@ const nfErrors = []
 for (const fn of effectQueue.slice()) { try { fn() } catch (err) { nfErrors.push(err) } }
 ok(nfErrors.length === 0, '无 fetch 载体下安装子插件页 effect 不抛错')
 await tick(20)
-ok(nfTexts.includes('记忆库') && nfTexts.includes('安装子插件') && nfTexts.includes('重新检测'), '无 fetch 载体下仍渲染五项骨架与「重新检测」')
+ok(nfTexts.includes('记忆库') && nfTexts.includes('子插件清单') && nfTexts.includes('重新检测'), '无 fetch 载体下仍渲染五项骨架与「重新检测」')
 hookCursor = 0
 effectQueue = []
 const nfErrTree = expand(reg.render({ initialTab: 'plugins' }))
@@ -804,9 +805,9 @@ effectQueue = []
 calls.length = 0
 let iTree = expand(reg.render({ initialTab: 'init' }))
 let itext = collect(iTree, []).join(' | ')
-ok(itext.includes('配置引导'), '页面标题为「配置引导」（不再是只读计划）')
+ok(itext.includes('填写配置') && itext.includes('首用必配项'), '旧「初始化」页深链仍渲染向导（页签已下线，组件留待与核心配置一起收口）')
 ok(itext.includes('填写配置') && itext.includes('检查与预览') && itext.includes('执行') && itext.includes('结果'), '四段式向导齐全（填写配置 / 检查与预览 / 执行 / 结果）')
-ok(itext.includes('环境检查') && itext.includes('安装子插件') && itext.includes('初始化') && itext.includes('当前'), '分区四步进度条含「初始化」且为当前步')
+ok(!itext.includes('环境检查') && !itext.includes('后续版本'), '旧「初始化」页不再渲染四步进度条（1.1.3 已删除）')
 const bdFields = ['工作区目录', '工作岗位域', '身份专家', '记忆库目录', 'Obsidian 库目录']
 ok(bdFields.every((x) => itext.includes(x)), '首用必配五项字段齐全（' + bdFields.join(' / ') + '）')
 ok(itext.includes('首用必配项') && itext.includes('必填'), '表单标题与必填提示')
@@ -1099,7 +1100,7 @@ const gTree = expand(reg.render({}))
 const gText = collect(gTree, []).join(' | ')
 ok(gText.includes('还差 4 项才能开始使用'), 'setupNeeded:true → 顶部引导提示「还差 4 项才能开始使用」')
 ok(gText.includes('去完成配置'), '引导条带「去完成配置」按钮')
-ok(gText.includes('首用必配项'), 'setupNeeded:true → 默认落在「初始化」页')
+ok(gText.includes('先满足最低使用需求'), 'setupNeeded:true → 默认落在「核心配置」页（引导条 + 门禁卡）')
 
 // setupNeeded 为 false / 缺失 → 默认页仍是「关于与致谢」
 globalThis.fetch = async (url) => {
@@ -1581,8 +1582,9 @@ effectQueue = []
 calls.length = 0
 let cfTree = expand(reg.render({ initialTab: 'config' }))
 let cfText = collect(cfTree, []).join(' | ')
-ok(['安装与检查', '安装子插件', '初始化', '能力配置', '关于与致谢'].every((x) => cfText.includes(x)),
-  '五个页签保持既有文案（安装与检查 / 安装子插件 / 初始化 / 能力配置 / 关于与致谢）')
+ok(['安装与检查', '核心配置', '配置', '关于与致谢'].every((x) => cfText.includes(x)),
+  '页签 5 → 4（安装与检查 / 核心配置 / 配置 / 关于与致谢）')
+ok(!cfText.includes('安装子插件'), '旧「安装子插件」页签已从页签栏移除')
 ok(cfText.includes('读取中'), '首屏显示「读取中…」（异步枚举前骨架可读）')
 const cfBootErr = []
 for (const fn of effectQueue.slice()) { try { fn() } catch (err) { cfBootErr.push(err) } }
@@ -1931,6 +1933,127 @@ hookCursor = 0
 effectQueue = []
 cfText = collect(expand(reg.render({ initialTab: 'config' })), []).join(' | ')
 ok(cfText.includes('最近读取'), '点击「重新读取」后仍显示读取时刻（不白屏、不永久停在读取中）')
+
+// ══════════════════════════════════════════════════════════════════
+// [13] 1.1.3 改版：四页签 / 首屏 A 版 / 主按钮置灰 / 页内展开 / 核心配置门禁
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[13] 1.1.3 改版（页签 / 首屏 / 主按钮 / 页内展开 / 门禁）')
+
+const OK_CHECK = {
+  ok: true,
+  checkedAt: '2026-09-16T10:00:00+08:00',
+  items: [
+    { id: 'host', label: 'DSH 宿主', status: 'ok', value: '2.0.10', detail: '', fixKind: 'none', fixCommand: '', autoFixable: false },
+    { id: 'node', label: 'Node.js', status: 'ok', value: 'v24.18.1', detail: '', fixKind: 'none', fixCommand: '', autoFixable: false },
+    { id: 'python', label: 'Python', status: 'ok', value: '3.12.10', detail: '', fixKind: 'winget', fixCommand: 'winget install --id Python.Python.3.12', autoFixable: true },
+    { id: 'pythonDeps', label: 'Python 依赖', status: 'ok', value: '8/8 就绪', detail: '', fixKind: 'pip', fixCommand: 'py -3 -m pip install x', autoFixable: true },
+    { id: 'wps', label: 'WPS Office', status: 'ok', value: 'KWPS.Application 可实例化', detail: '', fixKind: 'winget', fixCommand: 'winget install --id Kingsoft.WPSOffice', autoFixable: true },
+    { id: 'obsidian', label: 'Obsidian', status: 'ok', value: '已安装', detail: '', fixKind: 'winget', fixCommand: 'winget install --id Obsidian.Obsidian', autoFixable: true },
+    { id: 'subPlugins', label: '子插件', status: 'ok', value: '5/5 已装',
+      detail: 'dsh-work-memory@1.0.5、dsh-doc-suite@0.7.9、dsh-experts@0.5.7、dsh-mermaid@0.4.0、workspace-tokenpet@1.0.1',
+      fixKind: 'none', fixCommand: '', autoFixable: false },
+  ],
+  summary: { ok: 7, warn: 0, missing: 0, skip: 0 },
+}
+const OK_PLUGINS = {
+  ok: true, repoRoot: 'C:/repo',
+  plugins: [
+    { id: 'dsh-work-memory', installed: true, installedVersion: '1.0.5', version: '1.0.5', upToDate: true },
+    { id: 'dsh-doc-suite', installed: true, installedVersion: '0.7.9', version: '0.7.9', upToDate: true },
+    { id: 'dsh-experts', installed: true, installedVersion: '0.5.7', version: '0.5.7', upToDate: true },
+    { id: 'dsh-mermaid', installed: true, installedVersion: '0.4.0', version: '0.4.0', upToDate: true },
+    { id: 'workspace-tokenpet', installed: true, installedVersion: '1.0.1', version: '1.0.1', upToDate: true },
+  ],
+}
+const GUIDE_HTML = '<!DOCTYPE html><html><head><style>h1{color:#111}</style></head><body><h1>工作秘书 · 安装引导</h1><p>本页由插件自带（不是外链）</p></body></html>'
+const htmlRes = (html) => ({ ok: true, status: 200, text: async () => html, json: async () => { throw new Error('not json') } })
+const allOkFetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/guide') >= 0 || u.indexOf('/help') >= 0) return htmlRes(GUIDE_HTML)
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  if (u.indexOf('/plugins') >= 0) return jsonRes(OK_PLUGINS)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+globalThis.fetch = allOkFetch
+
+// 首屏 + 页签
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+let nTree = expand(reg.render({ initialTab: 'install' }))
+let nText = collect(nTree, []).join(' | ')
+ok(nText.includes('检查运行环境、安装五个子插件、完成首次配置，并集中调整各子插件的设置。'), '首屏描述为 A 版原文（设计定稿 §1）')
+ok(nText.includes('work-personal-secretary v1.1.3'), '状态条 BUILD 与包版本对齐（v1.1.3）')
+const wantTabs = ['安装与检查', '核心配置', '配置', '关于与致谢']
+const tabLabels = findButtons(nTree).map((b) => label(b)).filter((x) => wantTabs.indexOf(x) >= 0)
+ok(tabLabels.length === wantTabs.length, '页签栏恰有四项（' + wantTabs.join(' / ') + '）')
+ok(!nText.includes('安装子插件') && !nText.includes('能力配置'), '旧页签文案不再出现（安装子插件 / 能力配置）')
+
+// 主按钮置灰（依赖组 + 子插件组全正常）
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(80)
+hookCursor = 0
+effectQueue = []
+nTree = expand(reg.render({ initialTab: 'install' }))
+nText = collect(nTree, []).join(' | ')
+const readyBtn = findButtons(nTree).filter((b) => label(b) === '环境已就绪')[0]
+ok(Boolean(readyBtn) && readyBtn.props.disabled === true, '依赖组 + 子插件组全正常 → 主按钮置灰（「环境已就绪」）')
+ok(nText.includes('6/6 正常') && nText.includes('5/5 已装'), '分组徽标：环境依赖 6/6 正常 · 子插件 5/5 已装')
+
+// 页内展开（不用 window.open：桌面外壳的合成 origin 交给系统浏览器打不开）
+const helpBtn = findButtons(nTree).filter((b) => label(b) === '使用说明')[0]
+ok(Boolean(helpBtn), '「使用说明」按钮存在且可点')
+calls.length = 0
+if (helpBtn) helpBtn.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+nTree = expand(reg.render({ initialTab: 'install' }))
+nText = collect(nTree, []).join(' | ')
+const docCalls = calls.filter((c) => c.url.indexOf('/work-personal-secretary/help') >= 0)
+ok(docCalls.length === 1 && docCalls[0].url === 'http://dsh.internal/work-personal-secretary/help',
+  '页内展开：GET 合成基址 /work-personal-secretary/help（' + (docCalls[0] && docCalls[0].url) + '）')
+const htmlBox = findAll(nTree, (x) => Boolean(x.props && x.props.dangerouslySetInnerHTML), [])[0]
+ok(Boolean(htmlBox) && String(htmlBox.props.dangerouslySetInnerHTML.__html).indexOf('安装引导') >= 0,
+  '宿主返回的 HTML 注入页内容器（text/html 不是 JSON）')
+ok(nText.includes('收起'), '展开区带「收起」按钮')
+
+// 门禁：未就绪 → 门禁卡 + 整页灰化（pointer-events:none）
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let cTree = expand(reg.render({ initialTab: 'core' }))
+let cText = collect(cTree, []).join(' | ')
+ok(cText.includes('先满足最低使用需求') && cText.includes('去安装与检查'), '门禁未就绪：门禁卡可见（标题 + 去安装与检查）')
+ok(cText.includes('记忆库插件') && cText.includes('Python 解释器') && cText.includes('Python 工具'), '门禁卡逐项列出三项')
+ok(cText.includes('记忆库工作目录在本页填写，不作为解锁条件'), '门禁卡说明：记忆库工作目录不参与判定（设计定稿 §3.1）')
+const gatedBox = findAll(cTree, (x) => Boolean(x.props && x.props.style && x.props.style.pointerEvents === 'none'), [])[0]
+ok(Boolean(gatedBox), '门禁未就绪：正文容器 pointer-events:none（整页灰化）')
+
+// 门禁：三项就绪 → 自动解锁
+globalThis.fetch = allOkFetch
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+cTree = expand(reg.render({ initialTab: 'core' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+cTree = expand(reg.render({ initialTab: 'core' }))
+cText = collect(cTree, []).join(' | ')
+ok(!cText.includes('先满足最低使用需求'), '三项就绪 → 门禁卡消失（自动解锁）')
+ok(cText.includes('目录与岗位'), '解锁后显示目录与岗位骨架')
+ok(!findAll(cTree, (x) => Boolean(x.props && x.props.style && x.props.style.pointerEvents === 'none'), []).length,
+  '解锁后不再有灰化容器')
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
