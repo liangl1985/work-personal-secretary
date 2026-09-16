@@ -474,7 +474,22 @@ window.__ModuleLoader__.load({
       initDomainRequired: '请先选择你的工作方向',
       initBrowse: '浏览…',
       initBrowseTip: '选择目录',
-      initBrowseUnavailable: '当前载体不支持系统目录选择，请手动输入路径',
+      // 5) 文案改准确：browse 能力下按钮本就可点，只有三条路都不通时才提示（旧说法已不成立）
+      initBrowseUnavailable: '无法打开目录选择器：请直接手动输入路径；桌面外壳下可用系统目录对话框。',
+      dirBrowserTitle: '选择目录',
+      dirBrowserLoading: '读取中…',
+      dirBrowserEmpty: '这个目录里没有子目录',
+      dirBrowserTruncated: '目录过多，只显示前若干项',
+      dirBrowserPick: '选用此目录',
+      dirBrowserNewName: '新目录名',
+      dirBrowserCreate: '新建目录',
+      dirBrowserUp: '返回上级',
+      dirBrowserCancel: '取消',
+      dirBrowserFailed: '目录读取失败',
+      dirBrowserNativeOnly: '系统目录对话框未能打开',
+      dirBrowserNoService: '宿主暂不提供目录浏览接口',
+      dirBrowserNewFailed: '新建目录失败',
+      dirBrowserNewNameRequired: '请先填写新目录名',
       initCandDetectedWorkspace: '使用探测到的工作区',
       initCandDefaultMemory: '使用默认（<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory）',
       initCandNoMirror: '不使用镜像',
@@ -1019,7 +1034,21 @@ window.__ModuleLoader__.load({
       initDomainRequired: 'Choose your job domain first',
       initBrowse: 'Browse…',
       initBrowseTip: 'Choose a directory',
-      initBrowseUnavailable: 'The directory picker is unavailable in this shell; type the path manually.',
+      initBrowseUnavailable: 'The directory picker is unavailable: type the path manually, or use the desktop shell for the native dialog.',
+      dirBrowserTitle: 'Choose a directory',
+      dirBrowserLoading: 'Loading…',
+      dirBrowserEmpty: 'No subdirectories here',
+      dirBrowserTruncated: 'Too many entries — only the first ones are shown',
+      dirBrowserPick: 'Use this directory',
+      dirBrowserNewName: 'New folder name',
+      dirBrowserCreate: 'Create folder',
+      dirBrowserUp: 'Up one level',
+      dirBrowserCancel: 'Cancel',
+      dirBrowserFailed: 'Could not read the directory',
+      dirBrowserNativeOnly: 'The native directory dialog could not be opened',
+      dirBrowserNoService: 'This host does not expose a directory browsing API yet',
+      dirBrowserNewFailed: 'Could not create the folder',
+      dirBrowserNewNameRequired: 'Enter a folder name first',
       initCandDetectedWorkspace: 'Use detected workspace',
       initCandDefaultMemory: 'Use default (<DSH_HOME or ~/.dsh>/data/dsh-work-memory/memory)',
       initCandNoMirror: 'No mirror',
@@ -1372,6 +1401,21 @@ window.__ModuleLoader__.load({
       modalHead: { padding: '12px 14px', fontSize: '14px', fontWeight: 650, borderBottom: '1px solid #eceef1' },
       modalBody: { padding: '12px 14px 4px' },
       modalFoot: { display: 'flex', gap: '8px', justifyContent: 'flex-end', padding: '10px 14px', borderTop: '1px solid #eceef1', background: '#fbfcfd' },
+      // 应用内目录浏览器（方案 A）：复用既有 modal 视觉，只补面包屑与列表两条原语
+      crumbs: { display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center', marginBottom: '6px' },
+      crumbBtn: {
+        appearance: 'none', border: 0, background: 'transparent', color: '#1d4ed8', cursor: 'pointer',
+        font: 'inherit', fontSize: '12px', padding: '1px 4px', textDecoration: 'underline',
+      },
+      dirList: {
+        border: '1px solid #eef0f2', borderRadius: '9px', background: '#fbfcfd',
+        maxHeight: '240px', overflow: 'auto', margin: '6px 0',
+      },
+      dirItem: {
+        display: 'block', width: '100%', textAlign: 'left', appearance: 'none', border: 0,
+        borderBottom: '1px solid #f2f4f7', background: 'transparent', cursor: 'pointer',
+        font: 'inherit', fontSize: '12.5px', color: '#1f2328', padding: '7px 10px',
+      },
       textarea: {
         width: '100%', font: 'inherit', fontSize: '12.5px', padding: '6px 8px', border: '1px solid #dfe1e5',
         borderRadius: '8px', resize: 'vertical', minHeight: '84px', color: '#1f2328', boxSizing: 'border-box',
@@ -2678,6 +2722,8 @@ window.__ModuleLoader__.load({
       modal: null, run: null, imported: '', pickError: '', openHint: null,
       // 当前生效值（GET /setup-state）：用于预填三个字段并标注来源；setupFilled = 已预填过
       setup: { phase: 'loading', data: null, error: '' }, setupFilled: false,
+      // 应用内目录浏览器（方案 A）；null = 未打开。形状见 DIR_BROWSER_DEFAULT
+      browse: null,
       // D3：三项全绿后由使用者点「点击此处继续」才展开配置表单
       gateConfirmed: false,
     }
@@ -2796,22 +2842,101 @@ window.__ModuleLoader__.load({
       function setPickError(msg) {
         setSt((prev) => Object.assign({}, prev, { pickError: String(msg || '') }))
       }
-      /** 目录选择：沿用宿主既有入口（桌面壳 bridge → uiWorkspace），不可用时给可读提示 */
+      // ── 目录选择：native 优先，native 不可用时转应用内浏览器（方案 A）──
+      const browseSt = Object.assign({}, DIR_BROWSER_DEFAULT, st.browse || {})
+
+      function browseLoad(path) {
+        setSt((prev) => Object.assign({}, prev, {
+          browse: Object.assign({}, DIR_BROWSER_DEFAULT, prev.browse || {}, { phase: 'loading', error: '', newError: '' }),
+        }))
+        dirBrowserLoad(path).then((patch) => {
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, patch) }))
+        }).catch((err) => {
+          setSt((prev) => Object.assign({}, prev, {
+            browse: Object.assign({}, prev.browse, { phase: 'error', error: dirBrowserErrorText(t, err) }),
+          }))
+        })
+      }
+      /** 打开应用内浏览器：起始路径用输入框已有值，否则交给宿主给默认起点（前端不硬编码盘符） */
+      function openDirBrowser(target) {
+        setSt((prev) => Object.assign({}, prev, {
+          browse: Object.assign({}, DIR_BROWSER_DEFAULT, { open: true, phase: 'loading', target: target }),
+          pickError: '',
+        }))
+        const start = target && target.key ? String(st[target.key] || '').trim() : ''
+        dirBrowserLoad(start).then((patch) => {
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, patch) }))
+        }).catch((err) => {
+          setSt((prev) => Object.assign({}, prev, {
+            browse: Object.assign({}, prev.browse, { phase: 'error', error: dirBrowserErrorText(t, err) }),
+          }))
+        })
+      }
+      function browsePick() {
+        const target = (browseSt.target && typeof browseSt.target === 'object') ? browseSt.target : {}
+        const path = String(browseSt.path || '')
+        if (!path) return
+        if (target.key) setField(target.key, path)
+        if (target.import) setSt((prev) => Object.assign({}, prev, { imported: path, browse: null }))
+        else setSt((prev) => Object.assign({}, prev, { browse: null }))
+        setPickError('')
+      }
+      function browseCancel() { setSt((prev) => Object.assign({}, prev, { browse: null })) }
+      function browseNewName(v) {
+        setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newName: String(v || '') }) }))
+      }
+      function browseNew() {
+        const parent = String(browseSt.path || '')
+        const name = String(browseSt.newName || '').trim()
+        if (!name) {
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newError: t('dirBrowserNewNameRequired') }) }))
+          return
+        }
+        setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newPhase: 'run', newError: '' }) }))
+        postFull('/dirs/new', { path: parent, name: name }, 60000).then((res) => {
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (!res.ok || body.ok === false) {
+            setSt((prev) => Object.assign({}, prev, {
+              browse: Object.assign({}, prev.browse, {
+                newPhase: 'idle',
+                newError: t('dirBrowserNewFailed') + '：' + String(body.message || body.error || ('HTTP ' + res.status)),
+              }),
+            }))
+            return
+          }
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newPhase: 'idle', newName: '', newError: '' }) }))
+          browseLoad(String(body.path || parent))
+        }, (err) => {
+          setSt((prev) => Object.assign({}, prev, {
+            browse: Object.assign({}, prev.browse, { newPhase: 'idle', newError: t('dirBrowserNewFailed') + '：' + String((err && err.message) || err) }),
+          }))
+        })
+      }
+
+      /** native 优先（桌面壳 bridge → uiWorkspace）；native 能力缺失时转应用内浏览器 */
       function pickDir(key) {
         const fn = props.pickDirectory
-        if (typeof fn !== 'function') { setPickError(t('initBrowseUnavailable')); return }
+        if (typeof fn !== 'function') { openDirBrowser({ key: key }); return }
         setPickError('')
         Promise.resolve().then(() => fn()).then((dir) => {
           if (typeof dir === 'string' && dir.trim()) setField(key, dir.trim())
-        }).catch((err) => { setPickError(t('initPickFailed') + String((err && err.message) || err)) })
+        }).catch((err) => {
+          const msg = String((err && err.message) || err)
+          if (msg.indexOf('native capability') >= 0 || msg.indexOf('系统目录选择器') >= 0) { openDirBrowser({ key: key }); return }
+          setPickError(t('initPickFailed') + msg)
+        })
       }
       function pickImport() {
         const fn = props.pickDirectory
-        if (typeof fn !== 'function') { setPickError(t('initBrowseUnavailable')); return }
+        if (typeof fn !== 'function') { openDirBrowser({ import: true }); return }
         setPickError('')
         Promise.resolve().then(() => fn()).then((dir) => {
           if (typeof dir === 'string' && dir.trim()) setSt((prev) => Object.assign({}, prev, { imported: dir.trim() }))
-        }).catch((err) => { setPickError(t('initPickFailed') + String((err && err.message) || err)) })
+        }).catch((err) => {
+          const msg = String((err && err.message) || err)
+          if (msg.indexOf('native capability') >= 0 || msg.indexOf('系统目录选择器') >= 0) { openDirBrowser({ import: true }); return }
+          setPickError(t('initPickFailed') + msg)
+        })
       }
 
       // 岗位选项：预置取自 GET /domain/list（不在前端写死第二份正文）+ 本页新建的自定义岗位
@@ -3200,7 +3325,17 @@ window.__ModuleLoader__.load({
         onCancel: closeModal,
       }) : null
 
-      return h('div', null, (gated ? [gateCard, coreBody] : [coreBody]).concat([modalNode]))
+      // 应用内目录浏览器弹层（方案 A）
+      const browseNode = browseSt.open ? h(DirBrowserModal, {
+        key: 'dirbrowser', t: t, state: browseSt,
+        onNav: (p) => browseLoad(p),
+        onPick: browsePick,
+        onCancel: browseCancel,
+        onNewName: browseNewName,
+        onNew: browseNew,
+      }) : null
+
+      return h('div', null, (gated ? [gateCard, coreBody] : [coreBody]).concat([modalNode, browseNode]))
     }
 
     /** 新建岗位对话框（1.1.3）：岗位名称 / 岗位内容 / [自动生成] / 保存 */
@@ -3262,6 +3397,118 @@ window.__ModuleLoader__.load({
       ])
     }
 
+    /** 应用内目录浏览器（方案 A）的初始状态；三处入口各自持有一份 */
+    const DIR_BROWSER_DEFAULT = {
+      open: false, phase: 'idle', path: '', parent: '', crumbs: [], entries: [],
+      truncated: false, message: '', error: '', target: null,
+      newName: '', newPhase: 'idle', newError: '',
+    }
+
+    /** 拉一层目录（GET /api/dirs?path=…）：成功返回可直接并入 state 的补丁；失败抛带 code/kind 的错误 */
+    async function dirBrowserLoad(path) {
+      const sub = path ? ('/dirs?path=' + encodeURIComponent(String(path))) : '/dirs'
+      // 用 requestJsonFull：4xx 也要读响应体才能区分 native-only / no-service（可读提示的依据）
+      const res = await requestJsonFull(sub, { headers: { accept: 'application/json' } }, 20000)
+      const body = (res && res.body && typeof res.body === 'object') ? res.body : null
+      if (!res.ok || !body) {
+        const err = new Error(String((body && (body.message || body.error || body.code)) || ('HTTP ' + res.status)))
+        err.code = String((body && body.code) || '')
+        err.kind = String((body && body.kind) || '')
+        throw err
+      }
+      if (body.ok === false) {
+        const err = new Error(String(body.message || body.code || 'dirs 返回 ok:false'))
+        err.code = String(body.code || '')
+        err.kind = String(body.kind || '')
+        throw err
+      }
+      return {
+        phase: 'ready',
+        path: String(body.path || ''),
+        parent: String(body.parent || ''),
+        crumbs: Array.isArray(body.crumbs) ? body.crumbs : [],
+        entries: Array.isArray(body.entries) ? body.entries : [],
+        truncated: body.truncated === true,
+        message: String(body.message || ''),
+        error: '',
+      }
+    }
+
+    /** 目录浏览器错误 → 可读文案（native-only 与 no-service 分别说清，绝不吞） */
+    function dirBrowserErrorText(t, err) {
+      const e = err || {}
+      const msg = String(e.message || e)
+      if (e.code === 'native-only') return t('dirBrowserNativeOnly') + '：' + msg
+      if (e.code === 'no-service') return t('dirBrowserNoService') + '：' + msg
+      return t('dirBrowserFailed') + '：' + msg
+    }
+
+    /**
+     * 应用内目录浏览器弹层（方案 A）。
+     * 宿主目录能力分 native（系统对话框）与 browse（只给列举/建目录原语）；本机挑中的是 browse，
+     * 所以由客户端渲染这个弹层。视觉沿用本页既有 modal 样式（modalWrap/modalMask/modalBox/…）。
+     */
+    function DirBrowserModal(props) {
+      const t = props.t
+      const b = props.state || DIR_BROWSER_DEFAULT
+      const entries = Array.isArray(b.entries) ? b.entries : []
+      const crumbs = Array.isArray(b.crumbs) ? b.crumbs : []
+      const busy = b.phase === 'loading' || b.newPhase === 'run'
+      const newName = String(b.newName || '')
+      return h('div', { style: S.modalWrap, 'data-dir-browser': 'open' }, [
+        h('div', { key: 'mask', style: S.modalMask, onClick: () => { if (!busy) props.onCancel() } }),
+        h('div', { key: 'box', style: S.modalBox }, [
+          h('div', { key: 'h', style: S.modalHead }, t('dirBrowserTitle')),
+          h('div', { key: 'b', style: S.modalBody }, [
+            h('div', { key: 'crumbs', style: S.crumbs }, crumbs.map((c, i) => h('button', {
+              key: 'c' + i, type: 'button', style: S.crumbBtn,
+              'data-dir-crumb': String(c && c.path || ''),
+              onClick: () => props.onNav(String(c && c.path || '')),
+            }, String((c && (c.name || c.path)) || '')))),
+            h('div', { key: 'path', style: S.labelHint }, String(b.path || b.message || '')),
+            b.truncated ? h('div', { key: 'tr', style: S.labelHint }, t('dirBrowserTruncated')) : null,
+            b.error ? h('div', { key: 'err', style: S.warnLine }, b.error) : null,
+            h('div', { key: 'list', style: S.dirList }, b.phase === 'loading'
+              ? [h('div', { key: 'ld', style: S.labelHint }, t('dirBrowserLoading'))]
+              : (entries.length
+                ? entries.map((e) => h('button', {
+                  key: String(e && (e.path || e.name) || 'x'), type: 'button', style: S.dirItem,
+                  'data-dir-entry': String(e && e.path || ''),
+                  onClick: () => props.onNav(String(e && e.path || '')),
+                }, String((e && (e.name || e.path)) || '')))
+                : [h('div', { key: 'empty', style: S.labelHint }, t('dirBrowserEmpty'))])),
+            h('div', { key: 'new', style: S.actions }, [
+              h('input', {
+                key: 'i', type: 'text', style: S.input, value: newName, disabled: busy,
+                placeholder: t('dirBrowserNewName'), 'data-dir-new-name': '1',
+                onChange: (e) => props.onNewName((e && e.target && e.target.value) || ''),
+              }),
+              h('button', {
+                key: 'c', type: 'button', disabled: busy || !newName.trim(),
+                'data-dir-create': '1',
+                style: Object.assign({}, S.btn, (busy || !newName.trim()) ? S.btnDisabled : null),
+                onClick: () => props.onNew(),
+              }, t('dirBrowserCreate')),
+            ]),
+            b.newError ? h('div', { key: 'ne', style: S.warnLine }, b.newError) : null,
+          ]),
+          h('div', { key: 'f', style: S.modalFoot }, [
+            h('button', {
+              key: 'up', type: 'button', disabled: busy || !b.parent,
+              style: Object.assign({}, S.btn, (busy || !b.parent) ? S.btnDisabled : null),
+              onClick: () => props.onNav(String(b.parent || '')),
+            }, t('dirBrowserUp')),
+            h('button', { key: 'cancel', type: 'button', style: S.btn, disabled: busy, onClick: () => props.onCancel() }, t('dirBrowserCancel')),
+            h('button', {
+              key: 'pick', type: 'button', disabled: busy || !b.path,
+              'data-dir-pick': '1',
+              style: Object.assign({}, S.btn, S.btnPrimary, (busy || !b.path) ? S.btnDisabled : null),
+              onClick: () => props.onPick(),
+            }, t('dirBrowserPick')),
+          ]),
+        ]),
+      ])
+    }
     /** 子插件清单一行：复选框 · 中文名 · 性质 · 状态 · 内置版本 · 已装版本 · 安装方式 · 单项安装 */
     function PluginRow(props) {
       const t = props.t
@@ -5117,6 +5364,8 @@ window.__ModuleLoader__.load({
         // 使用者会以为按钮坏了（2026-09-13 真机反馈）→ 用时间戳给出可见反馈。
         lastLoadedAt: 0,
         previewText: '', preview: { phase: 'idle', error: '', data: null },
+        // 应用内目录浏览器（方案 A）；null = 未打开
+        browse: null,
       })
       const st = state[0]
       const setSt = state[1]
@@ -5321,21 +5570,90 @@ window.__ModuleLoader__.load({
         }
       }
 
+      // ── 目录选择：native 优先，native 不可用时转应用内浏览器（方案 A，与核心配置页同源）──
+      const browseSt = Object.assign({}, DIR_BROWSER_DEFAULT, st.browse || {})
+      function browseLoad(path) {
+        setSt((prev) => Object.assign({}, prev, {
+          browse: Object.assign({}, DIR_BROWSER_DEFAULT, prev.browse || {}, { phase: 'loading', error: '', newError: '' }),
+        }))
+        dirBrowserLoad(path).then((patch) => {
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, patch) }))
+        }).catch((err) => {
+          setSt((prev) => Object.assign({}, prev, {
+            browse: Object.assign({}, prev.browse, { phase: 'error', error: dirBrowserErrorText(t, err) }),
+          }))
+        })
+      }
+      function openDirBrowser(target, startPath) {
+        setSt((prev) => Object.assign({}, prev, {
+          browse: Object.assign({}, DIR_BROWSER_DEFAULT, { open: true, phase: 'loading', target: target }),
+          notice: '', noticeKind: '',
+        }))
+        dirBrowserLoad(String(startPath || '').trim()).then((patch) => {
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, patch) }))
+        }).catch((err) => {
+          setSt((prev) => Object.assign({}, prev, {
+            browse: Object.assign({}, prev.browse, { phase: 'error', error: dirBrowserErrorText(t, err) }),
+          }))
+        })
+      }
+      function browsePick() {
+        const target = (browseSt.target && typeof browseSt.target === 'object') ? browseSt.target : {}
+        const path = String(browseSt.path || '')
+        if (!path) return
+        if (target.ns && target.key) setDraft(target.ns, target.key, path)
+        setSt((prev) => Object.assign({}, prev, { browse: null }))
+      }
+      function browseCancel() { setSt((prev) => Object.assign({}, prev, { browse: null })) }
+      function browseNewName(v) {
+        setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newName: String(v || '') }) }))
+      }
+      function browseNew() {
+        const parent = String(browseSt.path || '')
+        const name = String(browseSt.newName || '').trim()
+        if (!name) {
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newError: t('dirBrowserNewNameRequired') }) }))
+          return
+        }
+        setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newPhase: 'run', newError: '' }) }))
+        postFull('/dirs/new', { path: parent, name: name }, 60000).then((res) => {
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (!res.ok || body.ok === false) {
+            setSt((prev) => Object.assign({}, prev, {
+              browse: Object.assign({}, prev.browse, {
+                newPhase: 'idle',
+                newError: t('dirBrowserNewFailed') + '：' + String(body.message || body.error || ('HTTP ' + res.status)),
+              }),
+            }))
+            return
+          }
+          setSt((prev) => Object.assign({}, prev, { browse: Object.assign({}, prev.browse, { newPhase: 'idle', newName: '', newError: '' }) }))
+          browseLoad(String(body.path || parent))
+        }, (err) => {
+          setSt((prev) => Object.assign({}, prev, {
+            browse: Object.assign({}, prev.browse, { newPhase: 'idle', newError: t('dirBrowserNewFailed') + '：' + String((err && err.message) || err) }),
+          }))
+        })
+      }
+
       const handlers = {
         busy: Boolean(st.busyNs),
         setDraft: setDraft,
-        // 路径类键的目录入口（T5）：与「核心配置」页同源，不可用时给可读提示
+        // 路径类键的目录入口（T5）：native 优先，native 不可用时转应用内浏览器
         pickDir: (ns, key) => {
+          const curNs = st.namespaces[ns] || {}
+          const start = (st.drafts[ns] && st.drafts[ns][key] !== undefined)
+            ? String(st.drafts[ns][key] || '')
+            : String((curNs.value && curNs.value[key]) || '')
           const fn = props.pickDirectory
-          if (typeof fn !== 'function') {
-            setSt((prev) => Object.assign({}, prev, { notice: t('initBrowseUnavailable'), noticeKind: 'warn' }))
-            return
-          }
+          if (typeof fn !== 'function') { openDirBrowser({ ns: ns, key: key }, start); return }
           Promise.resolve().then(() => fn()).then((dir) => {
             if (typeof dir === 'string' && dir.trim()) setDraft(ns, key, dir.trim())
           }).catch((err) => {
+            const msg = String((err && err.message) || err)
+            if (msg.indexOf('native capability') >= 0 || msg.indexOf('系统目录选择器') >= 0) { openDirBrowser({ ns: ns, key: key }, start); return }
             setSt((prev) => Object.assign({}, prev, {
-              notice: t('initPickFailed') + String((err && err.message) || err), noticeKind: 'warn',
+              notice: t('initPickFailed') + msg, noticeKind: 'warn',
             }))
           })
         },
@@ -5439,6 +5757,15 @@ window.__ModuleLoader__.load({
           h(DocPanel, { key: 'panel', t: t }),
         ]) : null,
         st.activeGroup === 'pet' ? h(PetPanel, { key: 'pet', t: t, openSection: props.openSection }) : null,
+        // 应用内目录浏览器弹层（方案 A）
+        browseSt.open ? h(DirBrowserModal, {
+          key: 'dirbrowser', t: t, state: browseSt,
+          onNav: (p) => browseLoad(p),
+          onPick: browsePick,
+          onCancel: browseCancel,
+          onNewName: browseNewName,
+          onNew: browseNew,
+        }) : null,
       ])
     }
 
@@ -5553,7 +5880,12 @@ window.__ModuleLoader__.load({
       let page = null
       const checkProps = { check: checkSt, onRefreshCheck: loadCheck }
       if (tab === 'install') page = h(InstallPage, Object.assign({ key: 'i', t: t }, checkProps))
-      else if (tab === 'core') page = h(CorePage, Object.assign({ key: 'c0', t: t, onGoInstall: () => setTab('install') }, checkProps))
+      else if (tab === 'core') page = h(CorePage, Object.assign({
+        key: 'c0', t: t,
+        onGoInstall: () => setTab('install'),
+        // 目录选择入口：与配置页同源（native 优先，不可用时页面内部转应用内浏览器）
+        pickDirectory: props.pickDirectory,
+      }, checkProps))
       else if (tab === 'plugins') page = h(PluginsPage, { key: 'g', t: t })
       else if (tab === 'init') page = h(InitPage, {
         key: 'n', t: t,

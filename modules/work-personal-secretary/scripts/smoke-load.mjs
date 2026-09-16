@@ -2903,5 +2903,229 @@ const t19NoneText = collect(expand(reg.render({ initialTab: 'core' })), []).join
 ok(t19NoneText.indexOf('无需迁移') >= 0, 'migrateFrom 为空 → 该步显示「无需迁移」')
 ok(t19Posts.every((ids) => ids.indexOf('migrateMemory') < 0),
   'migrateFrom 为空 → 不发 migrateMemory 写请求（实测 ' + JSON.stringify(t19Posts) + '）')
+// ══════════════════════════════════════════════════════════════════
+// [20] 应用内目录浏览器（方案 A）：browse 弹层 · 面包屑 · 选用 · 新建 · native 不弹
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[20] 应用内目录浏览器')
+
+let d20Kind = 'browse'
+let d20NewOk = true
+let d20NoService = false
+const d20NewBodies = []
+const D20_ROOT = {
+  ok: true, kind: 'browse', path: 'D:/ws', parent: 'D:/',
+  crumbs: [{ name: 'D:', path: 'D:/' }, { name: 'ws', path: 'D:/ws' }],
+  entries: [{ name: 'memories', path: 'D:/ws/memories' }, { name: 'vault', path: 'D:/ws/vault' }],
+  truncated: false, message: '',
+}
+const D20_SUB = {
+  ok: true, kind: 'browse', path: 'D:/ws/memories', parent: 'D:/ws',
+  crumbs: [{ name: 'D:', path: 'D:/' }, { name: 'ws', path: 'D:/ws' }, { name: 'memories', path: 'D:/ws/memories' }],
+  entries: [], truncated: true, message: '',
+}
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/dirs/new') >= 0) {
+    let body = {}
+    try { body = JSON.parse(String((opts && opts.body) || '{}')) } catch (err) { body = {} }
+    d20NewBodies.push(body)
+    if (!d20NewOk) return jsonRes({ ok: false, code: 'exists', message: '同名目录已存在（模拟）' })
+    return jsonRes({ ok: true, path: String(body.path || '') + '/' + String(body.name || '') })
+  }
+  if (u.indexOf('/dirs') >= 0) {
+    if (d20NoService) return { ok: false, status: 404, json: async () => ({ ok: false, code: 'no-service', message: 'not found' }) }
+    if (d20Kind === 'native') return jsonRes({ ok: false, kind: 'native', code: 'native-only', message: '该宿主只提供系统对话框' })
+    return jsonRes(u.indexOf('memories') >= 0 ? D20_SUB : D20_ROOT)
+  }
+  if (u.indexOf('/setup-state') >= 0) {
+    return jsonRes({ ok: true, memoryDir: { value: 'D:/ws', source: 'settings' },
+      obsidianDir: { value: 'D:/ws/vault', source: 'settings' },
+      domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' } })
+  }
+  if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+const d20Render = async () => {
+  hookCursor = 0
+  effectQueue = []
+  let t = expand(reg.render({ initialTab: 'core' }))
+  for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+  await tick(50)
+  hookCursor = 0
+  effectQueue = []
+  t = expand(reg.render({ initialTab: 'core' }))
+  const gate = findButtons(t).filter((b) => label(b) === '点击此处继续')[0]
+  if (gate) gate.props.onClick()
+  hookCursor = 0
+  effectQueue = []
+  return expand(reg.render({ initialTab: 'core' }))
+}
+const d20Browse = (tree) => findButtons(tree).filter((b) => label(b) === '浏览…')
+const d20Layer = (tree) => findAll(tree, (x) => Boolean(x.props && x.props['data-dir-browser']), [])[0]
+
+// ① browse 环境：点「浏览…」打开弹层；列目录请求带正确 path
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let d20Tree = await d20Render()
+const d20Btns = d20Browse(d20Tree)
+ok(d20Btns.length === 2, '核心配置页两个目录字段各有「浏览…」按钮（实测 ' + d20Btns.length + '）')
+calls.length = 0
+if (d20Btns[0]) d20Btns[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+ok(Boolean(d20Layer(d20Tree)), 'browse 环境：点「浏览…」打开应用内目录浏览器')
+let d20Text = collect(d20Tree, []).join(' | ')
+ok(d20Text.indexOf('选择目录') >= 0 && d20Text.indexOf('memories') >= 0 && d20Text.indexOf('vault') >= 0, '弹层列出子目录')
+const d20ListCall = calls.filter((c) => c.url.indexOf('/dirs') >= 0)[0]
+ok(Boolean(d20ListCall) && d20ListCall.url === 'http://dsh.internal/work-personal-secretary/api/dirs?path=D%3A%2Fws',
+  '列目录请求 URL 与 query 正确（实测 ' + String(d20ListCall && d20ListCall.url) + '）')
+
+// ② 进入子目录：面包屑变化 + 空态 + truncated 提示
+const d20Entry = findAll(d20Tree, (x) => x.props && x.props['data-dir-entry'] === 'D:/ws/memories', [])[0]
+ok(Boolean(d20Entry), '拿到子目录条目（data-dir-entry）')
+if (d20Entry) d20Entry.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+d20Text = collect(d20Tree, []).join(' | ')
+ok(d20Text.indexOf('memories') >= 0, '进入子目录后面包屑含该级（crumbs）')
+ok(d20Text.indexOf('这个目录里没有子目录') >= 0, '空目录给可读空态')
+ok(d20Text.indexOf('目录过多，只显示前若干项') >= 0, 'truncated:true 时给「目录过多」提示')
+
+// ③ 选用此目录：填回输入框并关闭弹层
+const d20Pick = findAll(d20Tree, (x) => x.props && x.props['data-dir-pick'], [])[0]
+ok(Boolean(d20Pick), '弹层底部有「选用此目录」')
+if (d20Pick) d20Pick.props.onClick()
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+ok(!d20Layer(d20Tree), '选用后弹层关闭')
+const d20Inputs = findAll(d20Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+ok(d20Inputs.length === 2 && String(d20Inputs[0].props.value) === 'D:/ws/memories',
+  '选中的路径写回记忆库目录字段（实测 ' + String(d20Inputs[0] && d20Inputs[0].props.value) + '）')
+
+// ④ 新建目录：POST /api/dirs/new body 正确；失败时给可读原因
+calls.length = 0
+d20NewBodies.length = 0
+if (d20Browse(d20Tree)[0]) d20Browse(d20Tree)[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+const d20NewInput = findAll(d20Tree, (x) => x.props && x.props['data-dir-new-name'], [])[0]
+ok(Boolean(d20NewInput), '弹层有新建目录名输入框')
+if (d20NewInput) d20NewInput.props.onChange({ target: { value: 'newdir' } })
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+const d20Create = findAll(d20Tree, (x) => x.props && x.props['data-dir-create'], [])[0]
+if (d20Create) d20Create.props.onClick()
+await tick(60)
+ok(d20NewBodies.length === 1 && String(JSON.stringify(d20NewBodies[0])) === JSON.stringify({ path: 'D:/ws/memories', name: 'newdir' }),
+  '新建目录请求 body 正确（实测 ' + JSON.stringify(d20NewBodies[0]) + '）')
+// 失败分支
+d20NewOk = false
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+const d20NewInput2 = findAll(d20Tree, (x) => x.props && x.props['data-dir-new-name'], [])[0]
+if (d20NewInput2) d20NewInput2.props.onChange({ target: { value: 'dup' } })
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+const d20Create2 = findAll(d20Tree, (x) => x.props && x.props['data-dir-create'], [])[0]
+if (d20Create2) d20Create2.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+ok(collect(d20Tree, []).join(' | ').indexOf('新建目录失败：同名目录已存在（模拟）') >= 0, '新建失败 → 就地给可读原因（不吞）')
+d20NewOk = true
+
+// ⑤ kind:'native' → 不用应用内弹层（显示 native 说明，不白屏）
+d20Kind = 'native'
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+if (d20Browse(d20Tree)[0]) d20Browse(d20Tree)[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+ok(collect(d20Tree, []).join(' | ').indexOf('系统目录对话框未能打开') >= 0, 'kind:native → 显示 native 说明（不静默）')
+d20Kind = 'browse'
+
+// ⑥ 接口不可用 → 可读提示
+d20NoService = true
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+if (d20Browse(d20Tree)[0]) d20Browse(d20Tree)[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20Tree = expand(reg.render({ initialTab: 'core' }))
+ok(collect(d20Tree, []).join(' | ').indexOf('宿主暂不提供目录浏览接口') >= 0, '接口不可用 → 可读提示')
+d20NoService = false
+
+// ⑦ native 可用（uiWorkspace 成功）→ 不打开弹层，直接填值
+let d20NativeCalls = 0
+pickShell.ctx.uiWorkspace.pickDirectory = async () => { d20NativeCalls += 1; return 'D:/picked/by-native' }
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let d20bTree = expand(pickReg.render({ initialTab: 'core' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+d20bTree = expand(pickReg.render({ initialTab: 'core' }))
+const d20bGate = findButtons(d20bTree).filter((b) => label(b) === '点击此处继续')[0]
+if (d20bGate) d20bGate.props.onClick()
+hookCursor = 0
+effectQueue = []
+d20bTree = expand(pickReg.render({ initialTab: 'core' }))
+if (d20Browse(d20bTree)[0]) d20Browse(d20bTree)[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20bTree = expand(pickReg.render({ initialTab: 'core' }))
+ok(!d20Layer(d20bTree), 'native 可用时不打开应用内弹层（保持既有 native 路径不变；native 调用次数 ' + d20NativeCalls + '）')
+const d20bInputs = findAll(d20bTree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+ok(d20bInputs.some((i) => String(i.props.value) === 'D:/picked/by-native'), 'native 选中的目录直接填入输入框')
+
+// ⑧ 第三处入口：配置页的路径类字段（同一弹层）
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/dirs') >= 0) return jsonRes(u.indexOf('memories') >= 0 ? D20_SUB : D20_ROOT)
+  if (u.indexOf('/settings') >= 0) return jsonRes({ ok: true, namespaces: cfgNamespaces() })
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let d20cTree = expand(reg.render({ initialTab: 'config' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20cTree = expand(reg.render({ initialTab: 'config' }))
+const d20cPick = findAll(d20cTree, (x) => x.props && x.props['data-cfg-action'] === 'pick-dir', [])[0]
+ok(Boolean(d20cPick), '配置页路径类字段有「浏览…」入口（第三处）')
+if (d20cPick) d20cPick.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+d20cTree = expand(reg.render({ initialTab: 'config' }))
+ok(Boolean(d20Layer(d20cTree)), '配置页：native 不可用时同样打开应用内浏览器')
+
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
