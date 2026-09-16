@@ -1,0 +1,13 @@
+{
+  "schema": "dsh-doc-suite/assets@1",
+  "note": "内置素材清单（③a ⑤ 步）。内置层只放可随包分发的素材；公司 Logo / 产品图一律放使用者自定义层。",
+  "icons": [],
+  "shapes": [],
+  "policy": {
+    "icon_fallback": "图标名无素材时，渲染器用内置几何标记（见 scripts/office/ppt_render.py 的 ICON_MARKS / ICON_MARK_SCALE）；assets/icons/<name>.png|.jpg 存在则优先贴图。",
+    "registration": "每条素材必须记录 name / file / source / license / redistributable；未登记的素材不得进内置层。",
+    "license": "只收可再分发素材（MIT / Apache-2.0 / CC0 / 自绘）；不确定的进自定义层并标注不可外发。",
+    "size_budget_mb": 2
+  },
+  "custom_layer": "~/.dsh/data/dsh-doc-suite/assets/"
+}

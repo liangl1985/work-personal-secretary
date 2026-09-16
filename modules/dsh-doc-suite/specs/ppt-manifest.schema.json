@@ -86,6 +86,38 @@
         {
           "if": { "required": ["layout"], "properties": { "layout": { "const": "cards" } } },
           "then": { "$ref": "#/$defs/cards" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "toc" } } },
+          "then": { "$ref": "#/$defs/toc" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "section" } } },
+          "then": { "$ref": "#/$defs/section" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "compare" } } },
+          "then": { "$ref": "#/$defs/compare" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "data" } } },
+          "then": { "$ref": "#/$defs/data" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "chart" } } },
+          "then": { "$ref": "#/$defs/chart" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "table" } } },
+          "then": { "$ref": "#/$defs/table" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "quote" } } },
+          "then": { "$ref": "#/$defs/quote" }
+        },
+        {
+          "if": { "required": ["layout"], "properties": { "layout": { "const": "closing" } } },
+          "then": { "$ref": "#/$defs/closing" }
         }
       ]
     },
@@ -146,10 +178,117 @@
       "properties": {
         "icon": {
           "type": "string",
-          "description": "图标名（assets/icons/<name>.png）或单字符；缺素材时按内置字符兜底（assets 最小集属 ③b）。"
+          "description": "图标名（assets/icons/<name>.png）或单字符；缺素材时按内置几何标记兜底。"
         },
         "title": { "type": "string" },
         "body": { "type": "string" }
+      }
+    },
+    "list_item": {
+      "type": "object",
+      "required": ["title"],
+      "description": "目录条目：index 序号 / title 标题 / page 页码（后两者可选，渲染器缺值即留空）。",
+      "properties": {
+        "index": { "type": "string" },
+        "title": { "type": "string" },
+        "page": { "type": "string" }
+      }
+    },
+    "kpi_item": {
+      "type": "object",
+      "required": ["value", "label"],
+      "description": "KPI 卡：value 数值（含单位，如 98% / <5s）/ label 标签。",
+      "properties": {
+        "value": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+    "side": {
+      "type": "object",
+      "required": ["title"],
+      "description": "对比栏：title 栏标题 / body 要点数组。",
+      "properties": {
+        "title": { "type": "string" },
+        "body": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "series": {
+      "type": "object",
+      "required": ["values"],
+      "description": "图表系列：name 系列名 / values 数值数组。系列色由主题 color_roles.chart_series 决定，不在此写色值。",
+      "properties": {
+        "name": { "type": "string" },
+        "values": { "type": "array", "minItems": 1, "items": { "type": "number" } }
+      }
+    },
+    "toc": {
+      "type": "object",
+      "required": ["items"],
+      "description": "目录页：最多 8 条（超出由渲染器省略并告警）。",
+      "properties": {
+        "items": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/list_item" } }
+      }
+    },
+    "section": {
+      "type": "object",
+      "required": ["title"],
+      "description": "章节页：index 章节编号（可选）/ title 章节标题。",
+      "properties": {
+        "index": { "type": "string" }
+      }
+    },
+    "compare": {
+      "type": "object",
+      "required": ["left", "right"],
+      "description": "左右对比页：左右两栏等宽，款式一致，差异靠栏标题与要点表达。",
+      "properties": {
+        "left": { "$ref": "#/$defs/side" },
+        "right": { "$ref": "#/$defs/side" }
+      }
+    },
+    "data": {
+      "type": "object",
+      "required": ["items"],
+      "description": "数据页：最多 4 个 KPI + 可选说明要点数组（body）+ 来源行。",
+      "properties": {
+        "items": { "type": "array", "minItems": 1, "maxItems": 4, "items": { "$ref": "#/$defs/kpi_item" } },
+        "body": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "chart": {
+      "type": "object",
+      "required": ["series"],
+      "description": "图表页：categories 类别轴 + series 系列；type 为 bar（=column 簇状柱）/ line / pie，缺省 bar。",
+      "properties": {
+        "type": { "type": "string", "enum": ["bar", "column", "line", "pie"] },
+        "categories": { "type": "array", "items": { "type": "string" } },
+        "series": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/series" } }
+      }
+    },
+    "table": {
+      "type": "object",
+      "required": ["header"],
+      "description": "表格页：header 表头（必填）+ rows 数据行；字号由主题 sizes_pt 的 table_header / table_cell 决定。",
+      "properties": {
+        "header": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "rows": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } }
+      }
+    },
+    "quote": {
+      "type": "object",
+      "required": ["text"],
+      "description": "引文页：text 引文（居中，最多 3 行）/ attribution 出处（可选）。",
+      "properties": {
+        "text": { "type": "string" },
+        "attribution": { "type": "string" }
+      }
+    },
+    "closing": {
+      "type": "object",
+      "required": ["title"],
+      "description": "结束页：title 致谢大字 / subtitle 副标题（可选）。",
+      "properties": {
+        "subtitle": { "type": "string" }
       }
     }
   }

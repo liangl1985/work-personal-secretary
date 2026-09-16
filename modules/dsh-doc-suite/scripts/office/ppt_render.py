@@ -65,6 +65,8 @@ try:  # python-pptx 是必需依赖；validate / list-layouts 不需要它也能
     from pptx.dml.color import RGBColor
     from pptx.enum.shapes import MSO_SHAPE
     from pptx.enum.text import MSO_ANCHOR, MSO_AUTO_SIZE, PP_ALIGN
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
     from pptx.oxml.ns import qn
     from pptx.util import Emu, Inches, Pt
     PPTX_OK = True
@@ -79,9 +81,10 @@ USER_ASSETS = Path.home() / ".dsh" / "data" / "dsh-doc-suite" / "assets"
 ALL_LAYOUTS = ("cover", "toc", "section", "bullets", "cards", "compare", "data",
                "chart", "table", "quote", "closing",
                "image", "process", "timeline", "case", "qa")
-IMPLEMENTED_LAYOUTS = ("cover", "bullets", "cards")
-ALL_COMPONENTS = ("card", "chip", "kpi", "bar", "ring", "icon")
-IMPLEMENTED_COMPONENTS = ("card",)
+IMPLEMENTED_LAYOUTS = ("cover", "toc", "section", "bullets", "cards", "compare", "data",
+                       "chart", "table", "quote", "closing")
+ALL_COMPONENTS = ("card", "chip", "kpi", "bar", "ring", "icon", "toc_item", "compare_panel")
+IMPLEMENTED_COMPONENTS = ("card", "kpi", "toc_item", "compare_panel")
 FALLBACK_LAYOUT = "bullets"
 
 # 标题性字号键 → 用 fonts.heading；其余用 fonts.body
@@ -672,90 +675,97 @@ class Renderer:
             else:
                 self._add_shape(slide, el["box"], el.get("fill"))
 
-    def _draw_cover(self, slide, s, number):
-        lay = self._layout("cover")
-        self._paint_bg(slide, lay.get("background"))
-        values = {"kicker": s.get("kicker"), "title": s.get("title"),
-                  "subtitle": s.get("subtitle"), "meta": s.get("meta")}
-        for el in lay.get("elements") or []:
-            role = str(el.get("role"))
-            if role == "rule":
-                self._add_shape(slide, el["box"], el.get("fill"))
-                continue
-            if "text" not in el:
-                continue
-            value = values.get(role)
-            if not value:
-                if el.get("optional"):
-                    continue
-                value = ""
-            self._draw_text(slide, el, [str(value)], number=number)
+    def _draw_standard_page(self, slide, s, number):
+        """页型通用绘制（③a）：背景 → 骨架（如 inherits content_page）→ 本页元素。
 
-    def _draw_bullets(self, slide, s, number):
-        lay = self._layout("bullets")
+        元素按 role 分派：grid（组件槽位）/ chart / table（原生对象）/ page_number / 文本 / 装饰形状。
+        取值默认与 manifest 字段同名（见 specs 的 _note_geometry ⑨），仅 body 一处例外。
+        """
+        layout = str(s.get("layout") or FALLBACK_LAYOUT)
+        lay = self._layout(layout)
         self._paint_bg(slide, lay.get("background"))
-        self._draw_content_page(slide, s, number)
-        for el in lay.get("elements") or []:
-            role = str(el.get("role"))
-            if role == "body":
-                items = [str(x) for x in (s.get("bullets") or []) if str(x).strip()] or [""]
-                self._draw_text(slide, el, items, number=number)
-            elif role == "source":
-                if s.get("source"):
-                    self._draw_text(slide, el, [str(s.get("source"))], number=number)
-            elif "text" in el:
-                self._draw_text(slide, el, [""], number=number)
-            else:
-                self._add_shape(slide, el["box"], el.get("fill"))
-
-    def _draw_cards(self, slide, s, number):
-        lay = self._layout("cards")
-        self._paint_bg(slide, lay.get("background"))
-        self._draw_content_page(slide, s, number)
+        if lay.get("inherits") == "content_page":
+            self._draw_content_page(slide, s, number)
         for el in lay.get("elements") or []:
             role = str(el.get("role"))
             if role == "grid":
-                self._draw_grid(slide, el, s.get("cards") or [], number)
-            elif role == "source":
-                if s.get("source"):
-                    self._draw_text(slide, el, [str(s.get("source"))], number=number)
+                self._draw_grid(slide, el, self._grid_items(s), number)
+            elif role == "chart":
+                self._draw_chart(slide, el, s, number)
+            elif role == "table":
+                self._draw_table(slide, el, s, number)
+            elif role == "page_number":
+                if not self._page_number_on(layout):
+                    continue
+                fmt = str((self.chrome.get("page_number") or {}).get("format") or "{n}")
+                self._draw_text(slide, el, [fmt.replace("{n}", str(number))], number=number)
             elif "text" in el:
-                self._draw_text(slide, el, [""], number=number)
+                value = self._element_value(s, role)
+                if value is None or value == "" or value == []:
+                    if el.get("optional"):
+                        continue
+                    value = ""
+                paras = value if isinstance(value, list) else [str(value)]
+                self._draw_text(slide, el, [str(x) for x in paras], number=number)
             else:
                 self._add_shape(slide, el["box"], el.get("fill"))
 
+    @staticmethod
+    def _grid_items(s):
+        """网格槽位的数据来源：compare 用左右两栏，cards 用 cards，其余页型用 items。"""
+        layout = str(s.get("layout") or "")
+        if layout == "compare":
+            return [x for x in (s.get("left"), s.get("right")) if isinstance(x, dict)]
+        if layout == "cards":
+            return [x for x in (s.get("cards") or []) if isinstance(x, dict)]
+        return [x for x in (s.get("items") or []) if isinstance(x, dict)]
+
+    @staticmethod
+    def _element_value(s, role):
+        """元素取值：默认与 manifest 同名字段；body 例外（bullets 页取 bullets、data 页取 body）。"""
+        if role == "body":
+            if isinstance(s.get("body"), list):
+                return [str(x) for x in s["body"] if str(x).strip()]
+            if isinstance(s.get("bullets"), list):
+                return [str(x) for x in s["bullets"] if str(x).strip()]
+            return s.get("body") or ""
+        return s.get(role)
+
+
+
     def _draw_grid(self, slide, grid, items, number):
-        cards = [c for c in items if isinstance(c, dict)]
+        """网格槽位：按 slot 取组件逐格渲染；超容量省略并告警（不静默丢）。"""
+        entries = [c for c in items if isinstance(c, dict)]
         cols = int(grid.get("cols") or 3)
         max_rows = int(grid.get("max_rows") or 1)
-        if len(cards) == 4 and cols == 3:
-            cols = 2                                     # 55 号：4 张 2×2
+        slot = str(grid.get("slot") or "card")
+        if len(entries) == 4 and cols == 3 and slot == "card":
+            cols = 2                                     # 55 号：卡片 4 张 2×2
         cap = cols * max_rows
-        if len(cards) > cap:
-            self.warnings.append("第 %d 页 cards：%d 张超过网格容量 %d（%d 列 × %d 行），已省略 %d 张（建议拆页）"
-                                 % (number, len(cards), cap, cols, max_rows, len(cards) - cap))
-            cards = cards[:cap]
-        if not cards:
-            self.warnings.append("第 %d 页 cards：没有可渲染的卡片" % number)
+        if len(entries) > cap:
+            self.warnings.append("第 %d 页 %s：%d 项超过网格容量 %d（%d 列 × %d 行），已省略 %d 项（建议拆页）"
+                                 % (number, slot, len(entries), cap, cols, max_rows, len(entries) - cap))
+            entries = entries[:cap]
+        if not entries:
+            self.warnings.append("第 %d 页 %s：没有可渲染的条目（manifest 未给数据）" % (number, slot))
             return
-        rows = max(1, int(math.ceil(len(cards) / float(cols))))
+        rows = max(1, int(math.ceil(len(entries) / float(cols))))
         col_w = float(grid["col_w_in"])
         row_h = float(grid["row_h_in"])
         gap = float(grid["gap_in"])
         gx, gy, gh = float(grid["box"]["x"]), float(grid["box"]["y"]), float(grid["box"]["h"])
         block_h = rows * row_h + (rows - 1) * gap
         top = gy + (gh - block_h) / 2.0 if str(grid.get("valign") or "") == "middle" else gy
-        slot = str(grid.get("slot") or "card")
         comp = (self.pp.get("components") or {}).get(slot)
-        if not isinstance(comp, dict):
-            raise cli_guard.InputError("主题规格的 pptx.components 缺槽位组件 %r（cards 网格引用）" % slot)
-        for i, card in enumerate(cards):
+        if not isinstance(comp, dict) or not comp:
+            raise cli_guard.InputError("主题规格的 pptx.components 缺槽位组件 %r（%s 网格引用）" % (slot, slot))
+        for i, entry in enumerate(entries):
             col, row = i % cols, i // cols
-            ox = gx + col * (col_w + gap)
-            oy = top + row * (row_h + gap)
-            self._draw_card(slide, comp, ox, oy, col_w, row_h, card, number)
+            self._draw_component(slide, comp, gx + col * (col_w + gap),
+                                 top + row * (row_h + gap), col_w, row_h, entry, number)
 
-    def _draw_card(self, slide, comp, ox, oy, slot_w, slot_h, card, number):
+    def _draw_component(self, slide, comp, ox, oy, slot_w, slot_h, values, number):
+        """组件实例：values 为「role → 文本（str / list）」映射，role 默认与条目字段同名。"""
         if not self.dry:
             shp = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
                                          *self._geo({"x": ox, "y": oy, "w": slot_w, "h": slot_h}))
@@ -790,17 +800,25 @@ class Renderer:
         for el in comp.get("elements") or []:
             role = str(el.get("role"))
             if role == "icon":
-                value = card.get("icon")
+                value = values.get("icon")
                 if not value and el.get("optional"):
                     continue
                 self._draw_icon(slide, el, ox, oy, value, number)
-            elif role == "title":
-                self._draw_text(slide, el, [str(card.get("title") or "")], offset=(ox, oy), number=number)
-            elif role == "body":
-                body = card.get("body")
-                if not body and el.get("optional"):
-                    continue
-                self._draw_text(slide, el, [str(body or "")], offset=(ox, oy), number=number)
+                continue
+            if "text" in el:
+                value = values.get(role)
+                if value is None or value == "" or value == []:
+                    if el.get("optional"):
+                        continue
+                    value = ""
+                paras = value if isinstance(value, list) else [str(value)]
+                self._draw_text(slide, el, [str(x) for x in paras], offset=(ox, oy), number=number)
+                continue
+            # 无文本的装饰元素（分隔线 / 序号底板 等）
+            box = {"x": ox + el["box"]["x"], "y": oy + el["box"]["y"],
+                   "w": el["box"]["w"], "h": el["box"]["h"]}
+            shape = MSO_SHAPE.ROUNDED_RECTANGLE if el.get("radius_in") else MSO_SHAPE.RECTANGLE
+            self._add_shape(slide, box, el.get("fill"), shape)
 
     def _find_icon(self, name):
         for d in self.asset_dirs:
@@ -833,6 +851,113 @@ class Renderer:
         shape = getattr(MSO_SHAPE, ICON_MARKS.get(name.lower(), "DIAMOND"), MSO_SHAPE.DIAMOND)
         self._add_shape(slide, mark_box, color_token, shape)
 
+    # ---- 原生对象：图表 / 表格（③a 第二批）----
+    def _draw_chart(self, slide, el, s, number):
+        """图表：python-pptx 原生对象。几何只给区域；类型/图例/数据标签取自 layout；
+        系列色走 color_roles.chart_series（不写死 hex），与主题一致。"""
+        series = [x for x in (s.get("series") or []) if isinstance(x, dict) and x.get("values")]
+        if not series:
+            self.warnings.append("第 %d 页 chart：manifest 未给 series，已跳过图表（不产空白图）" % number)
+            return
+        need = max(len(x.get("values") or []) for x in series)
+        cats = [str(x) for x in (s.get("categories") or [])]
+        if len(cats) < need:
+            cats = cats + ["%d" % (i + 1) for i in range(len(cats), need)]   # 只补索引，不猜语义
+        ctype = str(s.get("type") or el.get("chart_type") or "bar").lower()
+        chart_type = {"bar": XL_CHART_TYPE.COLUMN_CLUSTERED,
+                      "column": XL_CHART_TYPE.COLUMN_CLUSTERED,
+                      "line": XL_CHART_TYPE.LINE_MARKERS,
+                      "pie": XL_CHART_TYPE.PIE}.get(ctype, XL_CHART_TYPE.COLUMN_CLUSTERED)
+        if self.dry:
+            return
+        data = CategoryChartData()
+        data.categories = cats
+        for item in series:
+            data.add_series(str(item.get("name") or "系列"),
+                            tuple(float(v) for v in (item.get("values") or [])))
+        chart = slide.shapes.add_chart(chart_type, *self._geo(el["box"]), data).chart
+        chart.has_title = False
+        legend = str(el.get("legend") or "bottom").lower()
+        if legend and legend != "none":
+            chart.has_legend = True
+            chart.legend.position = {"bottom": XL_LEGEND_POSITION.BOTTOM, "top": XL_LEGEND_POSITION.TOP,
+                                     "right": XL_LEGEND_POSITION.RIGHT,
+                                     "left": XL_LEGEND_POSITION.LEFT}.get(legend, XL_LEGEND_POSITION.BOTTOM)
+            chart.legend.include_in_layout = False
+        else:
+            chart.has_legend = False
+        if el.get("data_labels"):
+            try:
+                plot = chart.plots[0]
+                plot.has_data_labels = True
+                plot.data_labels.number_format = 'General'  # 实测：'0.#' / '0.###' 在 WPS 下都会渲染成 "10."（小数点被强制）
+                plot.data_labels.number_format_is_linked = False
+            except Exception:
+                pass
+        chart_slots = self.roles.get("chart_series") or {}
+        for i, plot_series in enumerate(chart.series):
+            token = chart_slots.get("s%d" % (i + 1))
+            if not token:
+                continue
+            try:
+                if chart_type == XL_CHART_TYPE.PIE:
+                    for j, point in enumerate(plot_series.points):
+                        point.format.fill.solid()
+                        point.format.fill.fore_color.rgb = self.color(chart_slots.get("s%d" % (j + 1)) or token)
+                else:
+                    plot_series.format.fill.solid()
+                    plot_series.format.fill.fore_color.rgb = self.color(token)
+            except Exception:
+                pass
+
+    def _draw_table(self, slide, el, s, number):
+        """表格：python-pptx 原生表格。字号引用 sizes_pt 的 header_size / cell_size。"""
+        header = [str(x) for x in (s.get("header") or [])]
+        rows = [[str(c) for c in r] for r in (s.get("rows") or []) if isinstance(r, list)]
+        if not header and not rows:
+            self.warnings.append("第 %d 页 table：manifest 未给 header / rows，已跳过表格" % number)
+            return
+        cols = max([len(header)] + [len(r) for r in rows])
+        if cols <= 0:
+            return
+        header = header + [""] * (cols - len(header))
+        body = [r + [""] * (cols - len(r)) for r in rows]
+        hsize = self.sizes.get(str(el.get("header_size") or "table_header"), 14)
+        csize = self.sizes.get(str(el.get("cell_size") or "table_cell"), 14)
+        if self.dry:
+            return
+        table = slide.shapes.add_table(len(body) + (1 if header else 0), cols, *self._geo(el["box"])).table
+        # 列宽按内容权重分配（中文按 2、ASCII 按 1 计；下限 4）—— 避免「序号」列等宽占掉 1/4
+        weights = []
+        for c in range(cols):
+            cells = ([header[c]] if header else []) + [row[c] for row in body]
+            weights.append(max(4, max((sum(2 if ord(ch) > 127 else 1 for ch in str(v)) for v in cells), default=4)))
+        total_emu = int(max(0.0, float(el["box"]["w"])) * EMU_PER_INCH)
+        for c in range(cols):
+            table.columns[c].width = Emu(int(total_emu * weights[c] / float(sum(weights))))
+        first = 0
+        if header:
+            for c, text in enumerate(header):
+                self._fill_cell(table.cell(0, c), text, hsize, True, "text_on_dark", "panel_dark")
+            first = 1
+        for r, row in enumerate(body):
+            for c, text in enumerate(row):
+                zebra = bool(el.get("zebra")) and (r % 2 == 1)
+                self._fill_cell(table.cell(first + r, c), text, csize, False,
+                                "text_on_light", "surface_alt" if zebra else "surface")
+
+    def _fill_cell(self, cell, text, pt, bold, color_token, fill_token):
+        cell.text = str(text)
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = self.color(fill_token)
+        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+        cell.margin_left = cell.margin_right = Inches(0.08)
+        cell.margin_top = cell.margin_bottom = Inches(0.03)
+        for para in cell.text_frame.paragraphs:
+            para.alignment = PP_ALIGN.LEFT
+            for run in para.runs:
+                self._style_run(run, pt, bold, color_token, self.body_font)
+
     # ---- 主流程 ----
     def build(self, manifest, slides):
         if not self.dry and not PPTX_OK:
@@ -849,12 +974,7 @@ class Renderer:
             self.current_page = {"index": i, "layout": layout,
                                  "title": str(s.get("title") or ""), "entries": []}
             slide = None if self.dry else prs.slides.add_slide(prs.slide_layouts[6])
-            if layout == "cover":
-                self._draw_cover(slide, s, i)
-            elif layout == "cards":
-                self._draw_cards(slide, s, i)
-            else:
-                self._draw_bullets(slide, s, i)
+            self._draw_standard_page(slide, s, i)
             note = s.get("notes")
             if not note and isinstance(notes, list) and i - 1 < len(notes) and isinstance(notes[i - 1], str):
                 note = notes[i - 1]
@@ -1007,7 +1127,7 @@ def cmd_list_layouts(args):
              float(slide.get("height_emu") or 0) / EMU_PER_INCH,
              (pp_fonts.get("heading") or {}).get("ea"),
              (pp_fonts.get("body") or {}).get("ea")))
-    print("页型（②b 已实现 %d / 共 %d 类）：" % (len(IMPLEMENTED_LAYOUTS), len(ALL_LAYOUTS)))
+    print("页型（③a 已实现 %d / 共 %d 类）：" % (len(IMPLEMENTED_LAYOUTS), len(ALL_LAYOUTS)))
     for name in ALL_LAYOUTS:
         lay = (pp.get("layouts") or {}).get(name)
         if name in IMPLEMENTED_LAYOUTS and isinstance(lay, dict):
@@ -1018,7 +1138,7 @@ def cmd_list_layouts(args):
             print("   ✔ %-9s %s" % (name, note))
         else:
             note = "规格已就位 · " if isinstance(lay, dict) else ""
-            print("   ✘ %-9s %s未实现（③a/③b 补齐；当前落 %s 兜底）" % (name, note, FALLBACK_LAYOUT))
+            print("   ✘ %-9s %s未实现（③b 补齐：扩展 5 类；当前落 %s 兜底）" % (name, note, FALLBACK_LAYOUT))
     print("组件：")
     for name in ALL_COMPONENTS:
         comp = (pp.get("components") or {}).get(name)

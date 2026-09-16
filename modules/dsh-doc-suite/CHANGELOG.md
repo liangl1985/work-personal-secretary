@@ -1,3 +1,54 @@
+## 0.3.0 — 2026-09-16（③a 收口：11 类页型渲染实现 + 回归套件 + 素材层）
+
+### 一、渲染实现（本步主体）
+
+ppt_render.py 从「三类页型」扩到 **核心 11 类**，并把三条专用通路**重构为一条通用通路**（第三次重复，按 Rule of Three 提取）：
+
+- **\_draw_standard_page**：背景 → 骨架（inherits）→ 元素按 role 分派（grid / chart / table / page_number / 文本 / 装饰形状）
+- **\_grid_items** + **\_element_value**：数据取值默认与 manifest 字段同名（规格 _note_geometry ⑨），仅 body 一处例外
+- **\_draw_component**（原 \_draw_card 泛化）：组件槽位通用渲染，支持 str / list 文本、icon 槽位、无文本装饰元素
+- **原生对象**：\_draw_chart（bar / column / line / pie；系列色走 color_roles.chart_series；图例位置与数据标签按 layout）、\_draw_table（表头与单元格字号引用 sizes_pt；**列宽按内容权重分配**，避免「序号」列等宽占掉 1/4）
+
+### 二、manifest 契约扩展
+
+specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compare / data / chart / table / quote / closing）+ 4 个子结构（list_item / kpi_item / side / series）；slide.allOf 分支 3 → 11。
+
+### 三、回归套件（55 号 ③a 验收项 ≥15 例）
+
+新增 scripts/ppt-render-test.mjs：**20 例**（契约 / 实现一致性 / 校验与容错退出码 / 渲染产物 / 列表命令），本机 **20 通过 0 失败**；CI（无 Python 依赖）自动 SKIP 需要 python-pptx 与本机字体的用例，不会误红；已纳入 CI 的 */scripts/*-test.mjs 步骤。
+
+### 四、素材层与发布白名单（55 号 ⑤ 步）
+
+- 新增 assets/manifest.json（素材清单：登记字段 / 许可口径 / 体积预算 2 MB / 图标回退策略）
+- 新增 templates/README.md（母版骨架后置说明 + 自定义层位置 + 内置层中性纪律）
+- package.json 的 files 白名单补 templates 与 assets
+
+### 五、目检抓出并修掉的问题（真渲染出图）
+
+1. **图表数据标签尾点**：number_format = '0.#' 在 WPS 下把 10 渲染成 10.（小数点被强制）；改 '0.###' 实测 XML 已变但出图未变 → 最终改 **General**
+2. **表格列宽等分**：python-pptx 默认等宽，「序号」列占掉 1/4 → 改为按内容权重（中文按 2、ASCII 按 1，下限 4）分配
+3. 顺手统一 list-layouts 文案（②b → ③a）与未实现页型的提示
+
+### 六、ring 小样验证结论（55 号风险 10，关闭）
+
+三次小样（BLOCK_ARC 的 angle adjustment：默认 [108, 0, 0.25]；按比例设值会退化成 0° 弧、按角度设值未能稳定标定可控弧度）**未通过** → 按预案**降级为数据条**：进度类数据走 chart 页（簇状柱 / 折线）表达。chip 与独立 bar 因暂无页型消费者不落（避免无消费方的组件）；icon 槽位已在 card 内实现（素材 PNG 优先，否则内置几何标记）。
+
+### 七、验证
+
+- spec_sync --check **0** · style-test **24 / 0** · ppt-render-test **20 / 0** · py_compile 全量通过
+- 11 页真渲染整册（E:\\lina\\.dsh\\tmp\\b-line-render\\png-deck11-v2\\，源 samples\\deck11-v2.pptx）逐页目检通过
+- 仓库 ↔ profile 逐文件 SHA256 一致
+
+### 八、未做（③b）
+
+- 扩展 5 类页型（image / process / timeline / case / qa）与其素材依赖
+- assets/icons/ 位图素材最小集（当前图标走内置几何标记）
+- 主题库与母版导入（后置）；ppt_style.py 存量美化（④ 步）；生图与图示链路（⑥ 步）
+
+### 九、回退
+
+版本改回 **0.2.4** 或 git revert 本提交；profile 同步一次即可。
+
 ## 0.2.4 — 2026-09-16（③a 第二批：8 类页型几何真值 + 3 个组件）
 
 ### 一、这一步做了什么

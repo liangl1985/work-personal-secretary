@@ -450,7 +450,7 @@
       }
     },
     "components": {
-      "_note": "组件几何。已实现：card（②a）· kpi / toc_item / compare_panel（③a 第二批，供 data / toc / compare 页的 grid 槽位调用）。未实现：chip · bar · ring（ring 待小样验证，55 号风险 10）。",
+      "_note": "组件几何。已实现：card（②a）· kpi / toc_item / compare_panel（③a，供 cards / data / toc / compare 页的 grid 槽位调用）· icon（card 内槽位：素材 PNG 优先，否则内置几何标记）。未实现：chip · bar · ring —— chip 与独立 bar 暂无页型消费者（不落无消费方的组件）；ring 经三次小样（BLOCK_ARC 角度 adjustment，2026-09-16）**未能标定出可控弧度**，按 55 号风险 10 的预案**降级为数据条**，进度类数据请走 chart 页（簇状柱 / 折线）表达。",
       "card": {
         "_note": "卡片组件：coord=relative，box 为**相对卡片左上角**的相对坐标（英寸），渲染器按 grid 算出卡片绝对框后叠加。符号值只允许 slot_w / slot_h（表示随槽宽/槽高伸缩），其余为固定英寸值。accent_bar 用 edge 表达（随槽宽自动整条），避免写死宽度；包边色走色角色 card_line（不写死 hex）。卡内垂直占位**按 WPS 实测行高反算、与 autofit 上限自洽**（③a 口径统一：行高 = 字号÷72 × 1.228 × 行距）：icon 0.22–0.70（28pt **行距 1.0** = 0.4776 ≤ 0.48）· 标题 0.80–1.26（22pt×1.2 单行 = 0.4503 ≤ 0.46，上限 1 行）· 正文 1.32–2.18（16pt×1.25 × 2 行 = 0.682 ≤ 0.86），卡高 2.35 内留底 0.17。卡内宽 = 列宽 3.6777 − 2×0.28 = 3.1177。",
         "coord": "relative",
