@@ -18,7 +18,7 @@
  */
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const CLIENT = join(HERE, '..', 'client', 'index.js')
@@ -1966,12 +1966,13 @@ const OK_PLUGINS = {
     { id: 'workspace-tokenpet', installed: true, installedVersion: '1.0.1', version: '1.0.1', upToDate: true },
   ],
 }
-const GUIDE_HTML = '<!DOCTYPE html><html><head><style>h1{color:#111}</style></head><body><h1>工作秘书 · 安装引导</h1><p>本页由插件自带（不是外链）</p></body></html>'
+// 宿主 embed=1 返回的是**片段**（无 html/head/body；样式作用域在 .wps-doc）——mock 按同一契约给
+const GUIDE_FRAGMENT = '<style>.wps-doc h1{color:#111}</style><article class="wps-doc" aria-label="使用说明"><h1>工作秘书 · 使用说明</h1><p>本页由插件自带（不是外链）</p></article>'
 const htmlRes = (html) => ({ ok: true, status: 200, text: async () => html, json: async () => { throw new Error('not json') } })
 const allOkFetch = async (url, opts) => {
   const u = String(url)
   calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
-  if (u.indexOf('/guide') >= 0 || u.indexOf('/help') >= 0) return htmlRes(GUIDE_HTML)
+  if (u.indexOf('/guide') >= 0 || u.indexOf('/help') >= 0) return htmlRes(GUIDE_FRAGMENT)
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
   if (u.indexOf('/plugins') >= 0) return jsonRes(OK_PLUGINS)
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
@@ -1986,7 +1987,15 @@ calls.length = 0
 let nTree = expand(reg.render({ initialTab: 'install' }))
 let nText = collect(nTree, []).join(' | ')
 ok(nText.includes('检查运行环境、安装五个子插件、完成首次配置，并集中调整各子插件的设置。'), '首屏描述为 A 版原文（设计定稿 §1）')
-ok(nText.includes('work-personal-secretary v1.1.3'), '状态条 BUILD 与包版本对齐（v1.1.3）')
+// BUILD 真比对（T10 升级）：读 package.json 的 version，断言 BUILD === 'v' + version
+const pkgVersion = (() => {
+  try { return String(JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8')).version || '') } catch (err) { return '' }
+})()
+const buildMatch = String(src).match(/const BUILD = '([^']+)'/)
+const buildConst = buildMatch ? buildMatch[1] : ''
+ok(buildConst !== '' && buildConst === 'v' + pkgVersion,
+  '客户端 BUILD 常量 === "v" + package.json.version（实测 BUILD=' + buildConst + ' / pkg=' + pkgVersion + '）')
+ok(nText.includes('work-personal-secretary ' + buildConst), '状态条渲染的就是该 BUILD 常量（' + buildConst + '）')
 // R-4：页签要**恰等四项**（按 data-tab 取全集，不再只数白名单内的标签）
 const wantTabs = ['安装与检查', '核心配置', '配置', '关于与致谢']
 const tabEls = findAll(nTree, (x) => Boolean(x.props && x.props['data-tab']), [])
@@ -2018,11 +2027,13 @@ effectQueue = []
 nTree = expand(reg.render({ initialTab: 'install' }))
 nText = collect(nTree, []).join(' | ')
 const docCalls = calls.filter((c) => c.url.indexOf('/work-personal-secretary/help') >= 0)
-ok(docCalls.length === 1 && docCalls[0].url === 'http://dsh.internal/work-personal-secretary/help',
-  '页内展开：GET 合成基址 /work-personal-secretary/help（' + (docCalls[0] && docCalls[0].url) + '）')
+ok(docCalls.length === 1 && docCalls[0].url === 'http://dsh.internal/work-personal-secretary/help?embed=1',
+  '页内展开：GET 合成基址 /work-personal-secretary/help?embed=1（' + (docCalls[0] && docCalls[0].url) + '）')
 const htmlBox = findAll(nTree, (x) => Boolean(x.props && x.props.dangerouslySetInnerHTML), [])[0]
-ok(Boolean(htmlBox) && String(htmlBox.props.dangerouslySetInnerHTML.__html).indexOf('安装引导') >= 0,
-  '宿主返回的 HTML 注入页内容器（text/html 不是 JSON）')
+ok(Boolean(htmlBox) && String(htmlBox.props.dangerouslySetInnerHTML.__html) === GUIDE_FRAGMENT,
+  'embed 片段整段原样注入（不包裹 html/head/body、不改写）')
+ok(Boolean(htmlBox) && htmlBox.props['data-embed-doc'] === 'help' && !htmlBox.props.style,
+  '注入容器无自有样式，只带 data-embed-doc 标记')
 ok(nText.includes('收起'), '展开区带「收起」按钮')
 
 // 门禁：未就绪 → 门禁卡 + 整页灰化（pointer-events:none）
@@ -2397,6 +2408,81 @@ const r1Btn = findButtons(r1Tree).filter((b) => label(b) === '环境已就绪')[
 ok(Boolean(r1Btn) && r1Btn.props.disabled === true, 'R-1：硬项全绿 + Obsidian 未装 → 主按钮置灰「环境已就绪」')
 ok(r1Text.indexOf('5/6 正常') >= 0, 'R-1：分组徽标仍如实显示 5/6 正常')
 ok(r1Text.indexOf('可选') >= 0, 'R-1：Obsidian 未就绪显示「可选」而非「缺失 / 警告」')
+
+// ══════════════════════════════════════════════════════════════════
+// [16] embed 片段：两个入口都带 ?embed=1 · 整段原样注入 · 重复展开幂等
+//      + 直接调宿主 lib/md.js::renderFragment 复核片段形状（只读引用，不改 lib）
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[16] embed 片段（guide / help）')
+
+const EMBED_GUIDE = '<style>.wps-doc h1{color:#111}</style><article class="wps-doc" aria-label="安装引导"><h1>工作秘书 · 安装引导</h1><p>本页由插件自带</p></article>'
+const EMBED_HELP = '<style>.wps-doc h1{color:#222}</style><article class="wps-doc" aria-label="使用说明"><h1>工作秘书 · 使用说明</h1></article>'
+const embedUrls = []
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/guide') >= 0) { embedUrls.push(u); return htmlRes(EMBED_GUIDE) }
+  if (u.indexOf('/help') >= 0) { embedUrls.push(u); return htmlRes(EMBED_HELP) }
+  if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)
+  if (u.indexOf('/plugins') >= 0) return jsonRes(PLUGINS_PAYLOAD)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let e16Tree = expand(reg.render({ initialTab: 'install' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+e16Tree = expand(reg.render({ initialTab: 'install' }))
+const e16Guide = findButtons(e16Tree).filter((b) => label(b).indexOf('查看安装引导') >= 0)[0]
+ok(Boolean(e16Guide) && e16Guide.props.disabled !== true, '有硬项缺时「查看安装引导」可点（' + (e16Guide ? label(e16Guide) : '未找到') + '）')
+if (e16Guide) e16Guide.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+e16Tree = expand(reg.render({ initialTab: 'install' }))
+ok(String(embedUrls[0]) === 'http://dsh.internal/work-personal-secretary/guide?embed=1',
+  '安装引导请求带 embed=1（实测 ' + String(embedUrls[0]) + '）')
+let e16Hosts = findAll(e16Tree, (x) => Boolean(x.props && x.props['data-embed-doc']), [])
+ok(e16Hosts.length === 1 && String(e16Hosts[0].props.dangerouslySetInnerHTML.__html) === EMBED_GUIDE,
+  'guide 片段整段原样注入到单一容器')
+const e16Help = findButtons(e16Tree).filter((b) => label(b) === '使用说明')[0]
+if (e16Help) e16Help.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+e16Tree = expand(reg.render({ initialTab: 'install' }))
+e16Hosts = findAll(e16Tree, (x) => Boolean(x.props && x.props['data-embed-doc']), [])
+ok(e16Hosts.length === 1, '重复展开仍是同一个容器（实测 ' + e16Hosts.length + ' 个，不叠加）')
+ok(e16Hosts.length === 1 && String(e16Hosts[0].props['data-embed-doc']) === 'help'
+  && String(e16Hosts[0].props.dangerouslySetInnerHTML.__html) === EMBED_HELP,
+  '切换到「使用说明」后容器内容被覆盖为 help 片段')
+ok(String(embedUrls[1]) === 'http://dsh.internal/work-personal-secretary/help?embed=1',
+  '使用说明请求带 embed=1（实测 ' + String(embedUrls[1]) + '）')
+const e16Injected = e16Hosts.length ? String(e16Hosts[0].props.dangerouslySetInnerHTML.__html) : ''
+ok(e16Injected.indexOf('<html') < 0 && e16Injected.indexOf('<body') < 0 && e16Injected.indexOf('<!DOCTYPE') < 0,
+  '注入内容不含 html / body / DOCTYPE（客户端不自行包裹文档骨架）')
+
+let mdMod = null
+let mdErr = ''
+try {
+  mdMod = await import(pathToFileURL(join(HERE, '..', 'lib', 'md.js')).href)
+} catch (err) { mdErr = String((err && err.message) || err) }
+ok(Boolean(mdMod && typeof mdMod.renderFragment === 'function'),
+  '可加载宿主 lib/md.js 的 renderFragment（' + (mdErr || 'ok') + '）')
+if (mdMod && typeof mdMod.renderFragment === 'function') {
+  const real = String(mdMod.renderFragment('安装引导', '<h1>标题</h1>'))
+  ok(real.indexOf('<html') < 0 && real.indexOf('<head') < 0 && real.indexOf('<body') < 0 && real.indexOf('<!DOCTYPE') < 0,
+    '真实 renderFragment 输出不含 html / head / body / DOCTYPE')
+  ok(real.indexOf('<style>') === 0 && real.indexOf('class="wps-doc"') >= 0,
+    '真实片段形状：<style> 起头 + <article class="wps-doc">')
+  const styleBlock = real.slice(0, real.indexOf('</style>'))
+  ok(styleBlock.indexOf('html{') < 0 && styleBlock.indexOf('body{') < 0 && styleBlock.indexOf('*{') < 0,
+    '片段样式块无全局选择器（无 html{ / body{ / *{）')
+  ok(styleBlock.indexOf('.wps-doc') >= 0, '片段样式以 .wps-doc 作用域')
+}
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)

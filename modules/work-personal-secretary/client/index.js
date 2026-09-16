@@ -115,6 +115,13 @@ window.__ModuleLoader__.load({
      * 但两种载体统一成一种行为最稳（设计定稿 §12 决议 12）。
      */
     const PAGE_PATHS = { guide: '/work-personal-secretary/guide', help: '/work-personal-secretary/help' }
+    /**
+     * 页内展开取的是**片段**（embed=1）：响应体为 <style>…</style> + <article class="wps-doc" …>，
+     * 不含 <html>/<head>/<body>，样式全部作用域在 .wps-doc（宿主 lib/md.js 的 renderFragment）。
+     * 客户端把片段**整段原样注入**，不自行包裹文档骨架、也不取完整文档
+     *（否则会把 html/head/body 塞进设置页 DOM）。桌面外壳与 Web 载体走同一条路径。
+     */
+    const PAGE_EMBED_QUERY = '?embed=1'
     /** 状态 → 文案键（ok | warn | missing | skip） */
     const STATUS_KEYS = { ok: 'statusOk', warn: 'statusWarn', missing: 'statusMissing', skip: 'statusSkip' }
     /** 批量执行状态 → 文案键 / 徽标样式 */
@@ -1354,10 +1361,6 @@ window.__ModuleLoader__.load({
       },
       groupCount: { marginLeft: 'auto' },
       docCard: { marginTop: '12px' },
-      docBody: {
-        border: '1px solid #eef0f2', borderRadius: '10px', background: '#fbfcfd',
-        padding: '10px 14px', fontSize: '12.5px', lineHeight: 1.7, maxHeight: '420px', overflow: 'auto',
-      },
       gatedBody: { opacity: 0.45, pointerEvents: 'none' },
       gateCard: { borderColor: '#f0d9b5', background: '#fffdf7' },
       coreFieldRow: { padding: '8px 0', borderTop: '1px solid #f6f7f9', marginBottom: '2px' },
@@ -2260,7 +2263,7 @@ window.__ModuleLoader__.load({
       async function openDoc(kind) {
         setSt((prev) => Object.assign({}, prev, { doc: { kind: kind, phase: 'loading', html: '', error: '' } }))
         try {
-          const html = await requestText(PAGE_PATHS[kind], 20000)
+          const html = await requestText(PAGE_PATHS[kind] + PAGE_EMBED_QUERY, 20000)
           setSt((prev) => (prev.doc && prev.doc.kind === kind)
             ? Object.assign({}, prev, { doc: { kind: kind, phase: 'ready', html: html, error: '' } })
             : prev)
@@ -2530,7 +2533,9 @@ window.__ModuleLoader__.load({
                 onClick: () => openDoc(st.doc.kind),
               }, t('docRetry')),
             ]) : (st.doc.phase === 'ready'
-              ? h('div', { key: 'html', style: S.docBody, dangerouslySetInnerHTML: { __html: st.doc.html } })
+              // 固定 key + 单一 state 字段 → 重复展开或切换 guide↔help 都复用同一容器（幂等，不叠加）；
+              // 容器本身不带样式（片段自带 .wps-doc 作用域样式），只挂 data 属性便于核对
+              ? h('div', { key: 'html', 'data-embed-doc': st.doc.kind, dangerouslySetInnerHTML: { __html: st.doc.html } })
               : h('div', { key: 'load', style: S.note }, t('docLoading'))),
           ]),
         ]) : null,
