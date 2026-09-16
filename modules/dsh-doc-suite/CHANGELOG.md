@@ -1,3 +1,42 @@
+## 0.2.3 — 2026-09-16（③a 第一步：几何容量口径统一）
+
+### 一、这一步做了什么
+
+把 ②a 定稿的几何从「设计口径」改成「WPS 实测口径」：**行高 = 字号 ÷ 72 × 1.228 × 行距**（1.228 = ②b 出图像素实测的单倍行高系数），三处口径统一并加门禁。
+
+- `specs/standard.json` 逐项重算（对照脚本 `diag_geom.py`），修正 7 处：
+  - `layouts.cover.title` box.h 1.72 → **1.74**（2 行 @44pt×1.15 = 1.7274）
+  - `layouts.cover.subtitle` box.h 0.90 → **0.98**（2 行 @22pt×1.3 = 0.9758）
+  - `layouts.bullets.body` max_lines 9 → **8**（8 行 × 0.4605 + 7 × 0.1389 = 4.656 ≤ 4.85；9 行 = 5.255 放不下）
+  - `layouts.bullets.source` / `layouts.cards.source` box.h 0.30 → **0.33**（单行 14pt = 0.3223）
+  - `components.card.title` box.h 0.40 → **0.46**（单行 22pt×1.2 = 0.4503）
+  - `components.card.body` y 1.28 → **1.32**、max_lines 3 → **2**（2 行 @16pt×1.25 = 0.682 ≤ 0.86；3 行 = 1.0233 放不下）
+  - `_note_geometry` 与各页型 `_note` 同步写明新口径与实测依据
+- `scripts/spec_sync.py`：新增常量 `SINGLE_LINE_EM`，容量判据与「无 autofit 单行」检查同口径
+- `scripts/style-test.mjs`：两处容量断言改口径，并**新增用例「行高口径三处一致」**（读 `spec_sync.py` 与 `ppt_render.py` 的常量与自身比对，防口径漂移）→ 23 → **24 例**
+- `scripts/office/ppt_render.py`：常量注释补「三处一致」
+
+### 二、为什么改（依据）
+
+②b 出图目检 + 像素实测：20pt / 行距 1.35 时相邻段起点间距 57px = 行高 44.2px（0.4605 in）+ 段距 10pt；19pt 同段两行间距 42px = 0.4375 in。旧口径「字号 × 行距 ÷ 72」对 19pt 只有 0.3563 in，**低约 23%** —— 会让「放不下的文本被判成放得下」。详见 0.2.2 段与 58 号第九节。
+
+### 三、验证
+
+- 容量对照脚本逐元素复核：**违规 0 项**（12 个文本元素全部自洽）
+- `spec_sync --check` **0** · `style-test` **24 / 0**
+- 样张重出（`E:\lina\.dsh\tmp\b-line-render\png-v6\`）：四页字号决策与 v5 一致（cover 44/22/14/14、bullets 20、cards 22/16、超容量页 20→18pt），卡片页视觉与 v5 一致（正文仅下移 0.04 in）
+- 仓库 ↔ profile 逐文件 SHA256 一致
+
+### 四、未做（③a 继续）
+
+- 核心 11 类中剩余的 8 类页型（toc / section / compare / data / chart / table / quote / closing）
+- 组件 `chip` / `kpi` / `bar`（`ring` 待小样验证）
+- `ppt-render-test.mjs` ≥15 例；`assets/` 最小集与 `files` 白名单（⑤ 步）
+
+### 五、回退
+
+版本改回 **0.2.2** 或 `git revert` 本提交（几何与门禁同批回滚）；profile 同步一次即可。
+
 ## 0.2.2 — 2026-09-16（B 线施工 ②b：ppt_render.py 最小版 + ②c 样张验收）
 
 ### 一、这一步做了什么

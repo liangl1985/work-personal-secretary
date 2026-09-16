@@ -100,6 +100,7 @@ TOL_IN = 0.002
 #   而「pt × 1.35 ÷ 72」对 19pt 只有 0.3563 in，低约 23% —— 按那个口径判容量会把放不下的
 #   文本判成放得下（②b 样张第 4 页实测溢出）。Pillow 的 font.getmetrics()（≈1.36 em）偏大
 #   11%，同样不用。换字体时按同样方法重新校准（出图 → 像素量行间距）。
+# 三处必须一致：本文件 / scripts/spec_sync.py / scripts/style-test.mjs（后者有门禁断言）。
 SINGLE_LINE_EM = 1.228
 
 _TYPE_CN = {"object": "对象", "array": "数组", "string": "字符串", "integer": "整数",

@@ -35,6 +35,10 @@ REQ_EXCEL = ("font", "header", "border", "print")
 # pptx 段（B 线）：②a 契约——凡带 pptx 段的规格，这三类页型必须齐全
 REQ_PPTX_LAYOUTS = ("cover", "bullets", "cards")
 EMU_PER_INCH = 914400.0
+# WPS 实测单倍行高系数（2026-09-16 ②b 出图像素实测；③a 统一口径）：
+# 行高 = 字号 ÷ 72 × 该系数 × 行距。三处必须一致 —— 本文件 / scripts/office/ppt_render.py /
+# scripts/style-test.mjs（后者有门禁断言，防止口径漂移）。
+SINGLE_LINE_EM = 1.228
 _HEX6 = re.compile(r"^[0-9A-Fa-f]{6}$")
 _BOX_KEYS = ("x", "y", "w", "h")
 _TOL_IN = 0.002
@@ -166,7 +170,7 @@ def _check_pptx_element(where, e, max_w, max_h, sizes, allowed, components, errs
             # 容量自洽：max_lines 是「基础字号下 box 能放下的行数」，段距只加在段与段之间
             max_lines = fit.get("max_lines")
             if _num(max_lines) and isinstance(box, dict) and _num(box.get("h")) and max_lines > 0:
-                line_h = base_pt * ls / 72.0
+                line_h = base_pt / 72.0 * SINGLE_LINE_EM * ls
                 need = max_lines * line_h + max(0, max_lines - 1) * gap_in
                 if need > box["h"] + _TOL_IN:
                     tail = "（含 %d 段 %spt 段距）" % (max_lines - 1, bullet.get("gap_after_pt")) if gap_in else ""
@@ -174,7 +178,7 @@ def _check_pptx_element(where, e, max_w, max_h, sizes, allowed, components, errs
                                 "max_lines 应按基础字号反算（或加高 box）"
                                 % (where, max_lines, line_h, tail, need, box["h"]))
         elif not isinstance(fit, dict) and _num(base_pt) and isinstance(box, dict) and _num(box.get("h")):
-            line_h = base_pt * ls / 72.0
+            line_h = base_pt / 72.0 * SINGLE_LINE_EM * ls
             if line_h > box["h"] + _TOL_IN:
                 errs.append("%s 单行高 %.4f in 已超出 box.h %.4f，且无 autofit 可缩（应加 autofit 或加高 box）"
                             % (where, line_h, box["h"]))

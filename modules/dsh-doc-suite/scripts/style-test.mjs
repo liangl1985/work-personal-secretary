@@ -21,6 +21,10 @@ const t = (n, fn) => { try { const r = fn(); if (r === 'skip') { console.log('  
 const assert = (c, m) => { if (!c) throw new Error(m); };
 const pyLine = (lines) => lines.join('\n');
 
+// 行高口径（③a 统一）：WPS 实测单倍行高系数。行高 = 字号 ÷ 72 × 该系数 × 行距。
+// 三处必须一致：scripts/spec_sync.py / scripts/office/ppt_render.py / 本文件（下方有门禁用例）。
+const SINGLE_LINE_EM = 1.228;
+
 function pyRun(script, args) {
   const candidates = [
     ['py', ['-3', script, ...args]],
@@ -147,7 +151,7 @@ t('pptx 几何真值：三类页型齐全且在页内（②a）', () => {
     const pt = p.sizes_pt[e.text.size];
     const ls = e.text.line_spacing ?? lsDefault;
     const gapIn = e.bullet?.gap_after_pt ? e.bullet.gap_after_pt / 72 : 0;
-    const need = e.autofit.max_lines * (pt * ls / 72) + Math.max(0, e.autofit.max_lines - 1) * gapIn;
+    const need = e.autofit.max_lines * (pt / 72 * SINGLE_LINE_EM * ls) + Math.max(0, e.autofit.max_lines - 1) * gapIn;
     assert(need <= e.box.h + 0.002, e.role + ' 容量不自洽：' + need.toFixed(4) + ' in > box.h ' + e.box.h + '（max_lines 应按基础字号反算）');
     assert(e.autofit.min_size_pt <= pt, e.role + ' 的 min_size_pt 大于基础字号');
   }
@@ -156,12 +160,24 @@ t('pptx 几何真值：三类页型齐全且在页内（②a）', () => {
     if (!e.text || e.autofit) continue;
     const pt = p.sizes_pt[e.text.size];
     const ls = e.text.line_spacing ?? lsDefault;
-    assert(pt * ls / 72 <= e.box.h + 0.002, e.role + ' 单行高已超出 box.h 且无 autofit 可缩');
+    assert(pt / 72 * SINGLE_LINE_EM * ls <= e.box.h + 0.002, e.role + ' 单行高已超出 box.h 且无 autofit 可缩');
   }
   // 页脚带不得与主体区重叠（复核抓出：cards 网格区底 6.85 > source 顶 6.72）
   const gridEl = p.layouts.cards.elements.find((e) => e.role === 'grid');
   const srcEl = p.layouts.cards.elements.find((e) => e.role === 'source');
   assert(gridEl.box.y + gridEl.box.h <= srcEl.box.y + 0.002, 'cards 网格区与来源行重叠');
+});
+
+t('行高口径三处一致（WPS 实测单倍行高 1.228）', () => {
+  const grab = (file) => {
+    const m = fs.readFileSync(file, 'utf8').match(/SINGLE_LINE_EM\s*=\s*([0-9.]+)/);
+    return m ? Number(m[1]) : null;
+  };
+  const a = grab(path.join(mod, 'scripts', 'spec_sync.py'));
+  const b = grab(path.join(OFF, 'ppt_render.py'));
+  assert(a && b, '未取到常量：spec_sync=' + a + ' ppt_render=' + b);
+  assert(a === SINGLE_LINE_EM && b === SINGLE_LINE_EM,
+    '行高口径漂移：spec_sync=' + a + ' ppt_render=' + b + ' style-test=' + SINGLE_LINE_EM);
 });
 
 t('spec_sync 能拒绝越界 / 悬空引用 / 缺页型的几何（负例）', () => {
