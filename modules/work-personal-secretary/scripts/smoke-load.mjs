@@ -248,7 +248,7 @@ ok(itexts.includes('3.10.0') && itexts.includes('v22.14.0'), '渲染接口证据
 ok(itexts.includes('警告') && itexts.includes('缺失') && itexts.includes('正常'), '渲染状态徽标（ok / warn / missing）')
 ok(itexts.includes('查看安装引导（3 项待处理）'), '有缺项时主按钮为「查看安装引导（3 项待处理）」（R-1：只数硬项 host/node/python/pythonDeps/wps，Obsidian 可选不计）')
 ok(itexts.includes('补齐选中项（4）'), '底部主按钮为「补齐选中项（4）」')
-ok(itexts.includes('将安装：') && itexts.includes('Python 解释器（3.12）') && itexts.includes('Obsidian（可选组件）'), '确认文案列出将安装内容（含 Obsidian）')
+ok(itexts.includes('将安装：') && itexts.includes('Python 解释器（3.12）') && itexts.includes('Obsidian（知识库组件）'), '确认文案列出将安装内容（含 Obsidian；C1 改名后为「知识库组件」）')
 ok(itexts.includes('WPS Office 为第三方商业软件') && itexts.includes('许可协议'), 'WPS 项显示许可协议提示')
 ok(itexts.includes('逐项依次执行'), '批量入口标注「逐项依次执行」（不再整批转圈）')
 const boxes = findBoxes(installTree)
@@ -314,6 +314,17 @@ effectQueue = []
 installTree = expand(reg.render({ initialTab: 'install' }))
 itexts = collect(installTree, []).join(' | ')
 ok(itexts.includes('cmd-python') && itexts.includes('Successfully installed python'), '单项报告只回显该项')
+
+// 恢复 WPS 勾选：D1 之后 picked 由本页状态持有，重新检测不再重置它，
+// 上一段取消勾选的效果会跨段落保留 —— 这里显式勾回，保持后续用例的前提（4 项）。
+hookCursor = 0
+effectQueue = []
+installTree = expand(reg.render({ initialTab: 'install' }))
+const boxesRestore = findBoxes(installTree)
+if (boxesRestore[2]) boxesRestore[2].props.onChange()
+hookCursor = 0
+effectQueue = []
+installTree = expand(reg.render({ initialTab: 'install' }))
 
 // 兜底：宿主未注册 /fix 时，先逐个尝试一次，随即整体回退 POST /fix-all
 const originalFetch = globalThis.fetch
@@ -494,7 +505,7 @@ const pErrors = []
 for (const fn of effectQueue.slice()) { try { fn() } catch (err) { pErrors.push(err) } }
 ok(pErrors.length === 0, '安装子插件页挂载 effect 不抛错')
 await tick(50)
-ok(calls.length > 0 && calls[0].url === 'http://dsh.internal/work-personal-secretary/api/plugins', '桌面载体 GET /plugins 命中合成基址')
+ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/plugins'), '桌面载体 GET /plugins 命中合成基址（D1 后首个请求可能是 Section 的 /check，故按包含判定）')
 
 // ready 态：清单字段 / 徽标 / 默认勾选 / 底部说明
 hookCursor = 0
@@ -840,7 +851,7 @@ const iErrors = []
 for (const fn of effectQueue.slice()) { try { fn() } catch (err) { iErrors.push(err) } }
 ok(iErrors.length === 0, '初始化页挂载 effect 不抛错')
 await tick(50)
-ok(calls.length > 0 && calls[0].url === 'http://dsh.internal/work-personal-secretary/api/basedeck', '进入页 GET /basedeck（不带 workspace）命中合成基址')
+ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/basedeck'), '进入页 GET /basedeck（不带 workspace）命中合成基址（按包含判定）')
 
 // ── 段 1：默认取当前工作区 ──────────────────────────────────────
 hookCursor = 0
@@ -1139,7 +1150,7 @@ calls.length = 0
 expand(webReg.render({ initialTab: 'init' }))
 for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
 await tick(50)
-ok(calls.length > 0 && calls[0].url === '/work-personal-secretary/api/basedeck', 'Web 载体 GET /basedeck 走根相对路径（' + (calls[0] && calls[0].url) + '）')
+ok(calls.some((c) => c.url === '/work-personal-secretary/api/basedeck'), 'Web 载体 GET /basedeck 走根相对路径（按包含判定；首个请求可能是 /check）')
 ok(calls.every((c) => c.url.indexOf('dsh.internal') < 0), 'Web 载体不发合成基址请求（相对路径成功即止）')
 
 // ── workspaceSource 的预填与来源说明（derived / cwd / config） ──
@@ -1916,7 +1927,7 @@ calls.length = 0
 expand(webReg.render({ initialTab: 'config' }))
 for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
 await tick(60)
-ok(calls.length > 0 && calls[0].url === '/work-personal-secretary/api/settings', 'Web 载体 GET /settings 走根相对路径（' + (calls[0] && calls[0].url) + '）')
+ok(calls.some((c) => c.url === '/work-personal-secretary/api/settings'), 'Web 载体 GET /settings 走根相对路径（按包含判定；首个请求可能是 /check）')
 ok(calls.every((c) => c.url.indexOf('dsh.internal') < 0), 'Web 载体不发合成基址请求')
 
 // ── 段 12：重读要有可见反馈（真机曾误判「按钮被禁用」） ──────────
@@ -2003,7 +2014,7 @@ effectQueue = []
 calls.length = 0
 let nTree = expand(reg.render({ initialTab: 'install' }))
 let nText = collect(nTree, []).join(' | ')
-ok(nText.includes('检查运行环境、安装五个子插件、完成首次配置，并集中调整各子插件的设置。'), '首屏描述为 A 版原文（设计定稿 §1）')
+ok(!nText.includes('检查运行环境、安装五个子插件'), 'A1：首屏描述整句已删除（标题下不再留说明书式描述）')
 // BUILD 真比对（T10 升级）：读 package.json 的 version，断言 BUILD === 'v' + version
 const pkgVersion = (() => {
   try { return String(JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8')).version || '') } catch (err) { return '' }
@@ -2068,11 +2079,12 @@ ok(cText.includes('记忆库工作目录在本页填写，不作为解锁条件'
 const gatedBox = findAll(cTree, (x) => Boolean(x.props && x.props.style && x.props.style.pointerEvents === 'none'), [])[0]
 ok(Boolean(gatedBox), '门禁未就绪：正文容器 pointer-events:none（整页灰化）')
 
-// 门禁：三项就绪 → 自动解锁
+// 门禁：三项就绪 → **不自动解锁**，等使用者点「点击此处继续」（D3）
 globalThis.fetch = allOkFetch
 hookSlots = []
 hookCursor = 0
 effectQueue = []
+calls.length = 0
 cTree = expand(reg.render({ initialTab: 'core' }))
 for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
 await tick(60)
@@ -2080,10 +2092,23 @@ hookCursor = 0
 effectQueue = []
 cTree = expand(reg.render({ initialTab: 'core' }))
 cText = collect(cTree, []).join(' | ')
-ok(!cText.includes('先满足最低使用需求'), '三项就绪 → 门禁卡消失（自动解锁）')
-ok(cText.includes('目录与岗位') && cText.includes('保存配置并开始'), '解锁后显示目录与岗位表单 + 保存条')
+ok(cText.includes('先满足最低使用需求') && cText.includes('点击此处继续'),
+  'D3：三项就绪后仍停在门禁卡，按钮变为「点击此处继续」')
+ok(!cText.includes('去安装与检查'), 'D3：全绿时不再显示「去安装与检查」')
+const gcBtn = findButtons(cTree).filter((b) => label(b) === '点击此处继续')[0]
+ok(Boolean(gcBtn), 'D3：找到「点击此处继续」按钮')
+hookCursor = 0
+effectQueue = []
+if (gcBtn) gcBtn.props.onClick()
+cTree = expand(reg.render({ initialTab: 'core' }))
+cText = collect(cTree, []).join(' | ')
+ok(!cText.includes('先满足最低使用需求'), 'D3：点击后门禁卡消失（进入配置表单）')
+ok(cText.includes('目录与岗位') && cText.includes('保存配置并开始'), '点击后显示目录与岗位表单 + 保存条')
 ok(!findAll(cTree, (x) => Boolean(x.props && x.props.style && x.props.style.pointerEvents === 'none'), []).length,
   '解锁后不再有灰化容器')
+// D1：核心配置页不再自己发 /check（只发一次，由 Section 统一持有）
+const checkCount = calls.filter((c) => c.method === 'GET' && c.url === 'http://dsh.internal/work-personal-secretary/api/check').length
+ok(checkCount <= 1, 'D1：进入核心配置页不再重复发 /check（本次实测 ' + checkCount + ' 次）')
 
 // ══════════════════════════════════════════════════════════════════
 // [14] T4 核心配置：目录与岗位 + 保存即执行链 + 导入引导卡
@@ -2648,15 +2673,15 @@ const s17Inputs = findAll(s17Tree, (x) => x.type === 'input' && x.props && x.pro
 const s17Select = findAll(s17Tree, (x) => x.type === 'select', [])[0]
 const s17Save = () => findButtons(s17Tree).filter((b) => label(b) === '保存配置并开始')[0]
 
-// ① 预填三值 + 来源标注
+// ① 预填三值（来源标注按使用者反馈已删，这里做反向断言）
 ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/setup-state'),
   '进入页面 GET /api/setup-state（合成基址）')
 ok(s17Inputs.length === 2 && String(s17Inputs[0].props.value) === 'D:/ws/memories/me',
   '记忆库目录预填当前生效值（实测 ' + String(s17Inputs[0] && s17Inputs[0].props.value) + '）')
 ok(String(s17Inputs[1] && s17Inputs[1].props.value) === 'D:/ws', 'Obsidian 目录预填当前生效值')
 ok(Boolean(s17Select) && String(s17Select.props.value) === 'infosec', '工作岗位预填为对应预置项（infosec）')
-ok(s17Text.indexOf('当前生效值') >= 0, '标注「当前生效值」（source=settings）')
-ok(s17Text.indexOf('由记忆镜像反推') >= 0, '标注「由记忆镜像反推」（source=derived）')
+ok(s17Text.indexOf('当前生效值') < 0 && s17Text.indexOf('由记忆镜像反推') < 0,
+  'A2：来源标注不再显示（预填功能保留）')
 ok(Boolean(s17Save()) && s17Save().props.disabled !== true, '预填后三项齐 → 保存按钮可点')
 ok(calls.filter((c) => c.method === 'POST').length === 0, '预填不触发任何写操作（无 POST）')
 
@@ -2696,5 +2721,63 @@ const s17Inputs4 = findAll(s17Tree, (x) => x.type === 'input' && x.props && x.pr
 ok(s17Inputs4.length === 2 && String(s17Inputs4[0].props.value) === '', '接口 404 → 字段保持空（不臆造值）')
 ok(s17Text.indexOf('未能取到当前生效值') >= 0, '接口 404 → 给一行可读说明（不静默）')
 ok(Boolean(s17Save()), '接口 404 不拦主流程：表单与保存按钮仍在')
+// ══════════════════════════════════════════════════════════════════
+// [18] D 组：环境检测共享（只发一次）+ 加载态不显示「缺失」
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[18] 检测共享与加载态（D1/D2）')
+
+const t18FetchOf = (delayCheck) => async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/check') >= 0) {
+    if (delayCheck) return { ok: true, status: 200, json: async () => new Promise(() => {}) }
+    return jsonRes(CHECK_PAYLOAD)
+  }
+  if (u.indexOf('/plugins') >= 0) return jsonRes(PLUGINS_PAYLOAD)
+  if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/setup-state') >= 0) return jsonRes({ ok: true, memoryDir: { value: '', source: 'none' }, obsidianDir: { value: '', source: 'none' }, domain: { id: '', label: '', isPreset: false, source: 'none' } })
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+
+// D1：进入分区只发一次 /check；切页签不重复
+globalThis.fetch = t18FetchOf(false)
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+let t18Tree = expand(reg.render({ initialTab: 'install' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(50)
+hookCursor = 0
+effectQueue = []
+t18Tree = expand(reg.render({ initialTab: 'install' }))
+const t18Check1 = calls.filter((c) => c.url.indexOf('/api/check') >= 0).length
+const t18CoreTab = findAll(t18Tree, (x) => x.props && x.props['data-tab'] === 'core', [])[0]
+ok(Boolean(t18CoreTab), '拿到「核心配置」页签按钮')
+if (t18CoreTab) t18CoreTab.props.onClick()
+hookCursor = 0
+effectQueue = []
+// 只重渲染、不再跑 effectQueue：真实 React 只在**挂载**时跑一次 effect，
+// 替身里每渲染一次都会重新登记 effect，重复执行会伪造出第二次 /check。
+t18Tree = expand(reg.render({ initialTab: 'install' }))
+const t18Text = collect(t18Tree, []).join(' | ')
+const t18Check2 = calls.filter((c) => c.url.indexOf('/api/check') >= 0).length
+ok(t18Check1 === 1 && t18Check2 === 1, 'D1：进入安装与检查页再到核心配置页，/check 全程只发 1 次（实测 ' + t18Check1 + ' → ' + t18Check2 + '）')
+ok(t18Text.indexOf('目录与岗位') >= 0, '切到核心配置页拿到的是同一份检测结果（表单已渲染）')
+
+// D2：结果未到手时三项显示「检测中…」，绝不显示「缺失」
+globalThis.fetch = t18FetchOf(true)
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let t18bTree = expand(reg.render({ initialTab: 'core' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(30)
+hookCursor = 0
+effectQueue = []
+t18bTree = expand(reg.render({ initialTab: 'core' }))
+const t18bText = collect(t18bTree, []).join(' | ')
+ok(t18bText.indexOf('检测中…') >= 0, 'D2：检测未返回时门禁显示「检测中…」')
+ok(t18bText.indexOf('缺失') < 0, 'D2：加载态不把「未知」画成「缺失」')
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
