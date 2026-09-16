@@ -167,6 +167,38 @@ def check_wps():
         return {"ok": False, "evidence": str(e)[:120], "progid": None, "fix": "检查 pywin32 安装"}
 
 
+def check_media():
+    """[4] 媒体链路（可选能力）：生图只看**配置来源**（不探测密钥内容）+ 图示运行时。
+
+    红线（55 号第八章）：**不对 ARK 密钥做自检** —— 探测密钥会诱导把密钥写进配置；
+    这里只报告「环境变量是否已设置」，绝不读取/回显密钥值。
+    """
+    media_dir = SCRIPTS_DIR / "media"
+    graph = {"ok": False, "runtime": "", "browser": "", "fix": ""}
+    try:
+        if str(media_dir) not in sys.path:
+            sys.path.insert(0, str(media_dir))
+        import gen_diagram as gd            # 复用同一套运行时查找逻辑（单一真值）
+        tools, cli = gd.find_runtime()
+        if tools and cli:
+            graph["ok"] = True
+            graph["runtime"] = str(tools)
+        edge = gd._edge_path()
+        graph["browser"] = edge or "未找到 Edge（不下载 Chromium 时必须用本机 Edge）"
+        if not graph["ok"]:
+            graph["fix"] = ("powershell -ExecutionPolicy Bypass -File "
+                            "%s%s" % (media_dir, os.sep + "setup_mermaid.ps1 -Install"))
+    except Exception as exc:               # noqa: BLE001
+        graph["fix"] = "（检测失败：%s）" % exc
+    image = {
+        "key_env": bool(os.environ.get("ARK_API_KEY")),
+        "endpoint": os.environ.get("ARK_ENDPOINT") or "https://ark.cn-beijing.volces.com/api/v3（默认北京区）",
+        "model": os.environ.get("ARK_MODEL") or "doubao-seedream-5-0-pro-260628（默认）",
+        "probe_key": False,
+    }
+    return {"image": image, "graph": graph}
+
+
 def main():
     ap = argparse.ArgumentParser(description="dsh-doc-suite 环境自检")
     ap.add_argument("--json", action="store_true", help="输出 JSON（供插件解析）")
@@ -192,6 +224,7 @@ def main():
     py = check_python()
     deps = check_deps()
     wps = None if args.skip_wps else check_wps()
+    media = check_media()
 
     missing = [d["pip"] for d in deps if not d["ok"] and d["required"]]
     missing_opt = [d["pip"] for d in deps if not d["ok"] and not d["required"]]
@@ -204,7 +237,7 @@ def main():
 
     if args.json:
         print(json.dumps({
-            "python": py, "deps": deps, "wps": wps,
+            "python": py, "deps": deps, "wps": wps, "media": media,
             "missing_required": missing, "missing_optional": missing_opt,
             "fix_command": fix_cmd, "fix_command_optional": fix_cmd_opt,
             "ready": bool(py["ok"] and not missing and (args.skip_wps or (wps or {}).get("ok"))),
@@ -237,6 +270,24 @@ def main():
             print("    修复：" + wps["fix"])
 
     ok = py["ok"] and not missing and (args.skip_wps or (wps or {}).get("ok"))
+    img = media["image"]
+    graph = media["graph"]
+    print("\n[4] 媒体链路（可选能力：生图 / 图示）")
+    print("    生图(ARK) 密钥：" + ("已设置环境变量 ARK_API_KEY（不回显）"
+                              if img["key_env"] else
+                              "未配置 → 生图不可用，将回退代码矢量绘制（可在设置页 media.ark.api_key 填写）"))
+    print("              端点：" + img["endpoint"])
+    print("              模型：" + img["model"])
+    if graph["ok"]:
+        print("    图示(mermaid) ✅ 运行时：" + graph["runtime"])
+        print("                  浏览器：" + graph["browser"])
+    else:
+        print("    图示(mermaid) ⚠️ 未就绪（属可选能力；缺它不影响文档四格式处理）")
+        if graph["browser"]:
+            print("                  浏览器：" + graph["browser"])
+        if graph["fix"]:
+            print("    修复：" + graph["fix"])
+
     print("\n" + "-" * 62)
     print("结论：" + ("✅ 环境就绪，文档四格式能力可用" if ok else "❌ 环境未就绪，请按上面的修复命令补齐"))
     print("-" * 62)

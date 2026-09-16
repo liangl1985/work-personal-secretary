@@ -16,9 +16,10 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { installSettings, mediaSummary } from './settings.js'
 
 export const name = 'dsh-doc-suite'
-export const inject = ['commands']
+export const inject = ['commands', 'settings']
 
 const MODULE_ROOT = fileURLToPath(new URL('..', import.meta.url))
 const DOCTOR = join(MODULE_ROOT, 'doctor.py')
@@ -36,6 +37,18 @@ function runDoctor(launcher, args, timeoutMs = 60000) {
 export function apply(ctx, config = {}) {
   const disposers = []
   const launcher = config.pythonLauncher || 'py -3'
+  // 媒体设置（生图/生视频）：密钥默认空、不进日志；环境变量优先于设置项（脚本侧读取）
+  const settings = installSettings(ctx, config)
+
+  function mediaLine() {
+    const s = mediaSummary(settings.read())
+    return [
+      '媒体设置：provider ' + s.provider,
+      '生图 ' + (s.imageEnabled ? '开' : '关') + '（模型 ' + s.model + ' / 尺寸 ' + s.size + '）',
+      'ARK 密钥 ' + (s.hasApiKey ? '已配置（不显示明文）' : '未配置 → 生图将回退代码矢量绘制'),
+      '生视频 ' + (s.videoEnabled ? '开' : '关'),
+    ].join(' ｜ ')
+  }
 
   disposers.push(ctx.commands.register({
     name: 'doc-doctor',
@@ -50,7 +63,9 @@ export function apply(ctx, config = {}) {
       for (const l of attempts) {
         const r = await runDoctor(l, wantFix ? ['--fix'] : [])
         last = r
-        if (r.ok) return { kind: 'success', text: (r.stdout || '').trim() || '（自检无输出）' }
+        if (r.ok) {
+          return { kind: 'success', text: (r.stdout || '').trim() + '\n' + mediaLine() }
+        }
         const out = (r.stdout || '') + (r.stderr || '')
         if (!/was not found|Microsoft Store|No such file|ENOENT/i.test(out)) {
           // 解释器能跑，但自检未通过（缺依赖/缺 WPS）——直接回报，别继续试别的启动器

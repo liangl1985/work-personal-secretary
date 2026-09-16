@@ -1,3 +1,54 @@
+## 0.6.0 — 2026-09-16（⑥：生图（ARK）与图示（mermaid）链路 + 媒体设置项）
+
+### 一、这一步做了什么
+
+按 55 号第七、八章落地两条媒体链路 —— **生图优先生成、失败自动回退代码矢量**；图示走**本地**渲染。
+
+- **scripts/media/gen_image.py**（ARK 生图）
+  - image --prompt --out [--ref] [--size] [--model] [--endpoint] [--timeout-ms] [--retries] [--api-key]；check 只报告配置状态
+  - 密钥来源：--api-key > 环境变量 ARK_API_KEY；**不打印、不落日志、不进报错文本**（只报「已配置 / 未配置」）
+  - 调用前**显式告知**「生图是云端服务，prompt 将发送到该服务；请勿包含客户信息、报价或涉密内容」
+  - 失败分类：模型未开通 / 限额 / 鉴权 / 网络 → 中文原因 + **exit 4（可回退）**；4xx 不重试，网络与 5xx 重试
+- **scripts/media/gen_diagram.py**（mermaid 本地渲染）
+  - render <in.mmd> <out.png|svg> [--tools-dir] [--scale] [--theme] [--background]；check 报告运行时与浏览器
+  - 运行时查找顺序：--tools-dir > 环境变量 DSH_DOC_SUITE_MERMAID > 标准位置 ~/.dsh/data/dsh-doc-suite/tools/mermaid
+  - **不自动安装**：缺失时打印安装命令（含 PUPPETEER_SKIP_DOWNLOAD=1）+ **exit 4（可回退：导出 SVG 人工插图）**
+  - 未提供 puppeteer.json 时按本机 Edge 自动生成**临时**配置（不污染运行目录）
+- **scripts/media/setup_mermaid.ps1**（安装 / 迁移；带 UTF-8 BOM 兼容 PowerShell 5.1）
+  - 默认只体检；-Install 在标准位置安装（不下载 Chromium，用本机 Edge）；-MoveFrom <目录> 迁移已有运行时
+- **设置项 lib/settings.js + lib/index.js**：inject 加 settings，注册命名空间 dsh-doc-suite
+  - 键路径：media.provider / media.image.{enabled,model,size,timeout_ms,retries,fallback_to_vector} / media.video.{enabled,model} / media.ark.{api_key,endpoint}
+  - **密钥默认空字符串**（发布件永不含密钥）；默认值三处一致（schema / DEFAULTS / patch 注释）
+  - /doc-doctor 输出追加「媒体设置」摘要（**不含密钥明文**）
+- **doctor.py** 新增 [4] 媒体链路：报告生图配置来源（**不对密钥做自检** —— 探测会诱导把密钥写进配置）与图示运行时；缺运行时给安装命令
+
+### 二、实测（本机，事实）
+
+- mermaid 真渲染：arch.mmd → PNG 13,431 B + SVG 13,438 B，exit 0（运行时取本机已有目录）
+- gen_image：无密钥 → exit 4 + 明确回退提示；**假密钥 + 坏端点 → exit 4，且输出中无密钥明文**
+- setup_mermaid.ps1 体检：node v24.18.0 / npm 11.16.0 / Edge 153.0.4234.32 / 标准位置运行时未安装
+- doctor.py：[4] 段输出正常，结论仍「环境就绪」（媒体属**可选能力**，不拖红环境判断）
+
+### 三、回归
+
+新增 scripts/media-test.mjs **14 例**（要点 / BOM / inject / 无密钥回退 / **密钥不泄露** / 运行时缺失 / 真渲染 PNG+SVG / 语法错误 / PS 5.1 可执行 / **schema 默认值与 DEFAULTS 一致** / doctor JSON 含 media），本机 **14/0**；CI 无依赖自动 SKIP。
+
+### 四、验证
+
+spec_sync --check 0 · style-test 24/0 · ppt-render-test 24/0 · ppt-style-test 11/0 · media-test **14/0** · 仓库↔profile 0 差异
+
+### 五、需要重启 DSH
+
+本步改了 lib/**（新增 settings 命名空间与 inject）—— **设置页的新配置项要重启 DSH 后才出现**；scripts/**.py 免重启、skills/** 需重启。
+
+### 六、未做
+
+⑦ 收口（office-ppt 技能扩写 + media-gen 技能新增 + README/NOTICE/CHANGELOG 三处默认值一致）· ⑧ T5 专家卡 · 主题库与母版导入（后置）· **生图云端实测**（需使用者提供 ARK 密钥；当前默认无密钥 → 自动回退矢量）
+
+### 七、回退
+
+版本改回 **0.5.0** 或 git revert 本提交；profile 同步一次并重启 DSH。
+
 ## 0.5.0 — 2026-09-16（④：PPT 存量美化 ppt_style.py · apply-style）
 
 ### 一、这一步做了什么
