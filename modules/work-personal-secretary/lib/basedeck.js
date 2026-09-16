@@ -33,11 +33,15 @@
  * @module work-personal-secretary/basedeck
  */
 
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import {
+  accessSync,
+  closeSync,
+  constants,
   copyFileSync,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -1494,6 +1498,202 @@ function planDirs(ctx) {
   })
 }
 
+// ───────────────────── 目录锁（与 dsh-work-memory 共用同一把 .work-memory.lock） ─────────────────────
+//
+// 为什么放在本文件：basedeck 的写回（记忆种子 / 记忆体结构）与 identity 的身份写入都会写
+// <记忆库目录>/MEMORY.md，两者**必须共用同一把锁**；锁实现只有一份（本文件），identity.js
+// 通过 re-export 暴露同名导出，杜绝「各写一把锁」。
+// 锁口径抄自 dsh-work-memory/lib/store.js 的 withDirLock：同进程重入计数 + 陈旧锁清理 + 超时。
+
+/** 锁文件名（与 dsh-work-memory 一致） */
+export const MEMORY_LOCK_NAME = '.work-memory.lock'
+/** 陈旧锁判定：mtime 早于该值即可抢占 */
+const STALE_LOCK_MS = 10 * 1000
+/** 同步版等待上限（同步上下文无法让出事件循环，取小值） */
+const LOCK_WAIT_SYNC_MS = 1000
+/** 异步版等待上限（等待期间让出事件循环） */
+const LOCK_WAIT_ASYNC_MS = 5 * 1000
+const LOCK_RETRY_MS = 25
+/** 拿不到锁时的统一可读失败信息 */
+export const LOCK_BUSY_MESSAGE = '记忆库正被其它写入占用（等待 ' + MEMORY_LOCK_NAME + ' 超时）：本次写入已放弃，未改动任何文件，请稍后重试'
+
+/** 同进程重入计数：外层已持锁时，内层调用直接复用（不再抢同一把文件锁） */
+const heldLocks = new Map()
+
+/** 抢占一把锁；返回释放函数 */
+function acquireMemoryLock(dir, waitMs) {
+  mkdirSync(dir, { recursive: true })
+  const lockPath = join(dir, MEMORY_LOCK_NAME)
+  const deadline = Date.now() + waitMs
+  for (;;) {
+    try {
+      const fd = openSync(lockPath, 'wx')
+      writeFileSync(fd, String(process.pid), 'utf8')
+      closeSync(fd)
+      break
+    } catch (err) {
+      if (!err || err.code !== 'EEXIST') throw err
+      let stale = false
+      try {
+        const st = statSync(lockPath)
+        stale = Date.now() - st.mtimeMs > STALE_LOCK_MS
+      } catch (e) {
+        continue
+      }
+      if (stale) {
+        try { rmSync(lockPath, { force: true }) } catch (e) { /* best-effort */ }
+        continue
+      }
+      if (Date.now() > deadline) throw new Error(LOCK_BUSY_MESSAGE)
+      const t = Date.now()
+      while (Date.now() - t < LOCK_RETRY_MS) { /* spin */ }
+    }
+  }
+  return () => {
+    try { rmSync(lockPath, { force: true }) } catch (e) { /* best-effort */ }
+  }
+}
+
+/** 已持锁则复用（返回 leave 函数），否则返回 null */
+function enterReentrant(dir) {
+  const key = String(dir)
+  const depth = heldLocks.get(key) || 0
+  if (depth > 0) {
+    heldLocks.set(key, depth + 1)
+    return () => {
+      const next = (heldLocks.get(key) || 1) - 1
+      if (next <= 0) heldLocks.delete(key)
+      else heldLocks.set(key, next)
+    }
+  }
+  return null
+}
+
+/**
+ * 同步版目录锁（供同步写回路径使用；等待上限 1s，避免长时间阻塞事件循环）。
+ * @param {string} dir 记忆库目录
+ * @param {Function} fn 临界区（同步）
+ */
+export function withMemoryDirLock(dir, fn) {
+  const leave = enterReentrant(dir)
+  if (leave) {
+    try { return fn() } finally { leave() }
+  }
+  const release = acquireMemoryLock(dir, LOCK_WAIT_SYNC_MS)
+  heldLocks.set(String(dir), 1)
+  try {
+    return fn()
+  } finally {
+    heldLocks.delete(String(dir))
+    release()
+  }
+}
+
+/**
+ * 异步版目录锁：等待期间 await setTimeout **让出事件循环**（宿主进程不再被锁等待阻塞）。
+ * @param {string} dir 记忆库目录
+ * @param {Function} fn 临界区（可同步可异步）
+ * @returns {Promise<*>}
+ */
+export async function withMemoryDirLockAsync(dir, fn) {
+  const key = String(dir)
+  const leave = enterReentrant(dir)
+  if (leave) {
+    try { return await fn() } finally { leave() }
+  }
+  mkdirSync(dir, { recursive: true })
+  const lockPath = join(dir, MEMORY_LOCK_NAME)
+  const deadline = Date.now() + LOCK_WAIT_ASYNC_MS
+  for (;;) {
+    let acquired = false
+    try {
+      const fd = openSync(lockPath, 'wx')
+      writeFileSync(fd, String(process.pid), 'utf8')
+      closeSync(fd)
+      acquired = true
+    } catch (err) {
+      if (!err || err.code !== 'EEXIST') throw err
+      let stale = false
+      try {
+        const st = statSync(lockPath)
+        stale = Date.now() - st.mtimeMs > STALE_LOCK_MS
+      } catch (e) {
+        continue
+      }
+      if (stale) {
+        try { rmSync(lockPath, { force: true }) } catch (e) { /* best-effort */ }
+        continue
+      }
+      if (Date.now() > deadline) throw new Error(LOCK_BUSY_MESSAGE)
+      await new Promise((resolve) => setTimeout(resolve, LOCK_RETRY_MS))
+    }
+    if (!acquired) continue
+    heldLocks.set(key, 1)
+    try {
+      return await fn()
+    } finally {
+      heldLocks.delete(key)
+      try { rmSync(lockPath, { force: true }) } catch (e) { /* best-effort */ }
+    }
+  }
+}
+
+/**
+ * 严格读文件：把「不存在」与「存在但读不到」分开（ENOENT/ENOTDIR = 不存在；其余 = 读失败）。
+ * 写前判定用：文件存在却读不到时必须**拒绝写入**，而不是当成不存在去新建。
+ * @returns {{exists:boolean, readable:boolean, buffer?:Buffer, text?:string, bom?:string, code:string, error:string}}
+ */
+export function readFileStrict(file) {
+  try {
+    const buffer = readFileSync(file)
+    return { exists: true, readable: true, buffer: buffer, text: buffer.toString('utf8'), bom: detectBom(buffer), code: '', error: '' }
+  } catch (err) {
+    const code = err && err.code ? String(err.code) : ''
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return { exists: false, readable: false, code: code, error: '' }
+    }
+    return { exists: true, readable: false, code: code || 'EUNKNOWN', error: String(err && err.message ? err.message : err) }
+  }
+}
+
+/**
+ * 写目标护栏（与「核心配置 → 可用性检查」同口径）：落盘前统一校验目标目录。
+ * 拒绝：未填写 / 非绝对路径 / 用户主目录 / 同名文件占用 / 不可写。
+ * @returns {{ok:boolean, dir?:string, error?:string}}
+ */
+export function assertWritableDir(dir, label, env = process.env) {
+  const name = label || '目标目录'
+  const raw = typeof dir === 'string' ? dir.trim() : ''
+  if (!raw) return { ok: false, error: name + '未填写' }
+  const p = normalizePath(raw)
+  if (!isAbsolute(p)) return { ok: false, error: name + '必须是绝对路径：' + raw }
+  if (isHomePath(p, env)) return { ok: false, error: name + '不能是用户主目录（会把记忆与结构写进家目录）：' + posix(p) }
+  let st = null
+  try { st = statSync(p) } catch (e) { st = null }
+  if (st && !st.isDirectory()) return { ok: false, error: name + '位置已被同名文件占用：' + posix(p) }
+  let probe = p
+  if (!st) {
+    probe = ''
+    let cur = p
+    for (let i = 0; i < 64; i++) {
+      const parent = dirname(cur)
+      if (parent === cur) break
+      cur = parent
+      try {
+        if (statSync(cur).isDirectory()) { probe = cur; break }
+      } catch (e) { /* 继续向上找 */ }
+    }
+    if (!probe) return { ok: false, error: name + '找不到可用的上级目录：' + posix(p) }
+  }
+  try {
+    accessSync(probe, constants.W_OK)
+  } catch (err) {
+    const code = err && err.code ? String(err.code) : 'EACCES'
+    return { ok: false, error: name + '不可写（' + code + '）：' + posix(probe) }
+  }
+  return { ok: true, dir: p }
+}
+
 // ───────────────────────────── 写回器 ─────────────────────────────
 
 /** 轮转备份：保留最近 keep 份（best-effort，失败不阻断） */
@@ -1528,7 +1728,8 @@ export function backupFile(file, io, date) {
 
 /** 原子写（同目录临时文件 → rename），UTF-8 无 BOM */
 export function atomicWriteText(file, text, io) {
-  const tmp = file + '.wps-tmp'
+  // 临时名带 pid + 随机后缀：两个进程（或两个并发请求）不会互踩同一个 .wps-tmp
+  const tmp = file + '.wps-tmp-' + process.pid + '-' + randomBytes(4).toString('hex')
   io.writeFileSync(tmp, Buffer.from(String(text), 'utf8'))
   try {
     io.renameSync(tmp, file)
@@ -1589,11 +1790,11 @@ export function applyBaseDeckItem(id, options = {}) {
   }
 
   if (id === 'agentsMd') return applyAgentsMd(ctx, item, item.internal || {}, io, dryRun, base)
-  if (id === 'memorySeed') return applyMemorySeed(ctx, item, item.internal || {}, io, dryRun, base)
+  if (id === 'memorySeed') return applyMemorySeed(ctx, item, item.internal || {}, io, dryRun, base, options)
   if (id === 'skills') return applySkills(ctx, item, item.internal || {}, io, dryRun, base)
   if (id === 'settings') return applySettings(ctx, item, item.internal || {}, io, dryRun, base)
-  if (id === 'memoryDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base)
-  if (id === 'knowledgeDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base)
+  if (id === 'memoryDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base, options)
+  if (id === 'knowledgeDeck') return applyDeckFiles(ctx, item, item.internal || {}, io, dryRun, base, options)
   return applyDirs(ctx, item, item.internal || {}, io, dryRun, base)
 }
 
@@ -1712,7 +1913,26 @@ function applyAgentsMd(ctx, item, internal, io, dryRun, base) {
   })
 }
 
-function applyMemorySeed(ctx, item, internal, io, dryRun, base) {
+/**
+ * 记忆种子写回。
+ * 1.1.3 起：写 **<记忆库目录>/** 的路径一律先取 .work-memory.lock（与 dsh-work-memory 共用），
+ * 并在**锁内重算计划再写**（读-改-写必须在临界区内，否则并发的 memory_remember 会被覆盖）。
+ */
+function applyMemorySeed(ctx, item, internal, io, dryRun, base, options) {
+  if (dryRun || !ctx.memoryDir) return applyMemorySeedLocked(ctx, item, internal, io, dryRun, base)
+  const preGuard = assertWritableDir(ctx.memoryDir, '记忆库目录', ctx.env)
+  if (!preGuard.ok) return Object.assign(base, { ok: false, detail: '已拒绝写入：' + preGuard.error })
+  try {
+    return withMemoryDirLock(ctx.memoryDir, () => {
+      const fresh = planBaseDeck(options || {}).items.filter((it) => it.id === 'memorySeed')[0]
+      return applyMemorySeedLocked(ctx, fresh || item, (fresh && fresh.internal) || internal, io, false, base)
+    })
+  } catch (err) {
+    return Object.assign(base, { ok: false, detail: '记忆库写入未执行（未改动任何文件）：' + String(err && err.message ? err.message : err) })
+  }
+}
+
+function applyMemorySeedLocked(ctx, item, internal, io, dryRun, base) {
   if (item.status === 'up_to_date') return Object.assign(base, { ok: true, detail: item.detail + '（未写盘）' })
   if (item.status === 'broken' || item.status === 'none') return Object.assign(base, { ok: false, detail: item.detail + '（未写盘）' })
   if (!ctx.memoryFile || !internal.newEntries || internal.newEntries.length === 0) {
@@ -1721,8 +1941,7 @@ function applyMemorySeed(ctx, item, internal, io, dryRun, base) {
 
   const hadFile = internal.exists
   const oldText = internal.text || ''
-  const trimmed = oldText.replace(/[\r\n]+$/, '')
-  const body = (trimmed === '' ? '' : trimmed + '\n§\n') + internal.newEntries.join('\n§\n') + '\n'
+  const body = appendEntriesText(oldText, internal.newEntries)
   const bytes = Buffer.byteLength(body, 'utf8')
   base.wouldWriteBytes = bytes
   const plannedBackup = hadFile ? ctx.memoryFile + BACKUP_SUFFIX + stamp(ctx.now) : ''
@@ -1735,6 +1954,10 @@ function applyMemorySeed(ctx, item, internal, io, dryRun, base) {
         + (plannedBackup ? '，写前备份到 ' + posix(plannedBackup) : '，记忆库原本不存在无需备份') + '）',
     })
   }
+
+  // 落盘前护栏：与「可用性检查」同口径（拒绝主目录 / 非绝对路径 / 不可写 / 同名文件占用）
+  const guard = assertWritableDir(ctx.memoryDir, '记忆库目录', ctx.env)
+  if (!guard.ok) return Object.assign(base, { ok: false, detail: '已拒绝写入：' + guard.error })
 
   let backup = ''
   try {
@@ -1755,13 +1978,17 @@ function applyMemorySeed(ctx, item, internal, io, dryRun, base) {
     rollbackWrite(ctx.memoryFile, backup, io, hadFile)
     return Object.assign(base, { ok: false, backup: posix(backup), detail: '写后校验失败（已回滚）：' + verify.error })
   }
-  const after = verify.text.split('\n§\n').map((e) => e.trim()).filter((e) => e.length > 0)
-  const preserved = internal.entries.every((e, i) => after[i] === e)
-  const added = internal.newEntries.every((e) => after.indexOf(e) >= 0)
-  if (!preserved || !added) {
+  if (verify.text !== body) {
     rollbackWrite(ctx.memoryFile, backup, io, hadFile)
-    return Object.assign(base, { ok: false, backup: posix(backup), detail: '写后校验失败：既有条目未被完整保留（已回滚）' })
+    return Object.assign(base, { ok: false, backup: posix(backup), detail: '写后校验失败：文件内容与预期不一致（已回滚）' })
   }
+  const tailMatch = /[ \t\r\n]*$/.exec(oldText)
+  const head = oldText.slice(0, oldText.length - (tailMatch ? tailMatch[0].length : 0))
+  if (head.trim() !== '' && !verify.text.startsWith(head)) {
+    rollbackWrite(ctx.memoryFile, backup, io, hadFile)
+    return Object.assign(base, { ok: false, backup: posix(backup), detail: '写后校验失败：原有内容前缀发生变化（已回滚）' })
+  }
+  const after = parseMemoryEntries(verify.text)
 
   return Object.assign(base, {
     ok: true,
@@ -1771,7 +1998,7 @@ function applyMemorySeed(ctx, item, internal, io, dryRun, base) {
     entriesBefore: internal.entries.length,
     entriesAfter: after.length,
     preservedEntries: internal.entries.length,
-    detail: item.detail + '；已写入 ' + bytes + ' 字节，原有 ' + internal.entries.length + ' 条逐条保留'
+    detail: item.detail + '；已写入 ' + bytes + ' 字节，原有 ' + internal.entries.length + ' 条与尾部空白逐字节保留'
       + (backup ? '，备份 ' + posix(backup) : ''),
   })
 }
@@ -2116,12 +2343,24 @@ export function memoryEntryId(content) {
   return sha256Text('wps-deck:' + String(content)).slice(0, 12)
 }
 
-/** 在既有文本末尾追加条目（保留原有内容逐字不变） */
+/**
+ * 在既有文本末尾追加条目。
+ * **不再全量序列化**：原文去掉尾随空白后的部分（head）与尾随空白（tail）逐字节保留，
+ * 只把「分隔符 + 新条目」插在两者之间 —— 既有条目与文件尾部空白都不被规范化。
+ * @returns {string}
+ */
 export function appendEntriesText(existingText, newEntries) {
-  const trimmed = String(existingText == null ? '' : existingText).replace(/[\r\n]+$/, '')
-  const parts = trimmed === '' ? [] : [trimmed]
-  for (const e of newEntries) parts.push(e)
-  return parts.join(ENTRY_SEP) + '\n'
+  const src = String(existingText == null ? '' : existingText)
+  const list = Array.isArray(newEntries) ? newEntries.filter((e) => typeof e === 'string' && e.length > 0) : []
+  if (list.length === 0) return src
+  const add = list.join(ENTRY_SEP)
+  const m = /[ \t\r\n]*$/.exec(src)
+  const tailLen = m ? m[0].length : 0
+  const cut = src.length - tailLen
+  const head = src.slice(0, cut)
+  const tail = src.slice(cut)
+  if (head.trim() === '') return add + '\n'
+  return head + ENTRY_SEP + add + tail
 }
 
 /** 读取数据文件（读不到返回空串） */
@@ -2167,10 +2406,15 @@ function planMemoryDeck(ctx) {
 
   // ② MEMORY.md 写入「使用者身份」占位（已有同前缀条目则跳过）
   const memoryFile = ctx.memoryFile
-  const rawMem = memoryFile ? readFileRaw(memoryFile) : null
+  // 「不存在」与「存在但读不到」严格区分：后者必须拒写（否则会把 EACCES 当成首装去新建）
+  const memStrict = memoryFile ? readFileStrict(memoryFile) : { exists: false, readable: false, code: '', error: '' }
+  const rawMem = memStrict.readable ? { text: memStrict.text, bom: memStrict.bom } : null
   const memText = rawMem ? rawMem.text : ''
-  if (rawMem && rawMem.bom) broken = 'MEMORY.md 带 ' + rawMem.bom + ' BOM，已拒绝写入；请先另存为 UTF-8 无 BOM'
-  let memEntries = rawMem ? parseMemoryEntries(memText) : []
+  if (memStrict.exists && !memStrict.readable) {
+    broken = 'MEMORY.md 存在但读不到（' + (memStrict.code || 'EACCES') + '）：已拒绝写入，避免覆盖；请检查文件权限或占用后重试'
+  }
+  if (!broken && rawMem && rawMem.bom) broken = 'MEMORY.md 带 ' + rawMem.bom + ' BOM，已拒绝写入；请先另存为 UTF-8 无 BOM'
+  const memEntries = rawMem ? parseMemoryEntries(memText) : []
   if (!broken && rawMem && memText.trim() !== '' && memEntries.length === 0) {
     broken = 'MEMORY.md 存在但读不出任何条目，已拒绝追加（避免覆盖你的记忆库）'
   }
@@ -2208,8 +2452,11 @@ function planMemoryDeck(ctx) {
   // ④ PROJECTS/工作秘书.md：四条（使用说明 / 安装说明 / 待办·开局 / 技能库），只补缺失的
   if (!broken) {
     const projectFile = join(ctx.memoryDir, 'PROJECTS', WORK_SECRETARY_FILE)
-    const projectRaw = readFileRaw(projectFile)
-    if (projectRaw && projectRaw.bom) {
+    const projectStrict = readFileStrict(projectFile)
+    const projectRaw = projectStrict.readable ? { text: projectStrict.text, bom: projectStrict.bom } : null
+    if (projectStrict.exists && !projectStrict.readable) {
+      broken = 'PROJECTS/' + WORK_SECRETARY_FILE + ' 存在但读不到（' + (projectStrict.code || 'EACCES') + '）：已拒绝写入'
+    } else if (projectRaw && projectRaw.bom) {
       broken = 'PROJECTS/' + WORK_SECRETARY_FILE + ' 带 ' + projectRaw.bom + ' BOM，已拒绝写入'
     } else {
       const projectText = projectRaw ? projectRaw.text : ''
@@ -2367,12 +2614,32 @@ function planKnowledgeDeck(ctx) {
   const files = []
   const writes = []
   let broken = ''
+  // 冲突判定（1.1.3 修：此前 broken 恒为空，是死分支）——受管子目录位置被同名**文件**占用即拒写
+  for (const t of dirTargets) {
+    let st = null
+    try { st = statSync(t.dir) } catch (e) { st = null }
+    if (st && !st.isDirectory()) {
+      broken = '知识库子目录位置被同名文件占用：' + posix(t.dir)
+      break
+    }
+  }
   const fileSpecs = [
     { name: VAULT_HOME_FILE, path: join(vault, VAULT_HOME_FILE), content: buildVaultHomeText(modules), note: '总入口（含已登记的 ' + modules.length + ' 个业务模块）' },
     { name: VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_OVERVIEW_FILE, path: join(vault, VAULT_TOOLS_DIR_NAME, VAULT_TOOL_OVERVIEW_FILE), content: buildToolOverviewText(), note: '工具入口与同步纪律' },
     { name: VAULT_OBSIDIAN_DIR_NAME + '/' + VAULT_APP_JSON_FILE, path: join(vault, VAULT_OBSIDIAN_DIR_NAME, VAULT_APP_JSON_FILE), content: VAULT_APP_JSON_TEXT, note: '.obsidian 最小配置' },
   ]
   for (const s of fileSpecs) {
+    const strict = readFileStrict(s.path)
+    if (strict.exists && !strict.readable) {
+      broken = s.name + ' 存在但读不到（' + (strict.code || 'EACCES') + '）：已拒绝写入，请检查文件权限或占用后重试'
+      break
+    }
+    let st = null
+    try { st = statSync(s.path) } catch (e) { st = null }
+    if (st && !st.isFile()) {
+      broken = s.name + ' 位置被同名目录占用：' + posix(s.path)
+      break
+    }
     if (fileExists(s.path)) {
       files.push({ name: s.name, path: posix(s.path), state: 'exists', detail: '已存在，保留不覆盖（' + s.note + '）' })
       continue
@@ -2384,8 +2651,9 @@ function planKnowledgeDeck(ctx) {
   const missingDirs = dirs.filter((d) => d.state === 'missing')
   const bytes = writes.reduce((acc, w) => acc + w.bytes, 0)
   const status = broken ? 'broken' : (missingDirs.length === 0 && writes.length === 0 ? 'up_to_date' : (dirs.every((d) => d.state === 'missing') ? 'append' : 'update'))
-  const action = status === 'up_to_date' ? '已是最新无需写入' : '将只补缺失的目录与文件（不覆盖任何已有内容）'
-  const detail = '模块骨架登记 ' + modules.length + ' 个（' + (modules.join('、') || '暂无') + '）；目录缺失 ' + missingDirs.length + ' / ' + dirs.length + '；待写入 ' + writes.length + ' 个文件'
+  const action = broken ? '结构不可安全写入，已停止'
+    : (status === 'up_to_date' ? '已是最新无需写入' : '将只补缺失的目录与文件（不覆盖任何已有内容）')
+  const detail = broken || ('模块骨架登记 ' + modules.length + ' 个（' + (modules.join('、') || '暂无') + '）；目录缺失 ' + missingDirs.length + ' / ' + dirs.length + '；待写入 ' + writes.length + ' 个文件')
 
   return makeItem(spec, {
     status: status,
@@ -2407,7 +2675,31 @@ function planKnowledgeDeck(ctx) {
 
 // ── ⑥⑦ 共用写回器 ──
 
-function applyDeckFiles(ctx, item, internal, io, dryRun, base) {
+/**
+ * ⑥⑦ 共用写回器。
+ * 1.1.3 起：写 <记忆库目录>/ 的项（memoryDeck）先取 .work-memory.lock 并在**锁内重算**再写
+ * （否则并发的 memory_remember / 自动记日志会与本项互相覆盖）；knowledgeDeck 写的是知识库目录，
+ * 不是记忆库，不共用这把锁。两项落盘前都过 assertWritableDir 护栏（与「可用性检查」同口径）。
+ */
+function applyDeckFiles(ctx, item, internal, io, dryRun, base, options) {
+  const lockDir = item.id === 'memoryDeck' ? (ctx.memoryDir || '') : ''
+  if (!dryRun && lockDir) {
+    // 护栏前置到取锁之前：被拒的目标目录不该被创建锁文件
+    const preGuard = assertWritableDir(lockDir, '记忆库目录', ctx.env)
+    if (!preGuard.ok) return Object.assign(base, { ok: false, detail: '已拒绝写入：' + preGuard.error })
+    try {
+      return withMemoryDirLock(lockDir, () => {
+        const fresh = planBaseDeck(options || {}).items.filter((it) => it.id === item.id)[0]
+        return applyDeckFilesLocked(ctx, fresh || item, (fresh && fresh.internal) || internal, io, false, base)
+      })
+    } catch (err) {
+      return Object.assign(base, { ok: false, detail: '记忆库写入未执行（未改动任何文件）：' + String(err && err.message ? err.message : err) })
+    }
+  }
+  return applyDeckFilesLocked(ctx, item, internal, io, dryRun, base)
+}
+
+function applyDeckFilesLocked(ctx, item, internal, io, dryRun, base) {
   if (item.status === 'up_to_date') {
     return Object.assign(base, { ok: true, detail: item.detail + '（未写盘）' })
   }
@@ -2428,6 +2720,12 @@ function applyDeckFiles(ctx, item, internal, io, dryRun, base) {
       detail: item.detail + '；干跑：未写盘（将创建 ' + dirs.length + ' 个目录、写入 ' + writes.length + ' 个文件，共 ' + totalBytes + ' 字节）',
     })
   }
+
+  // 落盘前护栏（与「可用性检查」同口径）：拒绝主目录 / 非绝对路径 / 不可写 / 同名文件占用
+  const guardDir = item.id === 'knowledgeDeck' ? ctx.obsidianDir : ctx.memoryDir
+  const guardLabel = item.id === 'knowledgeDeck' ? 'Obsidian 知识库目录' : '记忆库目录'
+  const guard = assertWritableDir(guardDir, guardLabel, ctx.env)
+  if (!guard.ok) return Object.assign(base, { ok: false, detail: '已拒绝写入：' + guard.error })
 
   const createdDirs = []
   const createdFiles = []

@@ -5,10 +5,17 @@
  * defaults/install.zh-CN.md、defaults/use.zh-CN.md 渲染成网页。**单一真相源是那两个 md**，
  * 本文件只做呈现，不持有任何说明文字（避免两处措辞漂移）。
  *
+ * 两种输出形态（1.1.3 返工 R1-3）：
+ *   renderPage(title, body)     —— 完整 HTML 文档（浏览器直接访问用；默认形态）
+ *   renderFragment(title, body) —— **片段**（embed=1 用）：无 <html>/<head>/<body>，
+ *                                 只带作用域化样式 + <article class="wps-doc">，供客户端
+ *                                 注入宿主 GUI 容器（不污染宿主全局样式）。
+ * 样式一律作用域到 .wps-doc（无 html/body/* 这类全局选择器）。
+ *
  * 纪律：
  * 1. 零运行时依赖（只用字符串处理），宿主 peer 缺失时不影响加载；
  * 2. 输出**转义**后的 HTML：md 里的一切文本先 escape，再识别语法，不接受原始 HTML 直出；
- * 3. 链接只放行 http(s) / # / 根相对路径，其余一律降级为 #（防 javascript: 注入）；
+ * 3. 链接只放行 http(s) / # / 根相对路径；protocol-relative（//host/…）与其余一律降级为 '#'；
  * 4. 只覆盖两个 md 实际用到的语法：标题 / 段落 / 列表 / 表格 / 代码块 / 引用块 / 行内代码 / 粗体。
  *
  * @module work-personal-secretary/md
@@ -46,7 +53,8 @@ export function renderInline(text) {
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (m, label, href) => {
       const raw = String(href).trim()
-      const safe = /^(https?:\/\/|#|\/)/i.test(raw) ? raw : '#'
+      // 先拒协议相对地址（//host/path）——浏览器会把它当跨站地址，属放行漏洞
+      const safe = /^\/\//.test(raw) ? '#' : (/^(https?:\/\/|#|\/)/i.test(raw) ? raw : '#')
       return '<a href="' + escapeHtml(safe) + '" target="_blank" rel="noreferrer noopener">' + label + '</a>'
     })
     return s
@@ -65,7 +73,7 @@ function isTableRule(line) {
 }
 
 /**
- * Markdown → HTML 片段。
+ * Markdown → HTML 片段（不含外层容器与样式）。
  * @param {string} markdown
  * @returns {string}
  */
@@ -133,43 +141,68 @@ export function renderMarkdown(markdown) {
   return out.join('\n')
 }
 
-/** 页面样式（随 webServer 直出；不含任何外部资源与外链） */
-export const PAGE_CSS = [
-  ':root{--ink:#1f2328;--ink3:#6b7280;--line:#eef0f2;--brand:#1d4ed8}',
-  '*{box-sizing:border-box}',
-  'html,body{margin:0;padding:0}',
-  'body{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#f4f6f8}',
-  '.doc{max-width:760px;margin:0 auto;padding:32px 32px 56px;background:#fff;min-height:100vh}',
-  '.doc h1{font-size:22px;margin:0 0 6px}',
-  '.doc h2{font-size:17px;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}',
-  '.doc h3{font-size:15px;margin:16px 0 4px}',
-  '.doc p{margin:8px 0}',
-  '.doc ul,.doc ol{margin:8px 0;padding-left:24px}',
-  '.doc li{margin:4px 0}',
-  '.doc code{font-family:Consolas,"Courier New",monospace;font-size:13px;background:#f2f4f7;padding:1px 5px;border-radius:4px}',
-  '.doc pre{background:#20242b;color:#e6e9ee;padding:12px 14px;border-radius:9px;overflow-x:auto;font-size:13px;margin:10px 0}',
-  '.doc pre code{background:transparent;color:inherit;padding:0;font-size:13px}',
-  '.doc table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}',
-  '.doc th,.doc td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}',
-  '.doc th{color:var(--ink3);font-weight:600;font-size:13px}',
-  '.doc .callout{border-left:3px solid #cfd8e3;background:#fbfcfd;padding:9px 13px;margin:12px 0;border-radius:0 6px 6px 0}',
-  '.doc .callout p{margin:4px 0}',
-  '.doc a{color:var(--brand)}',
-].join(String.fromCharCode(10))
+/** 作用域根类名（客户端嵌入宿主页面时靠它隔离样式） */
+export const DOC_SCOPE_CLASS = 'wps-doc'
 
 /**
- * 套上完整 HTML 外壳。
- * @param {string} title 页面标题（同时进 title 与页首）
+ * 页面样式：**全部选择器都作用域在 .wps-doc 下**。
+ * 不出现 html / body / * 这类全局选择器 —— 片段注入宿主 GUI 时不会污染全局样式。
+ * （因此也不能用 .wps-doc * 这种通配写法，box-sizing 显式列元素。）
+ */
+export const PAGE_CSS = [
+  '.wps-doc{--ink:#1f2328;--ink3:#6b7280;--line:#eef0f2;--brand:#1d4ed8}',
+  '.wps-doc{font-family:"Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;font-size:15px;line-height:1.75;color:var(--ink);background:#fff;max-width:760px;margin:0 auto;padding:28px 28px 40px}',
+  '.wps-doc,.wps-doc h1,.wps-doc h2,.wps-doc h3,.wps-doc p,.wps-doc ul,.wps-doc ol,.wps-doc li,.wps-doc table,.wps-doc th,.wps-doc td,.wps-doc pre,.wps-doc code,.wps-doc .callout{box-sizing:border-box}',
+  '.wps-doc h1{font-size:22px;margin:0 0 6px}',
+  '.wps-doc h2{font-size:17px;margin:26px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}',
+  '.wps-doc h3{font-size:15px;margin:16px 0 4px}',
+  '.wps-doc p{margin:8px 0}',
+  '.wps-doc ul,.wps-doc ol{margin:8px 0;padding-left:24px}',
+  '.wps-doc li{margin:4px 0}',
+  '.wps-doc code{font-family:Consolas,"Courier New",monospace;font-size:13px;background:#f2f4f7;padding:1px 5px;border-radius:4px}',
+  '.wps-doc pre{background:#20242b;color:#e6e9ee;padding:12px 14px;border-radius:9px;overflow-x:auto;font-size:13px;margin:10px 0}',
+  '.wps-doc pre code{background:transparent;color:inherit;padding:0;font-size:13px}',
+  '.wps-doc table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}',
+  '.wps-doc th,.wps-doc td{border-bottom:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}',
+  '.wps-doc th{color:var(--ink3);font-weight:600;font-size:13px}',
+  '.wps-doc .callout{border-left:3px solid #cfd8e3;background:#fbfcfd;padding:9px 13px;margin:12px 0;border-radius:0 6px 6px 0}',
+  '.wps-doc .callout p{margin:4px 0}',
+  '.wps-doc a{color:var(--brand)}',
+].join(String.fromCharCode(10))
+
+/** 完整文档额外的一条页面底色（**只出现在 renderPage**；片段里不含任何全局选择器） */
+const PAGE_DOC_EXTRA_CSS = 'body{margin:0;padding:0;background:#f4f6f8}'
+
+/**
+ * 片段形态（embed=1）：无 <html>/<head>/<body>，样式作用域在 .wps-doc。
+ * @param {string} title 只用于容器 aria-label（不产出 <head>）
+ * @param {string} bodyHtml renderMarkdown 的输出
+ * @returns {string}
+ */
+export function renderFragment(title, bodyHtml) {
+  const NL = String.fromCharCode(10)
+  const label = title ? ' aria-label="' + escapeHtml(title) + '"' : ''
+  return '<style>' + NL + PAGE_CSS + NL + '</style>' + NL
+    + '<article class="' + DOC_SCOPE_CLASS + '"' + label + '>' + NL
+    + bodyHtml
+    + NL + '</article>' + NL
+}
+
+/**
+ * 完整文档形态（默认）：浏览器可直接访问。
+ * @param {string} title 页面标题
  * @param {string} bodyHtml renderMarkdown 的输出
  * @returns {string}
  */
 export function renderPage(title, bodyHtml) {
-  return '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n'
-    + '<meta charset="utf-8">\n'
-    + '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-    + '<title>' + escapeHtml(title) + '</title>\n'
-    + '<style>\n' + PAGE_CSS + '\n</style>\n'
-    + '</head>\n<body>\n<article class="doc">\n'
+  const NL = String.fromCharCode(10)
+  return '<!DOCTYPE html>' + NL + '<html lang="zh-CN">' + NL + '<head>' + NL
+    + '<meta charset="utf-8">' + NL
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">' + NL
+    + '<title>' + escapeHtml(title) + '</title>' + NL
+    + '<style>' + NL + PAGE_CSS + NL + PAGE_DOC_EXTRA_CSS + NL + '</style>' + NL
+    + '</head>' + NL + '<body>' + NL
+    + '<article class="' + DOC_SCOPE_CLASS + '" aria-label="' + escapeHtml(title) + '">' + NL
     + bodyHtml
-    + '\n</article>\n</body>\n</html>\n'
+    + NL + '</article>' + NL + '</body>' + NL + '</html>' + NL
 }

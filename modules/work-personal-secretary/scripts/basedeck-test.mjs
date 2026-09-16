@@ -48,7 +48,9 @@ import {
   IDENTITY_PLACEHOLDER_TEXT,
   SETTINGS_TARGETS,
   STARTER_TODOS,
+  VAULT_MIRROR_DIR_NAME,
   applyBaseDeck,
+  withMemoryDirLock,
   applyBaseDeckItem,
   currentBlockBody,
   decideAgentsStatus,
@@ -922,10 +924,14 @@ ok(isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'a', 'b')) === true && isS
 ok(volumeOf(deckMem) === volumeOf(deckVault), 'volumeOf：同盘返回同一卷标识')
 
 section('[20] 1.1.3 新路由契约（preflight / identity / domain）+ 随包网页')
+const home13 = join(TMP_ROOT, 'home13', '.dsh')
+const idMem = join(TMP_ROOT, 'idroute')
+// GET /identity 的可读范围 = 「设置里的记忆库目录或其子路径」：夹具里把 memoryDir 写进 settings.yaml
+writeText(join(home13, 'settings.yaml'), 'work-memory:' + NL + '  memoryDir: ' + idMem.replace(/\\/g, '/') + NL)
 const ctx13 = makeMockCtx()
 installApi(ctx13, {
   platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'),
-  env: {}, now: FIXED_NOW, dshHome: join(TMP_ROOT, 'home13', '.dsh'),
+  env: {}, now: FIXED_NOW, dshHome: home13,
   probeOptions: { skip: ['host', 'node', 'python', 'pythonDeps', 'wps', 'obsidian', 'subPlugins'] },
 })
 ok(ctx13.routes.filter((r) => r.kind === 'exact').length === API_PATHS.length + PAGE_PATHS.length, 'exact = API_PATHS + 两个随包网页')
@@ -940,9 +946,15 @@ async function call13(method, sub, body, headers) {
 const pfRoute = await call13('GET', '/preflight')
 ok(pfRoute.status === 200 && pfRoute.body.ok === true && Array.isArray(pfRoute.body.checks) && pfRoute.body.ready === false,
   'GET /preflight → 200 + checks（目录未填时 ready=false）')
-const idMem = join(TMP_ROOT, 'idroute')
-const idGet0 = await call13('GET', '/identity?memoryDir=' + encodeURIComponent(idMem))
-ok(idGet0.status === 200 && idGet0.body.ok === true && idGet0.body.exists === false, 'GET /identity 首次 → exists=false')
+const idGet0 = await call13('GET', '/identity')
+ok(idGet0.status === 200 && idGet0.body.ok === true && idGet0.body.exists === false, 'GET /identity（用设置里的记忆库目录）首次 → exists=false')
+const idGetSub = await call13('GET', '/identity?memoryDir=' + encodeURIComponent(join(idMem, 'sub')))
+ok(idGetSub.status === 200 && idGetSub.body.ok === true, 'GET /identity 允许记忆库目录的**子路径**（只读范围之内）')
+const idGetOut = await call13('GET', '/identity?memoryDir=' + encodeURIComponent(join(TMP_ROOT, 'not-my-memory')))
+ok(idGetOut.status === 403 && /只能读取/.test(String(idGetOut.body && idGetOut.body.error)), 'GET /identity 越界路径 → 403 可读错误（可读范围受限）')
+const idCrossRes = makeRes()
+await h13(makeReq({ method: 'GET', url: API_ROOT + '/identity', headers: { host: '127.0.0.1:43120', origin: 'http://evil.example' } }), idCrossRes)
+ok(idCrossRes.status === 403, 'GET /identity 带跨站 Origin → 403（只读同源守卫）')
 const idDry = await call13('POST', '/identity/save', { memoryDir: idMem, content: '从事信息安全售前工作。' }, REQ_HEADERS)
 ok(idDry.status === 200 && idDry.body.dryRun === true && idDry.body.status === 'append', 'POST /identity/save 未传 dryRun → dry-run 计划 append')
 ok(!existsSync(join(idMem, 'MEMORY.md')), 'identity dry-run 未落盘')
@@ -998,10 +1010,66 @@ await pageGuide(makeReq({ method: 'GET', url: PAGE_ROOT + '/guide' }), gRes)
 ok(gRes.status === 200 && String(gRes.headers['content-type']).indexOf('text/html') === 0, 'GET /work-personal-secretary/guide → text/html; charset=utf-8')
 ok(gRes.body.indexOf('<!DOCTYPE html>') === 0 && gRes.body.indexOf('安装引导') > 0, 'guide 页是完整 HTML 且含标题')
 ok(gRes.body.indexOf('py -3 -m pip install') > 0, 'guide 页正文来自 defaults/install.zh-CN.md（与记忆条目同源）')
+const gEmbed = makeRes()
+await pageGuide(makeReq({ method: 'GET', url: PAGE_ROOT + '/guide?embed=1' }), gEmbed)
+ok(gEmbed.status === 200 && gEmbed.body.indexOf('<html') < 0 && gEmbed.body.indexOf('<head') < 0 && gEmbed.body.indexOf('<body') < 0,
+  'GET /work-personal-secretary/guide?embed=1 → 片段（无 html/head/body）')
+ok(gEmbed.body.indexOf('class="wps-doc"') > 0 && gEmbed.body.indexOf('html{') < 0 && gEmbed.body.indexOf('body{') < 0,
+  'embed 片段自带 .wps-doc 作用域样式、无全局选择器')
+ok(gEmbed.body.indexOf('py -3 -m pip install') > 0, 'embed 片段正文仍与 defaults/install.zh-CN.md 同源')
 const hRes = makeRes()
 await pageHelp(makeReq({ method: 'GET', url: PAGE_ROOT + '/help' }), hRes)
 ok(hRes.status === 200 && hRes.body.indexOf('使用说明') > 0, 'GET /work-personal-secretary/help → text/html 使用说明')
 ok(hRes.body.indexOf('保存配置并开始') > 0, 'help 页正文用定稿按钮文案「保存配置并开始」')
+
+section('[21] R1-2 / R1-4 / 小6：记忆库写入取锁 + 写前护栏 + 知识库冲突拒写')
+const lockMem = join(TMP_ROOT, 'lockmem')
+const lockWs = makeWorkspace('lockws')
+const lockHome = join(TMP_ROOT, 'lockhome', '.dsh')
+const lockBase = opts({ workspace: lockWs, dshHome: lockHome, settingsFile: join(lockHome, 'settings.yaml'), memoryDir: lockMem, moduleDir: MODULE_DIR })
+const lockPath = join(lockMem, '.work-memory.lock')
+let sawLock = false
+const lockIo = { writeFileSync: (p, data, o) => { if (existsSync(lockPath)) sawLock = true; writeFileSync(p, data, o) } }
+const lockRes = applyBaseDeckItem('memoryDeck', Object.assign({}, lockBase, { dryRun: false, io: lockIo }))
+ok(lockRes.ok === true && lockRes.wroteAny === true, 'memoryDeck 真写成功（夹具）')
+ok(sawLock === true, '写盘发生在 .work-memory.lock 持有期间（确实取了锁，与 dsh-work-memory 共用同一把）')
+ok(!existsSync(lockPath), '写完后锁文件已释放')
+ok(readdirSync(lockMem).every((n) => n.indexOf('.wps-tmp') < 0), '无固定名 .wps-tmp 残留（临时名带 pid + 随机后缀）')
+
+let sawSeedLock = false
+const seedMem = join(TMP_ROOT, 'seedlockmem')
+const seedWs = makeWorkspace('seedlock')
+const seedHome = join(TMP_ROOT, 'seedlockhome', '.dsh')
+const seedLockPath = join(seedMem, '.work-memory.lock')
+const seedIo = { writeFileSync: (p, data, o) => { if (existsSync(seedLockPath)) sawSeedLock = true; writeFileSync(p, data, o) } }
+const seedRes = applyBaseDeckItem('memorySeed', Object.assign({}, opts({
+  workspace: seedWs, dshHome: seedHome, settingsFile: join(seedHome, 'settings.yaml'),
+  memoryDir: seedMem, seedFile: realSeed, moduleDir: MODULE_DIR,
+}), { dryRun: false, io: seedIo }))
+ok(seedRes.ok === true && sawSeedLock === true, 'memorySeed 写 MEMORY.md 时同样持锁（既有路径此前无锁）')
+ok(!existsSync(seedLockPath), 'memorySeed 写完锁文件已释放')
+
+const guardBase = opts({ workspace: lockWs, dshHome: lockHome, settingsFile: join(lockHome, 'settings.yaml'), memoryDir: homedir(), moduleDir: MODULE_DIR })
+const guardRes = applyBaseDeckItem('memoryDeck', Object.assign({}, guardBase, { dryRun: false }))
+ok(guardRes.ok === false && /主目录/.test(guardRes.detail), '记忆库目录 = 用户主目录 → 拒绝写入（与可用性检查同口径）')
+ok(!existsSync(join(homedir(), '.work-memory.lock')), '被拒时不创建锁文件（护栏前置到取锁之前）')
+
+const vaultBad = join(TMP_ROOT, 'vaultbad')
+mkdirSync(vaultBad, { recursive: true })
+writeText(join(vaultBad, VAULT_MIRROR_DIR_NAME), 'not-a-directory')
+const badBase = opts({ workspace: lockWs, dshHome: lockHome, settingsFile: join(lockHome, 'settings.yaml'), memoryDir: lockMem, obsidianDir: vaultBad, moduleDir: MODULE_DIR })
+const kBad = planBaseDeck(badBase).items.filter((i) => i.id === 'knowledgeDeck')[0]
+ok(kBad.status === 'broken' && /同名文件占用/.test(kBad.detail), '知识库子目录被同名文件占用 → broken（补上此前恒不成立的死分支）')
+const kBadRes = applyBaseDeckItem('knowledgeDeck', Object.assign({}, badBase, { dryRun: false }))
+ok(kBadRes.ok === false, 'broken 的知识库项真写 → 拒绝（未写盘）')
+
+const reDir = join(TMP_ROOT, 'reentrant-lock')
+mkdirSync(reDir, { recursive: true })
+const tReentrant = Date.now()
+const reOut = withMemoryDirLock(reDir, () => withMemoryDirLock(reDir, () => 'inner-ok'))
+ok(reOut === 'inner-ok' && Date.now() - tReentrant < 500,
+  '同进程重入不再抢同一把文件锁（内层直接复用，不死等；实测 ' + (Date.now() - tReentrant) + 'ms）')
+ok(!existsSync(join(reDir, '.work-memory.lock')), '重入退出后锁文件已释放')
 
 section('[15] 真实环境只读快照首尾比对')
 let realDrift = 0

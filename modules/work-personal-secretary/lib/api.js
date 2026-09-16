@@ -45,7 +45,7 @@
 import { URL } from 'node:url'
 import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import {
   FIX_WHITELIST,
   FIX_EXECUTION_ORDER,
@@ -90,9 +90,9 @@ import {
 import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
 // 1.1.3 新增能力的宿主侧实现（T6 可用性检查 / T7 身份写入 / T8 岗位生成 / T9 随包网页）
 import { runPreflight } from './preflight.js'
-import { applyIdentity, readIdentity } from './identity.js'
+import { applyIdentityAsync, readIdentity } from './identity.js'
 import { DOMAIN_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
-import { renderMarkdown, renderPage } from './md.js'
+import { renderFragment, renderMarkdown, renderPage } from './md.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
@@ -111,6 +111,11 @@ export const PAGE_PATHS = ['/guide', '/help']
 /**
  * 两个网页的**单一真相源**映射（T9）：页面正文只来自 defaults 下的 md，
  * 同一份 md 也被写进记忆条目 PROJECTS/工作秘书.md 的前两条，杜绝两处措辞漂移。
+ *
+ * 两种输出形态（1.1.3 返工 R1-3，**接口已冻结**）：
+ *   不带 embed（默认）→ 完整 HTML 文档（浏览器直接访问）
+ *   ?embed=1          → **片段**：无 <html>/<head>/<body>，样式全部作用域在 .wps-doc，
+ *                       供客户端用 innerHTML 注入宿主 GUI（不污染全局样式）
  */
 export const PAGE_SPECS = {
   '/guide': { file: 'install.zh-CN.md', title: '工作秘书 · 安装引导' },
@@ -200,6 +205,43 @@ function sameOriginGuard(req) {
     return '跨站请求已拒绝'
   }
   return null
+}
+
+/**
+ * **只读路由**的同源守卫（GET 不带 content-type，不能复用 sameOriginGuard）：
+ * 同源导航 / 同源 fetch 往往不带 Origin → 放行；**带了** Origin 且与 Host 不同源 → 拒绝（拦跨站读取）。
+ * @returns {string|null} 拒绝原因，放行返回 null
+ */
+function sameOriginLooseGuard(req) {
+  const host = String(req.headers.host || '')
+  const origin = String(req.headers.origin || '')
+  if (!origin) return null
+  if (!host) return '缺少 Host 头'
+  try {
+    if (new URL(origin).host !== host) return '跨站请求已拒绝'
+  } catch (e) {
+    return '跨站请求已拒绝'
+  }
+  return null
+}
+
+/** 路径规范化（比较用：resolve + 正斜杠 + Windows 大小写不敏感） */
+function pathKey(p) {
+  const s = String(p == null ? '' : p).trim()
+  if (!s) return ''
+  let out = s
+  try { out = resolve(s) } catch (e) { out = s }
+  out = out.replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' ? out.toLowerCase() : out
+}
+
+/** child 是否等于 parent 或在其之下（用于把 GET /identity 的可读范围限制在记忆库目录内） */
+function isPathWithin(child, parent) {
+  const a = pathKey(child)
+  const b = pathKey(parent)
+  if (!a || !b) return false
+  if (a === b) return true
+  return a.indexOf(b + '/') === 0
 }
 
 // ───────────────────────────── 白名单解析（纯函数，可单测） ─────────────────────────────
@@ -605,9 +647,16 @@ export function installApi(ctx, deps = {}) {
       }
 
       // GET /identity[?memoryDir=] —— 当前「使用者身份」条目状态与正文（只读）
+      // 1.1.3 返工 R1-4：补只读同源守卫，并把可读范围限制为「配置里的记忆库目录或其子路径」
       if (req.method === 'GET' && (sub === '/identity' || sub === '/identity/')) {
+        const guard = sameOriginLooseGuard(req)
+        if (guard) return sendError(res, 403, guard)
         const dirParam = String(url.searchParams.get('memoryDir') || '').trim().slice(0, 1024)
-        return sendJson(res, 200, readIdentity({ memoryDir: dirParam || currentMemoryDir() }))
+        const allowedDir = currentMemoryDir()
+        if (dirParam && !isPathWithin(dirParam, allowedDir)) {
+          return sendError(res, 403, 'memoryDir 只能读取当前配置的记忆库目录或其子路径；已拒绝：' + dirParam)
+        }
+        return sendJson(res, 200, readIdentity({ memoryDir: dirParam || allowedDir }))
       }
 
       // POST /identity/save { content, memoryDir?, dryRun } —— 整条写入身份（同源保护；dryRun 默认 true）
@@ -617,11 +666,13 @@ export function installApi(ctx, deps = {}) {
         let body
         try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
         const dirParam = typeof body.memoryDir === 'string' ? body.memoryDir.trim().slice(0, 1024) : ''
-        const result = applyIdentity({
+        // 用**异步**锁版本：等待 .work-memory.lock 时让出事件循环，不阻塞宿主进程
+        const result = await applyIdentityAsync({
           memoryDir: dirParam || currentMemoryDir(),
           content: typeof body.content === 'string' ? body.content.slice(0, 4000) : '',
           now: installNow,
           dryRun: body.dryRun !== false,
+          env: installEnv,
         })
         return sendJson(res, 200, result.ok ? result : failBody(result))
       }
@@ -1019,8 +1070,12 @@ export function installApi(ctx, deps = {}) {
       const subPath = url.pathname.indexOf(PAGE_ROOT) === 0 ? url.pathname.slice(PAGE_ROOT.length) : ''
       const spec = PAGE_SPECS[subPath]
       if (!spec) return notFound(404, '页面不存在')
+      // embed=1 → 只回**片段**（无 html/head/body + 作用域化样式），供客户端注入宿主 GUI；
+      // 不带 embed（默认）→ 完整文档，浏览器直接访问。
+      const embed = String(url.searchParams.get('embed') || '') === '1'
       const raw = readFileSync(join(installModuleDir, 'defaults', spec.file), 'utf8')
-      return sendHtml(res, 200, renderPage(spec.title, renderMarkdown(raw)))
+      const body = renderMarkdown(raw)
+      return sendHtml(res, 200, embed ? renderFragment(spec.title, body) : renderPage(spec.title, body))
     } catch (err) {
       const why = String(err && err.message ? err.message : err).replace(/[<>&]/g, '')
       ctx.logger?.warn?.('work-personal-secretary: 随包网页渲染失败：' + why)

@@ -14,6 +14,9 @@
  *   [8] 回滚：写后校验失败 → 文件恢复原样
  *   [9] BOM 拒绝 / 空正文拒绝
  *  [10] 陈旧锁被清理后仍可写入，写完锁文件不残留
+ *  [11] R1-1：区间切片替换 —— 既有条目首尾空白 / 文件尾随空白 / CRLF 分隔符均逐字节保留；
+ *       构造「区间外被改动」的反例，验证 othersUntouched **不再恒真**
+ *  [12] R1-4 / 建议5：用户主目录被拒且不建锁文件；持锁时同步写入给出可读失败且等待上限收紧
  *
  * 隔离红线：全部夹具在 os.tmpdir() 下自建；本脚本不读写任何真实记忆库。
  */
@@ -30,7 +33,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 
 import {
   ENTRY_DELIMITER,
@@ -201,6 +204,72 @@ const r10 = applyIdentity({ memoryFile: memFile, content: '陈旧锁不应阻塞
 ok(r10.ok === true && r10.wroteAny === true, '陈旧锁被清理后写入成功')
 ok(!existsSync(lockPath), '写完锁文件不残留')
 ok(readFileSync(memFile, 'utf8').indexOf('使用者身份：陈旧锁不应阻塞。') > 0, '内容已写入')
+
+section('[11] R1-1 区间切片替换：空白 / CRLF 逐字节保留 + 校验不再恒真')
+const memA = join(ROOT, 'mem-a')
+mkdirSync(memA, { recursive: true })
+const fileA = join(memA, 'MEMORY.md')
+const keepHead = '  [id:keep00000001] [2026-09-01] [tag:常规] 首条带前导空格与尾随空格  '
+const identOld = '[id:ident0000001] [2026-09-10] [tag:关键] 使用者身份：旧正文'
+const keepTail = '[id:tail00000001] [2026-09-15] [tag:常规] 末条带尾随空格  '
+const rawA = '\n' + keepHead + '\n§\n' + identOld + '\n§\n' + keepTail + '\n\n'
+writeFileSync(fileA, rawA, 'utf8')
+const rA = applyIdentity({ memoryFile: fileA, content: '新正文。', now: NOW, dryRun: false })
+const afterA = readFileSync(fileA, 'utf8')
+ok(rA.ok === true && rA.status === 'rewrite', '中间身份条目改写成功')
+ok(afterA.indexOf('使用者身份：新正文。') > 0 && afterA.indexOf('旧正文') < 0, '正文被整条替换')
+ok(afterA.indexOf(keepHead) > 0 && afterA.indexOf(keepTail) > 0, '既有条目的首尾空白逐字保留（不再被 trim 规范化）')
+ok(afterA.startsWith('\n  [id:keep00000001]'), '文件前导空行保留')
+ok(afterA.endsWith('\n\n'), '文件尾随空白保留')
+ok(rA.othersUntouched === true, '逐字节校验通过 → othersUntouched=true')
+
+const memB = join(ROOT, 'mem-b')
+mkdirSync(memB, { recursive: true })
+const fileB = join(memB, 'MEMORY.md')
+const crlf1 = '[id:crlf00000001] [2026-09-01] [tag:常规] CRLF 首条'
+const crlfIdent = '[id:crlfident001] [2026-09-10] [tag:关键] 使用者身份：CRLF 旧正文'
+const crlf3 = '[id:crlf00000003] [2026-09-15] [tag:常规] CRLF 末条'
+const rawB = crlf1 + '\r\n§\r\n' + crlfIdent + '\r\n§\r\n' + crlf3 + '\r\n'
+writeFileSync(fileB, rawB, 'utf8')
+const rB = applyIdentity({ memoryFile: fileB, content: 'CRLF 新正文。', now: NOW, dryRun: false })
+const afterB = readFileSync(fileB, 'utf8')
+ok(rB.ok === true && rB.count === 1, 'CRLF 分隔符下仍唯一定位身份条目（宽松切分生效）')
+ok(afterB.startsWith(crlf1 + '\r\n§\r\n'), 'CRLF 首条与分隔符逐字节保留')
+ok(afterB.endsWith('\r\n§\r\n' + crlf3 + '\r\n'), 'CRLF 末条与文件尾随换行逐字节保留')
+ok(afterB.indexOf('使用者身份：CRLF 新正文。') > 0 && afterB.indexOf('CRLF 旧正文') < 0, 'CRLF 场景正文被整条替换')
+
+const memC = join(ROOT, 'mem-c')
+mkdirSync(memC, { recursive: true })
+const fileC = join(memC, 'MEMORY.md')
+const rawC = '[id:f0000000001] [2026-09-01] [tag:常规] 其它条目\n§\n[id:ident0000002] [2026-09-10] [tag:关键] 使用者身份：待改\n'
+writeFileSync(fileC, rawC, 'utf8')
+const rC = applyIdentity({
+  memoryFile: fileC, memoryDir: memC, content: '新正文。', now: NOW, dryRun: false,
+  io: { writeFileSync: (p, data, o) => { writeFileSync(p, String(data).replace('其它条目', '其它条目X'), o) } },
+})
+ok(rC.ok === false && rC.othersUntouched === false, '写后校验捕获「区间外被改动」→ ok:false 且 othersUntouched=false（不再恒真）')
+ok(/已回滚/.test(rC.detail), '反例触发回滚：' + rC.detail.slice(0, 40) + '…')
+ok(readFileSync(fileC, 'utf8') === rawC, '反例回滚后文件与写前逐字一致')
+
+section('[12] R1-4 / 建议5：写入护栏 + 持锁不阻塞')
+const rD = applyIdentity({ memoryDir: homedir(), content: 'x', now: NOW, dryRun: false })
+ok(rD.ok === false && /主目录/.test(rD.detail), '目标为用户主目录 → 拒绝（与可用性检查同口径）')
+ok(!existsSync(join(homedir(), '.work-memory.lock')), '被拒目标目录没有创建锁文件（护栏前置生效）')
+
+const memE = join(ROOT, 'mem-e')
+mkdirSync(memE, { recursive: true })
+const fileE = join(memE, 'MEMORY.md')
+const rawE = '[id:e0000000001] [2026-09-01] [tag:关键] 使用者身份：旧\n'
+writeFileSync(fileE, rawE, 'utf8')
+const lockE = join(memE, '.work-memory.lock')
+writeFileSync(lockE, 'other-process', 'utf8')
+const t0 = Date.now()
+const rE = applyIdentity({ memoryFile: fileE, memoryDir: memE, content: '新', now: NOW, dryRun: false })
+const waited = Date.now() - t0
+ok(rE.ok === false && /正被其它写入占用/.test(rE.detail), '持锁时同步写入 → 可读失败信息：' + rE.detail.slice(0, 30) + '…')
+ok(waited < 4000, '同步等待上限收紧（实测 ' + waited + 'ms < 4000ms；旧实现会死等约 5s）')
+ok(readFileSync(fileE, 'utf8') === rawE, '拿不到锁时一字未写')
+rmSync(lockE, { force: true })
 
 // ───────────────────── 汇总 ─────────────────────
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' identity-test：' + pass + ' 通过 / ' + fail + ' 失败')

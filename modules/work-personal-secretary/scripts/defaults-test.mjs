@@ -18,7 +18,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
 
-import { escapeHtml, renderMarkdown, renderPage } from '../lib/md.js'
+import { escapeHtml, renderFragment, renderMarkdown, renderPage } from '../lib/md.js'
 import { applyBaseDeck } from '../lib/basedeck.js'
 import { entryBody, parseEntries } from '../lib/identity.js'
 
@@ -124,7 +124,7 @@ for (const spec of FILES) {
   ok(html.indexOf('<!DOCTYPE html>') === 0 && html.indexOf('<meta charset="utf-8">') > 0, spec.file + ' HTML 声明 doctype 与 charset')
   ok(html.indexOf('<script') < 0, spec.file + ' 无 <script>')
   ok(html.indexOf('<a href="http') < 0 && html.indexOf('src=') < 0 && html.indexOf('<link') < 0, spec.file + ' 无外部资源与外部跳转')
-  ok(html.indexOf('<style>') > 0 && html.indexOf('.doc h1') > 0, spec.file + ' 自带样式（不依赖任何外部 CSS）')
+  ok(html.indexOf('<style>') > 0 && html.indexOf('.wps-doc h1') > 0, spec.file + ' 自带样式（作用域在 .wps-doc，不依赖外部 CSS）')
   const e1 = renderPage('t', renderMarkdown('<script>alert(1)</script>'))
   ok(e1.indexOf('<script>') < 0 && e1.indexOf('&lt;script&gt;') > 0, 'md 里的原始 HTML 会被转义（不直出）')
   const e2 = renderPage('t', renderMarkdown('[x](javascript:alert(1))'))
@@ -152,6 +152,40 @@ ok(bodyInstall === texts['install.zh-CN.md'].replace(/\n$/, ''), '第 2 条正�
 ok(bodyUse.indexOf('保存配置并开始') > 0 && bodyUse.indexOf('一键配置结构') < 0, '使用说明用定稿按钮文案（不含旧稿「一键配置结构」）')
 
 // ───────────────────── [6] package.json 发布件白名单 ─────────────────────
+section('[7] embed=1 片段形态（客户端页内展开注入宿主 GUI 用）')
+for (const spec of FILES) {
+  const text = texts[spec.file]
+  const body = renderMarkdown(text)
+  const frag = renderFragment(spec.title, body)
+  ok(frag.indexOf('<html') < 0 && frag.indexOf('<head') < 0 && frag.indexOf('<body') < 0,
+    'defaults/' + spec.file + ' 片段不含 <html>/<head>/<body>')
+  ok(frag.indexOf('html{') < 0 && frag.indexOf('body{') < 0 && frag.indexOf('*{') < 0,
+    'defaults/' + spec.file + ' 片段不含全局选择器（html{ / body{ / *{）')
+  ok(frag.indexOf('<style>') === 0 && frag.indexOf('class="wps-doc"') > 0, 'defaults/' + spec.file + ' 片段自带作用域样式与 .wps-doc 容器')
+  const css = frag.slice(0, frag.indexOf('</style>'))
+  const selectors = css.split('\n')
+    .filter((l) => l.indexOf('{') > 0)
+    .reduce((acc, l) => acc.concat(l.slice(0, l.indexOf('{')).split(',').map((x) => x.trim()).filter(Boolean)), [])
+  const outside = selectors.filter((sel) => sel.indexOf('.wps-doc') !== 0)
+  ok(selectors.length > 8 && outside.length === 0,
+    'defaults/' + spec.file + ' 片段里 ' + selectors.length + ' 个选择器全部以 .wps-doc 开头' + (outside.length ? '（越界：' + outside.slice(0, 2).join(' / ') + '）' : ''))
+  const missing = []
+  for (const line of text.split('\n')) {
+    if (/^[ \t]*$/.test(line) || /^[ \t]*\|/.test(line) || /^[ \t]*[\u0060]{3}/.test(line)) continue
+    for (const fr of fragmentsOf(line)) if (frag.indexOf(escapeHtml(fr)) < 0) missing.push(fr.slice(0, 20))
+  }
+  ok(missing.length === 0, 'defaults/' + spec.file + ' 片段正文与 md 逐字一致' + (missing.length ? '（缺：' + missing.slice(0, 2).join(' | ') + '）' : ''))
+  const full = renderPage(spec.title, body)
+  ok(full.indexOf('<!DOCTYPE html>') === 0 && full.indexOf('<html lang="zh-CN">') > 0 && full.indexOf('<body>') > 0 && full.indexOf('class="wps-doc"') > 0,
+    'defaults/' + spec.file + ' 默认（不带 embed）仍是完整文档')
+}
+
+section('[8] 链接白名单：protocol-relative 与 javascript: 一律降级')
+const linkHtml = renderMarkdown('[a](//evil.example.com/x) [b](javascript:alert(1)) [c](https://ok.example.com/y) [d](/local)')
+ok(linkHtml.indexOf('evil.example.com') < 0, '协议相对地址（//host/…）被拒绝（不再放行跨站地址）')
+ok(linkHtml.indexOf('javascript:') < 0, 'javascript: 被拒绝')
+ok(linkHtml.indexOf('https://ok.example.com/y') > 0 && linkHtml.indexOf('href="/local"') > 0, 'https 与根相对路径仍放行')
+
 section('[6] package.json：files / exports 覆盖 defaults')
 const pkg = JSON.parse(readFileSync(join(MODULE_DIR, 'package.json'), 'utf8'))
 ok(Array.isArray(pkg.files) && pkg.files.indexOf('defaults') >= 0, 'package.json files 白名单含 defaults')

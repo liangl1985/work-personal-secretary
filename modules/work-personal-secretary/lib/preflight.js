@@ -17,11 +17,11 @@
  * @module work-personal-secretary/preflight
  */
 
-import { accessSync, constants, existsSync, readFileSync, statSync } from 'node:fs'
+import { accessSync, constants, existsSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 
 import { parseEntries } from './identity.js'
-import { isHomePath, normalizePath } from './basedeck.js'
+import { isHomePath, normalizePath, readFileStrict } from './basedeck.js'
 
 /** 环境就绪三项（门禁口径，与设计定稿 §3.1 一致） */
 export const PREFLIGHT_ENV_IDS = ['subPlugins', 'python', 'pythonDeps']
@@ -199,15 +199,19 @@ export function pathChecks(options = {}) {
   // 既有 MEMORY.md 的结构判定：能解析出条目才继续（绝不覆盖使用者数据）
   if (memOk) {
     const memoryFile = join(normalizePath(memoryDir), 'MEMORY.md')
-    let text = null
-    try { text = existsSync(memoryFile) ? statSync(memoryFile).isFile() ? 'file' : 'dir' : null } catch (e) { text = null }
-    if (text === 'dir') {
+    const strict = readFileStrict(memoryFile)
+    let st = null
+    try { st = statSync(memoryFile) } catch (e) { st = null }
+    if (st && !st.isFile()) {
       out.push(check('memoryFileConflict', '记忆库目标', 'block', 'MEMORY.md 位置已被同名目录占用：' + memoryFile.replace(/\\/g, '/')))
-    } else if (text === 'file') {
-      let content = ''
-      try { content = readFileSync(memoryFile, 'utf8') } catch (e) { content = '' }
-      const entries = parseEntries(content)
-      if (content.trim() !== '' && entries.length === 0) {
+    } else if (strict.exists && !strict.readable) {
+      // 小5：EACCES / EBUSY 等读失败**不能**当成「不存在」——否则会误判「将新建」，
+      // 真写时才发现在一个读不到的文件上踩空。这里直接判 block。
+      out.push(check('memoryFileConflict', '记忆库目标', 'block',
+        '既有 MEMORY.md 存在但读不到（' + (strict.code || 'EACCES') + '）：已拒绝写入；请检查文件权限或占用后重试'))
+    } else if (strict.readable) {
+      const entries = parseEntries(strict.text)
+      if (strict.text.trim() !== '' && entries.length === 0) {
         out.push(check('memoryFileConflict', '记忆库目标', 'block', '既有 MEMORY.md 读不出任何条目（不是本集成体的记忆库格式）：已拒绝写入，避免覆盖你的数据'))
       } else {
         out.push(check('memoryFileConflict', '记忆库目标', 'ok', '既有 MEMORY.md 可解析（' + entries.length + ' 条）：只补缺失、不覆盖'))
