@@ -835,7 +835,7 @@ ok(bdBrowse.length === 3, '三个目录字段各有「浏览…」按钮（实�
 ok(bdBrowse.every((b) => b.props.disabled === true), '服务缺失（无 uiWorkspace）时「浏览…」全部禁用（优雅降级）')
 ok(bdBrowse.every((b) => String(b.props.title || '').length > 0), '禁用的「浏览…」带 tooltip 说明，页面不崩')
 ok(findButtons(iTree).filter((b) => label(b) === '使用探测到的工作区').length === 1, '工作区目录有「使用探测到的工作区」候选')
-ok(findButtons(iTree).filter((b) => label(b).indexOf('使用默认（~/.dsh/memories/') >= 0).length === 1, '记忆库目录有「使用默认」候选')
+ok(findButtons(iTree).filter((b) => label(b).indexOf('使用默认（<DSH_HOME 或 ~/.dsh>/') >= 0).length === 1, '记忆库目录有「使用默认」候选')
 ok(findButtons(iTree).filter((b) => label(b) === '不使用镜像').length === 1
   && findButtons(iTree).filter((b) => label(b) === '<工作区>/00_全局记忆').length === 1
   && findButtons(iTree).filter((b) => label(b) === '<工作区>/work-memory').length === 1, 'Obsidian 库目录三个候选齐全（不使用镜像 / 00_全局记忆 / work-memory）')
@@ -1244,11 +1244,12 @@ effectQueue = []
 pkTree = expand(pickReg.render({ initialTab: 'init' }))
 ok(findInputs(pkTree)[0].props.value === 'C:/work/space', '「使用探测到的工作区」候选把探测值填回')
 
-findButtons(pkTree).filter((b) => label(b).indexOf('使用默认（~/.dsh/memories/') >= 0)[0].props.onClick()
+findButtons(pkTree).filter((b) => label(b).indexOf('使用默认（<DSH_HOME 或 ~/.dsh>/') >= 0)[0].props.onClick()
 hookCursor = 0
 effectQueue = []
 pkTree = expand(pickReg.render({ initialTab: 'init' }))
-ok(findInputs(pkTree)[1].props.value === '~/.dsh/memories/space', '记忆库候选填入默认路径（~/.dsh/memories/<库名>）')
+ok(findInputs(pkTree)[1].props.value === '<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory',
+  '记忆库候选填入新默认路径（<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory）')
 
 findButtons(pkTree).filter((b) => label(b) === '<工作区>/00_全局记忆')[0].props.onClick()
 hookCursor = 0
@@ -2215,7 +2216,9 @@ const t4Seq = calls.filter((c) => c.method === 'POST').map((c) => {
 ok(String(t4Seq) === String(['/preflight', '/basedeck:memoryDeck', '/basedeck:knowledgeDeck', '/basedeck:settings', '/identity/save']),
   '执行链按序发请求：preflight → memoryDeck → knowledgeDeck → settings → identity/save（实测 ' + String(t4Seq) + '）')
 ok(Boolean(preflightPayload) && preflightPayload.dryRun === undefined, '可用性检查是只读的（不传 dryRun）')
-ok(bdCalls.length === 3 && bdCalls.every((b) => b.dryRun === false), '三次 basedeck 均显式 dryRun:false（实测 ' + bdCalls.length + ' 次）')
+const bdWrites = bdCalls.filter((b) => Array.isArray(b.ids))
+ok(bdWrites.length === 3 && bdWrites.every((b) => b.dryRun === false),
+  '三次 basedeck 写请求均显式 dryRun:false（迁移步的只读 GET 不计；实测写 ' + bdWrites.length + ' 次 / 全部 ' + bdCalls.length + ' 次）')
 const t4Link = bdCalls.filter((b) => (b.ids || []).indexOf('settings') >= 0)[0]
 ok(Boolean(t4Link) && String(t4Link.overrides.obsidianSyncDir).indexOf('00_全局记忆') >= 0,
   '第 3 步关联：basedeck settings 的 overrides.obsidianSyncDir = <Obsidian 目录>/00_全局记忆（实测 ' + (t4Link && t4Link.overrides.obsidianSyncDir) + '）')
@@ -2779,5 +2782,126 @@ t18bTree = expand(reg.render({ initialTab: 'core' }))
 const t18bText = collect(t18bTree, []).join(' | ')
 ok(t18bText.indexOf('检测中…') >= 0, 'D2：检测未返回时门禁显示「检测中…」')
 ok(t18bText.indexOf('缺失') < 0, 'D2：加载态不把「未知」画成「缺失」')
+// ══════════════════════════════════════════════════════════════════
+// [19] 迁移旧记忆库：执行链顺序 · stoppedAt 即停 · 无需迁移 · 契约 8 项
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[19] 迁移旧记忆库（basedeck migrateMemory）')
+
+const BD8_ITEMS = [
+  { id: 'dirs', label: '目录结构' },
+  { id: 'migrateMemory', label: '迁移旧记忆库' },
+  { id: 'memorySeed', label: '记忆种子' },
+  { id: 'memoryDeck', label: '记忆体结构' },
+  { id: 'knowledgeDeck', label: '知识库结构' },
+  { id: 'skills', label: '技能' },
+  { id: 'settings', label: '设置用户层' },
+  { id: 'agentsMd', label: '指令层 AGENTS.md' },
+]
+let t19From = 'D:/old/memories'      // GET /basedeck 的 migrateFrom
+let t19Stop = false                  // true → migrateMemory 返回 stoppedAt
+const t19Posts = []
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  const method = (opts && opts.method) || 'GET'
+  calls.push({ url: u, method: method, body: opts && opts.body })
+  if (u.indexOf('/basedeck') >= 0) {
+    let body = {}
+    try { body = JSON.parse(String((opts && opts.body) || '{}')) } catch (err) { body = {} }
+    if (method === 'GET') return jsonRes({ ok: true, migrateFrom: t19From, items: BD8_ITEMS, setupNeeded: false })
+    const ids = Array.isArray(body.ids) ? body.ids : []
+    t19Posts.push(ids)
+    if (ids.indexOf('migrateMemory') >= 0 && t19Stop) {
+      return jsonRes({ ok: true, stoppedAt: 'migrateMemory', stopReason: '目标目录不可写（模拟）', results: [{ id: 'dirs', ok: true }, { id: 'migrateMemory', ok: false, error: '目标目录不可写（模拟）' }] })
+    }
+    const results = ids.map((id) => {
+      if (id === 'migrateMemory') {
+        return { id: id, ok: true, dryRun: false, action: '迁移 3 个文件', oldDirKept: true,
+          migrateStats: { copy: 3, skip: 1, conflict: 1, noise: 2, bytes: 2048 },
+          migratedFiles: ['MEMORY.md', 'USER.md', 'PROJECTS/工作秘书.md'], conflicts: ['GRAPH.json'] }
+      }
+      return { id: id, ok: true, dryRun: false, action: '写入 ' + id, target: 'D:/fake/' + id }
+    })
+    return jsonRes({ ok: true, dryRun: false, results: results, wroteAny: true })
+  }
+  if (u.indexOf('/setup-state') >= 0) {
+    return jsonRes({ ok: true, memoryDir: { value: 'D:/ws/memories/me', source: 'settings' },
+      obsidianDir: { value: 'D:/ws', source: 'settings' },
+      domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' } })
+  }
+  if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/preflight') >= 0) return jsonRes({ ok: true, ready: true, checks: [], summary: { total: 0, ok: 0, warn: 0, block: 0 } })
+  if (u.indexOf('/identity/save') >= 0) return jsonRes({ ok: true, status: 'rewrite', entryId: 'id-1', detail: '已整条改写「使用者身份」条目' })
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+const t19Run = async () => {
+  hookSlots = []
+  hookCursor = 0
+  effectQueue = []
+  let t = expand(reg.render({ initialTab: 'core' }))
+  for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+  await tick(60)
+  hookCursor = 0
+  effectQueue = []
+  t = expand(reg.render({ initialTab: 'core' }))
+  // 门禁全绿 → 先点「点击此处继续」展开表单
+  const gate = findButtons(t).filter((b) => label(b) === '点击此处继续')[0]
+  if (gate) gate.props.onClick()
+  hookCursor = 0
+  effectQueue = []
+  t = expand(reg.render({ initialTab: 'core' }))
+  const save = findButtons(t).filter((b) => label(b) === '保存配置并开始')[0]
+  return { tree: t, save: save }
+}
+
+// ① 正常迁移：执行链顺序 + 统计文案 + 8 项契约
+t19From = 'D:/old/memories'
+t19Stop = false
+t19Posts.length = 0
+let t19 = await t19Run()
+if (t19.save) t19.save.props.onClick()
+await tick(120)
+ok(String(JSON.stringify(t19Posts)) === String(JSON.stringify([['memoryDeck'], ['migrateMemory'], ['knowledgeDeck'], ['settings']])),
+  'basedeck 写请求顺序：memoryDeck → migrateMemory → knowledgeDeck → settings（实测 ' + JSON.stringify(t19Posts) + '）')
+const t19Text = collect(await (async () => { hookCursor = 0; effectQueue = []; return expand(reg.render({ initialTab: 'core' })) })(), []).join(' | ')
+ok(t19Text.indexOf('迁移旧记忆库') >= 0, '执行链出现「迁移旧记忆库」步骤（保存后链条卡片可见）')
+ok(t19Text.indexOf('已迁移 3 个文件') >= 0, '迁移步回显迁移文件数（migrateStats.copy）')
+ok(t19Text.indexOf('旧目录保留不动') >= 0, '迁移步回显「旧目录保留不动」')
+ok(t19Text.indexOf('只补缺失') >= 0 && t19Text.indexOf('不覆盖') >= 0, '迁移步说明写明「只补缺失、不覆盖」')
+ok(t19Text.indexOf('已有旧内容要带过来？') >= 0, '全绿后进入导入引导卡（链条跑完）')
+ok(BD8_ITEMS.length === 8, '夹具按宿主契约给 8 项 items（末项 migrateMemory）')
+ok(t19Posts.every((ids) => ids.length === 1), '客户端按步骤逐个下发 ids（每步 1 项），不整批下发 8 项')
+
+// ② stoppedAt 非空：立即终止，不再发后续请求
+t19Stop = true
+t19Posts.length = 0
+calls.length = 0
+t19 = await t19Run()
+if (t19.save) t19.save.props.onClick()
+await tick(150)
+hookCursor = 0
+effectQueue = []
+const t19FailTree = expand(reg.render({ initialTab: 'core' }))
+const t19FailText = collect(t19FailTree, []).join(' | ')
+ok(t19FailText.indexOf('已在「migrateMemory」停止') >= 0 && t19FailText.indexOf('目标目录不可写') >= 0,
+  'stoppedAt 非空 → 就地显示停止步与中文原因')
+ok(JSON.stringify(t19Posts) === JSON.stringify([['memoryDeck'], ['migrateMemory']]),
+  'stoppedAt 非空 → 后续 basedeck 写请求一个都不发（实测 ' + JSON.stringify(t19Posts) + '）')
+ok(calls.filter((c) => c.url.indexOf('/identity/save') >= 0).length === 0, 'stoppedAt 非空 → 不发 identity/save')
+ok(Boolean(findButtons(t19FailTree).filter((b) => label(b) === '重试')[0]), 'stoppedAt 失败后出现「重试」按钮')
+
+// ③ migrateFrom 为空 → 「无需迁移」，且不发 migrateMemory 写请求
+t19Stop = false
+t19From = ''
+t19Posts.length = 0
+t19 = await t19Run()
+if (t19.save) t19.save.props.onClick()
+await tick(120)
+hookCursor = 0
+effectQueue = []
+const t19NoneText = collect(expand(reg.render({ initialTab: 'core' })), []).join(' | ')
+ok(t19NoneText.indexOf('无需迁移') >= 0, 'migrateFrom 为空 → 该步显示「无需迁移」')
+ok(t19Posts.every((ids) => ids.indexOf('migrateMemory') < 0),
+  'migrateFrom 为空 → 不发 migrateMemory 写请求（实测 ' + JSON.stringify(t19Posts) + '）')
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)

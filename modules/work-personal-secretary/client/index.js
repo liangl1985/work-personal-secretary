@@ -281,6 +281,12 @@ window.__ModuleLoader__.load({
       chainStepCheckSub: '环境就绪（记忆库插件 / Python / Python 工具）· 两个目录路径合法且可写 · 两目录同一工作区 · 目标目录无冲突',
       chainStepMemory: '建立记忆库目录',
       chainStepMemorySub: '骨架 PROJECTS / DAILY / ARCHIVE；MEMORY.md 写入使用者身份（占位，待本页填写）；PROJECTS/工作秘书.md 与 USER.md、GRAPH.json',
+      chainStepMigrate: '迁移旧记忆库',
+      chainStepMigrateSub: '把旧记忆库里的文件补进新目录：只补缺失、不覆盖同名不同内容的文件；旧目录保留不动；逐文件校验，失败回滚',
+      chainStepMigrateNone: '无需迁移（未检测到旧记忆库，或旧目录与目标相同）',
+      chainStepMigrateDone: '已迁移 {n} 个文件（其中 {conflict} 个同名冲突已保留目标）',
+      chainStepMigrateKept: '旧目录保留不动',
+      chainStopped: '已在「{step}」停止：{reason}（后续步骤未执行）',
       chainStepKnowledge: '建立知识库目录',
       chainStepKnowledgeSub: '主页入口、模块骨架、00_全局记忆 镜像区、工具/（技能 · 脚本 · MCP）、.obsidian 最小配置',
       chainStepLink: '建立两者关联',
@@ -470,7 +476,7 @@ window.__ModuleLoader__.load({
       initBrowseTip: '选择目录',
       initBrowseUnavailable: '当前载体不支持系统目录选择，请手动输入路径',
       initCandDetectedWorkspace: '使用探测到的工作区',
-      initCandDefaultMemory: '使用默认（~/.dsh/memories/{n}）',
+      initCandDefaultMemory: '使用默认（<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory）',
       initCandNoMirror: '不使用镜像',
       initCandNeedWorkspace: '需先填写工作区',
       initObsidianOffNote: '已选择不使用镜像',
@@ -686,7 +692,7 @@ window.__ModuleLoader__.load({
       cfgFDailyAutoLog: '自动追加今日日志',
       cfgHDailyAutoLog: '每轮对话自动记一条活动日志（10 分钟防抖）',
       cfgFMemoryDir: '记忆库根目录',
-      cfgHMemoryDir: '留空 = ~/.dsh/memories/<插件命名空间>',
+      cfgHMemoryDir: '留空 = <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory',
       cfgFObsidianSyncDir: 'Obsidian 镜像目录',
       cfgHObsidianSyncDir: '留空 = 不同步；建议指向 vault 下的记忆镜像区',
       cfgFExpertsEnabled: '专家库总开关',
@@ -706,7 +712,7 @@ window.__ModuleLoader__.load({
       cfgFDisciplineEnabled: '交付层纪律块',
       cfgHDisciplineEnabled: '从项目记忆读【纪律块 v1】，每轮注入、不随专家裁剪丢弃',
       cfgFDisciplineMemoryDir: '纪律块记忆库根',
-      cfgHDisciplineMemoryDir: '留空 = 取记忆库设置里的 memoryDir，再退到 $DSH_HOME/memories/work-memory',
+      cfgHDisciplineMemoryDir: '留空 = 取记忆库设置里的 memoryDir，再退到 <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory',
       cfgFExpertInjectDetail: '注入形态',
       cfgHExpertInjectDetail: '每轮注入形态：auto（默认）—— 首轮把命中的专家全部以精简卡代入（候选全景），之后判断确实要干活的专家时注入其全文；card = 全部精简卡；full = 全部全文（旧行为逃生舱）',
       cfgFExpertInjectBudgetChars: '注入上限（字符）',
@@ -820,6 +826,12 @@ window.__ModuleLoader__.load({
       chainStepCheckSub: 'Environment ready (memory sub-plugin / Python / Python tools) · both directories valid and writable · same workspace · no target conflict',
       chainStepMemory: 'Create the memory directory',
       chainStepMemorySub: 'Skeleton PROJECTS / DAILY / ARCHIVE; the user identity placeholder in MEMORY.md; PROJECTS/工作秘书.md plus USER.md and GRAPH.json',
+      chainStepMigrate: 'Migrate the old memory store',
+      chainStepMigrateSub: 'Copies files from the old memory store into the new directory: only missing files are added and existing files are never overwritten; the old directory is left untouched; every file is checksummed and the step rolls back on failure',
+      chainStepMigrateNone: 'Nothing to migrate (no old memory store found, or it is the same as the target)',
+      chainStepMigrateDone: 'Migrated {n} file(s); {conflict} name conflict(s) kept the target file',
+      chainStepMigrateKept: 'the old directory is left untouched',
+      chainStopped: 'Stopped at "{step}": {reason} (later steps were not run)',
       chainStepKnowledge: 'Create the vault directory',
       chainStepKnowledgeSub: 'Home entry, module skeleton, the 00_全局记忆 mirror area, 工具/ (skills · scripts · MCP), a minimal .obsidian config',
       chainStepLink: 'Link the two',
@@ -1009,7 +1021,7 @@ window.__ModuleLoader__.load({
       initBrowseTip: 'Choose a directory',
       initBrowseUnavailable: 'The directory picker is unavailable in this shell; type the path manually.',
       initCandDetectedWorkspace: 'Use detected workspace',
-      initCandDefaultMemory: 'Use default (~/.dsh/memories/{n})',
+      initCandDefaultMemory: 'Use default (<DSH_HOME or ~/.dsh>/data/dsh-work-memory/memory)',
       initCandNoMirror: 'No mirror',
       initCandNeedWorkspace: 'Fill in the workspace first',
       initObsidianOffNote: 'No mirror selected',
@@ -1222,7 +1234,7 @@ window.__ModuleLoader__.load({
       cfgFDailyAutoLog: 'Append a daily log',
       cfgHDailyAutoLog: 'Add one activity line per turn (10 minute debounce)',
       cfgFMemoryDir: 'Memory root directory',
-      cfgHMemoryDir: 'Empty = ~/.dsh/memories/<plugin namespace>',
+      cfgHMemoryDir: 'Empty = <DSH_HOME or ~/.dsh>/data/dsh-work-memory/memory',
       cfgFObsidianSyncDir: 'Obsidian mirror directory',
       cfgHObsidianSyncDir: 'Empty = no mirror; point it at the memory mirror area of your vault',
       cfgFExpertsEnabled: 'Expert library master switch',
@@ -1242,7 +1254,7 @@ window.__ModuleLoader__.load({
       cfgFDisciplineEnabled: 'Delivery discipline block',
       cfgHDisciplineEnabled: 'Reads [discipline block v1] from project memory and injects it every turn, never trimmed by expert selection',
       cfgFDisciplineMemoryDir: 'Discipline memory root',
-      cfgHDisciplineMemoryDir: 'Empty = take memoryDir from the memory settings',
+      cfgHDisciplineMemoryDir: 'Empty = take memoryDir from the memory settings, falling back to <DSH_HOME or ~/.dsh>/data/dsh-work-memory/memory',
       cfgFExpertInjectDetail: 'Injection detail',
       cfgHExpertInjectDetail: 'Per-turn injection mode: auto (default) — the first turn loads every matched expert as a compact card (a candidate overview), later turns inject the full persona of the experts that actually need to work; card = compact cards only; full = full personas (legacy escape hatch)',
       cfgFExpertInjectBudgetChars: 'Injection cap (chars)',
@@ -2633,10 +2645,16 @@ window.__ModuleLoader__.load({
       ]
     }
 
-    /** 执行链五步（客户端写死；顺序与设计定稿 §3.3 一致，「检」在最前） */
+    /**
+     * 执行链六步（客户端写死）。顺序**必须**与宿主 basedeck 的固定序一致：
+     * dirs → migrateMemory → memorySeed → memoryDeck → knowledgeDeck → skills → settings → agentsMd。
+     * 即：先建记忆库目录（迁移的目标要先存在）→ 再迁移旧记忆库 → 再建知识库 → 关联 → 写身份。
+     * 「检」是最前面的只读可用性检查（preflight），不属于 basedeck 的项。
+     */
     const CORE_CHAIN = [
       { id: 'check', labelKey: 'chainStepCheck', subKey: 'chainStepCheckSub' },
       { id: 'memoryDeck', labelKey: 'chainStepMemory', subKey: 'chainStepMemorySub' },
+      { id: 'migrateMemory', labelKey: 'chainStepMigrate', subKey: 'chainStepMigrateSub' },
       { id: 'knowledgeDeck', labelKey: 'chainStepKnowledge', subKey: 'chainStepKnowledgeSub' },
       { id: 'link', labelKey: 'chainStepLink', subKey: 'chainStepLinkSub' },
       { id: 'identity', labelKey: 'chainStepIdentity', subKey: 'chainStepIdentitySub' },
@@ -2925,6 +2943,29 @@ window.__ModuleLoader__.load({
           })
           return basedeckStepDetail(res, id)
         }
+        if (id === 'migrateMemory') {
+          // 先只读探一次：GET /basedeck 顶层带 migrateFrom（旧记忆库绝对路径）。
+          // 没有旧目录、或旧目录与目标相同 → 本步显示「无需迁移」，**不发任何写请求**。
+          const plan = await getJson('/basedeck', 20000)
+          const from = (plan && typeof plan.migrateFrom === 'string') ? plan.migrateFrom.trim() : ''
+          if (!from || from === form.memoryDir) return t('chainStepMigrateNone')
+          const res = await postFull('/basedeck', {
+            ids: ['migrateMemory'],
+            dryRun: false,
+            overrides: { memoryDir: form.memoryDir, obsidianDir: form.obsidianDir },
+          })
+          await basedeckStepDetail(res, 'migrateMemory')
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          const item = (Array.isArray(body.results) ? body.results : [])
+            .filter((x) => x && x.id === 'migrateMemory')[0] || {}
+          const stats = (item.migrateStats && typeof item.migrateStats === 'object') ? item.migrateStats : {}
+          const copied = (typeof stats.copy === 'number') ? stats.copy
+            : (Array.isArray(item.migratedFiles) ? item.migratedFiles.length : 0)
+          const conflict = (typeof stats.conflict === 'number') ? stats.conflict
+            : (Array.isArray(item.conflicts) ? item.conflicts.length : 0)
+          const base = fillAll(t('chainStepMigrateDone'), { n: copied, conflict: conflict })
+          return item.oldDirKept === false ? base : (base + ' · ' + t('chainStepMigrateKept'))
+        }
         if (id === 'link') {
           // 第 3 步「建立两者关联」= 写 settings.yaml 的 work-memory.memoryDir 与
           // work-memory.obsidianSyncDir（后者 = <Obsidian 目录>/00_全局记忆）。
@@ -2957,6 +2998,14 @@ window.__ModuleLoader__.load({
       async function basedeckStepDetail(res, id) {
         const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
         if (!res.ok || body.ok === false) throw new Error(String(body.error || body.message || ('HTTP ' + res.status)))
+        // 宿主「失败即停」：stoppedAt 非空说明它在某一步停了（后续项一律没跑）——
+        // 立即抛错终止链条，runChain 会停在该步并给「重试」，绝不再发后续请求。
+        if (typeof body.stoppedAt === 'string' && body.stoppedAt) {
+          throw new Error(fillAll(t('chainStopped'), {
+            step: String(body.stoppedAt),
+            reason: String(body.stopReason || body.message || ''),
+          }))
+        }
         const item = (Array.isArray(body.results) ? body.results : []).filter((x) => x && x.id === id)[0] || null
         if (!item) throw new Error('响应里没有 ' + id + ' 的结果')
         if (item.ok === false) throw new Error(String(item.error || item.detail || '写入未成功'))
@@ -3757,7 +3806,7 @@ window.__ModuleLoader__.load({
       const state = useState({
         stage: 'form', busy: false, items: [], workspace: '', workspaceSource: '',
         summary: null, error: '', writeError: '', pickError: '', open: {},
-        detected: '', libraryName: '', memoryRoot: '~/.dsh/memories', obsidianOff: false,
+        detected: '', libraryName: '', memoryRoot: '<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory', obsidianOff: false,
         form: { workspace: '', domain: '', identityExpert: '', memoryDir: '', obsidianSyncDir: '' },
         batch: null,
       })
@@ -3863,7 +3912,7 @@ window.__ModuleLoader__.load({
           // 只有 none 才留空（此时必须由使用者选择）；client/config/derived/cwd/default 一律预填
           const isNone = src === 'none'
           const lib = firstText(body.libraryName, body.memoryLibrary) || baseName(ws)
-          const memRoot = firstText(body.memoryRoot, body.defaultMemoryRoot) || '~/.dsh/memories'
+          const memRoot = firstText(body.memoryRoot, body.defaultMemoryRoot) || '<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory'
           setSt((prev) => Object.assign({}, prev, {
             stage: 'form', busy: false, error: '',
             items: Array.isArray(body.items) ? body.items : [],
@@ -4109,7 +4158,8 @@ window.__ModuleLoader__.load({
                 h('div', { key: 'cand', style: S.candRow }, [
                   candidate('memoryDir', 'def',
                     fill(t('initCandDefaultMemory'), st.libraryName || '…'),
-                    (st.libraryName && st.memoryRoot) ? joinPath(st.memoryRoot, st.libraryName) : '',
+                    // 新默认记忆库路径是固定目录（不再拼库名）：<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory
+      st.memoryRoot ? st.memoryRoot : '',
                     Boolean(st.libraryName)),
                 ]),
               ])),
