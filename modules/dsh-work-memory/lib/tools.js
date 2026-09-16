@@ -19,10 +19,13 @@ import { touchAccess } from './access.js'
 /**
  * 创建三个工具定义（供 ctx.tools.register 使用）。
  * @param {object} deps - { root, getBranch(session), onSuggestion }
+ *   root 可传字符串（固定目录）或解析器函数 () => string（记忆库根目录热切换，1.0.6）
  * @returns {object[]} tool definitions
  */
 export function createTools(deps) {
-  const { root, getBranch, onSuggestion, archiveCfg, backupCfg, obsidianSyncDir } = deps
+  const { root: rootSource, getBranch, onSuggestion, archiveCfg, backupCfg, obsidianSyncDir } = deps
+  // root 允许传解析器函数（记忆库根目录热切换）或字符串（旧调用方，行为与 1.0.6 前一致）
+  const root = () => (typeof rootSource === 'function' ? rootSource() : rootSource)
 
   /** 判断调用方是否为子代理（SessionHeader.origin/delegationDepth） */
   function isSubagentExec(exec) {
@@ -39,7 +42,7 @@ export function createTools(deps) {
   function maybeArchive() {
     if (!archiveCfg || archiveCfg.enabled === false) return
     try {
-      runArchive(root, archiveCfg)
+      runArchive(root(), archiveCfg)
     } catch { /* best-effort */ }
   }
 
@@ -47,7 +50,7 @@ export function createTools(deps) {
   function maybeBackup() {
     if (!backupCfg || backupCfg.enabled === false) return
     try {
-      backupMemory(root, backupCfg)
+      backupMemory(root(), backupCfg)
     } catch { /* best-effort */ }
   }
 
@@ -55,7 +58,7 @@ export function createTools(deps) {
   function maybeSync() {
     if (!obsidianSyncDir) return
     try {
-      syncMemoryToObsidian(root, obsidianSyncDir)
+      syncMemoryToObsidian(root(), obsidianSyncDir)
     } catch { /* best-effort */ }
   }
 
@@ -105,7 +108,7 @@ export function createTools(deps) {
       return { ok: false, error: '子代理不可直接写入全局/用户记忆，请由主代理（主对话）写入' }
     }
 
-    const files = memoryFiles(root, { branch })
+    const files = memoryFiles(root(), { branch })
     const filePath = scope === 'global' ? files.global
       : scope === 'user' ? files.user
       : scope === 'daily' ? files.daily
@@ -113,7 +116,7 @@ export function createTools(deps) {
 
     const entry = makeEntry(content, { branch: scope === 'project' ? branch : null, tag })
 
-    const result = withDirLock(root, () => {
+    const result = withDirLock(root(), () => {
       const store = new MemoryStore(filePath)
       store.ensure()
       // 入库去重：正文（元数据前缀之后的部分）相同即视为重复，不重复写入
@@ -131,7 +134,7 @@ export function createTools(deps) {
       store.add(entry)
       // 图谱登记（2026-09-11 使用者要求）：记忆落盘时就登记节点，
       // 不再只在 memory_link 时才出现——否则各范围图谱是空的
-      registerEntry(root, entry)
+      registerEntry(root(), entry)
       return { ok: true, file: filePath, tag }
     })
     // 懒任务放在**锁外**：它们内部各自取锁（归档 / 备份 / Obsidian 同步），
@@ -149,24 +152,24 @@ export function createTools(deps) {
     const scope = args.scope || 'all'
     const limit = Math.min(Math.max(Number(args.limit) || 5, 1), 20)
     const branch = args.branch || null
-    const files = memoryFiles(root, { branch })
+    const files = memoryFiles(root(), { branch })
 
     // 归档范围：查 ARCHIVE（冷数据，默认不注入）；**命中即转热**（2026-09-11 定）：
     // 把命中的条目按原 id、原文写回它原来所属的范围，从冷区移出。
     if (scope === 'archive') {
-      const pool = archiveEntries(root, Math.max(limit * 4, 40))
+      const pool = archiveEntries(root(), Math.max(limit * 4, 40))
         .filter((c) => !query || c.entry.toLowerCase().includes(query))
         .slice(0, limit)
       const promoted = []
       for (const c of pool) {
         if (!c.id) continue
         try {
-          const r = promoteEntry(root, c.id)
+          const r = promoteEntry(root(), c.id)
           if (r && r.ok) promoted.push({ scope: r.scope, entry: r.entry, to: r.file })
         } catch { /* best-effort */ }
       }
       if (promoted.length > 0) {
-        touchAccess(root, promoted.map((p) => extractEntryId(p.entry)))
+        touchAccess(root(), promoted.map((p) => extractEntryId(p.entry)))
         maybeSync()
       }
       return {
@@ -181,7 +184,7 @@ export function createTools(deps) {
 
     // project 范围：遍历 PROJECTS/ 全部文件（不依赖 branch 参数，避免漏查）
     const projectFiles = () => {
-      const dir = join(root, 'PROJECTS')
+      const dir = join(root(), 'PROJECTS')
       if (!existsSync(dir)) return []
       return readdirSync(dir).filter((f) => f.endsWith('.md')).map((f) => ['project/' + f, join(dir, f)])
     }
@@ -213,7 +216,7 @@ export function createTools(deps) {
 
     const top = candidates.slice(0, limit)
     // 「被用到才算热」：命中即刷新访问时间，归档判定据此顺延（常用旧记忆不会被归档）
-    touchAccess(root, top.map((c) => extractEntryId(c.entry)))
+    touchAccess(root(), top.map((c) => extractEntryId(c.entry)))
     return {
       ok: true,
       count: top.length,
@@ -228,16 +231,16 @@ export function createTools(deps) {
     const relation = String(args.relation || '相关').trim()
     if (!from || !to) return { ok: false, error: 'from/to 不能为空' }
     const branch = args.branch || null
-    const files = memoryFiles(root, { branch })
+    const files = memoryFiles(root(), { branch })
 
-    return withDirLock(root, () => {
+    return withDirLock(root(), () => {
       const fromMatch = findEntry(files, from)
       const toMatch = findEntry(files, to)
       if (!fromMatch || !toMatch) {
         return { ok: false, error: '未找到匹配条目（from/to 需为条目中的唯一片段）' }
       }
       // 建边（并把两端节点登记进图谱）——统一走 lib/graph.js
-      const edge = linkEntries(root, {
+      const edge = linkEntries(root(), {
         from: { id: fromMatch.id, label: fromMatch.label || fromMatch.id },
         to: { id: toMatch.id, label: toMatch.label || toMatch.id },
         relation,

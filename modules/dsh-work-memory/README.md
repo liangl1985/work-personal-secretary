@@ -74,7 +74,7 @@ dsh plugin --profile desktop install
    可以说：「记住：我是……（scope=user）」「记住：你是我的……助手，性格……（scope=global）」
 3. **建议配合 Obsidian**：把 `obsidianSyncDir` 指向 vault 里的一个目录（如 `<vault>/work-memory`），插件会把 `MEMORY.md / USER.md / PROJECTS/ / DAILY/ / GRAPH.json` 单向镜像过去，便于人工翻阅与灾难恢复。**镜像目录请当只读参考**（手改会在下次同步被覆盖，要改请用工具或面板）。
 4. **分类可增删改**：范围（全局/偏好/项目/日志/归档）固定，但**项目分类**可随时新建与归档（面板「项目」范围里）；条目可增删；`tag` 取 关键/常规/临时/敏感（**敏感条目不自动注入**，只在显式 `memory_recall` 时返回）。
-5. 记忆库位置：默认 `~/.dsh/memories/<命名空间>`，可用 `memoryDir` 改；结构：
+5. 记忆库位置：默认 `<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory`（DSH 标准插件数据目录），可用 `memoryDir` 改——**改完即时生效，无需重启 DSH**；结构：
    ```
    MEMORY.md  USER.md  GRAPH.json  .access.json
    PROJECTS/<项目>.md   DAILY/<日期>.md
@@ -85,7 +85,7 @@ dsh plugin --profile desktop install
 ## 五、卸载与数据留存
 
 - 卸载：从 `dsh.profile.bundles` 与 `dependencies` 移除包名 → `dsh plugin install` → 重启 DSH。
-- **卸载不会删除记忆数据**：记忆库在 `~/.dsh/memories/<命名空间>`（另有 `backupDir` 里的每日备份与 Obsidian 镜像），随时可重新装回继续用。
+- **卸载不会删除记忆数据**：记忆库在 `<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory`（另有 `backupDir` 里的每日备份与 Obsidian 镜像），随时可重新装回继续用。
 - 想彻底清空：手动删除上述目录（建议先备份）。
 
 ## 六、隐私与边界（必读）

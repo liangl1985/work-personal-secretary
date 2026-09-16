@@ -1,4 +1,4 @@
-﻿/**
+/**
  * work-memory — Web GUI API.
  * 记忆可视化管理的后端：列表/详情/编辑/批准/拒绝/归档/图谱。
  * 同源保护（Content-Type JSON + Origin 校验）。
@@ -62,14 +62,18 @@ function sameOriginGuard(req) {
  * 安装 Web API 路由。
  * @param {object} ctx - cordis context（需 webServer）
  * @param {object} deps - { root, resolveCwd(sessionId), getBranch(sessionId) }
+ *   root 可传字符串（固定目录）或解析器函数 () => string（记忆库根目录热切换，1.0.6）
  */
 export function installApi(ctx, deps) {
-  const { root, resolveCwd, getBranch } = deps
+  const { root: rootSource, resolveCwd, getBranch } = deps
+  // root 允许传解析器函数（记忆库根目录热切换）或字符串（旧调用方，行为与 1.0.6 前一致）
+  const root = () => (typeof rootSource === 'function' ? rootSource() : rootSource)
 
   // 极简访问日志：桌面载体下客户端请求是否真的到达 host，一眼可查（超 256KB 清空，避免轮询刷爆）
-  const accessLog = join(root, '.api-access.log')
+  // 注意：路径在**每次请求**里解析（不能装成安装期常量，否则切目录后仍写旧库）
   const logAccess = (req) => {
     try {
+      const accessLog = join(root(), '.api-access.log')
       if (existsSync(accessLog) && statSync(accessLog).size > 256 * 1024) writeFileSync(accessLog, '', 'utf8')
       appendFileSync(accessLog, localIso() + ' ' + String(req.method) + ' ' + String(req.url) + ' host=' + String(req.headers?.host ?? '') + '\n', 'utf8')
     } catch { /* best-effort */ }
@@ -87,13 +91,13 @@ export function installApi(ctx, deps) {
 
       // GET /overview — 记忆总览（各范围条数 + 待确认数）
       if (req.method === 'GET' && sub === '/overview') {
-        const files = memoryFiles(root, { branch: null })
+        const files = memoryFiles(root(), { branch: null })
         const count = (p) => existsSync(p) ? parseEntries(readFileSync(p, 'utf8')).length : 0
         const suggestions = existsSync(files.suggestions)
           ? readFileSync(files.suggestions, 'utf8').split('\n').filter((l) => l.trim().startsWith('{')).length
           : 0
-        const projects = existsSync(join(root, 'PROJECTS')) ? readdirSync(join(root, 'PROJECTS')).filter((f) => f.endsWith('.md')) : []
-        const dailies = existsSync(join(root, 'DAILY')) ? readdirSync(join(root, 'DAILY')).filter((f) => f.endsWith('.md')).sort().reverse() : []
+        const projects = existsSync(join(root(), 'PROJECTS')) ? readdirSync(join(root(), 'PROJECTS')).filter((f) => f.endsWith('.md')) : []
+        const dailies = existsSync(join(root(), 'DAILY')) ? readdirSync(join(root(), 'DAILY')).filter((f) => f.endsWith('.md')).sort().reverse() : []
         // 项目/日志的「条目总量」：与「文件个数」区分开，面板上两个口径都要能说清
         const countIn = (dir, list) => list.reduce((sum, f) => sum + count(join(dir, f)), 0)
         sendJson(res, 200, {
@@ -104,8 +108,8 @@ export function installApi(ctx, deps) {
             daily: count(files.daily),
             projects: projects.length,
             dailies: dailies.length,
-            projectEntries: countIn(join(root, 'PROJECTS'), projects),
-            dailyEntries: countIn(join(root, 'DAILY'), dailies),
+            projectEntries: countIn(join(root(), 'PROJECTS'), projects),
+            dailyEntries: countIn(join(root(), 'DAILY'), dailies),
             suggestions,
           },
         })
@@ -116,12 +120,12 @@ export function installApi(ctx, deps) {
       if (req.method === 'GET' && sub === '/entries') {
         const scope = String(url.searchParams.get('scope') || 'global')
         const name = String(url.searchParams.get('name') || '')
-        const files = memoryFiles(root, { branch: null })
+        const files = memoryFiles(root(), { branch: null })
         let filePath = null
         if (scope === 'global') filePath = files.global
         else if (scope === 'user') filePath = files.user
-        else if (scope === 'daily') filePath = join(root, 'DAILY', sanitize(name) + '.md')
-        else if (scope === 'project') filePath = join(root, 'PROJECTS', sanitize(name) + '.md')
+        else if (scope === 'daily') filePath = join(root(), 'DAILY', sanitize(name) + '.md')
+        else if (scope === 'project') filePath = join(root(), 'PROJECTS', sanitize(name) + '.md')
         if (!filePath) return sendError(res, 400, '未知 scope')
         const store = new MemoryStore(filePath)
         sendJson(res, 200, { ok: true, scope, name, entries: store.entries() })
@@ -131,7 +135,7 @@ export function installApi(ctx, deps) {
       // GET /lists?kind=projects|dailies
       if (req.method === 'GET' && sub === '/lists') {
         const kind = String(url.searchParams.get('kind') || 'projects')
-        const dir = join(root, kind === 'dailies' ? 'DAILY' : 'PROJECTS')
+        const dir = join(root(), kind === 'dailies' ? 'DAILY' : 'PROJECTS')
         const list = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.md')) : []
         sendJson(res, 200, { ok: true, kind, list })
         return
@@ -139,7 +143,7 @@ export function installApi(ctx, deps) {
 
       // GET /graph — 关系图谱
       if (req.method === 'GET' && sub === '/graph') {
-        const graphPath = memoryFiles(root).graph
+        const graphPath = memoryFiles(root()).graph
         let graph = { entities: [], edges: [] }
         try {
           if (existsSync(graphPath)) graph = JSON.parse(readFileSync(graphPath, 'utf8'))
@@ -158,7 +162,7 @@ export function installApi(ctx, deps) {
         // 这样关系图上的节点就是「能读懂的内容」，而不是一串 id。
         const needLabel = graph.entities.filter((x) => x && x.id && !x.label)
         if (needLabel.length > 0) {
-          const files = memoryFiles(root, { branch: null })
+          const files = memoryFiles(root(), { branch: null })
           const sources = [files.global, files.user]
           const pushDir = (dir, filter) => {
             try {
@@ -166,8 +170,8 @@ export function installApi(ctx, deps) {
               for (const f of readdirSync(dir)) if (filter(f)) sources.push(join(dir, f))
             } catch { /* best-effort */ }
           }
-          pushDir(join(root, 'PROJECTS'), (f) => f.endsWith('.md'))
-          pushDir(join(root, 'DAILY'), (f) => f.endsWith('.md'))
+          pushDir(join(root(), 'PROJECTS'), (f) => f.endsWith('.md'))
+          pushDir(join(root(), 'DAILY'), (f) => f.endsWith('.md'))
           const labelOf = new Map()
           for (const file of sources) {
             try {
@@ -194,19 +198,19 @@ export function installApi(ctx, deps) {
 
       // GET /backup — 备份列表
       if (req.method === 'GET' && sub === '/backup') {
-        sendJson(res, 200, { ok: true, dir: defaultBackupDir(), files: listBackups(root) })
+        sendJson(res, 200, { ok: true, dir: defaultBackupDir(), files: listBackups(root()) })
         return
       }
 
       // GET /archive — 归档区列表（冷存储，可查不注入）
       if (req.method === 'GET' && sub === '/archive') {
-        sendJson(res, 200, { ok: true, files: listArchive(root) })
+        sendJson(res, 200, { ok: true, files: listArchive(root()) })
         return
       }
 
       // GET /suggestions — 待确认队列
       if (req.method === 'GET' && sub === '/suggestions') {
-        const file = memoryFiles(root).suggestions
+        const file = memoryFiles(root()).suggestions
         const rows = existsSync(file)
           ? readFileSync(file, 'utf8').split('\n').filter((l) => l.trim().startsWith('{')).map((l) => { try { return JSON.parse(l) } catch { return null } }).filter(Boolean)
           : []
@@ -223,7 +227,7 @@ export function installApi(ctx, deps) {
       // POST /backup/run — 手动执行备份
       if (req.method === 'POST' && sub === '/backup/run') {
         try {
-          const result = backupMemory(root, {})
+          const result = backupMemory(root(), {})
           return sendJson(res, 200, { ok: true, result })
         } catch (err) {
           return sendError(res, 500, String(err?.message || err))
@@ -233,7 +237,7 @@ export function installApi(ctx, deps) {
       // POST /archive/run — 手动执行归档
       if (req.method === 'POST' && sub === '/archive/run') {
         try {
-          const result = runArchive(root, {})
+          const result = runArchive(root(), {})
           return sendJson(res, 200, { ok: true, result })
         } catch (err) {
           return sendError(res, 500, String(err?.message || err))
@@ -244,15 +248,15 @@ export function installApi(ctx, deps) {
       if (req.method === 'POST' && sub === '/write') {
         const body = await readBody(req)
         const { scope, name, action } = body
-        const files = memoryFiles(root)
+        const files = memoryFiles(root())
         let filePath = null
         if (scope === 'global') filePath = files.global
         else if (scope === 'user') filePath = files.user
-        else if (scope === 'daily') filePath = join(root, 'DAILY', sanitize(name || todayStamp()) + '.md')
-        else if (scope === 'project') filePath = join(root, 'PROJECTS', sanitize(name) + '.md')
+        else if (scope === 'daily') filePath = join(root(), 'DAILY', sanitize(name || todayStamp()) + '.md')
+        else if (scope === 'project') filePath = join(root(), 'PROJECTS', sanitize(name) + '.md')
         if (!filePath) return sendError(res, 400, '未知 scope')
 
-        const result = withDirLock(root, () => {
+        const result = withDirLock(root(), () => {
           const store = new MemoryStore(filePath)
           store.ensure()
           if (action === 'add') {
@@ -260,7 +264,7 @@ export function installApi(ctx, deps) {
             if (!entry) return { ok: false, error: 'content 不能为空' }
             store.add(entry)
             // 图谱登记：面板写入的条目也要立刻进图谱（与 memory_remember 一致）
-            registerEntry(root, store.entries().slice(-1)[0] || entry)
+            registerEntry(root(), store.entries().slice(-1)[0] || entry)
             return { ok: true }
           }
           if (action === 'remove') {
@@ -268,7 +272,7 @@ export function installApi(ctx, deps) {
             if (!match) return { ok: false, error: 'match 不能为空' }
             const removedId = extractEntryId(match)
             const r = store.remove(match)
-            if (r && r.ok && removedId) pruneEntity(root, removedId)
+            if (r && r.ok && removedId) pruneEntity(root(), removedId)
             return r
           }
           return { ok: false, error: '未知 action' }
@@ -281,9 +285,9 @@ export function installApi(ctx, deps) {
       if (req.method === 'POST' && (sub === '/suggestions/approve' || sub === '/suggestions/reject')) {
         const body = await readBody(req)
         const index = Number(body.index)
-        const file = memoryFiles(root).suggestions
+        const file = memoryFiles(root()).suggestions
         const approve = sub.endsWith('/approve')
-        const result = withDirLock(root, () => {
+        const result = withDirLock(root(), () => {
           if (!existsSync(file)) return { ok: false, error: '队列为空' }
           const lines = readFileSync(file, 'utf8').split('\n').filter((l) => l.trim().length > 0)
           if (index < 0 || index >= lines.length) return { ok: false, error: '索引越界' }
@@ -299,18 +303,18 @@ export function installApi(ctx, deps) {
             const text = String(content || '')
             const dayMatch = /\[(\d{4}-\d{2}-\d{2})\]/.exec(text)
             const day = dayMatch ? dayMatch[1] : todayStamp()
-            const files = memoryFiles(root)
+            const files = memoryFiles(root())
             let target = null
             if (scope === 'global') target = files.global
             else if (scope === 'user') target = files.user
-            else if (scope === 'project') target = join(root, 'PROJECTS', sanitize(branch || '未分类') + '.md')
-            else target = join(root, 'DAILY', sanitize(day) + '.md')
+            else if (scope === 'project') target = join(root(), 'PROJECTS', sanitize(branch || '未分类') + '.md')
+            else target = join(root(), 'DAILY', sanitize(day) + '.md')
             if (target) {
               const store = new MemoryStore(target)
               store.ensure()
               store.add(text)
               // 批准落盘的条目同样登记图谱节点
-              registerEntry(root, store.entries().slice(-1)[0] || text)
+              registerEntry(root(), store.entries().slice(-1)[0] || text)
             }
             return { ok: true, written: target }
           }
@@ -328,7 +332,7 @@ export function installApi(ctx, deps) {
         const action = String(body.action || '').trim()
         const name = sanitize(String(body.name || '').trim())
         if (!name || name === 'default') return sendError(res, 400, '项目名不能为空')
-        const projDir = join(root, 'PROJECTS')
+        const projDir = join(root(), 'PROJECTS')
         const target = join(projDir, name + '.md')
         if (action === 'create') {
           if (existsSync(target)) return sendError(res, 400, '项目已存在：' + name)
@@ -338,7 +342,7 @@ export function installApi(ctx, deps) {
         }
         if (action === 'archive') {
           if (!existsSync(target)) return sendError(res, 400, '项目不存在：' + name)
-          const archDir = join(root, 'ARCHIVE')
+          const archDir = join(root(), 'ARCHIVE')
           mkdirSync(archDir, { recursive: true })
           const stamp = todayStamp()
           const dest = join(archDir, 'project-' + name + '-' + stamp + '.md')

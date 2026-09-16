@@ -8,14 +8,14 @@
  * 4. Web API：ctx.webServer.register() 可视化记忆管理
  * 5. 运行时可配置：ctx.settings.register() 原生设置命名空间（设置→插件 卡片）
  *
- * 零依赖（node:fs），本地优先（默认 ~/.dsh/memories/work-memory，可在设置里改）。
+ * 零依赖（node:fs），本地优先（默认 <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory，可在设置里改；
+ * 1.0.6 起改 memoryDir 即时生效，无需重启 DSH）。
  * @module work-memory
  */
 
 import { join } from 'node:path'
 import { mkdirSync, appendFileSync, existsSync, readFileSync, readdirSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { MemoryStore, withDirLock, makeEntry, todayStamp, DAILY_ACTIVITY_PREFIX, stripEntryId, extractEntryDate, extractEntryId } from './store.js'
+import { MemoryStore, withDirLock, makeEntry, todayStamp, DAILY_ACTIVITY_PREFIX, stripEntryId, extractEntryDate, extractEntryId, resolveMemoryRoot, ensureMemoryRoot } from './store.js'
 import { buildSnapshot, memoryFiles } from './context.js'
 import { createTools } from './tools.js'
 import { installApi } from './api.js'
@@ -60,11 +60,36 @@ export function apply(ctx, config = {}) {
       keep: next.backupKeep,
     })
     ctx.logger?.debug?.('work-memory: 设置已更新')
+    // 目录若改了：这里立刻建出新目录并打切换日志（消费点下次取值即用新目录）
+    memoryRoot()
   })
 
-  const root = cfg.memoryDir || join(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'), 'memories', 'work-memory')
-  mkdirSync(root, { recursive: true })
-  for (const dir of ['DAILY', 'PROJECTS']) mkdirSync(join(root, dir), { recursive: true })
+  // ---- 记忆库根目录：实时解析（1.0.6 起改 memoryDir 免重启） ----
+  // 根目录是本插件唯一"生命周期内可变"的路径。所有消费点必须经 memoryRoot() 取值，
+  // 不能存成一次性常量（1.0.6 前正是常量，改 memoryDir 要重启才切过去）。
+  // 切换策略：下一次取值时发现设置变化 → 先建出新目录（含 DAILY/PROJECTS），建成才切；
+  // 建失败则沿用旧目录并 warn —— 设置写错时不会把记忆写到不存在的地方，旧数据也不受影响。
+  let activeRoot = resolveMemoryRoot(cfg.memoryDir)
+  ensureMemoryRoot(activeRoot)
+  // 目标目录建失败时同一目标只 warn 一次（避免每次调用都刷日志），成功切换后复位
+  let failedRoot = null
+  const memoryRoot = () => {
+    const next = resolveMemoryRoot(cfg.memoryDir)
+    if (next === activeRoot) return activeRoot
+    try {
+      ensureMemoryRoot(next)
+      const prev = activeRoot
+      activeRoot = next
+      failedRoot = null
+      ctx.logger?.debug?.('work-memory: 记忆库根目录已切换 ' + prev + ' → ' + next)
+    } catch (err) {
+      if (failedRoot !== next) {
+        failedRoot = next
+        ctx.logger?.warn?.('work-memory: 新记忆库目录不可用，仍沿用 ' + activeRoot + '：' + (err?.message || err))
+      }
+    }
+    return activeRoot
+  }
 
   const disposers = []
 
@@ -83,7 +108,7 @@ export function apply(ctx, config = {}) {
         lastDailyLogAt = now
         const t = todayStamp()
         const hhmm = nowHHMM()
-        const store = new MemoryStore(join(root, 'DAILY', t + '.md'))
+        const store = new MemoryStore(join(memoryRoot(), 'DAILY', t + '.md'))
         store.ensure()
         store.add(makeEntry(DAILY_ACTIVITY_PREFIX + '（' + hhmm + '）', { tag: '常规' }))
       } catch { /* best-effort，不影响对话 */ }
@@ -93,6 +118,7 @@ export function apply(ctx, config = {}) {
       order: cfg.snapshotOrder,
       text: (context) => {
         if (!cfg.injectMemory) return ''
+        const root = memoryRoot()
         dailyLog()
         const session = context?.agent?.session
         let branch = null
@@ -131,7 +157,8 @@ export function apply(ctx, config = {}) {
 
   // ---- 2. 记忆工具（官方 ToolDefinition 形态） ----
   const toolDefs = createTools({
-    root,
+    // 传解析器而非字符串：工具执行时才解析根目录，改 memoryDir 免重启
+    root: memoryRoot,
     archiveCfg: liveArchiveCfg,
     backupCfg: liveBackupCfg,
     obsidianSyncDir: cfg.obsidianSyncDir || null,
@@ -148,6 +175,7 @@ export function apply(ctx, config = {}) {
     },
     onSuggestion: (item) => {
       if (!cfg.reviewEnabled) return
+      const root = memoryRoot()
       const file = memoryFiles(root).suggestions
       const line = JSON.stringify({ ...item, at: localIso(), id: Date.now() })
       try {
@@ -166,6 +194,7 @@ export function apply(ctx, config = {}) {
     name: 'memory_review',
     description: '查看待确认的记忆建议',
     handler: async () => {
+      const root = memoryRoot()
       const file = memoryFiles(root).suggestions
       if (!existsSync(file)) return { kind: 'success', text: '建议队列为空' }
       const rows = readFileSync(file, 'utf8').split('\n').filter((l) => l.trim().startsWith('{'))
@@ -187,6 +216,7 @@ export function apply(ctx, config = {}) {
     name: 'memory_archive',
     description: '执行记忆衰减归档（过期 DAILY 按月合并、常规条目超期移入 ARCHIVE）',
     handler: async () => {
+      const root = memoryRoot()
       try {
         // 分级 TTL：三个都要传。
         // （原先只传 dailyRetentionDays 且带了已废弃的 entryTtlDays —— 后者在 archive.js 里
@@ -214,6 +244,7 @@ export function apply(ctx, config = {}) {
     name: 'memory_backup',
     description: '手动备份记忆库（全量复制到备份目录，保留最近 N 份）',
     handler: async () => {
+      const root = memoryRoot()
       try {
         const result = backupMemory(root, { backupDir: cfg.backupDir, keep: cfg.backupKeep })
         if (result.skipped) {
@@ -232,6 +263,7 @@ export function apply(ctx, config = {}) {
     name: 'memory_audit',
     description: '记忆分类巡检：各范围条数 + 可疑条目（项目类内容落在全局、长期未归档等）',
     handler: async () => {
+      const root = memoryRoot()
       try {
         const read = (p) => existsSync(p) ? new MemoryStore(p).entries() : []
         const files = memoryFiles(root)
@@ -318,6 +350,7 @@ export function apply(ctx, config = {}) {
     name: 'memory_maintain',
     description: '记忆周保养：到期转冷 + 转热候选 + 分类巡检（建议每周一次）',
     handler: async () => {
+      const root = memoryRoot()
       try {
         const before = listArchive(root)
         const report = runArchive(root, { ...liveArchiveCfg, force: true })
@@ -411,6 +444,7 @@ export function apply(ctx, config = {}) {
     handler: async ({ rawInput } = {}) => {
       const id = String(rawInput || '').trim().split(/\s+/)[0]
       if (!id) return { kind: 'error', text: '用法：/memory_promote <条目id>（id 见 /memory_audit 或面板条目元信息）' }
+      const root = memoryRoot()
       try {
         const r = promoteEntry(root, id)
         if (!r.ok) return { kind: 'error', text: r.error || '转热失败' }
@@ -426,6 +460,7 @@ export function apply(ctx, config = {}) {
     name: 'memory_triage',
     description: '转冷预审判定：列出「待判断」条目，或 /memory_triage keep <id>（保留并顺延）、/memory_triage cold <id>（现在转冷）',
     handler: async ({ rawInput } = {}) => {
+      const root = memoryRoot()
       try {
         const parts = String(rawInput || '').trim().split(/\s+/).filter(Boolean)
         const action = parts[0] || ''
@@ -473,7 +508,8 @@ export function apply(ctx, config = {}) {
   }))
 
   try {
-    disposers.push(installApi(ctx, { root }))
+    // 传解析器而非字符串：面板/API 每次请求解析根目录，改 memoryDir 免重启
+    disposers.push(installApi(ctx, { root: memoryRoot }))
   } catch (err) {
     ctx.logger?.warn?.('work-memory: web API 安装失败: ' + (err?.message || err))
   }

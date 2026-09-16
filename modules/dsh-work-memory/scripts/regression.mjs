@@ -471,6 +471,43 @@ const { backupMemory, listBackups } = await import(pathToFileURL(join(lib, 'back
   rmSync(root, { recursive: true, force: true })
 }
 
+// ---------- 4.11 记忆库根目录：默认口径 + 热解析（1.0.6） ----------
+{
+  const { defaultMemoryRoot, resolveMemoryRoot, ensureMemoryRoot } = await import(pathToFileURL(join(lib, 'store.js')).href)
+  const prevDshHome = process.env.DSH_HOME
+  const fakeHome = join(here, '..', '.regression-tmp-dshhome')
+  try {
+    process.env.DSH_HOME = fakeHome
+    // 默认口径：<DSH_HOME>/data/dsh-work-memory/memory（1.0.6 起；旧口径是 <DSH_HOME>/memories/work-memory）
+    const def = defaultMemoryRoot()
+    check('根目录：未设置时默认落到 <DSH_HOME>/data/dsh-work-memory/memory',
+      def === join(fakeHome, 'data', 'dsh-work-memory', 'memory'))
+
+    // 未设置（null/undefined/空串）→ 默认；显式值原样（向后兼容：配过 memoryDir 的使用者行为不变）
+    const custom = join(here, '..', '.regression-tmp-custommem')
+    check('根目录：memoryDir 未设置回落新默认、显式值原样生效',
+      resolveMemoryRoot(null) === def && resolveMemoryRoot(undefined) === def
+      && resolveMemoryRoot('') === def && resolveMemoryRoot(custom) === custom)
+
+    // 热切换：解析器不缓存——连续两次不同入参得到两个不同目录；切换动作把新目录建齐
+    const rootA = join(here, '..', '.regression-tmp-rootA')
+    const rootB = join(here, '..', '.regression-tmp-rootB')
+    rmSync(rootA, { recursive: true, force: true })
+    rmSync(rootB, { recursive: true, force: true })
+    const gotA = resolveMemoryRoot(rootA)
+    const gotB = resolveMemoryRoot(rootB)
+    ensureMemoryRoot(gotA)
+    ensureMemoryRoot(gotB)
+    check('根目录：热切换——改值即解析到新目录且新目录建齐 DAILY/PROJECTS',
+      gotA === rootA && gotB === rootB && existsSync(join(rootB, 'DAILY')) && existsSync(join(rootB, 'PROJECTS')))
+    rmSync(rootA, { recursive: true, force: true })
+    rmSync(rootB, { recursive: true, force: true })
+  } finally {
+    if (prevDshHome === undefined) delete process.env.DSH_HOME
+    else process.env.DSH_HOME = prevDshHome
+  }
+}
+
 // ---------- 4. 子代理门控（可解析 dsh-tools 时启用） ----------
 try {
   const { createTools } = await import(pathToFileURL(join(lib, 'tools.js')).href)

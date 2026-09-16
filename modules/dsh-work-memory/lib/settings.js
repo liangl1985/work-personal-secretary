@@ -51,7 +51,7 @@ export const DEFAULTS = {
 /** 设置页渲染的 schema（描述即卡片上的说明文字） */
 export const MEMORY_SETTINGS_SCHEMA = z.object({
   memoryDir: z.string().default('')
-    .description('记忆库根目录；留空 = ~/.dsh/memories/<插件命名空间>'),
+    .description('记忆库根目录；留空 = <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory（改动即时生效，无需重启）'),
   personaLabel: z.string().default('记忆')
     .description('注入快照的标题词，默认「记忆」'),
   injectMemory: z.boolean().default(true)

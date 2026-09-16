@@ -14,10 +14,34 @@ const STALE_LOCK_MS = 10_000
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_RETRY_MS = 25
 
+/**
+ * 默认记忆库根目录：<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory
+ * （DSH 标准插件数据目录；data/ 下按包名分目录，与桌宠 ~/.dsh/data/workspace-tokenpet 同规矩。
+ *  1.0.6 前是 <base>/memories/work-memory —— 显式设了 memoryDir 的使用者不受影响。）
+ */
 export function defaultMemoryRoot() {
   const dshHome = process.env.DSH_HOME?.trim()
   const base = dshHome && dshHome.length > 0 ? dshHome : join(homedir(), '.dsh')
-  return join(base, 'memories', 'work-memory')
+  return join(base, 'data', 'dsh-work-memory', 'memory')
+}
+
+/**
+ * 实时解析记忆库根目录：memoryDir 有值用它，为空/未设置回落 defaultMemoryRoot()。
+ * **不缓存**——每次调用都重新读入参，设置页改 memoryDir 后下一次调用即生效（热切换）。
+ * 兼容口径与 1.0.6 前的 `cfg.memoryDir || <默认>` 完全一致（仅空串/null/undefined 才算未设置）。
+ */
+export function resolveMemoryRoot(memoryDir) {
+  return (typeof memoryDir === 'string' && memoryDir.length > 0) ? memoryDir : defaultMemoryRoot()
+}
+
+/**
+ * 建出记忆库根目录及其两个必备子目录（DAILY / PROJECTS），幂等。
+ * 初始挂载与目录热切换都走它，保证"只此一份"的建目录口径。
+ */
+export function ensureMemoryRoot(root) {
+  mkdirSync(root, { recursive: true })
+  for (const dir of ['DAILY', 'PROJECTS']) mkdirSync(join(root, dir), { recursive: true })
+  return root
 }
 
 export function genEntryId() {

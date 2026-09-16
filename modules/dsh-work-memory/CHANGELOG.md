@@ -1,5 +1,34 @@
 # CHANGELOG
 
+## 1.0.6 — 2026-09-16（默认路径迁移 + memoryDir 热生效）
+
+- **行为修正（本单主线）**：记忆库根目录此前是 `apply()` 时算一次的常量（旧 `lib/index.js:65` 的
+  `const root = cfg.memoryDir || …`），改设置页的 `memoryDir` 必须**重启 DSH** 才切过去。现改为**实时解析**：
+  所有消费点（工具 / 命令 / 注入快照 / 面板与 API / 归档 / 备份 / 转冷预审）统一经实例内的 `memoryRoot()` 取值，
+  改完设置下一次读写即落在新目录。
+  - `settings.watch` 回调里会预建新目录（根 + `DAILY`/`PROJECTS`）并打 debug 日志
+    `work-memory: 记忆库根目录已切换 <旧> → <新>`。
+  - 新目录建不出来（非法路径 / 无权限）时只 **warn 并沿用上一可用目录**：不会把记忆写到不存在的地方，
+    也不影响旧库；同一失败目标只 warn 一次（不刷日志）。
+  - 一致性：每个消费点（每个工具调用 / 每条命令 / 每次 API 请求 / 每轮注入）**入口取一次根目录快照**，
+    同一操作全程用同一目录，切换只发生在两次操作之间；各目录沿用各自的 `.work-memory.lock`，
+    切换不做锁迁移（因此不会出现跨目录半写）。
+- **默认路径变更**：`<DSH_HOME 或 ~/.dsh>/memories/work-memory` →
+  **`<DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory`**（DSH 标准插件数据目录；`data/` 下按包名分目录，
+  与桌宠 `~/.dsh/data/workspace-tokenpet` 同规矩）。默认口径只保留**一份实现**：`lib/store.js` 的
+  `defaultMemoryRoot()`（`index.js` 不再内联第二份表达式）。
+  - **显式设过 `memoryDir` 的使用者行为完全不变**；只有未设置的新装 / 未配置场景落到新默认。
+  - 升级提示：未显式配置、且旧库（`<DSH_HOME>/memories/work-memory`）里已有数据的使用者，
+    请在设置页或 `~/.dsh/settings.yaml` 的 `work-memory` 段把 `memoryDir` 指回旧路径，数据即可零迁移。
+- 同步口径三处：`settings.js` 的 `memoryDir` 描述、README「首次使用 / 卸载与数据留存」的默认值说明。
+- 影响面：仅 host 半（`lib/`）；`client/` 未改动（不需要刷新前端缓存）。
+  设置项键名与语义**一字未改**（schema 仍 24 键）。
+- 回归：**86/86**（新增 3 条：默认落到新路径 / `memoryDir` 未设置时回落默认且显式值原样 / 热切换解析到新目录并建齐
+  `DAILY`+`PROJECTS`）。另做过一次 host 级端到端验证（临时脚本，未随包发布：真实 `apply` + 模拟
+  settings watch，12/12）——切换后 `memory_remember`/`memory_recall`、注入快照、面板 `/overview` 全部落到新目录，
+  且旧目录不再被写；指回旧目录与「新目录非法」两条回退路径均按预期（后者仅 warn、不抛异常）。
+- 来源：2026-09-16 使用者要求「记忆库目录改动要热生效，不能重启 DSH」，并拍定新默认位置。
+
 ## 1.0.5 — 2026-09-13（回归脚本时区 bug 修复）
 
 - **修复**：`scripts/regression.mjs` 里 3 处用 `new Date().toISOString().slice(0, 10)` 取日期（**UTC**），而实现侧 `clock.js` 的 `todayStamp()` 取**本地日期**。在 Asia/Shanghai 的 00:00–08:00 窗口两者差一天，导致测试写的是 `DAILY/<UTC 日>.md`、查的是 `backup-<UTC 日>`，而插件实际用本地日 → 「快照：包含真实日志」「备份：全量复制成功」「备份：保留最近 N 份」在**这个时段必然误报失败**（80/83），白天则是 83/83。现改为与实现同源（`todayStamp()`）。
