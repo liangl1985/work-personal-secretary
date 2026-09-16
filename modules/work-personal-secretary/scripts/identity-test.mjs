@@ -271,6 +271,33 @@ ok(waited < 4000, '同步等待上限收紧（实测 ' + waited + 'ms < 4000ms�
 ok(readFileSync(fileE, 'utf8') === rawE, '拿不到锁时一字未写')
 rmSync(lockE, { force: true })
 
+// ───────────────────── [13] 既有其它条目但没有身份条目 → 追加 ─────────────────────
+// 1.1.3 返工抓出的真缺陷：这条分支原来引用了一个**本文件里不存在的**常量名（ENTRY_SEP 定义在 basedeck.js，
+// 本文件只有 ENTRY_DELIMITER），于是「库里已有内容但没有『使用者身份』条目」时直接抛 ReferenceError。
+// 链里没暴露是因为 memoryDeck 会先写占位条目 → 走的永远是「改写 1 条」分支；只有拿一个像样的旧库来写才会踩到。
+section('[13] 既有内容但无身份条目：追加（不是改写，也不能抛异常）')
+const memF = join(ROOT, 'mem-f')
+mkdirSync(memF, { recursive: true })
+const fileF = join(memF, 'MEMORY.md')
+const personaF = '[id:other000001] [2026-09-15] [tag:关键] ' + PERSONA_MARK + '：知性、温柔。'
+const dailyF = '[id:daily00009] [2026-09-15] [tag:常规] 今日日志：一条。'
+const rawF = personaF + ENTRY_DELIMITER + dailyF + '\n'
+writeFileSync(fileF, rawF, 'utf8')
+
+const rFdry = applyIdentity({ memoryFile: fileF, memoryDir: memF, content: '从事信息安全售前工作。', now: NOW })
+ok(rFdry.ok === true && rFdry.status === 'append' && rFdry.dryRun === true, '有既有内容且无身份条目 → 计划为 append')
+ok(readFileSync(fileF, 'utf8') === rawF, 'dry-run 一字未写')
+
+const rF = applyIdentity({ memoryFile: fileF, memoryDir: memF, content: '从事信息安全售前工作。', now: NOW, dryRun: false, id: 'ident0000001' })
+ok(rF.ok === true && rF.status === 'append' && rF.count === 0, '真写：追加成功（count=0）')
+const tF = readFileSync(fileF, 'utf8')
+ok(tF.indexOf('使用者身份：从事信息安全售前工作。') > 0, '新身份条目已写入')
+ok(tF.startsWith(personaF + ENTRY_DELIMITER + dailyF + ENTRY_DELIMITER), '既有两条前缀逐字节保留、新条目接在末尾')
+ok(tF.split(ENTRY_DELIMITER).length === 3, '条目数 2 → 3（没有多插/漏插分隔符）')
+ok(rF.personaUntouched === true && rF.othersUntouched === true, '证据字段：人设未动 / 其余条目未动')
+ok(rF.backup !== '' && existsSync(rF.backup), '有既有文件 → 写前备份存在')
+ok(!existsSync(join(memF, '.work-memory.lock')), '写完锁已清理')
+
 // ───────────────────── 汇总 ─────────────────────
 console.log('\n' + (fail === 0 ? '✅' : '❌') + ' identity-test：' + pass + ' 通过 / ' + fail + ' 失败')
 try { rmSync(ROOT, { recursive: true, force: true }) } catch (e) { /* best-effort */ }

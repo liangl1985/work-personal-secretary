@@ -285,7 +285,12 @@ function buildIdentityRunner(options, base, io, memoryFile, content, now) {
         coreStart = 0
         coreEnd = 0
       } else {
-        inserted = ENTRY_SEP + entryAfter
+        // 必须用**本文件**的常量：ENTRY_SEP 只定义在 basedeck.js（两者同为 '\n§\n'）。
+        // 这里原来写成 ENTRY_SEP → 「库里已有内容但没有『使用者身份』条目」时直接抛
+        // ReferenceError（链里没暴露：memoryDeck 会先写占位条目，走的永远是改写分支）。
+        // 值也必须与 appendEntriesText 插入的完全一致（head + ENTRY_SEP + add + tail），
+        // 否则写后「目标区间以外逐字节未变」的校验会误判。
+        inserted = ENTRY_DELIMITER + entryAfter
         coreStart = cut
         coreEnd = cut
       }
