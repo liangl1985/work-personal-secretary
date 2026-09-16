@@ -253,13 +253,64 @@ window.__ModuleLoader__.load({
       gateChecking: '检测中…',
       gateLoadFailed: '未能取到环境检测结果',
       coreDirsTitle: '目录与岗位',
-      coreDirsSub: '填好记忆库目录、Obsidian 目录与工作岗位后保存：先做可用性检查，再依次建立两个目录、建立关联、写入岗位身份。',
+      coreDirsSub: '三项都填写后才能保存；两个目录都要填，保存后按下面的执行链一次做完。',
       coreFieldMemoryDir: '记忆库目录',
       coreFieldMemoryDirHint: '脚本在此建立 MEMORY.md / PROJECTS / DAILY / ARCHIVE 与首条记忆',
       coreFieldObsidianDir: 'Obsidian 知识库目录',
       coreFieldObsidianDirHint: '脚本在此建立知识库结构，并把记忆镜像区 00_全局记忆 与记忆库关联',
       coreFieldDomain: '工作岗位',
-      coreFieldDomainHint: '五个预置岗位 +「都不是（新建岗位…）」，选定后写入使用者身份',
+      coreFieldDomainHint: '五个预置岗位对应信息安全 / 财务 / 人力资源 / 代码编程 / 金融五个行业域，均为可直接写入身份的预置正文；都不是时可自填，新建后自动出现在这里并选中',
+      coreDomainNew: '都不是（新建岗位…）',
+      coreDomainPlaceholder: '请选择…',
+      modalCustomSuffix: '（自定义）',
+      chainMarkCheck: '检',
+      corePlaceNote: '放在哪里最合适',
+      corePlaceBody:
+        '· 推荐：新建一个空文件夹专用于工作秘书，把记忆库与知识库都放在它下面；或直接放进长期使用的主工作区目录。· 不建议：两个目录分散在互不相关的文件夹、尤其不同盘符 —— 跨文件夹使用时可能受权限范围限制，出现记忆写入失败或镜像同步中断。· 两个目录都要填：脚本会在「记忆库目录」里建记忆结构，在「Obsidian 目录」里建知识库结构，并把两者关联起来（记忆镜像写入知识库的 00_全局记忆 区）。',
+      coreSave: '保存配置并开始',
+      coreSaveHintWait: '三项都填写后才能保存；保存会先做可用性检查，通过后自动执行',
+      coreSaveHintReady: '点「保存配置并开始」即触发：先做可用性检查，通过后依次建立两个目录、建立关联、写入身份',
+      chainTitle: '一键配置',
+      chainSub: '按顺序执行；任一步失败就停在该步，已建成的部分保留，可从失败处重试。',
+      chainBadgeWait: '待保存',
+      chainBadgeRun: '执行中…',
+      chainBadgeDone: '已完成',
+      chainBadgeFail: '已中断',
+      chainStepCheck: '可用性检查',
+      chainStepCheckSub: '环境就绪（记忆库插件 / Python / Python 工具）· 两个目录路径合法且可写 · 两目录同一工作区 · 目标目录无冲突',
+      chainStepMemory: '建立记忆库目录',
+      chainStepMemorySub: '骨架 PROJECTS / DAILY / ARCHIVE；MEMORY.md 写入使用者身份（占位，待本页填写）；PROJECTS/工作秘书.md 与 USER.md、GRAPH.json',
+      chainStepKnowledge: '建立知识库目录',
+      chainStepKnowledgeSub: '主页入口、模块骨架、00_全局记忆 镜像区、工具/（技能 · 脚本 · MCP）、.obsidian 最小配置',
+      chainStepLink: '建立两者关联',
+      chainStepLinkSub: '把记忆镜像写入知识库的 00_全局记忆 区，并回写记忆库目录与镜像目录设置',
+      chainStepIdentity: '写入岗位身份',
+      chainStepIdentitySub: '把所选岗位或自填内容整条写入「使用者身份」条目；助手人设不在本步内',
+      chainRetry: '重试',
+      chainRetryHint: '从失败的那一步继续（已完成的部分保留；重复执行只补缺失）',
+      importTitle: '已有旧内容要带过来？',
+      importSub: '本机已有知识库或记忆文件时，可选文件夹带过来',
+      importBrowse: '浏览… 选择知识库或记忆文件夹',
+      importNote: '纪律：只读源目录、只补缺失、不覆盖现有文件、先给预览再落盘。',
+      importPlaceholder: '选择后先列清单，由你勾选要带过来的条目，确认后才写入。',
+      importPicked: '已选目录：',
+      importLater: '清单与勾选（条目归类）在后续版本提供；本轮先落定入口与纪律。',
+      modalTitle: '新建岗位',
+      modalName: '岗位名称',
+      modalNameHint: '会出现在岗位下拉里，建议用中文简称',
+      modalContent: '岗位内容',
+      modalContentHint: '点「自动生成」时，会把岗位名称与你已填的内容交给当前会话的模型；不点就不发送',
+      modalGen: '自动生成',
+      modalGenRunning: '生成中…',
+      modalGenDone: '已生成，可直接编辑或重试',
+      modalGenNoModel: '当前 profile 未提供模型服务，请手填',
+      modalGenFailed: '生成失败',
+      modalNote: '只写使用者身份本身，不写助手人设；结果只作预览，可替换或重试。保存后整条写入记忆体「使用者身份」条目（全局记忆 · tag=关键）。',
+      modalCancel: '取消',
+      modalSave: '保存岗位',
+      modalNameRequired: '请先填写岗位名称',
+      modalOver: '内容超过 {n} 字，请精简后再保存',
+      coreDomainMissing: '请选择工作岗位',
       checking: '检测中…',
       recheck: '重新检测',
       checkedAt: '检测时间',
@@ -765,13 +816,64 @@ window.__ModuleLoader__.load({
       gateChecking: 'Checking…',
       gateLoadFailed: 'Could not read the environment check',
       coreDirsTitle: 'Directories & job',
-      coreDirsSub: 'Fill in the memory directory, the Obsidian directory and the job, then save: availability check first, then create both directories, link them and write the job identity.',
+      coreDirsSub: 'All three fields are required; saving runs the whole chain below in one go.',
       coreFieldMemoryDir: 'Memory directory',
       coreFieldMemoryDirHint: 'MEMORY.md / PROJECTS / DAILY / ARCHIVE and the first entry are created here',
       coreFieldObsidianDir: 'Obsidian vault directory',
       coreFieldObsidianDirHint: 'The vault structure is created here, and the 00_全局记忆 mirror area is linked to the memory store',
       coreFieldDomain: 'Job',
-      coreFieldDomainHint: 'Five presets plus "None of these (new job…)"; the choice is written into the user identity',
+      coreFieldDomainHint: 'Five presets cover information security / accounting / HR / coding / finance, each a ready-to-write identity text; choose "None of these" to fill your own — it then appears in this list and is selected',
+      coreDomainNew: 'None of these (new job…)',
+      coreDomainPlaceholder: 'Select…',
+      modalCustomSuffix: ' (custom)',
+      chainMarkCheck: 'C',
+      corePlaceNote: 'Where to put them',
+      corePlaceBody:
+        '· Recommended: create an empty folder dedicated to the Work Secretary and put both directories under it, or place them inside the workspace you use long-term. · Not recommended: separate folders in unrelated places, especially different drives — cross-folder use can hit permission-scope limits, causing failed memory writes or interrupted mirror sync. · Both are required: the memory structure is built in the memory directory, the vault structure in the Obsidian directory, and the two are linked (the memory mirror is written into the vault 00_全局记忆 area).',
+      coreSave: 'Save and start',
+      coreSaveHintWait: 'All three fields are required; saving runs the availability check first, then executes automatically',
+      coreSaveHintReady: 'Pressing "Save and start" runs the availability check first, then creates both directories, links them and writes the identity',
+      chainTitle: 'One-click setup',
+      chainSub: 'Runs in order; on failure it stops at that step, keeps what was created and can be retried from there.',
+      chainBadgeWait: 'Not started',
+      chainBadgeRun: 'Running…',
+      chainBadgeDone: 'Done',
+      chainBadgeFail: 'Stopped',
+      chainStepCheck: 'Availability check',
+      chainStepCheckSub: 'Environment ready (memory sub-plugin / Python / Python tools) · both directories valid and writable · same workspace · no target conflict',
+      chainStepMemory: 'Create the memory directory',
+      chainStepMemorySub: 'Skeleton PROJECTS / DAILY / ARCHIVE; the user identity placeholder in MEMORY.md; PROJECTS/工作秘书.md plus USER.md and GRAPH.json',
+      chainStepKnowledge: 'Create the vault directory',
+      chainStepKnowledgeSub: 'Home entry, module skeleton, the 00_全局记忆 mirror area, 工具/ (skills · scripts · MCP), a minimal .obsidian config',
+      chainStepLink: 'Link the two',
+      chainStepLinkSub: 'Write the memory mirror into the vault 00_全局记忆 area and write the memory/mirror directories back to settings',
+      chainStepIdentity: 'Write the job identity',
+      chainStepIdentitySub: 'Rewrites the "使用者身份" entry with the chosen preset or your own text; the assistant persona is not part of this step',
+      chainRetry: 'Retry',
+      chainRetryHint: 'Continues from the failed step (finished parts are kept; re-running only fills what is missing)',
+      importTitle: 'Bring existing content over?',
+      importSub: 'If you already have a vault or memory files on this machine, pick the folder to bring them in',
+      importBrowse: 'Browse… choose a vault or memory folder',
+      importNote: 'Rules: read the source only, add what is missing, never overwrite existing files, show a preview before writing.',
+      importPlaceholder: 'After choosing, a list appears and you tick the entries to bring over; nothing is written before you confirm.',
+      importPicked: 'Selected directory: ',
+      importLater: 'The list and the per-entry selection (how items are categorized) come in a later version; this version settles the entry point and the rules.',
+      modalTitle: 'New job',
+      modalName: 'Job name',
+      modalNameHint: 'Appears in the job list; a short label works best',
+      modalContent: 'Job description',
+      modalContentHint: 'Pressing "Generate" sends the job name and what you have filled in to the current session model; nothing is sent unless you press it',
+      modalGen: 'Generate',
+      modalGenRunning: 'Generating…',
+      modalGenDone: 'Generated — edit it or try again',
+      modalGenNoModel: 'This profile provides no model service; please fill it in by hand',
+      modalGenFailed: 'Generation failed',
+      modalNote: 'Only the user identity itself is written, never the assistant persona; the result is a preview you can replace or retry. On save it rewrites the "使用者身份" entry (global memory, tag=关键).',
+      modalCancel: 'Cancel',
+      modalSave: 'Save job',
+      modalNameRequired: 'Enter a job name first',
+      modalOver: 'Longer than {n} characters — please shorten it before saving',
+      coreDomainMissing: 'Choose a job',
       checking: 'Checking…',
       recheck: 'Re-check',
       checkedAt: 'Checked at',
@@ -1290,6 +1392,25 @@ window.__ModuleLoader__.load({
       },
       gatedBody: { opacity: 0.45, pointerEvents: 'none' },
       gateCard: { borderColor: '#f0d9b5', background: '#fffdf7' },
+      coreFieldRow: { padding: '8px 0', borderTop: '1px solid #f6f7f9', marginBottom: '2px' },
+      saveBar: {
+        display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap',
+        marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #eceef1',
+      },
+      chainNo: { minWidth: '20px', textAlign: 'center' },
+      modalWrap: { position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' },
+      modalMask: { position: 'absolute', inset: 0, background: 'rgba(15,23,42,.38)' },
+      modalBox: {
+        position: 'relative', width: '480px', maxWidth: 'calc(100vw - 40px)', background: '#fff',
+        borderRadius: '14px', boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden',
+      },
+      modalHead: { padding: '12px 14px', fontSize: '14px', fontWeight: 650, borderBottom: '1px solid #eceef1' },
+      modalBody: { padding: '12px 14px 4px' },
+      modalFoot: { display: 'flex', gap: '8px', justifyContent: 'flex-end', padding: '10px 14px', borderTop: '1px solid #eceef1', background: '#fbfcfd' },
+      textarea: {
+        width: '100%', font: 'inherit', fontSize: '12.5px', padding: '6px 8px', border: '1px solid #dfe1e5',
+        borderRadius: '8px', resize: 'vertical', minHeight: '84px', color: '#1f2328', boxSizing: 'border-box',
+      },
       toolbar: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' },
       row: { padding: '10px 0', borderBottom: '1px solid #f6f7f9' },
       rowHead: { display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' },
@@ -1915,6 +2036,19 @@ window.__ModuleLoader__.load({
       throw new Error(lastErr || 'request failed')
     }
 
+    /**
+     * 需要**读响应体**的写请求（1.1.3 T4 执行链）：基址分档与 postJson 相同，但不把
+     * 4xx / 5xx 当传输异常 —— 宿主的 400 / 403 / 503 都带可读中文（error / message），
+     * 必须原样回显（例如 503 = profile 未提供模型服务）。返回 { ok, status, body }。
+     */
+    function postFull(sub, body, timeoutMs) {
+      return requestJsonFull(sub, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify(body || {}),
+      }, timeoutMs || 15 * 60 * 1000)
+    }
+
     /** 补齐用长超时：pip / winget 安装可能耗时数分钟，但也不能无限挂起 */
     function postJson(sub, body) {
       return requestJson(sub, {
@@ -2537,15 +2671,37 @@ window.__ModuleLoader__.load({
       ]
     }
 
+    /** 执行链五步（客户端写死；顺序与设计定稿 §3.3 一致，「检」在最前） */
+    const CORE_CHAIN = [
+      { id: 'check', labelKey: 'chainStepCheck', subKey: 'chainStepCheckSub' },
+      { id: 'memoryDeck', labelKey: 'chainStepMemory', subKey: 'chainStepMemorySub' },
+      { id: 'knowledgeDeck', labelKey: 'chainStepKnowledge', subKey: 'chainStepKnowledgeSub' },
+      { id: 'link', labelKey: 'chainStepLink', subKey: 'chainStepLinkSub' },
+      { id: 'identity', labelKey: 'chainStepIdentity', subKey: 'chainStepIdentitySub' },
+    ]
+    /** 岗位下拉里「新建岗位…」的哨兵值（不是真实岗位 id） */
+    const NEW_DOMAIN_VALUE = '__new__'
+    /** 知识库里的记忆镜像区目录名（与宿主 basedeck 的 VAULT_MIRROR_DIR_NAME 一致） */
+    const VAULT_MIRROR_NAME = '00_全局记忆'
+
     /**
-     * 「核心配置」页（1.1.3：门禁 + 骨架）。
-     * 任一门禁项不满足 → 整页灰化（opacity + pointer-events:none）+ 门禁卡（逐项状态 +
-     * 「去安装与检查」）；三项就绪 → 自动解锁（门禁卡消失）。
-     * 目录与岗位字段由后续任务填充：本轮只给出可辨识的骨架与说明。
+     * 「核心配置」页（1.1.3 T4：门禁 + 目录与岗位 + 保存即执行链 + 导入引导卡）。
+     * 门禁：任一不满足 → 整页灰化（opacity + pointer-events:none）+ 门禁卡；三项就绪 → 自动解锁。
+     * 执行链：可用性检查 → 建立记忆库目录 → 建立知识库目录 → 建立两者关联 → 写入岗位身份；
+     * 任一步失败停在该步并可重试（已完成的部分保留，重复执行只补缺失）。
      */
     function CorePage(props) {
       const t = props.t
-      const state = useState({ phase: 'loading', items: [], error: '' })
+      const state = useState({
+        phase: 'loading', items: [], error: '',
+        domains: { phase: 'loading', items: [], error: '', maxChars: 200 },
+        memoryDir: '', obsidianDir: '', domainId: '',
+        custom: [],
+        modal: null,
+        run: null,
+        imported: '',
+        pickError: '',
+      })
       const st = state[0]
       const setSt = state[1]
 
@@ -2564,7 +2720,220 @@ window.__ModuleLoader__.load({
           setSt((prev) => Object.assign({}, prev, { phase: 'error', error: String((err && err.message) || err) }))
         }
       }
-      useEffect(() => { detect() }, [])
+      async function loadDomains() {
+        setSt((prev) => Object.assign({}, prev, { domains: Object.assign({}, prev.domains, { phase: 'loading', error: '' }) }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/domain/list', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'domain/list 返回 ok:false'))
+          setSt((prev) => Object.assign({}, prev, {
+            domains: {
+              phase: 'ready', error: '',
+              items: Array.isArray(body.items) ? body.items : [],
+              maxChars: (typeof body.maxChars === 'number' && isFinite(body.maxChars)) ? body.maxChars : 200,
+            },
+          }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            domains: Object.assign({}, prev.domains, { phase: 'error', error: String((err && err.message) || err) }),
+          }))
+        }
+      }
+
+      useEffect(() => { detect(); loadDomains() }, [])
+
+      // ── 表单（记忆库目录 → Obsidian 目录 → 工作岗位） ──────────────
+      function setField(key, value) {
+        setSt((prev) => Object.assign({}, prev, { [key]: value }))
+      }
+      function setPickError(msg) {
+        setSt((prev) => Object.assign({}, prev, { pickError: String(msg || '') }))
+      }
+      /** 目录选择：沿用宿主既有入口（桌面壳 bridge → uiWorkspace），不可用时给可读提示 */
+      function pickDir(key) {
+        const fn = props.pickDirectory
+        if (typeof fn !== 'function') { setPickError(t('initBrowseUnavailable')); return }
+        setPickError('')
+        Promise.resolve().then(() => fn()).then((dir) => {
+          if (typeof dir === 'string' && dir.trim()) setField(key, dir.trim())
+        }).catch((err) => { setPickError(t('initPickFailed') + String((err && err.message) || err)) })
+      }
+      function pickImport() {
+        const fn = props.pickDirectory
+        if (typeof fn !== 'function') { setPickError(t('initBrowseUnavailable')); return }
+        setPickError('')
+        Promise.resolve().then(() => fn()).then((dir) => {
+          if (typeof dir === 'string' && dir.trim()) setSt((prev) => Object.assign({}, prev, { imported: dir.trim() }))
+        }).catch((err) => { setPickError(t('initPickFailed') + String((err && err.message) || err)) })
+      }
+
+      // 岗位选项：预置取自 GET /domain/list（不在前端写死第二份正文）+ 本页新建的自定义岗位
+      const domainOptions = (st.domains.items || [])
+        .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
+        .filter((d) => d.id)
+        .concat(st.custom)
+      const selectedDomain = domainOptions.filter((d) => d.id === st.domainId)[0] || null
+      const domainContent = selectedDomain ? String(selectedDomain.content || '') : ''
+      const memoryDir = String(st.memoryDir || '').trim()
+      const obsidianDir = String(st.obsidianDir || '').trim()
+      const filledCount = (memoryDir ? 1 : 0) + (obsidianDir ? 1 : 0) + (domainContent.trim() ? 1 : 0)
+      const runPhase = st.run ? st.run.phase : 'idle'
+      const runRunning = runPhase === 'run'
+      const canSave = filledCount === 3 && !runRunning
+
+      function onDomainChange(value) {
+        if (value === NEW_DOMAIN_VALUE) {
+          setSt((prev) => Object.assign({}, prev, { modal: { name: '', content: '', phase: 'idle', message: '', error: '' } }))
+          return
+        }
+        setField('domainId', value)
+      }
+
+      // ── 新建岗位对话框 ────────────────────────────────────────────
+      function setModal(patch) {
+        setSt((prev) => (prev.modal ? Object.assign({}, prev, { modal: Object.assign({}, prev.modal, patch) }) : prev))
+      }
+      function closeModal() {
+        setSt((prev) => Object.assign({}, prev, { modal: null }))
+      }
+      /**
+       * [自动生成] → POST /domain/generate（显式触发；结果只作预览）。
+       * 503（profile 未提供模型服务）→ 明确改成手填并说明原因，绝不假成功。
+       */
+      async function generateDomain() {
+        if (!st.modal || st.modal.phase === 'run') return
+        const name = String(st.modal.name || '').trim()
+        const draft = String(st.modal.content || '').trim()
+        setModal({ phase: 'run', message: t('modalGenRunning'), error: '' })
+        try {
+          const res = await postFull('/domain/generate', { name: name, content: draft }, 120000)
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (res.status === 503 || body.code === 'no-model-service') {
+            setModal({ phase: 'idle', message: '', error: String(body.error || t('modalGenNoModel')) })
+            return
+          }
+          if (!res.ok || body.ok === false) {
+            setModal({ phase: 'idle', message: '', error: t('modalGenFailed') + '：' + String(body.error || body.message || ('HTTP ' + res.status)) })
+            return
+          }
+          setModal({ phase: 'idle', content: typeof body.content === 'string' ? body.content : '', message: t('modalGenDone'), error: '' })
+        } catch (err) {
+          setModal({ phase: 'idle', message: '', error: t('modalGenFailed') + '：' + String((err && err.message) || err) })
+        }
+      }
+      function saveModal() {
+        if (!st.modal) return
+        const name = String(st.modal.name || '').trim()
+        const content = String(st.modal.content || '').trim()
+        if (!name) { setModal({ error: t('modalNameRequired') }); return }
+        const max = st.domains.maxChars || 200
+        if (content.length > max) { setModal({ error: fill(t('modalOver'), max) }); return }
+        const id = 'custom:' + name
+        setSt((prev) => Object.assign({}, prev, {
+          custom: prev.custom.filter((d) => d.id !== id).concat([{ id: id, label: name + t('modalCustomSuffix'), content: content }]),
+          domainId: id,
+          modal: null,
+        }))
+      }
+
+      // ── 保存即执行链 ──────────────────────────────────────────────
+      function chainInit() {
+        return CORE_CHAIN.map((s, i) => ({ id: s.id, index: i, state: 'wait', detail: '', error: '' }))
+      }
+      function setStep(index, patch) {
+        setSt((prev) => {
+          const run = prev.run || { phase: 'idle', steps: chainInit(), failedAt: -1 }
+          const steps = run.steps.map((s, i) => (i === index ? Object.assign({}, s, patch) : s))
+          return Object.assign({}, prev, { run: Object.assign({}, run, { steps: steps }) })
+        })
+      }
+      /**
+       * 逐步执行（幂等）：从 from 步开始，把该步及其后复位为等待，已成功的保留。
+       * 任一步失败 → 停在该步（不整链回滚），run.failedAt 记录位置供 [重试]。
+       */
+      async function runChain(from) {
+        if (st.run && st.run.phase === 'run') return
+        const start = (typeof from === 'number' && from >= 0) ? from : 0
+        const base = (st.run && Array.isArray(st.run.steps)) ? st.run.steps : chainInit()
+        const reset = base.map((s, i) => (i >= start ? Object.assign({}, s, { state: 'wait', detail: '', error: '' }) : s))
+        setSt((prev) => Object.assign({}, prev, { run: { phase: 'run', steps: reset, failedAt: -1 } }))
+        const form = { memoryDir: memoryDir, obsidianDir: obsidianDir, content: domainContent.trim() }
+        for (let i = start; i < CORE_CHAIN.length; i++) {
+          setStep(i, { state: 'run', detail: '', error: '' })
+          try {
+            const detail = await runChainStep(CORE_CHAIN[i].id, form)
+            setStep(i, { state: 'ok', detail: detail })
+          } catch (err) {
+            setStep(i, { state: 'fail', detail: '', error: String((err && err.message) || err) })
+            setSt((prev) => Object.assign({}, prev, { run: Object.assign({}, prev.run, { phase: 'fail', failedAt: i }) }))
+            return
+          }
+        }
+        setSt((prev) => Object.assign({}, prev, { run: Object.assign({}, prev.run, { phase: 'done', failedAt: -1 }) }))
+      }
+
+      /** 单步实现：每一步都显式 dryRun:false；可用性检查是只读的，不传 dryRun */
+      async function runChainStep(id, form) {
+        if (id === 'check') {
+          const res = await postFull('/preflight', { memoryDir: form.memoryDir, obsidianDir: form.obsidianDir, workspace: '' }, 60000)
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (!res.ok || body.ok === false) throw new Error(String(body.error || body.message || ('HTTP ' + res.status)))
+          const checks = Array.isArray(body.checks) ? body.checks : []
+          const blocked = checks.filter((c) => c && c.level === 'block')
+          if (body.ready !== true || blocked.length) {
+            throw new Error(blocked.length
+              ? blocked.map((c) => String(c.label || c.id || '') + '：' + String(c.detail || '')).join('；')
+              : t('chainStepCheck'))
+          }
+          return t('chainStepCheckSub')
+        }
+        if (id === 'memoryDeck' || id === 'knowledgeDeck') {
+          const res = await postFull('/basedeck', {
+            ids: [id],
+            dryRun: false,
+            overrides: { memoryDir: form.memoryDir, obsidianDir: form.obsidianDir },
+          })
+          return basedeckStepDetail(res, id)
+        }
+        if (id === 'link') {
+          // 第 3 步「建立两者关联」= 写 settings.yaml 的 work-memory.memoryDir 与
+          // work-memory.obsidianSyncDir（后者 = <Obsidian 目录>/00_全局记忆）。
+          // 走 basedeck 的 settings 项：lib/basedeck.js 的 planSettings 用
+          // overrides.memoryDir / overrides.obsidianSyncDir 覆盖这两键（basedeck.js:1331-1333）。
+          const mirror = form.obsidianDir.replace(/[\\/]+$/, '') + '/' + VAULT_MIRROR_NAME
+          const res = await postFull('/basedeck', {
+            ids: ['settings'],
+            dryRun: false,
+            overrides: { memoryDir: form.memoryDir, obsidianSyncDir: mirror, obsidianDir: form.obsidianDir },
+          })
+          await basedeckStepDetail(res, 'settings')
+          return 'memoryDir = ' + form.memoryDir + ' · obsidianSyncDir = ' + mirror
+        }
+        if (id === 'identity') {
+          const res = await postFull('/identity/save', {
+            content: form.content,
+            memoryDir: form.memoryDir,
+            dryRun: false,
+          })
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (!res.ok || body.ok === false) throw new Error(String(body.error || body.message || ('HTTP ' + res.status)))
+          if (body.dryRun === true) throw new Error(t('initWriteDryRun'))
+          return String(body.detail || body.entryAfter || body.status || '')
+        }
+        throw new Error('未知执行步：' + id)
+      }
+
+      /** 解析 POST /basedeck 单项结果（可读 detail；dryRun:true 视为未写盘） */
+      async function basedeckStepDetail(res, id) {
+        const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+        if (!res.ok || body.ok === false) throw new Error(String(body.error || body.message || ('HTTP ' + res.status)))
+        const item = (Array.isArray(body.results) ? body.results : []).filter((x) => x && x.id === id)[0] || null
+        if (!item) throw new Error('响应里没有 ' + id + ' 的结果')
+        if (item.ok === false) throw new Error(String(item.error || item.detail || '写入未成功'))
+        if (body.dryRun === true || item.dryRun === true) throw new Error(t('initWriteDryRun'))
+        return String(item.action || item.target || item.detail || '')
+      }
 
       const byId = {}
       for (const it of (st.items || [])) { if (it && it.id) byId[it.id] = it }
@@ -2612,31 +2981,172 @@ window.__ModuleLoader__.load({
         ]),
       ])
 
-      // 骨架：目录与岗位（字段与执行链由后续任务填充；这里先给出可辨识的结构与口径）
-      const coreBody = h('div', { key: 'core', style: gated ? S.gatedBody : null }, [
-        h('div', { key: 'dirs', style: S.card }, [
-          h('div', { key: 'head', style: S.cardHead }, [
-            h('h3', { key: 'title', style: S.cardTitle }, t('coreDirsTitle')),
-            h('div', { key: 'sub', style: S.cardSub }, t('coreDirsSub')),
-          ]),
-          h('div', { key: 'body', style: S.cardBody }, [
-            h('div', { key: 'f1', style: S.row }, [
-              h('div', { key: 'l', style: S.label }, t('coreFieldMemoryDir')),
-              h('div', { key: 'h', style: S.labelHint }, t('coreFieldMemoryDirHint')),
-            ]),
-            h('div', { key: 'f2', style: S.row }, [
-              h('div', { key: 'l', style: S.label }, t('coreFieldObsidianDir')),
-              h('div', { key: 'h', style: S.labelHint }, t('coreFieldObsidianDirHint')),
-            ]),
-            h('div', { key: 'f3', style: S.row }, [
-              h('div', { key: 'l', style: S.label }, t('coreFieldDomain')),
-              h('div', { key: 'h', style: S.labelHint }, t('coreFieldDomainHint')),
-            ]),
+      // ── 渲染：目录与岗位（顺序：记忆库目录 → Obsidian 目录 → 工作岗位）──
+      const dirField = (key, label, hint, value) => h('div', { key: 'f-' + key, style: S.coreFieldRow }, [
+        h('div', { key: 'l', style: S.label }, label),
+        h('div', { key: 'row', style: S.inputRow }, [
+          h('input', {
+            key: 'i', type: 'text', style: S.input, value: value, disabled: runRunning,
+            onChange: (e) => setField(key, (e && e.target && e.target.value) || ''),
+          }),
+          h('button', {
+            key: 'b', type: 'button', disabled: runRunning,
+            style: Object.assign({}, S.btn, runRunning ? S.btnDisabled : null),
+            onClick: () => pickDir(key),
+          }, t('initBrowse')),
+        ]),
+        h('div', { key: 'h', style: S.labelHint }, hint),
+      ])
+
+      const domainField = h('div', { key: 'f-domain', style: S.coreFieldRow }, [
+        h('div', { key: 'l', style: S.label }, t('coreFieldDomain')),
+        h('div', { key: 'row', style: S.inputRow }, [
+          h('select', {
+            key: 's', style: S.input, value: st.domainId, disabled: runRunning,
+            onChange: (e) => onDomainChange((e && e.target && e.target.value) || ''),
+          }, [h('option', { key: '__ph', value: '' }, t('coreDomainPlaceholder'))]
+            .concat(domainOptions.map((d) => h('option', { key: d.id, value: d.id }, d.label)))
+            .concat([h('option', { key: '__new', value: NEW_DOMAIN_VALUE }, t('coreDomainNew'))])),
+        ]),
+        h('div', { key: 'h', style: S.labelHint }, t('coreFieldDomainHint')),
+      ])
+
+      const dirsCard = h('div', { key: 'dirs', style: S.card }, [
+        h('div', { key: 'head', style: S.cardHead }, [
+          h('h3', { key: 'title', style: S.cardTitle }, t('coreDirsTitle')),
+          h('div', { key: 'sub', style: S.cardSub }, t('coreDirsSub')),
+        ]),
+        h('div', { key: 'body', style: S.cardBody }, [
+          dirField('memoryDir', t('coreFieldMemoryDir'), t('coreFieldMemoryDirHint'), st.memoryDir),
+          dirField('obsidianDir', t('coreFieldObsidianDir'), t('coreFieldObsidianDirHint'), st.obsidianDir),
+          domainField,
+          st.domains.phase === 'error' ? h('div', { key: 'derr', style: S.warnLine }, t('coreDomainMissing') + '：' + st.domains.error) : null,
+          st.pickError ? h('div', { key: 'perr', style: S.warnLine }, st.pickError) : null,
+          h('div', { key: 'place', style: S.note }, t('corePlaceNote') + '：' + t('corePlaceBody')),
+          h('div', { key: 'save', style: S.saveBar }, [
+            h('button', {
+              key: 'go', type: 'button', disabled: !canSave,
+              style: Object.assign({}, S.btn, S.btnPrimary, !canSave ? S.btnDisabled : null),
+              onClick: () => runChain(0),
+            }, t('coreSave')),
+            h('span', { key: 'h', style: S.actionHint }, canSave ? t('coreSaveHintReady') : t('coreSaveHintWait')),
           ]),
         ]),
       ])
 
-      return h('div', null, gated ? [gateCard, coreBody] : [coreBody])
+      // ── 渲染：执行链（保存后出现；失败停在该步，可重试）──
+      const runBadgeText = runPhase === 'run' ? t('chainBadgeRun')
+        : (runPhase === 'done' ? t('chainBadgeDone') : (runPhase === 'fail' ? t('chainBadgeFail') : t('chainBadgeWait')))
+      const runBadgeStyle = runPhase === 'done' ? S.badgeOk
+        : (runPhase === 'fail' ? S.badgeMissing : (runPhase === 'run' ? S.badgeWarn : S.badgeSkip))
+      const chainCard = st.run ? h('div', { key: 'chain', style: S.card }, [
+        h('div', { key: 'head', style: S.cardHead }, [
+          h('h3', { key: 'title', style: S.cardTitle }, [
+            t('chainTitle'),
+            h('span', { key: 'b', style: S.groupCount }, badge(runBadgeText, runBadgeStyle)),
+          ]),
+          h('div', { key: 'sub', style: S.cardSub }, t('chainSub')),
+        ]),
+        h('div', { key: 'body', style: S.cardBody }, [
+          h('div', { key: 'list' }, (st.run.steps || []).map((s, i) => h('div', { key: s.id, style: S.row }, [
+            h('div', { key: 'head', style: S.rowHead }, [
+              h('span', { key: 'no', style: Object.assign({}, S.badge, S.badgeSkip) }, s.id === 'check' ? t('chainMarkCheck') : String(i)),
+              h('span', { key: 'nm', style: S.itemName }, t(CORE_CHAIN[i].labelKey)),
+              h('span', { key: 'st', style: Object.assign({}, S.badge, runStateStyle(s.state)) }, t(RUN_STATE_KEYS[s.state] || 'runWait')),
+            ]),
+            h('div', { key: 'sub', style: S.labelHint }, t(CORE_CHAIN[i].subKey)),
+            s.detail ? h('div', { key: 'd', style: S.itemDetail }, s.detail) : null,
+            s.error ? h('div', { key: 'e', style: S.warnLine }, s.error) : null,
+          ]))),
+          runPhase === 'fail' ? h('div', { key: 'retry', style: S.actions }, [
+            h('button', {
+              key: 'r', type: 'button',
+              style: Object.assign({}, S.btn, S.btnPrimary),
+              onClick: () => runChain(st.run.failedAt),
+            }, t('chainRetry')),
+            h('span', { key: 'h', style: S.actionHint }, t('chainRetryHint')),
+          ]) : null,
+        ]),
+      ]) : null
+
+      // ── 渲染：导入引导卡（五项全绿后出现；本轮只给入口与纪律）──
+      const importCard = runPhase === 'done' ? h('div', { key: 'imp', style: S.card }, [
+        h('div', { key: 'head', style: S.cardHead }, [
+          h('h3', { key: 'title', style: S.cardTitle }, t('importTitle')),
+          h('div', { key: 'sub', style: S.cardSub }, t('importSub')),
+        ]),
+        h('div', { key: 'body', style: S.cardBody }, [
+          h('div', { key: 'note', style: S.note }, t('importNote')),
+          h('div', { key: 'act', style: S.actions }, [
+            h('button', { key: 'b', type: 'button', style: S.btn, onClick: () => pickImport() }, t('importBrowse')),
+          ]),
+          st.imported
+            ? h('div', { key: 'picked', style: S.note }, t('importPicked') + st.imported + ' · ' + t('importLater'))
+            : h('div', { key: 'ph', style: S.labelHint }, t('importPlaceholder')),
+        ]),
+      ]) : null
+
+      const coreBody = h('div', { key: 'core', style: gated ? S.gatedBody : null }, [dirsCard, chainCard, importCard])
+
+      const modalNode = st.modal ? h(NewDomainModal, {
+        key: 'modal', t: t, modal: st.modal,
+        onName: (v) => setModal({ name: v }),
+        onContent: (v) => setModal({ content: v }),
+        onGenerate: generateDomain,
+        onSave: saveModal,
+        onCancel: closeModal,
+      }) : null
+
+      return h('div', null, (gated ? [gateCard, coreBody] : [coreBody]).concat([modalNode]))
+    }
+
+    /** 新建岗位对话框（1.1.3）：岗位名称 / 岗位内容 / [自动生成] / 保存 */
+    function NewDomainModal(props) {
+      const t = props.t
+      const m = props.modal
+      const busy = m.phase === 'run'
+      return h('div', { style: S.modalWrap }, [
+        h('div', { key: 'mask', style: S.modalMask, onClick: () => { if (!busy) props.onCancel() } }),
+        h('div', { key: 'box', style: S.modalBox }, [
+          h('div', { key: 'h', style: S.modalHead }, t('modalTitle')),
+          h('div', { key: 'b', style: S.modalBody }, [
+            h('div', { key: 'name', style: S.cardSub }, t('modalName')),
+            h('div', { key: 'ni', style: S.inputRow }, [
+              h('input', {
+                key: 'i', type: 'text', style: S.input, value: m.name, disabled: busy,
+                onChange: (e) => props.onName((e && e.target && e.target.value) || ''),
+              }),
+            ]),
+            h('div', { key: 'nh', style: S.labelHint }, t('modalNameHint')),
+            h('div', { key: 'ct', style: S.cardSub }, t('modalContent')),
+            h('div', { key: 'ci', style: S.inputRow }, [
+              h('textarea', {
+                key: 'a', style: S.textarea, value: m.content, disabled: busy,
+                onChange: (e) => props.onContent((e && e.target && e.target.value) || ''),
+              }),
+            ]),
+            h('div', { key: 'ch', style: S.labelHint }, t('modalContentHint')),
+            h('div', { key: 'act', style: S.actions }, [
+              h('button', {
+                key: 'g', type: 'button', disabled: busy,
+                style: Object.assign({}, S.btn, busy ? S.btnDisabled : null),
+                onClick: () => props.onGenerate(),
+              }, busy ? t('modalGenRunning') : t('modalGen')),
+              h('span', { key: 'm', style: S.actionHint }, m.message || ''),
+            ]),
+            m.error ? h('div', { key: 'e', style: S.warnLine }, m.error) : null,
+            h('div', { key: 'note', style: S.note }, t('modalNote')),
+          ]),
+          h('div', { key: 'f', style: S.modalFoot }, [
+            h('button', { key: 'c', type: 'button', style: S.btn, disabled: busy, onClick: () => props.onCancel() }, t('modalCancel')),
+            h('button', {
+              key: 's', type: 'button', disabled: busy,
+              style: Object.assign({}, S.btn, S.btnPrimary, busy ? S.btnDisabled : null),
+              onClick: () => props.onSave(),
+            }, t('modalSave')),
+          ]),
+        ]),
+      ])
     }
 
     /** 子插件清单一行：复选框 · 中文名 · 性质 · 状态 · 内置版本 · 已装版本 · 安装方式 · 单项安装 */

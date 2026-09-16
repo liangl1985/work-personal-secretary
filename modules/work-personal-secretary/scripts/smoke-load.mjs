@@ -2051,9 +2051,224 @@ effectQueue = []
 cTree = expand(reg.render({ initialTab: 'core' }))
 cText = collect(cTree, []).join(' | ')
 ok(!cText.includes('先满足最低使用需求'), '三项就绪 → 门禁卡消失（自动解锁）')
-ok(cText.includes('目录与岗位'), '解锁后显示目录与岗位骨架')
+ok(cText.includes('目录与岗位') && cText.includes('保存配置并开始'), '解锁后显示目录与岗位表单 + 保存条')
 ok(!findAll(cTree, (x) => Boolean(x.props && x.props.style && x.props.style.pointerEvents === 'none'), []).length,
   '解锁后不再有灰化容器')
+
+// ══════════════════════════════════════════════════════════════════
+// [14] T4 核心配置：目录与岗位 + 保存即执行链 + 导入引导卡
+// ══════════════════════════════════════════════════════════════════
+console.log('\n[14] 核心配置（T4：字段顺序 / 保存置灰 / 执行链 / 失败重试 / 导入卡）')
+
+const DOMAIN_ITEMS = [
+  { id: 'infosec', label: '信息安全（infosec）', content: 'me-domain-infosec' },
+  { id: 'accounting', label: '财务（accounting）', content: 'me-domain-accounting' },
+  { id: 'hr', label: '人力资源（hr）', content: 'me-domain-hr' },
+  { id: 'coding', label: '代码编程（coding）', content: 'me-domain-coding' },
+  { id: 'finance', label: '金融（finance）', content: 'me-domain-finance' },
+]
+let bdCalls = []
+let identityPayload = null
+let preflightPayload = null
+let failKnowledge = false
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/preflight') >= 0) {
+    preflightPayload = JSON.parse(String((opts && opts.body) || '{}'))
+    return jsonRes({
+      ok: true, ready: true,
+      checks: [{ id: 'memoryDir', label: '记忆库目录', level: 'ok', ok: true, detail: '可用' },
+        { id: 'obsidianDir', label: 'Obsidian 知识库目录', level: 'ok', ok: true, detail: '可用' }],
+      summary: { total: 2, ok: 2, warn: 0, block: 0 }, checkedAt: '2026-09-16T11:00:00+08:00',
+    })
+  }
+  if (u.indexOf('/basedeck') >= 0) {
+    const body = JSON.parse(String((opts && opts.body) || '{}'))
+    bdCalls.push(body)
+    if (failKnowledge && (body.ids || []).indexOf('knowledgeDeck') >= 0) {
+      return jsonRes({ ok: true, dryRun: false, results: [{ id: 'knowledgeDeck', ok: false, error: '目标目录不可写（模拟失败）' }] })
+    }
+    const results = (body.ids || []).map((id) => ({ id: id, ok: true, dryRun: false, action: '写入 ' + id, target: 'D:/fake/' + id }))
+    return jsonRes({ ok: true, dryRun: false, results: results, wroteAny: true })
+  }
+  if (u.indexOf('/identity/save') >= 0) {
+    identityPayload = JSON.parse(String((opts && opts.body) || '{}'))
+    return jsonRes({ ok: true, status: 'rewrite', entryId: 'id-1', detail: '将整条改写「使用者身份」条目', personaUntouched: true, othersUntouched: true })
+  }
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+calls.length = 0
+let t4Tree = expand(reg.render({ initialTab: 'core' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(80)
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+let t4Text = collect(t4Tree, []).join(' | ')
+
+const iMem = t4Text.indexOf('记忆库目录')
+const iObs = t4Text.indexOf('Obsidian 知识库目录')
+const iJob = t4Text.indexOf('工作岗位')
+ok(iMem >= 0 && iObs > iMem && iJob > iObs, '字段顺序：记忆库目录 → Obsidian 目录 → 工作岗位')
+
+const findSave = () => findButtons(t4Tree).filter((b) => label(b) === '保存配置并开始')[0]
+ok(Boolean(findSave()) && findSave().props.disabled === true, '三项未齐时保存按钮 disabled')
+
+const t4Inputs = findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+ok(t4Inputs.length === 2, '两个必填目录输入框（实测 ' + t4Inputs.length + '）')
+t4Inputs[0].props.onChange({ target: { value: 'D:/ws/.dsh/memories/me' } })
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])[1]
+  .props.onChange({ target: { value: 'D:/ws' } })
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+ok(findSave().props.disabled === true, '只填两个目录、未选岗位时仍 disabled')
+
+const t4Sel = findAll(t4Tree, (x) => x.type === 'select', [])[0]
+ok(Boolean(t4Sel), '岗位下拉存在')
+const optTexts = collect(findAll(t4Tree, (x) => x.type === 'option', []), []).join(' | ')
+ok(DOMAIN_ITEMS.every((d) => optTexts.indexOf(d.label) >= 0), '五个预置岗位来自 GET /domain/list（不在前端写死）')
+ok(optTexts.indexOf('都不是（新建岗位…）') >= 0, '岗位下拉含「都不是（新建岗位…）」')
+ok(optTexts.indexOf('通用职能') < 0, '岗位下拉无「通用职能」')
+t4Sel.props.onChange({ target: { value: 'infosec' } })
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+ok(findSave().props.disabled !== true, '三项齐备 → 保存按钮可点')
+
+calls.length = 0
+findSave().props.onClick()
+await tick(150)
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+t4Text = collect(t4Tree, []).join(' | ')
+const t4Seq = calls.filter((c) => c.method === 'POST').map((c) => {
+  const b = JSON.parse(String(c.body || '{}'))
+  return (b.ids ? '/basedeck:' + b.ids.join(',') : String(c.url).replace(/^.*\/api/, ''))
+})
+ok(String(t4Seq) === String(['/preflight', '/basedeck:memoryDeck', '/basedeck:knowledgeDeck', '/basedeck:settings', '/identity/save']),
+  '执行链按序发请求：preflight → memoryDeck → knowledgeDeck → settings → identity/save（实测 ' + String(t4Seq) + '）')
+ok(Boolean(preflightPayload) && preflightPayload.dryRun === undefined, '可用性检查是只读的（不传 dryRun）')
+ok(bdCalls.length === 3 && bdCalls.every((b) => b.dryRun === false), '三次 basedeck 均显式 dryRun:false（实测 ' + bdCalls.length + ' 次）')
+const t4Link = bdCalls.filter((b) => (b.ids || []).indexOf('settings') >= 0)[0]
+ok(Boolean(t4Link) && String(t4Link.overrides.obsidianSyncDir).indexOf('00_全局记忆') >= 0,
+  '第 3 步关联：basedeck settings 的 overrides.obsidianSyncDir = <Obsidian 目录>/00_全局记忆（实测 ' + (t4Link && t4Link.overrides.obsidianSyncDir) + '）')
+ok(Boolean(t4Link) && t4Link.overrides.memoryDir === 'D:/ws/.dsh/memories/me', '第 3 步关联：overrides.memoryDir 取表单值')
+ok(Boolean(identityPayload) && identityPayload.dryRun === false && identityPayload.content === 'me-domain-infosec',
+  '写入身份：dryRun:false，content 为岗位正文（不含「使用者身份：」前缀）')
+ok(Boolean(identityPayload) && identityPayload.memoryDir === 'D:/ws/.dsh/memories/me', '写入身份带上 memoryDir')
+ok(t4Text.indexOf('建立两者关联') >= 0 && t4Text.indexOf('已完成') >= 0, '执行链五项全绿（徽标「已完成」）')
+ok(t4Text.indexOf('已有旧内容要带过来？') >= 0 && t4Text.indexOf('浏览… 选择知识库或记忆文件夹') >= 0,
+  '全绿后出现导入引导卡（入口 + 标题）')
+ok(t4Text.indexOf('只读源目录、只补缺失、不覆盖现有文件、先给预览再落盘') >= 0, '导入卡含纪律说明')
+
+failKnowledge = true
+calls.length = 0
+bdCalls = []
+findSave().props.onClick()
+await tick(150)
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+t4Text = collect(t4Tree, []).join(' | ')
+ok(t4Text.indexOf('目标目录不可写（模拟失败）') >= 0, '任一步失败：停在该步并回显可读原因')
+ok(calls.filter((c) => c.method === 'POST').every((c) => String(c.url).indexOf('/identity/save') < 0),
+  '失败后不继续后续步（未发 identity/save）')
+const t4Retry = findButtons(t4Tree).filter((b) => label(b) === '重试')[0]
+ok(Boolean(t4Retry), '失败后出现「重试」按钮')
+failKnowledge = false
+calls.length = 0
+t4Retry.props.onClick()
+await tick(200)
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+const t4RetrySeq = calls.filter((c) => c.method === 'POST').map((c) => {
+  const b = JSON.parse(String(c.body || '{}'))
+  return (b.ids ? '/basedeck:' + b.ids.join(',') : String(c.url).replace(/^.*\/api/, ''))
+})
+ok(String(t4RetrySeq) === String(['/basedeck:knowledgeDeck', '/basedeck:settings', '/identity/save']),
+  '「重试」从失败步继续、不重发 preflight / memoryDeck（实测 ' + String(t4RetrySeq) + '）')
+t4Text = collect(t4Tree, []).join(' | ')
+ok(t4Text.indexOf('已有旧内容要带过来？') >= 0, '重试成功后导入引导卡出现')
+
+// 新建岗位对话框 + POST /domain/generate（503 → 改成手填，绝不假成功）
+let genMode = 503
+const t4Base = globalThis.fetch
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  if (u.indexOf('/domain/generate') >= 0) {
+    calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+    if (genMode === 503) {
+      return { ok: false, status: 503, json: async () => ({ ok: false, code: 'no-model-service', error: '当前 profile 未提供模型服务，请改为手填岗位内容' }) }
+    }
+    return jsonRes({ ok: true, content: 'me-generated-job', channel: 'llm', provider: 'p', model: 'm', maxChars: 200 })
+  }
+  return t4Base(url, opts)
+}
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+findAll(t4Tree, (x) => x.type === 'select', [])[0].props.onChange({ target: { value: '__new__' } })
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+t4Text = collect(t4Tree, []).join(' | ')
+ok(t4Text.indexOf('新建岗位') >= 0 && t4Text.indexOf('自动生成') >= 0 && t4Text.indexOf('保存岗位') >= 0,
+  '选「都不是（新建岗位…）」→ 对话框出现（名称 / 内容 / 自动生成 / 保存）')
+findButtons(t4Tree).filter((b) => label(b) === '保存岗位')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+t4Text = collect(t4Tree, []).join(' | ')
+ok(t4Text.indexOf('请先填写岗位名称') >= 0, '名称为空时保存被拒绝并给出提示')
+const t4ModalInputs = findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+ok(t4ModalInputs.length === 3, '对话框出现后共 3 个文本框（表单 2 + 岗位名称 1）')
+t4ModalInputs[2].props.onChange({ target: { value: '工控安全售前' } })
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+calls.length = 0
+findButtons(t4Tree).filter((b) => label(b) === '自动生成')[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+t4Text = collect(t4Tree, []).join(' | ')
+ok(calls.some((c) => String(c.url).indexOf('/domain/generate') >= 0 && c.method === 'POST'),
+  '「自动生成」显式触发 POST /domain/generate（不点不发送）')
+ok(t4Text.indexOf('当前 profile 未提供模型服务') >= 0, '503 → 明确提示改为手填（不假成功）')
+const t4After503 = findAll(t4Tree, (x) => x.type === 'textarea', [])[0]
+ok(Boolean(t4After503) && t4After503.props.value === '', '503 时不写入任何假内容（内容框保持原样）')
+genMode = 200
+findButtons(t4Tree).filter((b) => label(b) === '自动生成')[0].props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+const t4After200 = findAll(t4Tree, (x) => x.type === 'textarea', [])[0]
+ok(Boolean(t4After200) && t4After200.props.value === 'me-generated-job', '有模型服务时生成结果只作预览（填入内容框，可替换或重试）')
+ok(collect(t4Tree, []).join(' | ').indexOf('已生成，可直接编辑或重试') >= 0, '生成后给「已生成…」提示')
+findButtons(t4Tree).filter((b) => label(b) === '保存岗位')[0].props.onClick()
+hookCursor = 0
+effectQueue = []
+t4Tree = expand(reg.render({ initialTab: 'core' }))
+t4Text = collect(t4Tree, []).join(' | ')
+ok(t4Text.indexOf('保存岗位') < 0, '保存后对话框关闭')
+ok(t4Text.indexOf('工控安全售前（自定义）') >= 0, '新建岗位进入下拉并选中')
+ok(findSave().props.disabled !== true, '自定义岗位选定后保存按钮仍可点')
+
 
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
