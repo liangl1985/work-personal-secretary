@@ -540,7 +540,7 @@ const pkgVersion = JSON.parse(readFileSync(join(MODULE_DIR, 'package.json'), 'ut
 ok(readVersion() === pkgVersion, 'readVersion 与 package.json 一致：v' + pkgVersion)
 const banned = ['莉娜', '主人', '天地和兴', '知识库-天地', 'lina', 'C:\\Users']
 for (const rel of ['lib/probe.js', 'lib/api.js', 'lib/index.js', 'lib/install.js', 'lib/basedeck.js',
-  'lib/md.js', 'lib/preflight.js', 'lib/identity.js', 'lib/domain.js',
+  'lib/md.js', 'lib/preflight.js', 'lib/identity.js', 'lib/domain.js', 'lib/setup-state.js',
   'defaults/use.zh-CN.md', 'defaults/install.zh-CN.md',
   'defaults/use.zh-CN.html', 'defaults/install.zh-CN.html']) {
   const src = readFileSync(join(MODULE_DIR, rel), 'utf8')

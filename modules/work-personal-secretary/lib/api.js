@@ -96,6 +96,7 @@ import {
 import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
 // 1.1.3 新增能力的宿主侧实现（T6 可用性检查 / T7 身份写入 / T8 岗位生成 / T9 随包网页）
 import { runPreflight } from './preflight.js'
+import { readSetupState } from './setup-state.js'
 import { applyIdentityAsync, readIdentity } from './identity.js'
 import { DOMAIN_MAX_CHARS, DOMAIN_NAME_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
 import { renderFragment, renderMarkdown, renderPage } from './md.js'
@@ -120,7 +121,7 @@ export const PAGE_PATHS = ['/guide', '/help']
  * 所以在 installApi 内与 API_PATHS、PAGE_PATHS 一起注册；不含 P4 三条
  * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
  */
-export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc']
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state']
 
 /**
  * 两个说明文档的**唯一映射**（单一真相源 = defaults 下的 md）：
@@ -843,6 +844,13 @@ export function installApi(ctx, deps = {}) {
         return sendJson(res, 200, {
           ok: true, doc: doc, title: spec.title, path: slash(file), command: opened.command,
         })
+      }
+
+      // GET /setup-state —— 核心配置页的「当前生效值」（**只读**；取值只走宿主设置服务 ctx.settings，
+      // 绝不读 ~/.dsh/settings.yaml）。设置服务缺失 / 记忆库不可读 → 各字段按 none 降级 + 可读 note，不抛异常。
+      if (req.method === 'GET' && (sub === '/setup-state' || sub === '/setup-state/')) {
+        const state = await readSetupState(ctx, { env: installEnv, dshHome: basedeckDshHome })
+        return sendJson(res, 200, state)
       }
 
       // GET /check —— 七项只读环境检查

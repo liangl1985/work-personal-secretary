@@ -702,6 +702,18 @@ export function resolveDshHome(env = process.env) {
   return join(homedir(), '.dsh')
 }
 
+/**
+ * 由**记忆镜像目录**反推知识库根目录（vault 根）：取父目录。
+ * **单一实现**：resolveWorkspace 的 derived 分支与 setup-state 的 obsidianDir 都调用它，
+ * 避免「反推逻辑写第二份」。
+ * @param {string} mirrorDir 记忆镜像目录（如 <vault>/00_全局记忆）
+ * @returns {string} 父目录绝对路径；入参为空返回空串
+ */
+export function deriveVaultRootFromMirror(mirrorDir) {
+  const m = normalizePath(mirrorDir)
+  return m ? dirname(m) : ''
+}
+
 /** 目录是否「看起来像工作区」（含 AGENTS.md / .dsh / .git 之一） */
 export function looksLikeWorkspace(dir) {
   if (!dir) return false
@@ -793,7 +805,7 @@ export function resolveWorkspace(options = {}) {
   // ③ 由记忆镜像目录反推（镜像目录通常是 vault 下的一个子目录，其父目录即工作区）
   const mirror = normalizePath(options.obsidianSyncDir)
   if (mirror) {
-    const parent = dirname(mirror)
+    const parent = deriveVaultRootFromMirror(mirror)
     if (accept(parent)) return { workspace: parent, source: 'derived', derivedFrom: mirror, tried: tried }
     if (accept(mirror)) return { workspace: mirror, source: 'derived', derivedFrom: mirror, tried: tried }
     reject(parent, '记忆镜像目录的父目录不可用（不存在 / 是用户主目录 / 等于 DSH_HOME）')

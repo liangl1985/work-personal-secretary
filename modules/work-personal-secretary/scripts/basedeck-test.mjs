@@ -1135,6 +1135,80 @@ ok(spawnMissing.ok === false && spawnMissing.code === 'ENOENT', 'openWithSystem�
 const spawnExit1 = await openWithSystem('C:/x.html', { platform: 'win32', exec: (cmd, args, opts, cb) => { const e = new Error('exit 1'); e.code = 1; cb(e) } })
 ok(spawnExit1.ok === true && spawnExit1.command.indexOf('explorer.exe') === 0, 'openWithSystem：explorer.exe 退出码 1 视为已交给系统（不判失败）')
 
+// ⑩ GET /setup-state —— 核心配置页的「当前生效值」（只走 ctx.settings，只读）
+const SETUP_MEM_SCHEMA = {
+  type: 'object', meta: {},
+  dict: {
+    memoryDir: { type: 'string', meta: { default: '' } },
+    obsidianSyncDir: { type: 'string', meta: { default: '' } },
+  },
+}
+const SETUP_EXP_SCHEMA = {
+  type: 'object', meta: {},
+  dict: { defaultDomain: { type: 'string', meta: { default: 'infosec' } } },
+}
+function installSetupCtx(namespaces, extraDeps) {
+  const ctx = makeMockCtx()
+  if (namespaces !== null) {
+    ctx.settings = {
+      describe: async () => {
+        if (namespaces === 'throw') throw new Error('settings exploded')
+        return namespaces
+      },
+    }
+  }
+  installApi(ctx, Object.assign({
+    platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, profileDir: join(TMP_ROOT, 'profile13'),
+    env: {}, now: FIXED_NOW, dshHome: join(TMP_ROOT, 'setupdsh', '.dsh'),
+  }, extraDeps || {}))
+  return (ctx.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
+}
+
+const hSetup1 = installSetupCtx([
+  { ns: 'work-memory', schema: SETUP_MEM_SCHEMA, value: { memoryDir: 'D:/mem/lib', obsidianSyncDir: 'E:/vault/00_全局记忆' }, revision: 3, applies: 'live' },
+  { ns: 'experts', schema: SETUP_EXP_SCHEMA, value: { defaultDomain: 'coding' }, revision: 5, applies: 'live' },
+])
+const ss1 = await callRoute(hSetup1, 'GET', '/setup-state')
+ok(ss1.status === 200 && ss1.body.ok === true, 'GET /setup-state → 200 ok')
+ok(ss1.body.memoryDir.value === 'D:/mem/lib' && ss1.body.memoryDir.source === 'settings', '①memoryDir 取设置里的值 + source=settings')
+ok(ss1.body.obsidianDir.value === 'E:/vault' && ss1.body.obsidianDir.source === 'derived', '①obsidianDir 由镜像目录反推出 vault 根 + source=derived')
+ok(ss1.body.domain.id === 'coding' && ss1.body.domain.label === '代码编程' && ss1.body.domain.isPreset === true && ss1.body.domain.source === 'settings',
+  '①domain 映射到预置岗位 label（coding → 代码编程）')
+ok(ss1.body.identity.exists === false && ss1.body.identity.entryId === '', '①identity 只读检查：记忆库不存在该条目 → exists=false')
+ok(typeof ss1.body.note === 'string' && ss1.body.note.length > 0, '①note 给出可读来源说明：' + ss1.body.note)
+
+const hSetup2 = installSetupCtx([
+  { ns: 'work-memory', schema: SETUP_MEM_SCHEMA, value: { memoryDir: '' }, revision: 1, applies: 'live' },
+])
+const ss2 = await callRoute(hSetup2, 'GET', '/setup-state')
+ok(ss2.body.memoryDir.source === 'default' && ss2.body.memoryDir.value.indexOf('memories/work-memory') > 0,
+  '②memoryDir 为空 → 生效默认（<DSH_HOME>/memories/work-memory，绝对路径）+ source=default：' + ss2.body.memoryDir.value)
+ok(ss2.body.obsidianDir.source === 'none' && ss2.body.obsidianDir.value === '', '③obsidianSyncDir 为空 → obsidianDir source=none、value 空')
+
+const hSetup3 = installSetupCtx([
+  { ns: 'experts', schema: SETUP_EXP_SCHEMA, value: { defaultDomain: 'custom-role' }, revision: 1, applies: 'live' },
+])
+const ss3 = await callRoute(hSetup3, 'GET', '/setup-state')
+ok(ss3.body.domain.id === 'custom-role' && ss3.body.domain.label === 'custom-role' && ss3.body.domain.isPreset === false,
+  '④defaultDomain 不在 5 个预置内 → isPreset=false、label 原样给 id')
+
+const hSetup4 = installSetupCtx([
+  { ns: 'experts', schema: SETUP_EXP_SCHEMA, value: { defaultDomain: '' }, revision: 1, applies: 'live' },
+])
+const ss4 = await callRoute(hSetup4, 'GET', '/setup-state')
+ok(ss4.body.domain.id === 'infosec' && ss4.body.domain.source === 'default' && ss4.body.domain.isPreset === true,
+  '④默认域为空 → 取 schema 默认 infosec + source=default')
+
+const hSetup5 = installSetupCtx(null)
+const ss5 = await callRoute(hSetup5, 'GET', '/setup-state')
+ok(ss5.status === 200 && ss5.body.ok === true, '⑤设置服务缺失 → 仍 200，不崩')
+ok(ss5.body.memoryDir.source === 'none' && ss5.body.obsidianDir.source === 'none' && ss5.body.domain.source === 'none',
+  '⑤设置服务缺失 → 三个字段全 none 降级（不猜默认）')
+ok(/设置服务不可用/.test(ss5.body.note), '⑤note 说明降级原因：' + ss5.body.note.slice(0, 40) + '…')
+const hSetup6 = installSetupCtx('throw')
+const ss6 = await callRoute(hSetup6, 'GET', '/setup-state')
+ok(ss6.status === 200 && ss6.body.ok === true && /读取设置失败/.test(ss6.body.note), '⑤describe 抛错 → 200 + 可读 note（不 500、不抛异常）')
+
 const pageGuide = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/guide')[0] || {}).handler
 const pageHelp = (ctx13.routes.filter((r) => r.kind === 'exact' && r.path === PAGE_ROOT + '/help')[0] || {}).handler
 const gRes = makeRes()
