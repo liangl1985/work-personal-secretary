@@ -6,23 +6,31 @@
 
 - **客户端四页签**：安装与检查 / 核心配置 / 配置 / 关于与致谢；「能力配置」改名「配置」（英文 Settings）；删掉四步进度条；首屏描述改写为「检查运行环境、安装五个子插件、完成首次配置，并集中调整各子插件的设置」。
 - **安装与检查页**：「查看安装引导 / 使用说明」按钮组置顶；环境依赖 6 项 + 子插件 5 项；新增「依赖安装工具」卡（逐项 `POST /fix`、兜底 `POST /fix-all`、不可代执行项只给复制命令、WPS 许可提示）。主按钮的「N 项待处理」只计硬项（DSH 宿主 / Node.js / Python / Python 依赖 / WPS Office），Obsidian 标「可选」，未装不再计入待处理。
-- **核心配置页（新）**：三项门禁 —— 记忆库子插件已装 · Python ≥ 3.10 · 8 个 pip 包（记忆库目录**不参与**判定）；不满足时整页灰化并逐项给出状态，满足后自动解锁。字段为记忆库目录 / Obsidian 目录 / 工作岗位（5 个预置岗位 +「都不是（新建岗位…）」，无「通用职能」）。点「保存配置并开始」执行五步链：可用性检查 → 建立记忆库目录 → 建立知识库目录 → 建立两者关联 → 写入岗位身份；任一步失败停在该步、保留已完成成果、可幂等重试；五步全绿后出现旧内容导入引导卡。
+- **核心配置页（新）**：三项门禁 —— 记忆库子插件已装 · Python ≥ 3.10 · 8 个 pip 包（记忆库目录**不参与**判定）；不满足时整页灰化并逐项给出状态，满足后自动解锁。
+  字段改为**存储根目录**（使用者唯一要先选的目录，唯一必填、带「浏览…」）+ **由它派生的**记忆库目录与 Obsidian 知识库目录（默认只读、标注「自动：存储根目录/」；点「单独指定」才可编辑，编辑后可点「跟随根目录」回到派生值）+ 工作岗位（5 个预置岗位 +「都不是（新建岗位…）」，无「通用职能」）。
+  派生子目录名 `memory-data` / `obsidian-data` 由宿主 `lib/basedeck.js` 的 `ROOT_SUBDIR_MEMORY` / `ROOT_SUBDIR_VAULT` 定义，经 `GET /setup-state` 的 `rootSubdirs` 下发（客户端不硬编码）。既有配置若不是这套布局，根目录留空、两个目录原样显示为「已单独指定」，**绝不改写使用者路径**。
+  点「保存配置并开始」执行**六步链**：可用性检查（只读 preflight）→ **迁移旧记忆库** → 建立记忆库目录（memoryDeck）→ 建立知识库目录（knowledgeDeck）→ 建立两者关联（写 `settings` 的 memoryDir 与 obsidianSyncDir=`<obsidianDir>/00_全局记忆`）→ 写入岗位身份。
+  **迁移在建立结构之前**：迁移逐文件只补缺失、目标已有同名文件一律保留目标，先建库会先写出 `MEMORY.md` / `USER.md` / `GRAPH.json` / `PROJECTS/工作秘书.md`，迁移随即把这四个全部跳过（实测：目标为空 copies=4；先建库后 copies=1 / conflicts=3）。
+  任一步失败停在该步、保留已完成成果、可幂等重试；六步全绿后出现**旧知识库**导入引导卡（该卡**只管知识库** —— 记忆体已在第 1 步自动迁完，卡上不再提，避免「记忆还要再搬一次」的错觉）。目录模型为「一个存储根目录 + `memory-data` / `obsidian-data` 两个兄弟目录」；**知识库只新建、不搬迁**（已有 vault 原样不动，要搬须使用者逐项指定对照；导入引导卡目前只有入口 + 纪律说明 + 清单占位），**只有记忆体自动迁移**。
 - **配置页按决议 12.1 收窄**：记忆库 5 常显 + 8 高级、专家库 5 + 5、文档能力 4 + 5；**未放出的 22 键不再渲染**（仍在 `settings.yaml` 与 profile 覆盖层可配）。草稿与 409 保留输入的机制不变。
 - **宿主侧新增能力**：
-  - `lib/basedeck.js` 新增两个结构生成器 —— `memoryDeck`（记忆体结构：PROJECTS / DAILY / ARCHIVE 骨架 + `MEMORY.md` 的「使用者身份」占位 + USER.md / GRAPH.json + `PROJECTS/工作秘书.md` 四条）与 `knowledgeDeck`（知识库结构：🏠 主页.md + 00_全局记忆 + 工具/（工具总览 + 技能 / 脚本 / MCP）+ .obsidian 最小配置）；只补缺失、不覆盖，写前备份、写后校验、失败回滚。
-  - `GET|POST /work-personal-secretary/api/preflight`：可用性检查（只读）—— 环境就绪 / 两目录路径合法可写 / 同工作区 / 目标无冲突。
+  - `lib/basedeck.js` 新增两个结构生成器 —— `memoryDeck`（记忆体结构：PROJECTS / DAILY / ARCHIVE 骨架 + `MEMORY.md` 的「使用者身份」占位 + USER.md / GRAPH.json + `PROJECTS/工作秘书.md` 四条）与 `knowledgeDeck`（知识库结构：🏠 主页.md + 00_全局记忆 + 工具/（`00_工具总览.md` + 技能 / 脚本 / MCP）+ .obsidian 最小配置；**`工具/` 本版只建目录与总览，未实现同步** —— 三个子目录现在是空的，总览里写的是预留用途，自动同步未立项，见仓库根 README）；只补缺失、不覆盖，写前备份、写后校验、失败回滚。
+  - `GET|POST /work-personal-secretary/api/preflight`：可用性检查（只读）—— 环境就绪 / 两目录路径合法可写 / 同工作区 / 目标无冲突。**「目标无冲突」只提示、不阻断**（`block` → `warn`，与「跨盘」同口径，不参与 `ready` 判定）；按 `relationOf` 的三个方向分开给文案（`same` / `memory-in-obsidian` / `obsidian-in-memory`，另加相互独立的 `separate`），每条都写明后果与「不阻断」。执行链把 `warn` 项一并带进成功步骤的详情。
   - `GET /identity`、`POST /identity/save`：把岗位整条写入「使用者身份」条目（按正文前缀定位；命中 0 条追加、1 条改写并保留原 id、多于 1 条拒绝）；与 `dsh-work-memory` 共用 `.work-memory.lock`；改写按区间切片替换，写后逐字节校验其余内容未变；含「助手人设」的条目不动。
   - `GET /domain/list`、`POST /domain/generate`：5 段预置岗位身份正文 + 生成通道（`promptEnhancer` 优先 → 回退 `llm` + `agentDefaultModel` → 都没有时 503 可读提示，前端改为手填）；`purpose` 为 `work-personal-secretary-domain`。
+  - `GET /setup-state`：核心配置页的宿主侧初值（既有 memoryDir / obsidianDir / domainId 等），并**反推「存储根目录」**（两个目录正好是同一父目录下的 `memory-data` / `obsidian-data` 时才给，推不出留空）；`rootSubdirs` 在这里下发。
+  - `GET /dirs`、`POST /dirs/new`：目录浏览 —— `ctx.directoryPicker` 的 browse / native 能力分支代理；`GET` 列一层目录、`POST` 在父目录下建一层子目录；native / 缺服务 / 未知能力都是**可读降级**（不抛异常、不 500）。
+  - `GET /docs`、`POST /open-doc`：随包说明 HTML 的取回与「用系统默认程序打开」（脚本白名单查表，**不接受路径入参**）。
   - `lib/md.js`：Markdown → HTML（零依赖、输出转义、链接白名单；拒绝 `javascript:` 与 `//` 协议相对地址）。
 - **随包说明网页**：`GET /work-personal-secretary/guide`（安装引导）与 `/help`（使用说明）直出 HTML；正文与 `defaults/install.zh-CN.md`、`defaults/use.zh-CN.md` **单一真相源**（同一份 md 也写入 `PROJECTS/工作秘书.md` 的前两条）。新增 `?embed=1` 片段形态（无 html / head / body，样式作用域到 `.wps-doc`），供设置页页内展开；不带 `embed` 仍是完整文档。
-- **行为变更（调用方注意）**：`GET/POST /work-personal-secretary/api/basedeck` 的 `items` 由 **5 项变为 7 项**（末尾追加 `memoryDeck` / `knowledgeDeck`，既有五项顺序不变）；**不带 `ids` 的缺省调用现在会写 7 项**（旧行为只写 5 项）。若调用方依赖旧缺省集合，请显式传 `ids`。
+- **行为变更（调用方注意）**：`GET/POST /work-personal-secretary/api/basedeck` 的 `items` 由 **5 项变为 8 项**（末尾追加 `memoryDeck` / `knowledgeDeck` / `migrateMemory`，既有五项顺序不变）；**不带 `ids` 的缺省调用现在会写 8 项**（旧行为只写 5 项）。若调用方依赖旧缺省集合，请显式传 `ids`。
 - **同版审查返工**：身份写入的「其余条目逐字未变」校验不再恒真（改为区间切片 + 逐字节比对）；写记忆库目录的路径统一取 `.work-memory.lock`（含既有记忆种子写回）；所有落盘路径统一走写目标护栏（拒绝用户主目录 / 非绝对路径 / 不可写 / 同名文件占用）；`GET /identity` 补只读同源守卫并把可读范围限制为配置的记忆库目录或其子路径；临时文件加随机后缀；`md.js` 拒绝 protocol-relative；同步锁等待上限收紧到 1 秒并新增异步锁（等待时让出事件循环）。
-- **桌面外壳兼容**：新增的 5 条 JSON 路由与 P4 三条能力配置路由已注册为**精确路由**（exact），桌面载体（合成 origin）的 fetch 桥下不再 404；精确路由集合 17 条 + 1 条 prefix。属内部接线，接口路径与响应体均未变。
+- **桌面外壳兼容**：新增的 JSON 路由与 P4 三条能力配置路由已注册为**精确路由**（exact），桌面载体（合成 origin）的 fetch 桥下不再 404；**精确路由集合 22 条 + 1 条 prefix（`apply()` 注册总数 23）** —— 出处 `lib/api.js` 顶部注释：`API_PATHS`(7) + `PAGE_PATHS`(2) + `CORE_API_EXACT_PATHS`(10) + `SETTINGS_API_PATHS`(3)。属内部接线，接口路径与响应体均未变。
 
 ### 验证
 
-- `node --check` **17 个文件 0 失败**
-- `scripts/smoke-load.mjs` **426 通过 / 0 失败** · `scripts/probe-test.mjs` **142 / 0** · `scripts/install-test.mjs` **244 / 0** · `scripts/basedeck-test.mjs` **263 / 0** · `scripts/settings-api-test.mjs` **112 / 0** · `scripts/identity-test.mjs` **64 / 0**（本版新增） · `scripts/defaults-test.mjs` **49 / 0**（本版新增，含随包说明的敏感过滤自检）
+- `node --check` **12 个文件 0 失败**（覆盖范围 = `package.json` 的 `scripts.check`：`lib/` 的 index · probe · api · install · basedeck · md · preflight · identity · domain · setup-state · dirs ＋ `client/index.js`）
+- `scripts/smoke-load.mjs` **513 通过 / 0 失败** · `scripts/probe-test.mjs` **149 / 0** · `scripts/install-test.mjs` **244 / 0** · `scripts/basedeck-test.mjs` **415 / 0** · `scripts/settings-api-test.mjs` **112 / 0** · `scripts/identity-test.mjs` **64 / 0**（本版新增） · `scripts/defaults-test.mjs` **59 / 0**（本版新增，含随包说明的敏感过滤自检） · `modules/dsh-work-memory/scripts/regression.mjs` **87 / 0**
 - 安装到 profile 后需**重启 DSH** 才加载宿主侧改动；客户端改动刷新页面即可。
 
 > 注记：本段**之下**仍保留 `## 1.2.0 — 未发布` 段，版本脉络（1.2.0 未发布 vs 1.1.3 本次发布）待主人裁定；未裁定前本版按 1.1.3 发布。
