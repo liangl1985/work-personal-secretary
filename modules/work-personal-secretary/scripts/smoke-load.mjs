@@ -2237,8 +2237,8 @@ ok(Boolean(identityPayload) && identityPayload.dryRun === false && identityPaylo
   '写入身份：dryRun:false，content 为岗位正文（不含「使用者身份：」前缀）')
 ok(Boolean(identityPayload) && identityPayload.memoryDir === 'D:\\ws\\memory-data', '写入身份带上 memoryDir（派生值）')
 ok(t4Text.indexOf('建立两者关联') >= 0 && t4Text.indexOf('已完成') >= 0, '执行链五项全绿（徽标「已完成」）')
-ok(t4Text.indexOf('已有旧内容要带过来？') >= 0 && t4Text.indexOf('浏览… 选择知识库或记忆文件夹') >= 0,
-  '全绿后出现导入引导卡（入口 + 标题）')
+ok(t4Text.indexOf('已有旧知识库要带过来？') >= 0 && t4Text.indexOf('浏览… 选择知识库文件夹') >= 0,
+  '全绿后出现导入引导卡（入口 + 标题；**只管知识库**——记忆体已在第 1 步自动迁完）')
 ok(t4Text.indexOf('只读源目录、只补还没有的文件、不覆盖现有文件、先给预览再逐项对照确认后才落盘') >= 0,
   '导入卡含纪律说明（逐项对照确认后才落盘）')
 
@@ -2270,7 +2270,7 @@ const t4RetrySeq = calls.filter((c) => c.method === 'POST').map((c) => {
 ok(String(t4RetrySeq) === String(['/basedeck:knowledgeDeck', '/basedeck:settings', '/identity/save']),
   '「重试」从失败步继续、不重发 preflight / memoryDeck（实测 ' + String(t4RetrySeq) + '）')
 t4Text = collect(t4Tree, []).join(' | ')
-ok(t4Text.indexOf('已有旧内容要带过来？') >= 0, '重试成功后导入引导卡出现')
+ok(t4Text.indexOf('已有旧知识库要带过来？') >= 0, '重试成功后导入引导卡出现')
 
 // 新建岗位对话框 + POST /domain/generate（503 → 改成手填，绝不假成功）
 let genMode = 503
@@ -2963,7 +2963,7 @@ ok(t19Text.indexOf('迁移旧记忆库') >= 0, '执行链出现「迁移旧记�
 ok(t19Text.indexOf('已迁移 3 个文件') >= 0, '迁移步回显迁移文件数（migrateStats.copy）')
 ok(t19Text.indexOf('旧目录保留不动') >= 0, '迁移步回显「旧目录保留不动」')
 ok(t19Text.indexOf('只补缺失') >= 0 && t19Text.indexOf('不覆盖') >= 0, '迁移步说明写明「只补缺失、不覆盖」')
-ok(t19Text.indexOf('已有旧内容要带过来？') >= 0, '全绿后进入导入引导卡（链条跑完）')
+ok(t19Text.indexOf('已有旧知识库要带过来？') >= 0, '全绿后进入导入引导卡（链条跑完）')
 ok(BD8_ITEMS.length === 8, '夹具按宿主契约给 8 项 items（末项 migrateMemory）')
 ok(t19Posts.every((ids) => ids.length === 1), '客户端按步骤逐个下发 ids（每步 1 项），不整批下发 8 项')
 
