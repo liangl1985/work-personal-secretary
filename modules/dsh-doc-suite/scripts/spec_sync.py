@@ -15,7 +15,7 @@
   py -3 spec_sync.py --profile-root <dir>   # 指定 profile 里的模块目录（含 specs/）
   py -3 spec_sync.py --spec standard        # 只处理指定规格 id
 
-退出码：0 成功 / 2 输入或规格错误 / 3 校验发现不一致
+退出码：0 成功 / 2 输入或规格错误 / 3 校验发现不一致 / 4 对比度不达标（B 线主题库门禁）
 说明：本脚本**不含任何使用者私有路径**（展示文档输出由 --doc-out 指定，缺省打印到标准输出）。
 """
 import argparse
@@ -636,6 +636,32 @@ def render_doc(spec):
     return "\n".join(L)
 
 
+def _contrast_check(specs):
+    """对比度门禁：逐规格算「文字 vs 背景」的 WCAG 2.1 AA 比值，不达标即列明并失败（exit 4）。
+
+    装饰色（accent_decor / rule / chart_series）不检 —— 它们不作文字。
+    与 scripts/office/ppt_contrast.py 共用同一实现（单一真值）。
+    """
+    try:
+        office = str(HERE / "office")
+        if office not in sys.path:
+            sys.path.insert(0, office)
+        from ppt_contrast import evaluate
+    except Exception as exc:                     # noqa: BLE001
+        print("[对比度] 跳过（%s）" % exc)
+        return 0
+    total_bad = 0
+    for name, s in specs.items():
+        rows, bad = evaluate(s, name)
+        total_bad += bad
+        for row in rows:
+            if not row["ok"]:
+                print("  ❌ %s · %s：%.2f:1 < %.1f（%s on %s）"
+                      % (name, row["item"], row["ratio"], row["threshold"], row["fg"], row["bg"]))
+    print("[对比度] %d 套规格，%d 项不达标（WCAG 2.1 AA：文字 >= 4.5:1）" % (len(specs), total_bad))
+    return total_bad
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="dsh-doc-suite 规格：校验 / 同步 profile / 生成展示文档")
     ap.add_argument("--check", action="store_true", help="只校验，不写任何文件（CI 用）")
@@ -650,6 +676,10 @@ def main(argv=None):
     for name, s in specs.items():
         validate(name, s, specs_by_id)
     print("[1/3] 规格校验通过：%s" % "、".join(specs))
+
+    # 对比度门禁（B 线主题库，2026-09-16；55 号第八章 ⑧ 的收口）
+    if _contrast_check(specs):
+        return 4
 
     if args.check:
         print("[2/3] --check：跳过同步与生成")

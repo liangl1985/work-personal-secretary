@@ -75,8 +75,10 @@ def _candidates(tools_dir=None):
     return uniq
 
 
-def find_runtime(tools_dir=None):
-    for cand in _candidates(tools_dir):
+def find_runtime(tools_dir=None, strict=False):
+    """strict=True 时**只在 tools_dir 内**查找（不回退环境变量与标准位置）—— 用于验证/排查指定目录。"""
+    cands = [Path(tools_dir)] if (strict and tools_dir) else _candidates(tools_dir)
+    for cand in cands:
         cli = _cli_js(cand)
         if cli.is_file():
             return cand, cli
@@ -145,9 +147,9 @@ def _file_version(path):
         return None
 
 
-def edge_alignment(tools_dir=None):
+def edge_alignment(tools_dir=None, strict=False):
     """Edge 主版本 vs puppeteer 期望 Chrome 主版本的对齐结论（check 与 doctor 共用）。"""
-    tools, _cli = find_runtime(tools_dir)
+    tools, _cli = find_runtime(tools_dir, strict)
     edge = _edge_path()
     expected = expected_chrome(tools) if tools else None
     edge_ver = _file_version(edge) if edge else None
@@ -175,14 +177,15 @@ def edge_alignment(tools_dir=None):
 
 
 def cmd_check(args):
-    tools, cli = find_runtime(args.tools_dir)
+    strict = bool(getattr(args, "strict_tools", False))
+    tools, cli = find_runtime(args.tools_dir, strict)
     if not tools:
-        print("运行时: 未找到（应位于 %s）" % STANDARD_DIR)
+        print("运行时: 未找到（%s）" % (args.tools_dir if strict else "应位于 %s" % STANDARD_DIR))
         print(INSTALL_HINT)
         return EXIT_FALLBACK
     print("运行时: %s" % tools)
     print("入口  : %s" % cli)
-    align = edge_alignment(args.tools_dir)
+    align = edge_alignment(args.tools_dir, strict)
     print("Edge  : %s%s" % (align["edge"] or "未找到（mermaid-cli 需浏览器；未下载 Chromium 时必须用 Edge）",
                             ("（puppeteer 期望 Chrome %s）" % align["expected_chrome"]) if align["expected_chrome"] else ""))
     print("对齐  : " + align["note"])
@@ -202,9 +205,11 @@ def cmd_render(args):
         raise cli_guard.InputError("输入应为 .mmd / .mermaid 文本文件：%s" % src)
     if out.suffix.lower() not in (".png", ".svg"):
         raise cli_guard.InputError("输出扩展名应为 .png 或 .svg：%s" % out)
-    tools, cli = find_runtime(args.tools_dir)
+    strict = bool(getattr(args, "strict_tools", False))
+    tools, cli = find_runtime(args.tools_dir, strict)
     if not tools:
-        print("错误: 找不到 mermaid 运行时（应位于 %s）。" % STANDARD_DIR, file=sys.stderr)
+        print("错误: 找不到 mermaid 运行时（%s）。"
+              % (args.tools_dir if strict else "应位于 %s" % STANDARD_DIR), file=sys.stderr)
         print(INSTALL_HINT, file=sys.stderr)
         print("提示: 这是**可回退**情形（exit %d）——可先导出 SVG 由人工插图。" % EXIT_FALLBACK, file=sys.stderr)
         return EXIT_FALLBACK
@@ -253,6 +258,8 @@ def main():
     p.add_argument("src", help="输入 .mmd / .mermaid")
     p.add_argument("out", help="输出 .png 或 .svg")
     p.add_argument("--tools-dir", dest="tools_dir", help="运行时目录（默认 %s）" % STANDARD_DIR)
+    p.add_argument("--strict-tools", dest="strict_tools", action="store_true",
+                   help="只在 --tools-dir 内查找（不回退环境变量与标准位置）")
     p.add_argument("--scale", type=float, default=2.0, help="缩放倍率（默认 2）")
     p.add_argument("--theme", default="default", help="mermaid 主题（default / neutral / dark / forest）")
     p.add_argument("--background", help="背景色（如 white / transparent）")
@@ -261,6 +268,8 @@ def main():
 
     p = sub.add_parser("check", help="检查运行时与浏览器（不渲染）")
     p.add_argument("--tools-dir", dest="tools_dir")
+    p.add_argument("--strict-tools", dest="strict_tools", action="store_true",
+                   help="只在 --tools-dir 内查找（不回退环境变量与标准位置）")
     p.set_defaults(fn=cmd_check)
 
     args = parser.parse_args()

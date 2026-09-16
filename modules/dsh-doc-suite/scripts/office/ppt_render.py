@@ -477,7 +477,11 @@ class Renderer:
 
     # ---- 基础绘制 ----
     def color(self, token, depth=0):
-        """色值解析链：6 位 hex → pptx.color_roles 的键 → 顶层 colors 的键（支持 neutral.light）。"""
+        """色值解析链：**6 位 hex → 顶层 colors 的键（支持 neutral.light）→ pptx.color_roles 的键**。
+
+        顺序说明（2026-09-16 主题库）：顶层 colors 是**主题色**；色角色引用它（如 color_roles.accent 写成
+        键名 accent）才能做到「换主题即换强调色」。若先查 color_roles，这种自引用会被误判为循环引用。
+        """
         t = str(token if token is not None else "").strip()
         if len(t) == 6 and all(c in "0123456789abcdefABCDEF" for c in t):
             return RGBColor.from_string(t.upper())
@@ -485,15 +489,17 @@ class Renderer:
             raise cli_guard.InputError("几何里请求了空色值（fill / color 未写）")
         if depth > 4:
             raise cli_guard.InputError("色角色解析过深（疑似循环引用）：%s" % t)
-        if t in self.roles:
-            return self.color(self.roles[t], depth + 1)
         node = self.colors
         try:
             for part in t.split("."):
                 node = node[part]
+            return RGBColor.from_string(str(node).upper())
         except (KeyError, TypeError):
-            raise cli_guard.InputError("色值 %r 既不是 6 位 hex，也不是 pptx.color_roles / 顶层 colors 的键" % t)
-        return RGBColor.from_string(str(node).upper())
+            pass
+        if t in self.roles:
+            return self.color(self.roles[t], depth + 1)
+        raise cli_guard.InputError(
+            "色值 %r 既不是 6 位 hex，也不是顶层 colors / pptx.color_roles 的键" % t)
 
     @staticmethod
     def _geo(box):

@@ -120,7 +120,8 @@ t('安全：假密钥 + 坏端点 → exit 4，且输出里绝无密钥明文', 
 
 t('gen_diagram check：运行时缺失 → exit 4 + 安装命令（不自动安装）', function () {
   if (!HAS_PY) return 'skip';
-  const r = pyRun(GEN_DIAGRAM, ['check', '--tools-dir', path.join(TMP, 'no-such-runtime')], { DSH_DOC_SUITE_MERMAID: '' });
+  const r = pyRun(GEN_DIAGRAM, ['check', '--tools-dir', path.join(TMP, 'no-such-runtime'), '--strict-tools'],
+    { DSH_DOC_SUITE_MERMAID: '' });
   assert(r.status === 4, 'exit=' + r.status);
   const all = (r.stdout || '') + (r.stderr || '');
   assert(all.includes('setup_mermaid.ps1'), '未给出安装命令');

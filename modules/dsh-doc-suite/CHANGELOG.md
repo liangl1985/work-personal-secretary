@@ -1,3 +1,52 @@
+## 0.7.2 — 2026-09-16（PPT 主题库：3 套内置主题 + 对比度门禁 + 5 处实测修正）
+
+### 一、新增：主题库（色板层）
+
+- 内置 **3 套主题**（只覆盖色板与色角色，几何 / 字号 / 字体全部继承 standard）：
+  - `graphite` 石墨工程（primary 37474F · accent 8C5E00）—— 技术方案、架构说明、运维汇报
+  - `teal` 青蓝技术（0F5257 · 0F6E62）—— 产品介绍、技术交流、培训材料
+  - `wine` 酒红正式（6B2737 · 8C2F39）—— 年度汇报、对外宣讲、品牌材料
+- 用法：`ppt_render.py render <manifest> <out.pptx> --theme graphite`
+- 设计口径：**文字色（text_on_light / text_muted_* / text_on_dark）是固定 hex、不随主题漂移** —— 换主题不会让文字对比度失效；主题只改 primary / secondary / accent / accent_decor 与色角色引用
+
+### 二、新增：对比度门禁（WCAG 2.1 AA）
+
+- 新增 `scripts/office/ppt_contrast.py`（单一真值）：`check` 逐主题算 **14 组**「文字 vs 背景」比值（门槛 4.5:1），`ratio` 算任意两色；**装饰色不检**（accent_decor / rule / chart_series 不作文字）
+- 接入 `spec_sync.py --check`：不达标 → **exit 4**，并指名到「主题 · 条目 · 比值」
+- **故障注入实测**：把 accent 改回不达标色 → `exit 4` + `❌ standard.json · 强调色 · 浅底备用：4.49:1 < 4.5`；还原后文件字节与原始一致
+
+### 三、门禁与实测抓出的 5 处真实缺陷（全部已修）
+
+| # | 缺陷 | 修法 |
+|---|---|---|
+| 1 | `semantic.pass = 548235` 在**备用底 F2F2F2** 上仅 **4.06:1**（A 线只测了白底） | 改 `4E7A2B`（白底 5.13 / 备底 4.58） |
+| 2 | `accent = B45309` 在备用底 **4.49:1**（差 0.01） | 改 `A34A00`（白底 5.94 / 备底 5.30） |
+| 3 | `pptx.color_roles.accent` 写**固定 hex** → **主题的 colors.accent 根本不生效**（换主题看不到强调色变化） | 改为引用键 `"accent"`（standard 与三套主题同步） |
+| 4 | 渲染器色解析**先查 color_roles** → 遇引用键判「循环引用」→ 主题渲染直接 **exit 2** | 改为**顶层 colors 优先**（主题色优先级），保留深度保护；渲染器回归 24/0 无回归 |
+| 5 | `ppt_contrast._resolve` 用「长度 == 6」判 hex → 键名 `accent`（恰好 6 字符）被误判成色值 | 改正则判定 `^#?[0-9A-Fa-f]{6}$` |
+
+> 结论：**没有这道门禁，前两处（A 线已交付）与后三处都不会被发现** —— 第 3、4 处会让主题库形同虚设。
+
+### 四、其他
+
+- `gen_diagram.py` 新增 `--strict-tools`（只在指定目录找运行时，不回退环境变量与标准位置）：便于验证 / 排查指定目录；`media-test` 的「运行时缺失」用例据此改为严格模式（运行时已迁标准位置后原假设不再成立）
+- 3 套主题的 `chart_series.s4` 与 `colors.semantic.pass` 同步为 `4E7A2B`
+- `specs/` 下两个历史备份 `standard.json.bak-20260916-*` **移出发布件** → `E:\lina\backup\2026-09-16-specs-bak-清理-前\`
+
+### 五、验证
+
+- 对比度：**6 套**（standard / compact / graphite / teal / wine / 自定义层 report）各 14 项**全部达标**，最低 **4.53:1**
+- `spec_sync --check` **0**（含对比度门禁）· `style-test` **24/0** · `ppt-render-test` **24/0** · `ppt-style-test` **11/0** · `media-test` **17/0**
+- 主题端到端：同一份 manifest 四主题渲染，封面填充 = 1F4E79 / 37474F / 0F5257 / 6B2737 ✓
+
+### 六、未做（下一步）
+
+**母版导入**（从公司母版 pptx 提取主题色与字体 → 生成自定义层主题）· **生图云端实测**（待使用者提供 ARK 密钥）
+
+### 七、回退
+
+版本改回 **0.7.1** 或 git revert 本提交；profile 同步一次（`scripts/**` 与 `specs/**` 均免重启）。
+
 ## 0.7.1 — 2026-09-16（运行时安装可复现 + 浏览器版本对齐提示）
 
 ### 一、这一步做了什么（三条加固）

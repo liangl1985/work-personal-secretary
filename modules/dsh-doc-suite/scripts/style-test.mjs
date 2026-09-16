@@ -414,7 +414,7 @@ t('规格扩展：compact 内置 + 自定义层 extends 继承 / 深度覆盖 / 
     'try:',
     '    ss.USER_DIR = tmp',
     '    demo = {"schema": "dsh-doc-suite/style-spec@1", "id": "demo-report", "extends": "standard",',
-    '            "colors": {"accent": "B45309"},',
+    '            "colors": {"accent": "A34A00"},',
     '            "word": {"styles": {"Heading 1": {"align": "left"}},',
     '                     "table": {"header": {"shading": "BDD7EE"}}}}',
     '    (tmp / "demo-report.json").write_text(json.dumps(demo, ensure_ascii=False), encoding="utf-8")',
@@ -438,7 +438,7 @@ t('规格扩展：compact 内置 + 自定义层 extends 继承 / 深度覆盖 / 
     '          and d["word"]["styles"]["Normal"]["size_pt"] == 12',
     '          and d["word"]["styles"]["Heading 1"]["align"] == "left"',
     '          and d["word"]["table"]["header"]["shading"] == "BDD7EE"',
-    '          and d["colors"]["accent"] == "B45309"',
+    '          and d["colors"]["accent"] == "A34A00"',
     '          and std_after["word"]["styles"]["Heading 1"]["align"] == "center"',
     '          and cyc)',
     '    print("extends/override/isolation/cycle ok=" + str(ok))',
@@ -512,7 +512,7 @@ t('A2.4 Markdown 解析：1–5 级标题与 **加粗**（星号不落盘）', (
 
 t('色板修正：文字色达标 + 装饰色保留', () => {
   const c = globalThis.SPEC.colors;
-  assert(c.accent === 'B45309', 'accent 应为可读深橙 B45309（5.02:1）');
+  assert(c.accent === 'A34A00', 'accent 应为可读深橙 A34A00（5.94:1）');
   assert(c.accent_decor === 'ED7D31', 'accent_decor 应保留 ED7D31');
   assert(c.semantic.warn === '8A6A00', 'warn 应为 8A6A00（5.07:1）');
   assert(c.semantic.warn_decor === 'BF9000', 'warn_decor 应保留 BF9000');

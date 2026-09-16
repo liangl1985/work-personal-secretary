@@ -1,0 +1,37 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "teal",
+  "name": "青蓝技术",
+  "extends": "standard",
+  "mood": "清爽、技术感、透气",
+  "best_for": [
+    "产品介绍",
+    "技术交流",
+    "项目启动",
+    "培训材料"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-16",
+  "_note": "B 线主题库内置主题（2026-09-16）：**只覆盖色板与 PPT 色角色**，几何、字号、字体全部继承 standard。文字色（text_on_light / text_muted_* / text_on_dark）保持固定 hex、不随主题漂移 —— 换主题不会让文字对比度失效（这是 ②a 的既定口径）。本主题全部检查组合已由 scripts/office/ppt_contrast.py 实测达标（最低 5.47:1）。",
+  "colors": {
+    "primary": "0F5257",
+    "secondary": "2E8B84",
+    "accent": "0F6E62",
+    "accent_decor": "ED7D31"
+  },
+  "pptx": {
+    "color_roles": {
+      "text_heading": "primary",
+      "rule": "accent_decor",
+      "accent": "accent",
+      "panel_dark": "primary",
+      "chart_series": {
+        "s1": "0F5257",
+        "s2": "2E8B84",
+        "s3": "ED7D31",
+        "s4": "4E7A2B",
+        "s5": "808080"
+      }
+    }
+  }
+}

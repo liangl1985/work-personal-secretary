@@ -1,0 +1,37 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "wine",
+  "name": "酒红正式",
+  "extends": "standard",
+  "mood": "正式、传统、仪式感",
+  "best_for": [
+    "年度汇报",
+    "对外宣讲",
+    "庆典与表彰",
+    "品牌材料"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-16",
+  "_note": "B 线主题库内置主题（2026-09-16）：**只覆盖色板与 PPT 色角色**，几何、字号、字体全部继承 standard。文字色（text_on_light / text_muted_* / text_on_dark）保持固定 hex、不随主题漂移 —— 换主题不会让文字对比度失效（这是 ②a 的既定口径）。本主题全部检查组合已由 scripts/office/ppt_contrast.py 实测达标（最低 7.27:1）。",
+  "colors": {
+    "primary": "6B2737",
+    "secondary": "A64D5C",
+    "accent": "8C2F39",
+    "accent_decor": "ED7D31"
+  },
+  "pptx": {
+    "color_roles": {
+      "text_heading": "primary",
+      "rule": "accent_decor",
+      "accent": "accent",
+      "panel_dark": "primary",
+      "chart_series": {
+        "s1": "6B2737",
+        "s2": "A64D5C",
+        "s3": "ED7D31",
+        "s4": "4E7A2B",
+        "s5": "808080"
+      }
+    }
+  }
+}
