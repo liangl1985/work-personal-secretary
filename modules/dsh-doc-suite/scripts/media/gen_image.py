@@ -48,8 +48,45 @@ EXIT_FALLBACK = 4
 _MAX_REF_BYTES = 10 * 1024 * 1024
 
 
+DSH_SETTINGS_FILE = Path(os.environ.get("DSH_SETTINGS_FILE") or (Path.home() / ".dsh" / "settings.yaml"))
+
+
+def _settings_value(key, ns="dsh-doc-suite"):
+    """从 DSH 设置存储（~/.dsh/settings.yaml）读某命名空间下的键值。
+
+    **为什么直接读文件**（2026-09-16 实测补链路）：集成体「文档能力」页写入的设置落在**用户层
+    设置存储**里，而本脚本与 DSH 不在同一进程；环境变量也未必注入当前进程（实测：用户级
+    ARK_API_KEY 已设置，但 DSH 派生的子进程里看不到）→ 直接读该文件是**最可靠**的一条来源。
+
+    极简逐行解析（零依赖）：不做通用 YAML，只认 `ns:` 段下的 `key: value`（支持引号与行内注释）。
+    """
+    try:
+        text = DSH_SETTINGS_FILE.read_bytes().decode("utf-8")
+    except Exception:                              # noqa: BLE001（文件缺失/不可读 → 视为未配置）
+        return ""
+    in_ns = False
+    for raw in text.splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        if not raw[0].isspace():                   # 顶层键 = 命名空间
+            in_ns = raw.split(":", 1)[0].strip() == ns
+            continue
+        if not in_ns:
+            continue
+        k, _, v = raw.strip().partition(":")
+        if k.strip() != key:
+            continue
+        v = v.strip()
+        if "#" in v and not v.startswith(("\"", "'")):
+            v = v.split("#", 1)[0].strip()
+        return v.strip().strip('"').strip("'")
+    return ""
+
+
 def _api_key(args):
-    return (getattr(args, "api_key", None) or os.environ.get("ARK_API_KEY") or "").strip()
+    """密钥来源（优先级）：--api-key > 环境变量 ARK_API_KEY > DSH 设置（设置页 / 集成体「文档能力」页填的 mediaArkApiKey）。"""
+    return (getattr(args, "api_key", None) or os.environ.get("ARK_API_KEY")
+            or _settings_value("mediaArkApiKey") or "").strip()
 
 
 def _endpoint(args):
@@ -178,7 +215,11 @@ def cmd_check(args):
     print("endpoint : %s（%s）" % (endpoint, _host(endpoint)))
     print("model    : %s" % (getattr(args, "model", None) or DEFAULT_MODEL))
     print("密钥状态 : %s" % ("已配置（长度 %d，不回显）" % len(key) if key else "未配置 → 生图不可用，将回退代码矢量绘制"))
-    print("说明     : 密钥来源 = --api-key > 环境变量 ARK_API_KEY；本命令**不调用云端**。")
+    cfg_key = _settings_value("mediaArkApiKey")
+    print("设置项   : %s" % ("mediaArkApiKey 已填写（长度 %d，不回显）" % len(cfg_key) if cfg_key else "mediaArkApiKey 未填写"))
+    print("说明     : 密钥来源优先级 = --api-key > 环境变量 ARK_API_KEY > DSH 设置项 mediaArkApiKey；"
+          "本命令**不调用云端**。")
+    print("          设置文件：%s" % DSH_SETTINGS_FILE)
     return 0
 
 
@@ -193,9 +234,9 @@ def cmd_image(args):
     print("提示: 生图为云端服务（%s），prompt 将发送到该服务；请勿包含客户信息、报价或涉密内容。"
           % _host(endpoint))
     if not key:
-        print("错误: 未配置 ARK_API_KEY（也没给 --api-key）→ 生图不可用。", file=sys.stderr)
+        print("错误: 未配置密钥（--api-key / ARK_API_KEY / 设置项 mediaArkApiKey 三者都为空）→ 生图不可用。", file=sys.stderr)
         print("提示: 这是**可回退**情形（exit %d）——调用方应改用代码矢量绘制；"
-              "如需生图，请在设置页填写密钥或设置环境变量 ARK_API_KEY。" % EXIT_FALLBACK, file=sys.stderr)
+              "如需生图，请在「设置 → 插件 → dsh-doc-suite」或集成体「文档能力」页填写密钥。" % EXIT_FALLBACK, file=sys.stderr)
         return EXIT_FALLBACK
 
     body = {"model": model, "prompt": prompt, "size": str(args.size or "1K"), "response_format": "url"}

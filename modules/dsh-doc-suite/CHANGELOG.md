@@ -1,44 +1,75 @@
+## 0.7.8 — 2026-09-16（打通「设置项 → 脚本」密钥链路）
+
+### 一、本轮验证暴露的真实缺口
+
+集成体「文档能力」页 / DSH 原生设置页里填的 `mediaArkApiKey` **落了盘却用不上**：
+
+- 脚本原先只认 `--api-key` 与**环境变量** `ARK_API_KEY`（`gen_image.py` 的 `_api_key`）
+- 而环境变量**在当前进程未必可见**：实测用户级 `ARK_API_KEY` 已设置（长度 46），但 DSH 派生的子进程里 `$env:ARK_API_KEY` **不可见**
+
+→ 结论：**页面填的密钥到不了脚本** —— 这是真实链路缺口（此前注释里设想"宿主注入环境变量"，实际未实现）。
+
+### 二、修法（零新增依赖）
+
+- `gen_image.py` 新增 `_settings_value(key, ns)`：**直接读 DSH 设置存储** `~/.dsh/settings.yaml`（可用 `DSH_SETTINGS_FILE` 覆盖，便于测试与迁移）；极简逐行解析，只认 `ns:` 段下的 `key: value`（支持引号与行内注释），**不引入 YAML 库**
+- **密钥来源优先级**：`--api-key` > 环境变量 `ARK_API_KEY` > 设置项 `mediaArkApiKey`
+- `doctor.py` 的 [4] 段与 `gen_image.py check` 都会**报出实际来源**（环境变量 / 设置项 / 未配置），密钥只报长度、不回显
+- `media-test` 增一条用例：设置项兜底 + 命名空间隔离 + 缺失键回空串
+
+### 三、实测（**清空环境变量**，只靠设置项）
+
+- `check`：密钥状态 **已配置（长度 46）** + 「设置项 mediaArkApiKey 已填写」
+- `image`：退出码 0 · **34.7 秒** · 1024×1024 · **242,986 字节**（云端返回 JPEG → **自动转码为 PNG**）✓
+
+### 四、验证
+
+`media-test` 18 → **19 例**，本机 **19/0** · `spec_sync` 0 · 改的是 Python 侧（`scripts/**` **免重启**）
+
+### 五、回退
+
+版本改回 **0.7.7**。
+
 ## 0.7.7 — 2026-09-16（设置键扁平化：集成体「文档能力」页可配置生图）
 
 ### 一、为什么改（口径变更；2026-09-16 使用者选定方案 A）
 
 集成体的「能力配置页」把五个子插件的设置集中到一处渲染，但它有两处硬约束：
 
-1. 宿主侧**写入校验只接受长度 1 的顶层键**（§§modules/work-personal-secretary/lib/settings-api.js§§ 原文："不接受嵌套路径"）
-2. 客户端分组定义是**扁平 keys 列表**（§§client/index.js§§ 的 §§CFG_GROUPS§§）
+1. 宿主侧**写入校验只接受长度 1 的顶层键**（`modules/work-personal-secretary/lib/settings-api.js` 原文："不接受嵌套路径"）
+2. 客户端分组定义是**扁平 keys 列表**（`client/index.js` 的 `CFG_GROUPS`）
 
-→ 原先嵌套的 §§media.*§§ 在那一页**读不到也写不进**（这也是「文档能力」组长期只有自检面板的原因之一）。扁平化后**无需放宽集成体的安全边界**即可直接可用。
+→ 原先嵌套的 `media.*` 在那一页**读不到也写不进**（这也是「文档能力」组长期只有自检面板的原因之一）。扁平化后**无需放宽集成体的安全边界**即可直接可用。
 
 ### 二、键路径变更（默认值、语义与安全口径全部不变）
 
 | 旧（嵌套） | 新（扁平顶层键） |
 |---|---|
-| §§media.provider§§ | §§mediaProvider§§ |
-| §§media.image.enabled§§ | §§mediaImageEnabled§§ |
-| §§media.image.model§§ | §§mediaImageModel§§ |
-| §§media.image.size§§ | §§mediaImageSize§§ |
-| §§media.image.timeout_ms§§ | §§mediaImageTimeoutMs§§ |
-| §§media.image.retries§§ | §§mediaImageRetries§§ |
-| §§media.image.fallback_to_vector§§ | §§mediaImageFallbackToVector§§ |
-| §§media.video.enabled§§ | §§mediaVideoEnabled§§ |
-| §§media.video.model§§ | §§mediaVideoModel§§ |
-| §§media.ark.api_key§§ | §§mediaArkApiKey§§ |
-| §§media.ark.endpoint§§ | §§mediaArkEndpoint§§ |
+| `media.provider` | `mediaProvider` |
+| `media.image.enabled` | `mediaImageEnabled` |
+| `media.image.model` | `mediaImageModel` |
+| `media.image.size` | `mediaImageSize` |
+| `media.image.timeout_ms` | `mediaImageTimeoutMs` |
+| `media.image.retries` | `mediaImageRetries` |
+| `media.image.fallback_to_vector` | `mediaImageFallbackToVector` |
+| `media.video.enabled` | `mediaVideoEnabled` |
+| `media.video.model` | `mediaVideoModel` |
+| `media.ark.api_key` | `mediaArkApiKey` |
+| `media.ark.endpoint` | `mediaArkEndpoint` |
 
-- 密钥仍**默认空**、不打印不落日志不入 git；§§ARK_API_KEY§§ 环境变量仍**优先于**设置项
+- 密钥仍**默认空**、不打印不落日志不入 git；`ARK_API_KEY` 环境变量仍**优先于**设置项
 - 本模块自 0.6.0 起的键路径仅本机使用（无人填过值，实测走环境变量）→ **破坏面为零**
 
 ### 三、同步更新
 
-§§lib/settings.js§§（schema / DEFAULTS / mediaSummary 扁平化）· §§lib/index.js§§ · §§doctor.py§§ 文案 · §§cordis.patch.yml§§ 注释 · §§README.md§§ 设置表 · §§NOTICE§§ · §§skills/media-gen§§（含"设置项在哪儿"一节）· §§scripts/media-test.mjs§§（去掉 §§getPath§§ 探针，改断扁平键）
+`lib/settings.js`（schema / DEFAULTS / mediaSummary 扁平化）· `lib/index.js` · `doctor.py` 文案 · `cordis.patch.yml` 注释 · `README.md` 设置表 · `NOTICE` · `skills/media-gen`（含"设置项在哪儿"一节）· `scripts/media-test.mjs`（去掉 `getPath` 探针，改断扁平键）
 
 ### 四、验证
 
-§§media-test§§ 18/0 ｜ 其余四套不变 ｜ **需重启 DSH**（改动含 §§lib/**§§）
+`media-test` 18/0 ｜ 其余四套不变 ｜ **需重启 DSH**（改动含 `lib/**`）
 
 ### 五、回退
 
-版本改回 **0.7.6**（键路径回退需同步回滚 §§settings.js§§ 与各文档）。
+版本改回 **0.7.6**（键路径回退需同步回滚 `settings.js` 与各文档）。
 
 ## 0.7.6 — 2026-09-16（设置项可达性：applies live + 自检暴露注册状态）
 

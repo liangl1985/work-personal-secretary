@@ -46,6 +46,9 @@ function findMermaidDir() {
   return null;
 }
 const MERMAID_DIR = findMermaidDir();
+// 测试隔离：涉及密钥的用例必须**屏蔽本机真实设置文件**（否则会读到使用者已填的 mediaArkApiKey）
+const EMPTY_SETTINGS = path.join(TMP, 'empty-settings.yaml');
+fs.writeFileSync(EMPTY_SETTINGS, 'work-memory:\n  memoryDir: /x\n', 'utf8');
 
 console.log('== 媒体链路回归（⑥ 生图 / 图示 / 设置）==');
 
@@ -91,7 +94,7 @@ t('插件入口声明 settings 依赖并注册命名空间', function () {
 
 t('gen_image check：无密钥时如实报告（exit 0，不调用云端）', function () {
   if (!HAS_PY) return 'skip';
-  const r = pyRun(GEN_IMAGE, ['check'], { ARK_API_KEY: '' });
+  const r = pyRun(GEN_IMAGE, ['check'], { ARK_API_KEY: '', DSH_SETTINGS_FILE: EMPTY_SETTINGS });
   assert(r.status === 0, 'exit=' + r.status);
   assert(r.stdout.includes('未配置'), '未报告未配置：' + r.stdout.slice(0, 160));
   assert(r.stdout.includes('不调用云端'), '未声明不调用云端');
@@ -100,9 +103,9 @@ t('gen_image check：无密钥时如实报告（exit 0，不调用云端）', fu
 t('gen_image image：无密钥 → exit 4（可回退）且给出明确原因', function () {
   if (!HAS_PY) return 'skip';
   const out = path.join(TMP, 'nokey.png');
-  const r = pyRun(GEN_IMAGE, ['image', '--prompt', 'test', '--out', out], { ARK_API_KEY: '' });
+  const r = pyRun(GEN_IMAGE, ['image', '--prompt', 'test', '--out', out], { ARK_API_KEY: '', DSH_SETTINGS_FILE: EMPTY_SETTINGS });
   assert(r.status === 4, 'exit=' + r.status + '（应为 4 可回退）');
-  assert((r.stderr || '').includes('未配置 ARK_API_KEY'), '原因不明确：' + (r.stderr || '').slice(0, 160));
+  assert((r.stderr || '').includes('未配置密钥'), '原因不明确：' + (r.stderr || '').slice(0, 160));
   assert(!fs.existsSync(out), '失败时不应产出文件');
 });
 
@@ -112,7 +115,7 @@ t('安全：假密钥 + 坏端点 → exit 4，且输出里绝无密钥明文', 
   const out = path.join(TMP, 'badkey.png');
   const r = pyRun(GEN_IMAGE, ['image', '--prompt', 'test', '--out', out,
     '--endpoint', 'http://127.0.0.1:9/api/v3', '--timeout-ms', '1500', '--retries', '0',
-    '--api-key', fake], { ARK_API_KEY: '' });
+    '--api-key', fake], { ARK_API_KEY: '', DSH_SETTINGS_FILE: EMPTY_SETTINGS });
   const all = (r.stdout || '') + (r.stderr || '');
   assert(r.status === 4, 'exit=' + r.status);
   assert(!all.includes(fake), '输出里泄露了密钥明文！');
@@ -211,7 +214,7 @@ t('设置默认值一致：schema 默认 == DEFAULTS（mock schemastery 实跑�
 
 t('doctor --json 含 media 段，且明确不对密钥做自检', function () {
   if (!HAS_PY) return 'skip';
-  const r = pyRun(path.join(mod, 'doctor.py'), ['--json'], { ARK_API_KEY: '' });
+  const r = pyRun(path.join(mod, 'doctor.py'), ['--json'], { ARK_API_KEY: '', DSH_SETTINGS_FILE: EMPTY_SETTINGS });
   assert(r.status === 0, 'exit=' + r.status);
   const d = JSON.parse(r.stdout);
   assert(d.media && d.media.image && d.media.graph, 'JSON 缺 media 段');
@@ -272,6 +275,25 @@ t('落盘格式校验：云端返回 JPEG 但声明 .png → 自动转码为真 
   assert(r && r.status === 0, '探针失败：' + (r && r.stderr || '').slice(0, 200));
   assert(r.stdout.includes('png_magic: True'), '未转码为真 PNG：' + r.stdout.trim());
   assert(r.stdout.includes('转码'), '未在说明里体现转码：' + r.stdout.trim());
+});
+
+t('密钥来源：设置项兜底 + 命名空间隔离（DSH_SETTINGS_FILE 可覆盖）', function () {
+  if (!HAS_PY) return 'skip';
+  const cfg = path.join(TMP, 'settings.yaml');
+  fs.writeFileSync(cfg, 'work-memory:\n  memoryDir: /x\ndsh-doc-suite:\n  mediaArkApiKey: ark-test-123\n  mediaVideoEnabled: false\nother: {}\n', 'utf8');
+  const probe = [
+    'import sys',
+    'sys.path.insert(0, r"' + MEDIA + '")',
+    'import gen_image',
+    'print("v:", gen_image._settings_value("mediaArkApiKey"))',
+    'print("iso:", gen_image._settings_value("memoryDir", ns="work-memory"))',
+    'print("miss:", repr(gen_image._settings_value("nope")))',
+  ].join('\n');
+  const r = pyRun('-c', [probe], { DSH_SETTINGS_FILE: cfg, ARK_API_KEY: '' });
+  assert(r && r.status === 0, '探针失败：' + (r && r.stderr || '').slice(0, 200));
+  assert(r.stdout.includes('v: ark-test-123'), '未从设置项取到密钥：' + r.stdout.trim());
+  assert(r.stdout.includes('iso: /x'), '命名空间隔离异常：' + r.stdout.trim());
+  assert(r.stdout.includes("miss: ''"), '缺失键应回空串：' + r.stdout.trim());
 });
 
 console.log('');

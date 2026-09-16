@@ -179,6 +179,7 @@ def check_media():
     try:
         if str(media_dir) not in sys.path:
             sys.path.insert(0, str(media_dir))
+        import gen_image as gi              # 复用密钥来源解析（单一真值）
         import gen_diagram as gd            # 复用同一套运行时查找 + 版本对齐判断（单一真值）
         tools, cli = gd.find_runtime()
         if tools and cli:
@@ -195,8 +196,15 @@ def check_media():
                             "%s%s" % (media_dir, os.sep + "setup_mermaid.ps1 -Install"))
     except Exception as exc:               # noqa: BLE001
         graph["fix"] = "（检测失败：%s）" % exc
+    cfg_key = ""
+    try:
+        import gen_image as gi
+        cfg_key = gi._settings_value("mediaArkApiKey")
+    except Exception:                              # noqa: BLE001
+        cfg_key = ""
     image = {
         "key_env": bool(os.environ.get("ARK_API_KEY")),
+        "key_cfg": bool(cfg_key),
         "endpoint": os.environ.get("ARK_ENDPOINT") or "https://ark.cn-beijing.volces.com/api/v3（默认北京区）",
         "model": os.environ.get("ARK_MODEL") or "doubao-seedream-5-0-pro-260628（默认）",
         "probe_key": False,
@@ -278,9 +286,10 @@ def main():
     img = media["image"]
     graph = media["graph"]
     print("\n[4] 媒体链路（可选能力：生图 / 图示）")
-    print("    生图(ARK) 密钥：" + ("已设置环境变量 ARK_API_KEY（不回显）"
-                              if img["key_env"] else
-                              "未配置 → 生图不可用，将回退代码矢量绘制（可在设置页 mediaArkApiKey 填写）"))
+    key_src = ("环境变量 ARK_API_KEY（不回显）" if img["key_env"] else
+               "设置项 mediaArkApiKey（不回显）" if img.get("key_cfg") else
+               "未配置 → 生图不可用，将回退代码矢量绘制（可在「设置 → 插件 → dsh-doc-suite」或集成体「文档能力」页填写）")
+    print("    生图(ARK) 密钥：" + key_src)
     print("              端点：" + img["endpoint"])
     print("              模型：" + img["model"])
     if graph["ok"]:
