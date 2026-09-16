@@ -82,14 +82,14 @@ py -3 scripts/spec_sync.py --spec standard    # 只处理指定风格
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `media.provider` | `volcengine-ark` | 生图平台（默认火山引擎） |
-| `media.image.enabled` | `true` | 图形元素优先生图（失败自动回退代码矢量） |
-| `media.image.model` | `doubao-seedream-5-0-pro-260628` | 方舟模型 ID（以控制台开通为准） |
-| `media.image.size` / `timeout_ms` / `retries` | `1K` / `60000` / `2` | 尺寸 / 超时 / 重试 |
-| `media.image.fallback_to_vector` | `true` | 失败即回退矢量（不需人工介入） |
-| `media.video.enabled` / `media.video.model` | `false` / 空 | 生视频（默认关；模型 ID 按控制台填） |
-| `media.ark.api_key` | **空** | ARK 密钥（敏感：默认空、不落日志；**发布件永不含**） |
-| `media.ark.endpoint` | `https://ark.cn-beijing.volces.com/api/v3` | 方舟端点 |
+| `mediaProvider` | `volcengine-ark` | 生图平台（默认火山引擎） |
+| `mediaImageEnabled` | `true` | 图形元素优先生图（失败自动回退代码矢量） |
+| `mediaImageModel` | `doubao-seedream-5-0-pro-260628` | 方舟模型 ID（以控制台开通为准） |
+| `mediaImageSize` / `mediaImageTimeoutMs` / `mediaImageRetries` | `1K` / `60000` / `2` | 尺寸 / 超时（毫秒）/ 重试 |
+| `mediaImageFallbackToVector` | `true` | 失败即回退矢量（不需人工介入） |
+| `mediaVideoEnabled` / `mediaVideoModel` | `false` / 空 | 生视频（默认关；模型 ID 按控制台填） |
+| `mediaArkApiKey` | **空** | ARK 密钥（敏感：默认空、不落日志；**发布件永不含**） |
+| `mediaArkEndpoint` | `https://ark.cn-beijing.volces.com/api/v3` | 方舟端点 |
 
 > **默认值三处一致**：`lib/settings.js` 的 schema 与 DEFAULTS、`cordis.patch.yml` 的注释、本表（回归用例会比对 schema ↔ DEFAULTS）。
 
@@ -141,7 +141,7 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 ```
 
 - 宿主半只注册一个命令：**`/doc-doctor`** —— 执行环境自检并回报结论与修复命令。
-- 配置项（中性默认层，可在设置页用户层覆盖）：`pythonLauncher`（默认 `py -3`）、`docsRoot`、`wpsRequired`、`doctorOnStartup`；**媒体设置**命名空间 `dsh-doc-suite` 的 `media.*`（见「一之三」节表）。
+- 配置项（中性默认层，可在设置页用户层覆盖）：`pythonLauncher`（默认 `py -3`）、`docsRoot`、`wpsRequired`、`doctorOnStartup`；**媒体设置**命名空间 `dsh-doc-suite` 的 `media*（扁平顶层键）`（见「一之三」节表）。
 - `/doc-doctor` 输出末尾附一行**媒体设置摘要**（不含密钥明文）；`doctor.py` 的 [4] 段报告生图配置来源与 mermaid 运行时状态。
 - **改了 `lib/**`（含设置项 schema）需重启 DSH**；`scripts/**.py` 免重启；`skills/**` 需重启（启动时扫描技能）。
 

@@ -1,100 +1,82 @@
 /**
  * dsh-doc-suite — 设置命名空间（DSH 原生设置服务）
  *
- * 约定（55 号第七章 v4）：
- *   - 生图/生视频的**平台与开关都进设置项**，**默认接入火山引擎（ARK）**；
- *   - **密钥默认值为空字符串**（发布件永不含密钥）；密钥**不打印、不落日志、不进报错文本**；
- *   - 环境变量（ARK_API_KEY / ARK_ENDPOINT / ARK_MODEL）**优先于**设置项（脚本侧读取）；
- *   - 键路径形如 media.image.enabled（设置页按 media / image / video / ark 分组）。
+ * **键路径（扁平顶层键；2026-09-16 由嵌套 media*（扁平顶层键） 改为扁平）**：
+ *   mediaProvider · mediaImageEnabled · mediaImageModel · mediaImageSize ·
+ *   mediaImageTimeoutMs · mediaImageRetries · mediaImageFallbackToVector ·
+ *   mediaVideoEnabled · mediaVideoModel · mediaArkApiKey · mediaArkEndpoint
  *
- * 依赖宿主自带的 @deepseek-ai/schemastery（peer）。
- * 默认值三处必须一致：本文件的 schema / DEFAULTS、cordis.patch.yml 的注释、README。
+ * **为什么扁平**（口径变更依据，2026-09-16 使用者选定方案 A）：集成体的「能力配置页」把五个
+ * 子插件的设置集中到一处渲染 —— 它的宿主侧写入校验**只接受顶层键**
+ * （modules/work-personal-secretary/lib/settings-api.js 的 path 白名单原文："不接受嵌套路径"），
+ * 客户端分组定义也是扁平 keys 列表。嵌套的 media*（扁平顶层键） 在那一页读不到、也写不进；扁平化后
+ * **无需放宽集成体的安全边界**即可直接可用。
+ *
+ * 其余约定不变：**密钥默认空**、不打印不落日志不入 git；环境变量 ARK_API_KEY 优先于设置项。
  *
  * @module dsh-doc-suite/settings
  */
 import z from '@deepseek-ai/schemastery'
 
-/** 设置命名空间名（设置页按它派发） */
+/** 设置命名空间名（设置页与集成体能力配置页按它派发） */
 export const SETTINGS_NS = 'dsh-doc-suite'
 
 /** 兜底默认值：与 schema 默认值保持一致（设置服务缺失时退回这份值） */
 export const DEFAULTS = {
-  media: {
-    provider: 'volcengine-ark',
-    image: {
-      enabled: true,
-      model: 'doubao-seedream-5-0-pro-260628',
-      size: '1K',
-      timeout_ms: 60000,
-      retries: 2,
-      fallback_to_vector: true,
-    },
-    video: { enabled: false, model: '' },
-    ark: { api_key: '', endpoint: 'https://ark.cn-beijing.volces.com/api/v3' },
-  },
+  mediaProvider: 'volcengine-ark',
+  mediaImageEnabled: true,
+  mediaImageModel: 'doubao-seedream-5-0-pro-260628',
+  mediaImageSize: '1K',
+  mediaImageTimeoutMs: 60000,
+  mediaImageRetries: 2,
+  mediaImageFallbackToVector: true,
+  mediaVideoEnabled: false,
+  mediaVideoModel: '',
+  mediaArkApiKey: '',
+  mediaArkEndpoint: 'https://ark.cn-beijing.volces.com/api/v3',
 }
 
-/** 设置页渲染的 schema（description 即卡片说明文字） */
+/** 设置页与集成体能力配置页渲染用的 schema（description 即说明文字） */
 export const SETTINGS_SCHEMA = z.object({
-  media: z.object({
-    provider: z.string().default('volcengine-ark')
-      .description('生图服务商；默认火山引擎（ARK）'),
-    image: z.object({
-      enabled: z.boolean().default(true)
-        .description('图形元素优先生图（图标/装饰/概念插图/背景图）；关闭或失败时自动回退代码矢量绘制'),
-      model: z.string().default('doubao-seedream-5-0-pro-260628')
-        .description('方舟模型 ID（默认 Seedream 5.0 Pro）；以方舟控制台开通的 ID 为准'),
-      size: z.string().default('1K')
-        .description('出图尺寸（方舟口径，如 1K / 2K）'),
-      timeout_ms: z.natural().default(60000)
-        .description('单次请求超时（毫秒）'),
-      retries: z.natural().default(2)
-        .description('失败重试次数（网络/5xx 重试；4xx 不重试）'),
-      fallback_to_vector: z.boolean().default(true)
-        .description('无密钥/未开通/限流/超时 → 自动回退代码矢量绘制（不需人工介入）'),
-    }),
-    video: z.object({
-      enabled: z.boolean().default(false).description('生视频开关（默认关）'),
-      model: z.string().default('').description('生视频模型 ID（按方舟控制台填写；默认空 = 不用）'),
-    }),
-    ark: z.object({
-      api_key: z.string().default('')
-        .description('ARK 密钥（敏感）：默认空；不会打印、不落日志、不进报错。留空则生图不可用并自动回退矢量'),
-      endpoint: z.string().default('https://ark.cn-beijing.volces.com/api/v3')
-        .description('方舟端点（默认北京区）'),
-    }),
-  }),
+  mediaProvider: z.string().default('volcengine-ark')
+    .description('生图服务商；默认火山引擎（ARK）'),
+  mediaImageEnabled: z.boolean().default(true)
+    .description('图形元素优先生图（图标/装饰/概念插图/背景图）；关闭或失败时自动回退代码矢量绘制'),
+  mediaImageModel: z.string().default('doubao-seedream-5-0-pro-260628')
+    .description('方舟模型 ID（默认 Seedream 5.0 Pro）；以方舟控制台开通的 ID 为准'),
+  mediaImageSize: z.string().default('1K')
+    .description('出图尺寸（方舟口径，如 1K / 2K）'),
+  mediaImageTimeoutMs: z.natural().default(60000)
+    .description('单次请求超时（毫秒）'),
+  mediaImageRetries: z.natural().default(2)
+    .description('失败重试次数（网络/5xx 重试；4xx 不重试）'),
+  mediaImageFallbackToVector: z.boolean().default(true)
+    .description('无密钥/未开通/限流/超时 → 自动回退代码矢量绘制（不需人工介入）'),
+  mediaVideoEnabled: z.boolean().default(false)
+    .description('生视频开关（默认关）'),
+  mediaVideoModel: z.string().default('')
+    .description('生视频模型 ID（按方舟控制台填写；默认空 = 不用）'),
+  mediaArkApiKey: z.string().default('')
+    .description('ARK 密钥（敏感）：默认空；不会打印、不落日志、不进报错。留空则生图不可用并自动回退矢量'),
+  mediaArkEndpoint: z.string().default('https://ark.cn-beijing.volces.com/api/v3')
+    .description('方舟端点（默认北京区）'),
 })
 
-function deepMerge(base, override) {
-  const out = { ...base }
-  for (const [k, v] of Object.entries(override || {})) {
-    if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object') {
-      out[k] = deepMerge(out[k], v)
-    } else if (v !== undefined) {
-      out[k] = v
-    }
+/** 组合配置层：只保留 schema 认识的键（未知键忽略） */
+function normalizeBase(base) {
+  const out = {}
+  for (const [k, v] of Object.entries(base || {})) {
+    if (k in DEFAULTS && v !== undefined && v !== null) out[k] = v
   }
   return out
 }
 
-/** 组合配置层：只保留 schema 认识的媒体键 */
-function normalizeBase(base) {
-  const media = base && typeof base === 'object' ? base.media : null
-  return media && typeof media === 'object' ? { media: JSON.parse(JSON.stringify(media)) } : {}
-}
-
-/** 解析值 → 插件内部配置（空字符串统一视为「未设置」） */
+/** 解析值 → 插件内部配置（浅合并；空字符串统一视为「未设置」） */
 function toConfig(resolved) {
-  const cfg = deepMerge(DEFAULTS, resolved || {})
-  if (!cfg.media.ark.api_key) cfg.media.ark.api_key = ''
-  if (!cfg.media.video.model) cfg.media.video.model = ''
+  const cfg = { ...DEFAULTS, ...normalizeBase(resolved) }
+  if (!cfg.mediaArkApiKey) cfg.mediaArkApiKey = ''
+  if (!cfg.mediaVideoModel) cfg.mediaVideoModel = ''
   return cfg
-}
-
-/** 扁平路径读取（脚本与文档统一用 media.image.enabled 这样的键路径） */
-export function getPath(cfg, dotted) {
-  return String(dotted).split('.').reduce((node, key) => (node == null ? undefined : node[key]), cfg)
 }
 
 /**
@@ -128,15 +110,13 @@ export function installSettings(ctx, baseConfig = {}) {
 
 /** 生图配置摘要（绝不含密钥明文，供命令与自检展示） */
 export function mediaSummary(cfg) {
-  const img = cfg.media.image
-  const ark = cfg.media.ark
   return {
-    provider: cfg.media.provider,
-    imageEnabled: !!img.enabled,
-    model: img.model,
-    size: img.size,
-    hasApiKey: !!ark.api_key,
-    endpoint: ark.endpoint,
-    videoEnabled: !!cfg.media.video.enabled,
+    provider: cfg.mediaProvider,
+    imageEnabled: !!cfg.mediaImageEnabled,
+    model: cfg.mediaImageModel,
+    size: cfg.mediaImageSize,
+    hasApiKey: !!cfg.mediaArkApiKey,
+    endpoint: cfg.mediaArkEndpoint,
+    videoEnabled: !!cfg.mediaVideoEnabled,
   }
 }

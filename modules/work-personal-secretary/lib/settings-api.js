@@ -33,10 +33,10 @@ import { pathToFileURL } from 'node:url'
 // ───────────────────────────── 契约常量（契约 §3 / §4 / §5.1） ─────────────────────────────
 
 /** ns 白名单（契约 §5.1 硬编码；**不接受客户端任意 ns**） */
-export const SETTINGS_NS_WHITELIST = ['work-memory', 'experts']
+export const SETTINGS_NS_WHITELIST = ['work-memory', 'experts', 'dsh-doc-suite']
 
 /** ns → 页面分组标题（契约 §3：记忆库 / 专家库） */
-export const SETTINGS_NS_TITLES = { 'work-memory': '记忆库', experts: '专家库' }
+export const SETTINGS_NS_TITLES = { 'work-memory': '记忆库', experts: '专家库', 'dsh-doc-suite': '文档能力' }
 
 /** P4 的三条路由（注册方式见 lib/api.js 的 installSettingsExactRoutes） */
 export const SETTINGS_API_PATHS = ['/settings', '/settings/write', '/experts/preview']

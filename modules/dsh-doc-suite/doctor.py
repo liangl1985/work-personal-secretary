@@ -280,7 +280,7 @@ def main():
     print("\n[4] 媒体链路（可选能力：生图 / 图示）")
     print("    生图(ARK) 密钥：" + ("已设置环境变量 ARK_API_KEY（不回显）"
                               if img["key_env"] else
-                              "未配置 → 生图不可用，将回退代码矢量绘制（可在设置页 media.ark.api_key 填写）"))
+                              "未配置 → 生图不可用，将回退代码矢量绘制（可在设置页 mediaArkApiKey 填写）"))
     print("              端点：" + img["endpoint"])
     print("              模型：" + img["model"])
     if graph["ok"]:

@@ -1,3 +1,45 @@
+## 0.7.7 — 2026-09-16（设置键扁平化：集成体「文档能力」页可配置生图）
+
+### 一、为什么改（口径变更；2026-09-16 使用者选定方案 A）
+
+集成体的「能力配置页」把五个子插件的设置集中到一处渲染，但它有两处硬约束：
+
+1. 宿主侧**写入校验只接受长度 1 的顶层键**（§§modules/work-personal-secretary/lib/settings-api.js§§ 原文："不接受嵌套路径"）
+2. 客户端分组定义是**扁平 keys 列表**（§§client/index.js§§ 的 §§CFG_GROUPS§§）
+
+→ 原先嵌套的 §§media.*§§ 在那一页**读不到也写不进**（这也是「文档能力」组长期只有自检面板的原因之一）。扁平化后**无需放宽集成体的安全边界**即可直接可用。
+
+### 二、键路径变更（默认值、语义与安全口径全部不变）
+
+| 旧（嵌套） | 新（扁平顶层键） |
+|---|---|
+| §§media.provider§§ | §§mediaProvider§§ |
+| §§media.image.enabled§§ | §§mediaImageEnabled§§ |
+| §§media.image.model§§ | §§mediaImageModel§§ |
+| §§media.image.size§§ | §§mediaImageSize§§ |
+| §§media.image.timeout_ms§§ | §§mediaImageTimeoutMs§§ |
+| §§media.image.retries§§ | §§mediaImageRetries§§ |
+| §§media.image.fallback_to_vector§§ | §§mediaImageFallbackToVector§§ |
+| §§media.video.enabled§§ | §§mediaVideoEnabled§§ |
+| §§media.video.model§§ | §§mediaVideoModel§§ |
+| §§media.ark.api_key§§ | §§mediaArkApiKey§§ |
+| §§media.ark.endpoint§§ | §§mediaArkEndpoint§§ |
+
+- 密钥仍**默认空**、不打印不落日志不入 git；§§ARK_API_KEY§§ 环境变量仍**优先于**设置项
+- 本模块自 0.6.0 起的键路径仅本机使用（无人填过值，实测走环境变量）→ **破坏面为零**
+
+### 三、同步更新
+
+§§lib/settings.js§§（schema / DEFAULTS / mediaSummary 扁平化）· §§lib/index.js§§ · §§doctor.py§§ 文案 · §§cordis.patch.yml§§ 注释 · §§README.md§§ 设置表 · §§NOTICE§§ · §§skills/media-gen§§（含"设置项在哪儿"一节）· §§scripts/media-test.mjs§§（去掉 §§getPath§§ 探针，改断扁平键）
+
+### 四、验证
+
+§§media-test§§ 18/0 ｜ 其余四套不变 ｜ **需重启 DSH**（改动含 §§lib/**§§）
+
+### 五、回退
+
+版本改回 **0.7.6**（键路径回退需同步回滚 §§settings.js§§ 与各文档）。
+
 ## 0.7.6 — 2026-09-16（设置项可达性：applies live + 自检暴露注册状态）
 
 ### 一、背景（使用者反馈）

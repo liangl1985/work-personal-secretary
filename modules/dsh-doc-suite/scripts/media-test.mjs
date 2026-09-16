@@ -85,7 +85,8 @@ t('插件入口声明 settings 依赖并注册命名空间', function () {
   assert(idx.includes('installSettings'), '未调用 installSettings');
   const st = fs.readFileSync(SETTINGS_JS, 'utf8');
   assert(st.includes("SETTINGS_NS = 'dsh-doc-suite'"), '命名空间名不符');
-  assert(st.includes("api_key: z.string().default('')"), 'api_key 默认值必须为空字符串');
+  assert(st.includes("mediaArkApiKey: z.string().default('')"), '密钥默认值必须为空字符串');
+  assert(st.includes('mediaArkApiKey'), '密钥键为扁平顶层键 mediaArkApiKey');
 });
 
 t('gen_image check：无密钥时如实报告（exit 0，不调用云端）', function () {
@@ -187,7 +188,7 @@ t('设置默认值一致：schema 默认 == DEFAULTS（mock schemastery 实跑�
   ].join('\n'), 'utf8');
   fs.copyFileSync(SETTINGS_JS, path.join(dir, 'settings.js'));
   fs.writeFileSync(path.join(dir, 'probe.mjs'), [
-    "import { SETTINGS_SCHEMA, DEFAULTS, SETTINGS_NS, getPath } from './settings.js'",
+    "import { SETTINGS_SCHEMA, DEFAULTS, SETTINGS_NS } from './settings.js'",
     'function extract(node) {',
     '  if (node && node.__shape) {',
     '    const out = {}',
@@ -197,7 +198,7 @@ t('设置默认值一致：schema 默认 == DEFAULTS（mock schemastery 实跑�
     '  return node ? node.__def : undefined',
     '}',
     'console.log(JSON.stringify({ ns: SETTINGS_NS, schema: extract(SETTINGS_SCHEMA), defaults: DEFAULTS,',
-    "  pathSample: getPath(DEFAULTS, 'media.image.enabled') }))",
+    "  keySample: DEFAULTS.mediaImageEnabled }))",
   ].join('\n'), 'utf8');
   const r = spawnSync(process.execPath, [path.join(dir, 'probe.mjs')], { encoding: 'utf8', timeout: 60000 });
   assert(r.status === 0, '探针失败：' + (r.stderr || '').slice(0, 200));
@@ -205,7 +206,7 @@ t('设置默认值一致：schema 默认 == DEFAULTS（mock schemastery 实跑�
   assert(d.ns === 'dsh-doc-suite', '命名空间不符：' + d.ns);
   const a = JSON.stringify(d.schema), b = JSON.stringify(d.defaults);
   assert(a === b, 'schema 默认值与 DEFAULTS 不一致：\n  schema=' + a + '\n  defaults=' + b);
-  assert(d.pathSample === true, '路径读取异常：' + d.pathSample);
+  assert(d.keySample === true, '扁平键读取异常：' + d.keySample);
 });
 
 t('doctor --json 含 media 段，且明确不对密钥做自检', function () {

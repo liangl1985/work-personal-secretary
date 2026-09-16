@@ -34,6 +34,20 @@ CI「集成体本体自测」在 `scripts/settings-api-test.mjs` 停红（103 �
 - 不 `git commit` / `git push`；不改本机 profile（`~/.dsh/profiles/desktop/` 的 `package.json` 与 `node_modules` 一律不动）。
 - 换 id 的实际迁移由主人执行：卸载旧 id → 安装新 id → 确认素材目录（见根 README 与本模块 3.7 节）。
 
+## 1.1.1 — 2026-09-16（能力配置页：文档能力组接入生图设置）
+
+- **背景**：使用者反馈「文档能力」页看不到生图设置。该组原先只渲染自检面板，而集成体的设计意图本就是**把五个子插件的设置集中到这个分区**（见 §§client/index.js§§ 的 cfgLead）。
+- **根因（三处）**：
+  1. 宿主 ns 白名单只有 §§work-memory§§ / §§experts§§；
+  2. 客户端 §§CFG_GROUPS§§ 没有 docs 的 ns 映射；
+  3. 宿主写入校验**只接受顶层键**（原文"不接受嵌套路径"），而 dsh-doc-suite 当时用的是**嵌套** §§media.*§§。
+- **本次改动**：
+  - 宿主 §§lib/settings-api.js§§：ns 白名单加 §§dsh-doc-suite§§，标题加「文档能力」
+  - 客户端：§§CFG_FIELD_META§§ 加 11 个媒体设置键元信息；新增 §§CFG_DOC_GROUPS§§（生图 / 生视频 / 密钥与端点三组）；§§CFG_GROUPS§§ / §§CFG_NS_TITLE_KEY§§ / §§CFG_NS_LEAD_KEY§§ / §§CFG_NS_LIST§§ 接入；docs tab 改为「**设置卡 + 自检面板**」两段；中英各补 21 条文案
+  - 配套：§§dsh-doc-suite§§ **0.7.7** 把设置键**扁平化**（§§media.image.enabled§§ → §§mediaImageEnabled§§ 等），使写入校验**无需放宽**
+- **安全边界不变**：ns 白名单仍**硬编码**（只是多一个固定 ns）；密钥字段沿用 §§redactSecrets§§ 脱敏；写入仍走 revision 栅栏 + 默认 dry-run
+- **验证**：§§npm run check§§ / smoke / probe / install 全绿 · 使用者侧需**重启 DSH** 后可见
+
 ## 1.1.0 — 未发布（P1 · 安装与检查页）
 
 设置分区「工作秘书」下的「安装与检查」由占位替换为真实页面。本次**不发版**：`package.json` 与客户端 BUILD 仍为 1.0.0，随集成体统一升版。

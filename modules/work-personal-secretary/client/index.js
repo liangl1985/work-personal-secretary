@@ -521,6 +521,25 @@ window.__ModuleLoader__.load({
 
       cfgGroupDocs: '文档能力',
       cfgDocLead: '文档能力（dsh-doc-suite）没有独立设置项，这里展示自检与依赖状态。',
+      cfgDocSettingsLead: '同一组设置也能在此配置 —— 写入 dsh-doc-suite 命名空间的用户层；密钥不回显明文。',
+      cfgDocGImage: '生图',
+      cfgDocGImageHint: '图形元素优先生图；失败或无密钥时自动回退代码矢量绘制（单张约 40–45 秒）',
+      cfgDocGVideo: '生视频',
+      cfgDocGVideoHint: '默认关闭；方舟生视频模型另有余额门槛（以控制台为准）',
+      cfgDocGArk: '密钥与端点',
+      cfgDocGArkHint: '密钥默认空：留空则生图不可用并自动回退矢量；环境变量 ARK_API_KEY 优先于本项',
+      cfgProviderArk: '火山引擎（方舟）',
+      cfgFMediaProvider: '生图平台',
+      cfgFMediaImageEnabled: '优先生图',
+      cfgFMediaImageModel: '模型 ID',
+      cfgFMediaImageSize: '出图尺寸',
+      cfgFMediaImageTimeoutMs: '请求超时（毫秒）',
+      cfgFMediaImageRetries: '失败重试次数',
+      cfgFMediaImageFallbackToVector: '失败回退矢量',
+      cfgFMediaVideoEnabled: '生视频开关',
+      cfgFMediaVideoModel: '生视频模型 ID',
+      cfgFMediaArkApiKey: 'ARK 密钥',
+      cfgFMediaArkEndpoint: '方舟端点',
       cfgDocDeps: '依赖状态',
       cfgDocDepsHint: '取自「安装与检查」页的环境探测结果（只读）',
       cfgDocSkills: '四技能落盘',
@@ -976,6 +995,25 @@ window.__ModuleLoader__.load({
 
       cfgGroupDocs: 'Documents',
       cfgDocLead: 'The document suite (dsh-doc-suite) has no settings of its own, so this shows self-check and dependency status.',
+      cfgDocSettingsLead: 'The same settings can be configured here — written to the user layer of the dsh-doc-suite namespace; secrets are never echoed back.',
+      cfgDocGImage: 'Image generation',
+      cfgDocGImageHint: 'Image first for graphic elements; falls back to vector drawing when unavailable (about 40-45s per image)',
+      cfgDocGVideo: 'Video generation',
+      cfgDocGVideoHint: 'Off by default; Ark video models have their own balance threshold (see console)',
+      cfgDocGArk: 'Key & endpoint',
+      cfgDocGArkHint: 'Key is empty by default — leave it empty to fall back to vector drawing; ARK_API_KEY env var takes precedence',
+      cfgProviderArk: 'Volcengine (Ark)',
+      cfgFMediaProvider: 'Image provider',
+      cfgFMediaImageEnabled: 'Prefer image generation',
+      cfgFMediaImageModel: 'Model ID',
+      cfgFMediaImageSize: 'Image size',
+      cfgFMediaImageTimeoutMs: 'Request timeout (ms)',
+      cfgFMediaImageRetries: 'Retry count',
+      cfgFMediaImageFallbackToVector: 'Fall back to vector',
+      cfgFMediaVideoEnabled: 'Video generation',
+      cfgFMediaVideoModel: 'Video model ID',
+      cfgFMediaArkApiKey: 'Ark API key',
+      cfgFMediaArkEndpoint: 'Ark endpoint',
       cfgDocDeps: 'Dependency status',
       cfgDocDepsHint: 'Taken from the environment probe on the Install & Check page (read-only)',
       cfgDocSkills: 'Four skills on disk',
@@ -3248,7 +3286,8 @@ window.__ModuleLoader__.load({
     /** 设置命名空间白名单（与宿主侧同一口径；客户端只用来决定渲染哪张卡片） */
     const CFG_NS_MEMORY = 'work-memory'
     const CFG_NS_EXPERTS = 'experts'
-    const CFG_NS_LIST = [CFG_NS_MEMORY, CFG_NS_EXPERTS]
+    const CFG_NS_DOCS = 'dsh-doc-suite'
+    const CFG_NS_LIST = [CFG_NS_MEMORY, CFG_NS_EXPERTS, CFG_NS_DOCS]
     /**
      * 草稿哨兵：该键「待清除用户层覆盖」。NUL 前缀保证与任何真实输入都不冲突；
      * 只活在客户端草稿里，上报时转成 ops 的 { op:'unset', path:[key] }。
@@ -3320,6 +3359,18 @@ window.__ModuleLoader__.load({
       skillBudgetChars: { type: 'slider', min: 0, max: 2000, step: 100 },
       expertShowBanner: { type: 'bool' },
       expertSetupDone: { type: 'bool' },
+      // dsh-doc-suite（文档能力）的媒体设置：**扁平顶层键**（0.7.7 起，原嵌套 media.* 在宿主侧写不进）
+      mediaProvider: { type: 'select', options: [['volcengine-ark', 'cfgProviderArk']] },
+      mediaImageEnabled: { type: 'bool' },
+      mediaImageModel: { type: 'str' },
+      mediaImageSize: { type: 'str' },
+      mediaImageTimeoutMs: { type: 'num' },
+      mediaImageRetries: { type: 'num' },
+      mediaImageFallbackToVector: { type: 'bool' },
+      mediaVideoEnabled: { type: 'bool' },
+      mediaVideoModel: { type: 'str' },
+      mediaArkApiKey: { type: 'str' },
+      mediaArkEndpoint: { type: 'str' },
     }
 
     /** 记忆库 24 键的语义分组（顺序即展示顺序，与契约第三节一致） */
@@ -3366,8 +3417,26 @@ window.__ModuleLoader__.load({
     ]
 
     /** ns → 分组定义 / 卡片标题 / 卡片引言 */
-    const CFG_GROUPS = { 'work-memory': CFG_MEMORY_GROUPS, experts: CFG_EXPERT_GROUPS }
-    const CFG_NS_TITLE_KEY = { 'work-memory': 'cfgGroupMemory', experts: 'cfgGroupExperts' }
+
+    /** 文档能力（dsh-doc-suite）的媒体设置分组（键为扁平顶层键，与插件 schema 一一对应） */
+    const CFG_DOC_GROUPS = [
+      {
+        id: 'image', titleKey: 'cfgDocGImage', hintKey: 'cfgDocGImageHint',
+        keys: ['mediaProvider', 'mediaImageEnabled', 'mediaImageModel', 'mediaImageSize',
+          'mediaImageTimeoutMs', 'mediaImageRetries', 'mediaImageFallbackToVector'],
+      },
+      {
+        id: 'video', titleKey: 'cfgDocGVideo', hintKey: 'cfgDocGVideoHint',
+        keys: ['mediaVideoEnabled', 'mediaVideoModel'],
+      },
+      {
+        id: 'ark', titleKey: 'cfgDocGArk', hintKey: 'cfgDocGArkHint',
+        keys: ['mediaArkApiKey', 'mediaArkEndpoint'],
+      },
+    ]
+
+    const CFG_GROUPS = { 'work-memory': CFG_MEMORY_GROUPS, experts: CFG_EXPERT_GROUPS, 'dsh-doc-suite': CFG_DOC_GROUPS }
+    const CFG_NS_TITLE_KEY = { 'work-memory': 'cfgGroupMemory', experts: 'cfgGroupExperts', 'dsh-doc-suite': 'cfgGroupDocs' }
 
     /**
      * 能力配置页的**插件级标签**：一次只渲染当前插件的配置。
@@ -3380,7 +3449,8 @@ window.__ModuleLoader__.load({
       { id: 'docs', labelKey: 'cfgGroupDocs' },
       { id: 'pet', labelKey: 'cfgGroupPet' },
     ]
-    const CFG_NS_LEAD_KEY = { 'work-memory': 'cfgMemoryLead', experts: 'cfgExpertsLead' }
+    const CFG_NS_LEAD_KEY = { 'work-memory': 'cfgMemoryLead', experts: 'cfgExpertsLead', 'dsh-doc-suite': 'cfgDocSettingsLead' }
+
 
     /** 文档模块的四个技能（静态清单：落盘状态由文档模块自检给出，本页不臆断） */
     const CFG_DOC_SKILLS = [
@@ -4321,7 +4391,10 @@ window.__ModuleLoader__.load({
           }, t(tb.labelKey)))),
         st.activeGroup === 'work-memory' ? renderNsCard(CFG_NS_MEMORY, null) : null,
         st.activeGroup === 'experts' ? renderNsCard(CFG_NS_EXPERTS, [cfgRenderPreview(t, st, handlers)]) : null,
-        st.activeGroup === 'docs' ? h(DocPanel, { key: 'docs', t: t }) : null,
+        st.activeGroup === 'docs' ? h('div', { key: 'docs', style: { display: 'grid', gap: '12px' } }, [
+          renderNsCard(CFG_NS_DOCS, null),
+          h(DocPanel, { key: 'panel', t: t }),
+        ]) : null,
         st.activeGroup === 'pet' ? h(PetPanel, { key: 'pet', t: t, openSection: props.openSection }) : null,
       ])
     }
