@@ -707,6 +707,13 @@ ok(obsKeyOf(planEmptyOv).action === 'write' && obsKeyOf(planEmptyOv).value.repla
 const mirrorX = join(TMP_ROOT, 'mirrorX')
 const planPathOv = ovPlan(mirrorX)
 ok(obsKeyOf(planPathOv).action === 'write' && obsKeyOf(planPathOv).value.replace(/\\/g, '/') === mirrorX.replace(/\\/g, '/'), '路径 → 写入该路径')
+// 路径类目标（kind=dir）一律**存 POSIX 规范形**：引导侧传反斜杠也要落成正斜杠。
+// 否则使用者按 Windows 习惯敲的反斜杠会原样进 settings.yaml，下次读出来与页面其它路径写法不一致。
+const BS_ = String.fromCharCode(92)
+const winStyleMirror = 'E:' + BS_ + 'work' + BS_ + '00_全局记忆'
+const planWinOv = ovPlan(winStyleMirror)
+ok(obsKeyOf(planWinOv).value === 'E:/work/00_全局记忆',
+  '反斜杠入参 → settings 里落 POSIX 规范形（实测 ' + obsKeyOf(planWinOv).value + '）')
 
 const planOffOv = ovPlan('__none__')
 const kOff = obsKeyOf(planOffOv)

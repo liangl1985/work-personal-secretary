@@ -1611,6 +1611,42 @@ window.__ModuleLoader__.load({
       return b + sep + String(seg == null ? '' : seg)
     }
 
+    /** 看起来像 Windows 绝对路径：盘符 + 分隔符（`C:\` 或 `C:/`），或两反斜杠开头的 UNC */
+    function looksLikeWinPath(value) {
+      const s = String(value == null ? '' : value).trim()
+      return /^[A-Za-z]:[\\/]/.test(s) || /^\\\\/.test(s)
+    }
+
+    /**
+     * 页面上的路径统一写法：**只要是 Windows 形态，就一律用反斜杠**。
+     *
+     * 为什么必须做这一层：宿主对外一律输出 POSIX（见 `lib/install.js` 的 `posix` 注释），
+     * 而 Windows 使用者敲的是反斜杠 —— 不动的话同一页会并列出现 `E:` 开头的反斜杠路径与
+     * `C:/Users/…` 这种正斜杠路径（真机反馈两次，第二次指的正是「读到的数据」这一侧）。
+     * 判定只认「Windows 形态」，所以 POSIX 宿主上的 `/home/…` 不会被改坏。
+     * 落盘方向安全：`lib/basedeck.js` 的 `planSettings` 会把路径类键 **posix 归一**后再写 settings。
+     */
+    function nativePath(value) {
+      const s = String(value == null ? '' : value)
+      return looksLikeWinPath(s) ? s.replace(/\//g, '\\') : s
+    }
+
+    /**
+     * 把对象/数组里的**字符串值**递归过一遍 `nativePath`。
+     * 用在「整个视图一次性读进来」的地方（如 GET /settings 的命名空间视图）：
+     * 路径键会被统一成反斜杠，其余字符串（岗位域 id 等）原样——`nativePath` 只认 Windows 形态的绝对路径。
+     */
+    function nativePathsIn(value) {
+      if (typeof value === 'string') return nativePath(value)
+      if (Array.isArray(value)) return value.map(nativePathsIn)
+      if (value && typeof value === 'object') {
+        const out = {}
+        for (const k of Object.keys(value)) out[k] = nativePathsIn(value[k])
+        return out
+      }
+      return value
+    }
+
     function runStateStyle(state) {
       if (state === 'ok') return S.badgeOk
       if (state === 'run') return S.badgeWarn
@@ -2838,10 +2874,11 @@ window.__ModuleLoader__.load({
             const alreadyFilled = prev.setupFilled === true
             const next = { setup: { phase: 'ready', data: body, error: '' }, setupFilled: true }
             if (!alreadyFilled && !String(prev.memoryDir || '').trim() && typeof mem.value === 'string' && mem.value.trim()) {
-              next.memoryDir = mem.value.trim()
+              // 宿主回的是 POSIX；Windows 形态统一成反斜杠（真机反馈：「读到的数据」也是正斜杠那一侧）
+              next.memoryDir = nativePath(mem.value.trim())
             }
             if (!alreadyFilled && !String(prev.obsidianDir || '').trim() && typeof obs.value === 'string' && obs.value.trim()) {
-              next.obsidianDir = obs.value.trim()
+              next.obsidianDir = nativePath(obs.value.trim())
             }
             // 存储根目录：**只有宿主反推得出**（两个目录正好是同一父目录下的 memory-data /
             // obsidian-data）才预填，此时两个目录都归「自动派生」；反推不出来就把两个目录
@@ -2849,7 +2886,7 @@ window.__ModuleLoader__.load({
             if (!alreadyFilled) {
               const rootValue = (rootState && typeof rootState.value === 'string') ? rootState.value.trim() : ''
               if (rootValue) {
-                next.rootDir = rootValue
+                next.rootDir = nativePath(rootValue)
                 next.memCustom = false
                 next.obsCustom = false
               } else {
@@ -2887,7 +2924,9 @@ window.__ModuleLoader__.load({
 
       // ── 表单（记忆库目录 → Obsidian 目录 → 工作岗位） ──────────────
       function setField(key, value) {
-        setSt((prev) => Object.assign({}, prev, { [key]: value }))
+        // 两个目录字段走统一写法（Windows 形态一律反斜杠）；岗位 id 等非路径键原样
+        const v = (key === 'memoryDir' || key === 'obsidianDir') ? nativePath(value) : value
+        setSt((prev) => Object.assign({}, prev, { [key]: v }))
       }
       function setPickError(msg) {
         setSt((prev) => Object.assign({}, prev, { pickError: String(msg || '') }))
@@ -2999,7 +3038,7 @@ window.__ModuleLoader__.load({
        * 改「存储根目录」：两个**没被单独指定**的目录跟着重算；被指定过的不动（使用者的显式选择优先）。
        */
       function setRoot(value) {
-        const root = String(value == null ? '' : value)
+        const root = nativePath(value)
         setSt((prev) => {
           const patch = { rootDir: root }
           if (prev.memCustom !== true) patch.memoryDir = joinFsPath(root, SUB_MEM)
@@ -3569,12 +3608,14 @@ window.__ModuleLoader__.load({
         err.kind = String(body.kind || '')
         throw err
       }
+      // 弹层内的路径同样按 Windows 形态统一（宿主回的是 POSIX），否则面包屑又会与输入框两种写法
+      const np = (v) => nativePath(String(v == null ? '' : v))
       return {
         phase: 'ready',
-        path: String(body.path || ''),
-        parent: String(body.parent || ''),
-        crumbs: Array.isArray(body.crumbs) ? body.crumbs : [],
-        entries: Array.isArray(body.entries) ? body.entries : [],
+        path: np(body.path),
+        parent: np(body.parent),
+        crumbs: (Array.isArray(body.crumbs) ? body.crumbs : []).map((c) => ({ name: String((c && c.name) || ''), path: np(c && c.path) })),
+        entries: (Array.isArray(body.entries) ? body.entries : []).map((e) => ({ name: String((e && e.name) || ''), path: np(e && e.path) })),
         truncated: body.truncated === true,
         message: String(body.message || ''),
         error: '',
@@ -4310,11 +4351,11 @@ window.__ModuleLoader__.load({
           setSt((prev) => Object.assign({}, prev, {
             stage: 'form', busy: false, error: '',
             items: Array.isArray(body.items) ? body.items : [],
-            workspace: ws,
+            workspace: nativePath(ws),
             workspaceSource: src,
-            detected: ws,
+            detected: nativePath(ws),
             libraryName: lib,
-            memoryRoot: memRoot,
+            memoryRoot: nativePath(memRoot),
             summary: (body.summary && typeof body.summary === 'object') ? body.summary : null,
             form: Object.assign({}, prev.form, {
               workspace: isNone ? '' : (prev.form.workspace || ws),
@@ -5534,7 +5575,8 @@ window.__ModuleLoader__.load({
             }
             const view = cfgParseView(body)
             setSt((prev) => Object.assign({}, prev, {
-              phase: 'ready', error: '', namespaces: view.map,
+              // 配置页的路径类设置（记忆库目录 / 镜像目录 / 备份目录…）也是宿主回的 POSIX，统一成 Windows 写法
+              phase: 'ready', error: '', namespaces: nativePathsIn(view.map),
               notice: view.warn || prev.notice,
               noticeKind: view.warn ? 'warn' : prev.noticeKind,
               // 首次加载也算一次「读取」：进页面就能看到数据新鲜度（与手动重读一致）。

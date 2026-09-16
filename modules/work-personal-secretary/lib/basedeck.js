@@ -1399,10 +1399,15 @@ function planSettings(ctx) {
     const forced = Boolean(forceSet[id])
 
     if (override || forced) {
-      writes.push({ ns: t.ns, key: t.key, value: override, action: 'set' })
+      // 路径类目标（kind=dir）一律**存 POSIX 规范形**：不管引导侧传来正斜杠还是反斜杠，
+      // settings.yaml 里只有一种写法。理由两条：① 本插件对外一律 posix()（见 install.js 的 posix 注释）；
+      // ② 使用者在 Windows 上习惯敲反斜杠，若原样存进去，下次读出来与页面其它路径的写法就会不一致
+      //    （真机反馈两次：形如 `C:\work` 与 `C:/work` 两种写法同页并列）。非路径键（岗位域 / 身份专家）不动。
+      const stored = t.kind === 'dir' ? posix(override) : override
+      writes.push({ ns: t.ns, key: t.key, value: stored, action: 'set' })
       keys.push({
-        ns: t.ns, key: t.key, label: t.label, value: override,
-        action: forced ? (present && current === '' ? 'explicitOff' : 'setEmpty') : (hasCurrent && current === override ? 'upToDate' : 'write'),
+        ns: t.ns, key: t.key, label: t.label, value: stored,
+        action: forced ? (present && current === '' ? 'explicitOff' : 'setEmpty') : (hasCurrent && current === stored ? 'upToDate' : 'write'),
         detail: forced
           ? '引导选择「不使用镜像」→ 显式写入空值（关闭镜像同步）'
           : '引导填值，将写入' + hintFor(id),

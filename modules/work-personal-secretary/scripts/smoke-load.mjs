@@ -1242,7 +1242,7 @@ findButtons(pkTree).filter((b) => label(b) === '使用探测到的工作区')[0]
 hookCursor = 0
 effectQueue = []
 pkTree = expand(pickReg.render({ initialTab: 'init' }))
-ok(findInputs(pkTree)[0].props.value === 'C:/work/space', '「使用探测到的工作区」候选把探测值填回')
+ok(findInputs(pkTree)[0].props.value === 'C:\\work\\space', '「使用探测到的工作区」候选把探测值填回（统一成反斜杠）')
 
 findButtons(pkTree).filter((b) => label(b).indexOf('使用默认（<DSH_HOME 或 ~/.dsh>/') >= 0)[0].props.onClick()
 hookCursor = 0
@@ -1255,12 +1255,12 @@ findButtons(pkTree).filter((b) => label(b) === '<工作区>/00_全局记忆')[0]
 hookCursor = 0
 effectQueue = []
 pkTree = expand(pickReg.render({ initialTab: 'init' }))
-ok(findInputs(pkTree)[2].props.value === 'C:/work/space/00_全局记忆', 'Obsidian 候选「<工作区>/00_全局记忆」填入拼接路径')
+ok(findInputs(pkTree)[2].props.value === 'C:\\work\\space\\00_全局记忆', 'Obsidian 候选「<工作区>/00_全局记忆」填入拼接路径（统一成反斜杠）')
 findButtons(pkTree).filter((b) => label(b) === '<工作区>/work-memory')[0].props.onClick()
 hookCursor = 0
 effectQueue = []
 pkTree = expand(pickReg.render({ initialTab: 'init' }))
-ok(findInputs(pkTree)[2].props.value === 'C:/work/space/work-memory', 'Obsidian 候选「<工作区>/work-memory」填入拼接路径')
+ok(findInputs(pkTree)[2].props.value === 'C:\\work\\space\\work-memory', 'Obsidian 候选「<工作区>/work-memory」填入拼接路径（统一成反斜杠）')
 findButtons(pkTree).filter((b) => label(b) === '不使用镜像')[0].props.onClick()
 hookCursor = 0
 effectQueue = []
@@ -1278,7 +1278,7 @@ hookCursor = 0
 effectQueue = []
 pkTree = expand(pickReg.render({ initialTab: 'init' }))
 pkText = collect(pkTree, []).join(' | ')
-ok(findInputs(pkTree)[2].props.value === 'C:/work/space/work-memory'
+ok(findInputs(pkTree)[2].props.value === 'C:\\work\\space\\work-memory'
   && pkText.indexOf('已选择不使用镜像') < 0
   && pkText.includes('留空将把记忆镜像到'), '点镜像候选 → 退出显式关闭状态（提示恢复）')
 
@@ -2192,8 +2192,8 @@ t4Inputs()[0].props.onChange({ target: { value: 'D:/ws' } })
 hookCursor = 0
 effectQueue = []
 t4Tree = expand(reg.render({ initialTab: 'core' }))
-ok(t4Inputs()[1].props.value === 'D:/ws/memory-data' && t4Inputs()[2].props.value === 'D:/ws/obsidian-data',
-  '填根目录 → 两个目录自动派生为 <根>/memory-data 与 <根>/obsidian-data（实测 ' + t4Inputs()[1].props.value + ' / ' + t4Inputs()[2].props.value + '）')
+ok(t4Inputs()[1].props.value === 'D:\\ws\\memory-data' && t4Inputs()[2].props.value === 'D:\\ws\\obsidian-data',
+  '填根目录（正斜杠）→ 两个目录自动派生，且统一成 Windows 反斜杠写法（实测 ' + t4Inputs()[1].props.value + ' / ' + t4Inputs()[2].props.value + '）')
 ok(findSave().props.disabled === true, '只填目录、未选岗位时仍 disabled')
 
 const t4Sel = findAll(t4Tree, (x) => x.type === 'select', [])[0]
@@ -2232,10 +2232,10 @@ ok(bdWrites.length === 4 && bdWrites.every((b) => b.dryRun === false),
 const t4Link = bdCalls.filter((b) => (b.ids || []).indexOf('settings') >= 0)[0]
 ok(Boolean(t4Link) && String(t4Link.overrides.obsidianSyncDir).indexOf('00_全局记忆') >= 0,
   '第 3 步关联：basedeck settings 的 overrides.obsidianSyncDir = <Obsidian 目录>/00_全局记忆（实测 ' + (t4Link && t4Link.overrides.obsidianSyncDir) + '）')
-ok(Boolean(t4Link) && t4Link.overrides.memoryDir === 'D:/ws/memory-data', '第 3 步关联：overrides.memoryDir 取派生值（<根>/memory-data）')
+ok(Boolean(t4Link) && t4Link.overrides.memoryDir === 'D:\\ws\\memory-data', '第 3 步关联：overrides.memoryDir 取派生值（<根>/memory-data）')
 ok(Boolean(identityPayload) && identityPayload.dryRun === false && identityPayload.content === 'me-domain-infosec',
   '写入身份：dryRun:false，content 为岗位正文（不含「使用者身份：」前缀）')
-ok(Boolean(identityPayload) && identityPayload.memoryDir === 'D:/ws/memory-data', '写入身份带上 memoryDir（派生值）')
+ok(Boolean(identityPayload) && identityPayload.memoryDir === 'D:\\ws\\memory-data', '写入身份带上 memoryDir（派生值）')
 ok(t4Text.indexOf('建立两者关联') >= 0 && t4Text.indexOf('已完成') >= 0, '执行链五项全绿（徽标「已完成」）')
 ok(t4Text.indexOf('已有旧内容要带过来？') >= 0 && t4Text.indexOf('浏览… 选择知识库或记忆文件夹') >= 0,
   '全绿后出现导入引导卡（入口 + 标题）')
@@ -2693,9 +2693,9 @@ const s17Save = () => findButtons(s17Tree).filter((b) => label(b) === '保存配
 // ① 预填三值（来源标注按使用者反馈已删，这里做反向断言）
 ok(calls.some((c) => c.url === 'http://dsh.internal/work-personal-secretary/api/setup-state'),
   '进入页面 GET /api/setup-state（合成基址）')
-ok(s17Inputs.length === 3 && String(s17Inputs[1].props.value) === 'D:/ws/memories/me',
+ok(s17Inputs.length === 3 && String(s17Inputs[1].props.value) === 'D:\\ws\\memories\\me',
   '记忆库目录预填当前生效值（实测 ' + String(s17Inputs[1] && s17Inputs[1].props.value) + '）')
-ok(String(s17Inputs[2] && s17Inputs[2].props.value) === 'D:/ws', 'Obsidian 目录预填当前生效值')
+ok(String(s17Inputs[2] && s17Inputs[2].props.value) === 'D:\\ws', 'Obsidian 目录预填当前生效值（宿主的 POSIX 值在页面统一成反斜杠）')
 // 这两个目录**不是**同一父目录下的 memory-data / obsidian-data → 反推不出根目录，
 // 于是根目录留空、两个目录按「已单独指定」可编辑照显（绝不擅自改写既有路径）。
 ok(String(s17Inputs[0].props.value) === '' && s17Inputs[1].props.disabled === false && s17Inputs[2].props.disabled === false,
@@ -2762,23 +2762,21 @@ effectQueue = []
 s17Tree = await s17Render()
 s17Text = collect(s17Tree, []).join(' | ')
 let s17Root = s17TextInputs(s17Tree)
-ok(s17Root.length === 3 && String(s17Root[0].props.value) === 'D:/root',
-  '存储根目录预填（只有宿主反推得出才给；实测 ' + String(s17Root[0] && s17Root[0].props.value) + '）')
-ok(String(s17Root[1].props.value) === 'D:/root/memory-data' && String(s17Root[2].props.value) === 'D:/root/obsidian-data',
+// 宿主回的是 POSIX（`D:/root`），页面按 **Windows 形态统一成反斜杠** —— 这是真机反馈的第二层：
+// 「读到的数据」那一侧原来也是正斜杠，与使用者敲的根目录两种写法并列在同一页。
+ok(s17Root.length === 3 && String(s17Root[0].props.value) === 'D:' + BS + 'root',
+  '存储根目录预填并统一成反斜杠（实测 ' + String(s17Root[0] && s17Root[0].props.value) + '）')
+ok(String(s17Root[1].props.value) === 'D:' + BS + 'root' + BS + 'memory-data' && String(s17Root[2].props.value) === 'D:' + BS + 'root' + BS + 'obsidian-data',
   '两个目录由根目录派生（<根>/memory-data 与 <根>/obsidian-data）')
-// 分隔符必须跟随根目录自己的写法：真机上「E:\lina」曾被拼成「E:\lina/memory-data」（反斜杠 + 正斜杠混排）。
-// 宿主两种分隔符都收（落盘前 normalizePath → posix 归一），这里管的是**显示一致**。
-s17Root[0].props.onChange({ target: { value: 'D:' + BS + 'work' } })
-s17Tree = await s17Render()
-s17Root = s17TextInputs(s17Tree)
-ok(String(s17Root[1].props.value) === 'D:' + BS + 'work' + BS + 'memory-data' && String(s17Root[2].props.value) === 'D:' + BS + 'work' + BS + 'obsidian-data',
-  '反斜杠根目录 → 派生值也用反斜杠（不出现反斜杠 + 正斜杠混排；实测 ' + String(s17Root[1].props.value) + '）')
+// 使用者敲的根目录也一样统一（正斜杠 → 反斜杠），否则派生值又会与其它字段两种写法
 s17Root[0].props.onChange({ target: { value: 'D:/work/' } })
 s17Tree = await s17Render()
 s17Root = s17TextInputs(s17Tree)
-ok(String(s17Root[1].props.value) === 'D:/work/memory-data', '正斜杠根目录（含结尾斜杠）→ 去掉重复分隔符后仍用正斜杠拼接')
-// 通用守卫（不只盯这一处）：页面渲染出来的路径文本里**不许**出现「盘符 + 反斜杠 … 正斜杠」的混排。
+ok(String(s17Root[1].props.value) === 'D:' + BS + 'work' + BS + 'memory-data' && String(s17Root[2].props.value) === 'D:' + BS + 'work' + BS + 'obsidian-data',
+  '正斜杠根目录（含结尾斜杠）→ 去重并统一成反斜杠（实测 ' + String(s17Root[1].props.value) + '）')
+// 通用守卫（不只盯这一处）：按**最新**渲染文本判，页面路径文本里不许出现「盘符 + 反斜杠 … 正斜杠」的混排。
 // 以后谁再写一处固定 '/' 的拼接，这条都会红，不必再靠肉眼发现。
+s17Text = collect(s17Tree, []).join(' | ')
 ok(!/[A-Za-z]:\\[^\s|]*\//.test(s17Text),
   '核心配置页路径文本无「反斜杠 + 正斜杠」混排（实测文本片段：' + String(s17Text).slice(0, 60) + '…）')
 ok(s17Root[1].props.disabled === true && s17Root[2].props.disabled === true,
@@ -2788,7 +2786,7 @@ ok(s17Text.indexOf('自动：存储根目录/') >= 0, '派生行标注来源「�
 s17Root[0].props.onChange({ target: { value: 'E:/work' } })
 s17Tree = await s17Render()
 s17Root = s17TextInputs(s17Tree)
-ok(String(s17Root[1].props.value) === 'E:/work/memory-data' && String(s17Root[2].props.value) === 'E:/work/obsidian-data',
+ok(String(s17Root[1].props.value) === 'E:\\work\\memory-data' && String(s17Root[2].props.value) === 'E:\\work\\obsidian-data',
   '改存储根目录 → 两个派生目录跟着重算')
 // 「单独指定」：只放开该行，另一行仍只读；此后改根目录它不再跟随
 const s17Cust = findButtons(s17Tree).filter((b) => label(b) === '单独指定')[0]
@@ -2801,7 +2799,7 @@ ok(s17Root[1].props.disabled === false && s17Root[2].props.disabled === true,
 s17Root[0].props.onChange({ target: { value: 'F:/root2' } })
 s17Tree = await s17Render()
 s17Root = s17TextInputs(s17Tree)
-ok(String(s17Root[1].props.value) === 'E:/work/memory-data' && String(s17Root[2].props.value) === 'F:/root2/obsidian-data',
+ok(String(s17Root[1].props.value) === 'E:\\work\\memory-data' && String(s17Root[2].props.value) === 'F:\\root2\\obsidian-data',
   '已单独指定的目录不再跟随根目录，未指定的继续跟随')
 // 「跟随根目录」→ 回到派生值并恢复只读
 const s17Follow = findButtons(s17Tree).filter((b) => label(b) === '跟随根目录')[0]
@@ -2809,7 +2807,7 @@ ok(Boolean(s17Follow), '单独指定后出现「跟随根目录」按钮')
 if (s17Follow) s17Follow.props.onClick()
 s17Tree = await s17Render()
 s17Root = s17TextInputs(s17Tree)
-ok(String(s17Root[1].props.value) === 'F:/root2/memory-data' && s17Root[1].props.disabled === true,
+ok(String(s17Root[1].props.value) === 'F:\\root2\\memory-data' && s17Root[1].props.disabled === true,
   '「跟随根目录」→ 该行回到派生值并恢复只读')
 // 根目录为空时**不能**再给「跟随根目录」：没有可跟随的目标，点下去只会把刚填好的目录清空
 // （真机反馈：「我选择跟随后没有继续」——根目录为空时 joinDir 返回空串，字段被清空）
@@ -3080,11 +3078,11 @@ ok(Boolean(d20Layer(d20Tree)), 'browse 环境：点「浏览…」打开应用�
 let d20Text = collect(d20Tree, []).join(' | ')
 ok(d20Text.indexOf('选择目录') >= 0 && d20Text.indexOf('memories') >= 0 && d20Text.indexOf('vault') >= 0, '弹层列出子目录')
 const d20ListCall = calls.filter((c) => c.url.indexOf('/dirs') >= 0)[0]
-ok(Boolean(d20ListCall) && d20ListCall.url === 'http://dsh.internal/work-personal-secretary/api/dirs?path=D%3A%2Fws',
+ok(Boolean(d20ListCall) && d20ListCall.url === 'http://dsh.internal/work-personal-secretary/api/dirs?path=D%3A%5Cws',
   '列目录请求 URL 与 query 正确（实测 ' + String(d20ListCall && d20ListCall.url) + '）')
 
 // ② 进入子目录：面包屑变化 + 空态 + truncated 提示
-const d20Entry = findAll(d20Tree, (x) => x.props && x.props['data-dir-entry'] === 'D:/ws/memories', [])[0]
+const d20Entry = findAll(d20Tree, (x) => x.props && x.props['data-dir-entry'] === 'D:\\ws\\memories', [])[0]
 ok(Boolean(d20Entry), '拿到子目录条目（data-dir-entry）')
 if (d20Entry) d20Entry.props.onClick()
 await tick(60)
@@ -3105,7 +3103,7 @@ effectQueue = []
 d20Tree = expand(reg.render({ initialTab: 'core' }))
 ok(!d20Layer(d20Tree), '选用后弹层关闭')
 const d20Inputs = findAll(d20Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
-ok(d20Inputs.length === 3 && String(d20Inputs[1].props.value) === 'D:/ws/memories',
+ok(d20Inputs.length === 3 && String(d20Inputs[1].props.value) === 'D:\\ws\\memories',
   '选中的路径写回记忆库目录字段（实测 ' + String(d20Inputs[1] && d20Inputs[1].props.value) + '）')
 
 // ④ 新建目录：POST /api/dirs/new body 正确；失败时给可读原因
@@ -3125,7 +3123,7 @@ d20Tree = expand(reg.render({ initialTab: 'core' }))
 const d20Create = findAll(d20Tree, (x) => x.props && x.props['data-dir-create'], [])[0]
 if (d20Create) d20Create.props.onClick()
 await tick(60)
-ok(d20NewBodies.length === 1 && String(JSON.stringify(d20NewBodies[0])) === JSON.stringify({ path: 'D:/ws/memories', name: 'newdir' }),
+ok(d20NewBodies.length === 1 && String(JSON.stringify(d20NewBodies[0])) === JSON.stringify({ path: 'D:\\ws\\memories', name: 'newdir' }),
   '新建目录请求 body 正确（实测 ' + JSON.stringify(d20NewBodies[0]) + '）')
 // 失败分支
 d20NewOk = false
@@ -3196,7 +3194,7 @@ effectQueue = []
 d20bTree = expand(pickReg.render({ initialTab: 'core' }))
 ok(!d20Layer(d20bTree), 'native 可用时不打开应用内弹层（保持既有 native 路径不变；native 调用次数 ' + d20NativeCalls + '）')
 const d20bInputs = findAll(d20bTree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
-ok(d20bInputs.some((i) => String(i.props.value) === 'D:/picked/by-native'), 'native 选中的目录直接填入输入框')
+ok(d20bInputs.some((i) => String(i.props.value) === 'D:\\picked\\by-native'), 'native 选中的目录直接填入输入框（同样统一成反斜杠）')
 
 // ⑧ 第三处入口：配置页的路径类字段（同一弹层）
 globalThis.fetch = async (url, opts) => {
