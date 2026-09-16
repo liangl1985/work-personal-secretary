@@ -78,7 +78,7 @@ import {
   walkFilesForMigrate,
 } from '../lib/basedeck.js'
 import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
-import { isSameOrNested, pathChecks, runPreflight, volumeOf } from '../lib/preflight.js'
+import { NESTING_DETAIL, isSameOrNested, pathChecks, relationOf, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
 import { resolveMigrateSource } from '../lib/setup-state.js'
 import { isFullyQualifiedPath, listDirectories } from '../lib/dirs.js'
@@ -935,8 +935,14 @@ ok(pfOk.checks.some((c) => c.id === 'sameVolume' && c.level === 'ok'), '同工�
 ok(pfOk.checks.some((c) => c.id === 'memoryFileConflict' && c.level === 'ok'), '既有 MEMORY.md 可解析 → 允许只补缺失')
 const pfBad = runPreflight({ report: badReport, memoryDir: deckMem, obsidianDir: deckVault, env: {} })
 ok(pfBad.ready === false && pfBad.checks.filter((c) => c.id.indexOf('env') === 0).every((c) => c.level === 'block'), '环境三项不满足 → 全 block 且 ready=false')
+// 2026-09-16 使用者裁定（第二轮，承接跨盘那条）：两目录相同 / 互相嵌套**只提示不拦截**。
+// 页面自己推荐的用法就是「把记忆库放进长期使用的主工作区」，不能一边推荐一边卡死执行链。
+const noNest = (pf) => pf.checks.filter((c) => c.id === 'noNesting')[0]
 const pfSame = runPreflight({ report: okReport, memoryDir: deckMem, obsidianDir: deckMem, env: {} })
-ok(pfSame.ready === false && pfSame.checks.filter((c) => c.id === 'noNesting')[0].level === 'block', '两目录相同 → 拦截（noNesting=block）')
+ok(pfSame.ready === true && pfSame.summary.block === 0 && noNest(pfSame).level === 'warn',
+  '两目录相同 → 提示不阻断（noNesting=warn，ready 仍为 true、block 计数 0）')
+ok(noNest(pfSame).detail.indexOf('不阻断') >= 0 && noNest(pfSame).detail.indexOf('知识库根目录') >= 0,
+  '相同目录的文案写明后果并写明「不阻断」')
 const pfEmpty = runPreflight({ report: okReport, memoryDir: '', obsidianDir: deckVault, env: {} })
 ok(pfEmpty.ready === false && pfEmpty.checks.filter((c) => c.id === 'memoryDir')[0].detail.indexOf('未填写') >= 0, '必填目录为空 → block 且理由可读')
 const pfLow = runPreflight({ report: { items: [
@@ -946,7 +952,15 @@ const pfLow = runPreflight({ report: { items: [
 ] }, memoryDir: deckMem, obsidianDir: deckVault, env: {} })
 ok(pfLow.checks.filter((c) => c.id === 'envPython')[0].level === 'block', 'Python 低于 3.10 → block（版本门槛生效）')
 const pfNested = runPreflight({ report: okReport, memoryDir: deckMem, obsidianDir: join(deckMem, 'sub'), env: {} })
-ok(pfNested.ready === false, '一目录嵌在另一目录里 → 拦截')
+ok(pfNested.ready === true && noNest(pfNested).level === 'warn', '知识库嵌在记忆库里 → 提示不阻断（ready 仍为 true）')
+ok(noNest(pfNested).detail === NESTING_DETAIL['obsidian-in-memory'], '方向写得出：知识库在记忆库目录内（文案按方向分开）')
+// 主人真机那一例：记忆库 E:/lina/memory ⊂ 知识库 E:/lina（同一夹具里复刻成 deckVault/memory ⊂ deckVault）
+const pfMemInVault = runPreflight({ report: okReport, memoryDir: join(deckVault, 'memory'), obsidianDir: deckVault, env: {} })
+ok(pfMemInVault.ready === true && pfMemInVault.summary.block === 0 && noNest(pfMemInVault).level === 'warn',
+  '记忆库在知识库内（真机那一例）→ 提示不阻断，执行链可继续')
+ok(noNest(pfMemInVault).detail === NESTING_DETAIL['memory-in-obsidian'], '方向写得出：记忆库在知识库目录内')
+ok(relationOf(join(deckVault, 'memory'), deckVault) === 'memory-in-obsidian' && relationOf(deckVault, join(deckVault, 'memory')) === 'obsidian-in-memory',
+  'relationOf：两个方向分得开（不是一句话糊过去）')
 ok(isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'a', 'b')) === true && isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'ab')) === false,
   '嵌套判定不误伤同前缀目录')
 ok(volumeOf(deckMem) === volumeOf(deckVault), 'volumeOf：同盘返回同一卷标识')

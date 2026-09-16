@@ -279,6 +279,7 @@ window.__ModuleLoader__.load({
       chainBadgeFail: '已中断',
       chainStepCheck: '可用性检查',
       chainStepCheckSub: '环境就绪（记忆库插件 / Python / Python 工具）· 两个目录路径合法且可写 · 两目录同一工作区 · 目标目录无冲突',
+  chainStepCheckWarn: '提示：',
       chainStepMemory: '建立记忆库目录',
       chainStepMemorySub: '骨架 PROJECTS / DAILY / ARCHIVE；MEMORY.md 写入使用者身份（占位，待本页填写）；PROJECTS/工作秘书.md 与 USER.md、GRAPH.json',
       chainStepMigrate: '迁移旧记忆库',
@@ -839,6 +840,7 @@ window.__ModuleLoader__.load({
       chainBadgeFail: 'Stopped',
       chainStepCheck: 'Availability check',
       chainStepCheckSub: 'Environment ready (memory sub-plugin / Python / Python tools) · both directories valid and writable · same workspace · no target conflict',
+  chainStepCheckWarn: 'Notice: ', 
       chainStepMemory: 'Create the memory directory',
       chainStepMemorySub: 'Skeleton PROJECTS / DAILY / ARCHIVE; the user identity placeholder in MEMORY.md; PROJECTS/工作秘书.md plus USER.md and GRAPH.json',
       chainStepMigrate: 'Migrate the old memory store',
@@ -3058,7 +3060,12 @@ window.__ModuleLoader__.load({
               ? blocked.map((c) => String(c.label || c.id || '') + '：' + String(c.detail || '')).join('；')
               : t('chainStepCheck'))
           }
-          return t('chainStepCheckSub')
+          // 提示项（warn：跨盘 / 两目录相同或嵌套）**必须带出来**：它们是提示而不是拦截，
+          // 但藏在「检查通过」后面等于没说，使用者就无从判断自己要不要改。
+          const warned = checks.filter((c) => c && c.level === 'warn')
+          return t('chainStepCheckSub') + (warned.length
+            ? '｜' + t('chainStepCheckWarn') + warned.map((c) => String(c.detail || c.label || '')).join('；')
+            : '')
         }
         if (id === 'memoryDeck' || id === 'knowledgeDeck') {
           const res = await postFull('/basedeck', {

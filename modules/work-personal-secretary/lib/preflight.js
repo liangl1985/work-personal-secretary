@@ -14,7 +14,10 @@
  *   - 同工作区：两个目标目录**建议**同盘。设计定稿决议 9 原写「跨盘 → 拦截并给出理由」，
  *     但**使用者 2026-09-16 真机验收时修正为「仅提示不拦截」**（跨盘只是不建议，不构成实际限制）：
  *     该项判 'warn'，不参与 ready 判定，执行链可以继续；确实出现写入失败或同步中断时再考虑同盘。
- *   - 无冲突：两目录不得相同或互相嵌套；既有 MEMORY.md 必须能被解析为条目结构，否则拒绝（绝不覆盖使用者数据）。
+ *   - 目标冲突：两目录**相同或互相嵌套只提示、不拦截**（使用者 2026-09-16 真机验收第二轮裁定，与「跨盘」同口径：
+ *     属「不建议」而非「不允许」，检查不得成为实际限制）。判定按方向分开给文案（相同 / 记忆库在知识库内 /
+ *     知识库在记忆库内），因为三种形态的后果不同。既有 MEMORY.md 必须能被解析为条目结构，否则拒绝
+ *     （绝不覆盖使用者数据）—— **这一条仍是 block**，与嵌套无关。
  *
  * @module work-personal-secretary/preflight
  */
@@ -46,14 +49,38 @@ export function volumeOf(p) {
   return sep
 }
 
-/** a 与 b 是否相同、或一个包含另一个（大小写不敏感：Windows 路径不区分大小写） */
-export function isSameOrNested(a, b) {
-  const x = normalizePath(a).toLowerCase().replace(/[\\/]+$/, '')
-  const y = normalizePath(b).toLowerCase().replace(/[\\/]+$/, '')
-  if (!x || !y) return false
-  if (x === y) return true
+/**
+ * 记忆库目录与知识库目录的关系形态（大小写不敏感：Windows 路径不区分大小写）。
+ * 分开判方向是**为了把话说对**：三种形态的后果不同，提示文案必须各说各的。
+ * @param {string} memoryDir 记忆库目录
+ * @param {string} obsidianDir 知识库（Obsidian vault）目录
+ * @returns {'same'|'memory-in-obsidian'|'obsidian-in-memory'|'separate'}
+ */
+export function relationOf(memoryDir, obsidianDir) {
+  const x = normalizePath(memoryDir).toLowerCase().replace(/[\\/]+$/, '')
+  const y = normalizePath(obsidianDir).toLowerCase().replace(/[\\/]+$/, '')
+  if (!x || !y) return 'separate'
+  if (x === y) return 'same'
   const withSep = (p) => p + sep
-  return x.indexOf(withSep(y)) === 0 || y.indexOf(withSep(x)) === 0
+  if (x.indexOf(withSep(y)) === 0) return 'memory-in-obsidian'
+  if (y.indexOf(withSep(x)) === 0) return 'obsidian-in-memory'
+  return 'separate'
+}
+
+/** a 与 b 是否相同、或一个包含另一个（判定唯一实现在 relationOf，避免两份口径漂移） */
+export function isSameOrNested(a, b) {
+  return relationOf(a, b) !== 'separate'
+}
+
+/**
+ * 关系形态 → 提示文案。**全部是提示、不是拦截**：每种都写明后果 + 写明「不阻断」。
+ * 为什么要有这张表：一句话把三种形态揉在一起说，使用者看不出自己那样放到底会怎样。
+ */
+export const NESTING_DETAIL = {
+  same: '两个目录相同：记忆库正文（MEMORY.md / USER.md / PROJECTS / DAILY / ARCHIVE / GRAPH.json）会直接落在知识库根目录（**不阻断**，可继续；若不希望知识库根目录混入记忆文件，给记忆库单独一个空文件夹即可）',
+  'memory-in-obsidian': '记忆库在知识库目录内：同一份内容会在知识库里出现两次（记忆库原目录 + 00_全局记忆 镜像），记忆文件也会被 Obsidian 一并索引（**不阻断**，可继续）',
+  'obsidian-in-memory': '知识库在记忆库目录内：知识库整棵树会落在记忆库底下，记忆库的归档与检索会一并看到知识库文件（**不阻断**，可继续；反过来放更清爽）',
+  separate: '两个目录相互独立，无嵌套',
 }
 
 /** 目录可写判定（不写盘：只做 access 检查） */
@@ -181,12 +208,11 @@ export function pathChecks(options = {}) {
         ? '两个目录在同一卷（' + vm + '）'
         : '两个目录跨盘（' + vm + ' vs ' + vo + '）：不建议跨盘——跨盘写入与镜像同步可能受权限范围限制（不阻断，可继续；若后续出现写入失败或同步中断，再考虑改到同一盘符）'))
 
-    const nested = isSameOrNested(memoryDir, obsidianDir)
-    if (nested) {
-      out.push(check('noNesting', '目标无冲突', 'block', '两个目录相同或互相嵌套：请各选一个独立目录（记忆库与知识库不能放在同一处）'))
-    } else {
-      out.push(check('noNesting', '目标无冲突', 'ok', '两个目录相互独立，无嵌套'))
-    }
+    // 目标冲突：**只提示、不阻断**。使用者 2026-09-16 真机验收第二轮裁定（承接跨盘那条）：
+    // 「把记忆库放进长期使用的主工作区」本来就是本页字段说明自己推荐的用法，
+    // 不能一边推荐一边把执行链卡死在第一步。level 恒为 ok / warn，**永不 block**，不参与 ready。
+    const rel = relationOf(memoryDir, obsidianDir)
+    out.push(check('noNesting', '目标无冲突', rel === 'separate' ? 'ok' : 'warn', NESTING_DETAIL[rel]))
 
     const ws = typeof options.workspace === 'string' ? options.workspace.trim() : ''
     if (ws) {
