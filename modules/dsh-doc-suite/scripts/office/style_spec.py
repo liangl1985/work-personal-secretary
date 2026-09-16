@@ -152,6 +152,41 @@ def excel_snapshot(path) -> dict:
     return out
 
 
+def pptx_snapshot(path) -> dict:
+    """逐页 shape 文本 + 表格单元格 + 图表系列/类别 + 备注（不含格式）—— 内容零改动断言的快照。"""
+    from pptx import Presentation
+
+    prs = Presentation(str(path))
+    slides = []
+    for slide in prs.slides:
+        texts = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                texts.append(shape.text_frame.text)
+            if getattr(shape, "has_table", False):
+                try:
+                    for row in shape.table.rows:
+                        for cell in row.cells:
+                            texts.append(cell.text)
+                except Exception:
+                    pass
+            if getattr(shape, "has_chart", False):
+                try:
+                    chart = shape.chart
+                    texts.append("series:" + "|".join(str(s.name) for s in chart.series))
+                    texts.append("cats:" + "|".join(str(c) for c in chart.plots[0].categories))
+                except Exception:
+                    pass
+        notes = ""
+        if slide.has_notes_slide:
+            try:
+                notes = slide.notes_slide.notes_text_frame.text
+            except Exception:
+                notes = ""
+        slides.append({"texts": texts, "notes": notes})
+    return {"slides": slides}
+
+
 def _diff_lines(before, after, kind: str, limit: int = 8):
     lines = []
     if kind == "word":
@@ -167,6 +202,23 @@ def _diff_lines(before, after, kind: str, limit: int = 8):
                     lines.append(f"{label}#{i}: {x[:60]!r} → {y[:60]!r}")
                 if len(lines) >= limit:
                     break
+    elif kind == "pptx":
+        bs, as_ = before.get("slides", []), after.get("slides", [])
+        if len(bs) != len(as_):
+            lines.append(f"页数变化: {len(bs)} → {len(as_)}")
+        for i, (b, a) in enumerate(zip(bs, as_), 1):
+            bt, at = b.get("texts", []), a.get("texts", [])
+            if len(bt) != len(at):
+                lines.append(f"第 {i} 页文本块数量变化: {len(bt)} → {len(at)}")
+            for j, (x, y) in enumerate(zip(bt, at)):
+                if x != y:
+                    lines.append(f"第 {i} 页 文本#{j}: {x[:50]!r} → {y[:50]!r}")
+                if len(lines) >= limit:
+                    break
+            if b.get("notes") != a.get("notes"):
+                lines.append(f"第 {i} 页 备注: {str(b.get('notes'))[:40]!r} → {str(a.get('notes'))[:40]!r}")
+            if len(lines) >= limit:
+                break
     else:
         for sheet in sorted(set(list(before.keys()) + list(after.keys()))):
             b, a = before.get(sheet), after.get(sheet)
@@ -219,7 +271,9 @@ def commit_style(src, out_arg, apply_fn, tag: str = "style"):
 
     src = Path(src)
     out = Path(out_arg) if out_arg else src
-    tmp = src.with_name(f"{src.stem}.tmp-style{src.suffix or ''}")
+    import os as _os
+    # 临时名带 pid：与使用者可能同时打开的同名文件、或并发的另一次套样式错开（55 号硬约束 5）
+    tmp = src.with_name(f"{src.stem}.tmp-style-{_os.getpid()}{src.suffix or ''}")
     try:
         report = apply_fn(tmp)
         if tmp.resolve() == out.resolve():

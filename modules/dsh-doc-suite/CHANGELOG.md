@@ -1,3 +1,44 @@
+## 0.5.0 — 2026-09-16（④：PPT 存量美化 ppt_style.py · apply-style）
+
+### 一、这一步做了什么
+
+与 A 线 Word / Excel 的 apply-style **同构**：对**已有** pptx 就地或另存套样式，并在落盘前后做**内容零改动断言** —— 任一差异 → **exit 3 拒绝产出、原文件不动**。
+
+- 新增 scripts/office/ppt_style.py：apply-style <file.pptx> [--spec] [--out] [--dry-run] [--text-color ROLE]
+  - **字体统一**：逐 run 显式设置 a:latin / a:ea / a:cs 三属性（中文字形必须落在 a:ea，否则会被主题替换）；覆盖正文、**表格单元格**与**演讲者备注**
+  - **可选文字色**：--text-color <hex 或 color_roles 键>，**只改未显式设色的 run**（不破坏既有配色），默认关
+  - **白名单校验**：要套用的字体不在规格 allowed_fonts 内 → 拒绝（exit 2）
+  - **原子落盘**：commit_style（临时文件 → 断言 → 就位）；就地改自动备份 .bak-pptstyle-<时间戳>
+- style_spec.py 新增 **pptx_snapshot**（逐页文本 / 表格单元格 / 图表系列与类别 / 备注）与 _diff_lines 的 pptx 分支；commit_style 的临时文件名**加 pid**（55 号硬约束 5：固定名在 pptx 复用与并发下会撞车）
+
+### 二、退出码（与 A 线一致）
+
+**0** 成功 ｜ **2** 输入 / 参数 / 规格错 ｜ **3** 内容零改动断言失败（已拒绝产出、原文件未动）
+
+### 三、回归（新增套件）
+
+新增 scripts/ppt-style-test.mjs：**11 例**（实现关键点 / dry-run 不写盘 / --out 另存 / 就地改 + 备份 / 表格与备注字体 / --text-color / 非法色值 / 纯 Word 规格拒绝 / 字体白名单 / 断言 exit 3 语义 / 缺文件），本机 **11/0**；CI 无 python-pptx 时自动 SKIP。
+
+### 四、端到端实测（本机）
+
+造「宋体存量样本」（3 页、含表格与备注）→ apply-style：
+- 字体分布 {宋体: 13} → **{微软雅黑: 26}**（latin + ea 各 13）
+- **文本零改动 True**（快照逐项一致）
+- 生成备份 legacy.pptx.bak-pptstyle-20260916-155202
+- 断言探针：文本变化即拦截，ContentChangedError.exit_code == **3**
+
+### 五、验证
+
+spec_sync --check **0** · style-test **24/0** · ppt-render-test **24/0** · ppt-style-test **11/0** · 仓库 ↔ profile **0 差异**
+
+### 六、未做
+
+主题库与母版导入（后置）· ⑥ 生图（ARK）与图示（mermaid）链路 · ⑦ 收口（SKILL.md / doctor.py / README / NOTICE，**需重启 DSH**）· ⑧ T5 专家卡。
+
+### 七、回退
+
+版本改回 **0.4.0** 或 git revert 本提交；profile 同步一次即可。
+
 ## 0.4.0 — 2026-09-16（③b：扩展 5 类页型 + 图标素材最小集）
 
 ### 一、新增 5 类页型（16 类页型几何 + 渲染全通）
