@@ -2,6 +2,9 @@
 
 > ⛔ **本次不适用**：`v1.1.3` 及 `1.2.0` 经主人 2026-09-17 裁定**不发布**（原因见根 `/CHANGELOG.md` 的 1.1.3 段与 `modules/work-personal-secretary/CHANGELOG.md`）。本清单保留给**下一次真正发布**时使用；本次不做逐项打勾。
 
+> 📌 **发布节奏（2026-09-17 主人定）**：此后一律**小步 patch、不再开大版本**；非必要不打 Release。当前对外发布版为 `v1.0.0`（Latest）；`v1.1.0` 草稿已于 2026-09-17 删除（tag 保留）；`v1.1.1`–`v1.1.3` 与 `1.2.0` 均不发布。
+> 📌 **CI 状态（2026-09-17）**：远端 `main` 已追平本地 1.1.3；Linux runner 上的测试平台问题已修（见根 `CHANGELOG.md` 与 `modules/dsh-doc-suite/CHANGELOG.md` 的 0.7.10 段）。
+
 > 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
 >
 > 集成体版本：**`v1.0.0`**（正式版第一版，见根 [`CHANGELOG.md`](CHANGELOG.md)）。含**四个子模块**：`dsh-work-memory` v1.0.5、`dsh-doc-suite` v0.1.4、`dsh-experts` v0.1.3、`workspace-tokenpet` v1.0.0（**独立项目模块**）；四者已实装本机 desktop（桌宠模块本机尚需按 1.0.0 迁移步骤换 id：卸载旧 id → 安装新 id → 确认素材目录）。

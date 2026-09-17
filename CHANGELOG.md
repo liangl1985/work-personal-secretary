@@ -4,6 +4,18 @@
 > 集成体打 `v<major>.<minor>.<patch>`（例 `v1.0.0`），子模块另可打 `dsh-work-memory@1.0.5` 形式的 tag。
 > 各子模块自己的变更史见其目录下的 `CHANGELOG.md`。
 
+## v1.1.1 – v1.1.3 — 2026-09-16 / 09-17（设置界面与目录模型线）· ⛔ **均不发布**
+
+> **发布状态（2026-09-17 主人裁定）**：`v1.1.1` / `v1.1.2` / `v1.1.3` **均不发布** —— 目录模型本次只定义为测试，本机不采用新布局、工作区整体重建另择时间做。细节见 `modules/work-personal-secretary/CHANGELOG.md` 的 1.1.3 段。
+> **对外发布版仍为 `v1.0.0`（Latest）**；`v1.1.0` 的 GitHub Release 草稿已于 2026-09-17 删除（tag `v1.1.0` 保留作历史留痕，正文可从本文件恢复）。
+> **后续发布节奏（2026-09-17 主人定）**：此后一律**小步 patch 修改，不再开大版本**；非必要不打 Release。
+>
+> 三版要点（细节见本体 CHANGELOG）：
+> - **1.1.1**：核心配置页与「保存即执行」六步链、记忆库迁移步骤、目录模型收窄
+> - **1.1.2**：随包说明网页（安装引导 / 使用说明）、文档能力页接入生图设置（密钥链路打通）、桌面外壳 exact 路由接线
+> - **1.1.3**：设置界面四页签改版、「一个存储根目录 + `memory-data` / `obsidian-data`」目录模型、旧知识库导入引导卡
+>
+> **CI 修复（2026-09-17）**：远端 `main` 追平本地 1.1.3 后，修复两处只在 Linux runner 暴露的测试问题 —— `dsh-doc-suite` 的 PIL / python-pptx 守卫与随包 lock 入库（0.7.10），以及本体 `basedeck-test` 的 Windows 专属断言平台适配。
 ## v1.1.0 — 2026-09-15（每轮注入上限 4 · 通用型与域专家分开评分 · 文档工具编号层级修复 · 桌宠独立化）
 
 - **目录与包名**：`modules/dsh-token-pet` → `modules/workspace-tokenpet`（`git mv`，git 历史保留）；包名 `dsh-token-pet` → `workspace-tokenpet`；版本 `0.2.1-lina.1` → `1.0.0`；**插件运行时 id 一并改为 `workspace-tokenpet`**（cordis entry id/name、客户端 bundle 装载 id、插槽与设置分区 id、路由前缀 `/workspace-tokenpet/...`）。
