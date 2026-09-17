@@ -41,7 +41,7 @@ jobs:
             node "$t"
           done
 
-      # 集成体本体自测：探针 probe 134 / 安装引擎 install 169 / 底座契约 basedeck 179 / 设置 API settings-api 109
+      # 集成体本体自测（各套读数见根 TEST-MATRIX.md；2026-09-17 实测：smoke-load 513 / probe 149 / install 244 / basedeck 415 / settings-api 112 / identity 73 / defaults 59）
       # 四套均自带夹具，全部建在 os.tmpdir() 下并自清理，不触碰真实 profile 与设置文件
       # 失败时逐套收集输出：写 ::error:: annotation 与 step summary（无日志权限也能定位）
       - name: 集成体本体自测

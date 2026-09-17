@@ -35,6 +35,12 @@
 - `spec_sync --check` **0**（6 套规格，对比度 0 项不达标）· `style-test` **24/0**（断言同步为新页边距）
 - 公文档端到端：`create` → `apply-style --spec govdoc`（角色识别 heading_1=2 / heading_2=4 / body=10，**内容零改动断言通过**）→ `convert` PDF → 出图目检（标题黑色、三号仿宋、页边距 3.7/3.5/2.8/2.6）
 - **已知局限**：govdoc 只做**版式**，不生成公文版头要素（发文机关标志 / 发文字号 / 印章）与页脚页码；缺 方正小标宋 时标题用宋体加粗替代，交付前须目检字体
+## 0.7.12 — 2026-09-17（注释一致性 · Python 单测 · 模块说明）
+
+- `scripts/office/ppt_render.py` 头注释仍写「只实现 cover / bullets / cards 三类」→ 改「已实现 16 类页型（与 ALL_LAYOUTS 一致）」。
+- 新增 `scripts/tests/test_python.py`（**11 项，零依赖**：对比度 / 主题压暗 / deep_merge / 规格校验正负例）并纳入 CI；`package.json` 补 `test` 与 `spec:check`。
+- 新增 `ARCHITECTURE.md`（维护者向）。
+
 ## 0.7.10 — 2026-09-17（CI 守卫补齐 + 运行时 lock 入库）
 
 **背景**：远端 main 的 CI「集成体本体自测」连续红（09-16 多次 push，失败点全部落在 doc-suite 的测试脚本上）。本机装有 Pillow / python-pptx 因此全绿——典型的「本机绿 ≠ CI 绿」。

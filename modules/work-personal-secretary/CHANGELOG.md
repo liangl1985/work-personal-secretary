@@ -1,5 +1,15 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.4 — 2026-09-17（随包说明补齐 · 文档-实现一致性修复 · 模块说明）
+
+- **随包说明补齐**：`defaults/use.zh-CN.md` 新增「四、目录与镜像」（存储根派生 / 目录选择三条路 / 导入卡只管知识库 / 镜像何时被填 / 工具目录只有框架）；`defaults/install.zh-CN.md` 新增「六、升级与排障」（子插件升级走临时目录+SHA256+原子替换 / 记忆库换目录免重启需 work-memory ≥1.0.6 / 七套自测脚本）；HTML 按 md 重生成（`defaults-test` 59/0）。
+
+- **文档-实现一致性**（本轮核查逐条修）：`defaults/global-memory.seed.md` 的【专家库】条目仍写「常驻只有一位身份专家」→ 改「默认一位都不常驻」；`lib/index.js` 的 `SUB_PLUGINS` 同口径修正；`lib/api.js` 路由计数注释 17/18 → **22/23**（2026-09-17 复核）；`lib/basedeck.js` 注释「basedeck 自己不读 settings.yaml」与实现矛盾 → 改「两条口径并存」；`.github/workflows/ci.yml` 的通过数注释 → 指向 `TEST-MATRIX.md` 并写 2026-09-17 实测值。
+
+- **新增**：`ARCHITECTURE.md`（维护者向：架构 / 数据流 / 对外接口 / 回退与恢复）；根 `TEST-MATRIX.md`；`package.json` 补 `test` 脚本。
+
+- ⚠️ 需重启 DSH（`lib/**` 与 `defaults/**` 变更）。
+
 ## 1.1.3 — 2026-09-16（设置界面改版）· ⛔ **本版不发布**
 
 > **发布状态（2026-09-17 主人裁定）**：本版**不发布**。代码与文档已完成、七套脚本全绿，迭代过程中也做了真机验收，但主人判定「目录模型这次只定义为测试」，本机不采用新布局、工作区整体重建留待另择时间做。

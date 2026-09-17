@@ -79,13 +79,13 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
     .description('本人岗位默认域 —— 安装引导会问一次。取值：infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融 / general 通用职能。它决定任务优先从哪个专业角度被拆解（给会计岗同事用时改成 accounting 即可，无需改代码）'),
 
   identityExpert: z.string().default('')
-    .description('**常驻注入的唯一身份专家**（专家 id，如 infosec-ics-security）；留空 = 自动取「本人岗位」域的第一位。它每轮都在场，代表使用者的默认身份视角；其余专家由「问题归属判断」决定是否临时补充或派子代理激活'),
+    .description('要**常驻注入**的身份专家（专家 id，如 infosec-ics-security）；**留空 = 不常驻任何身份专家**（身份由记忆层承担，2026-09-14 起）。需要每轮固定视角时显式填 id；其余专家由「问题归属判断」决定是否本轮注入或派子代理激活'),
 
   enabledDomains: z.string().default('')
     .description('把匹配范围**收窄**到这些域（逗号分隔，如 infosec,accounting）；留空 = 全部专家都参与匹配。「本人岗位」只作打分先验，不当白名单（否则跨域任务会命中不了本域之外的专家）'),
 
   enabledExperts: z.string().default('')
-    .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 infosec-bid-proposal,accounting-tax）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 /expert use <id> 临时注入'),
+    .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 infosec-bid-proposal,accounting-tax）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 expert_recall 现取现用'),
 
   expertInjectMax: z.natural().default(4)
     .description('**persona 注入软上限**：**默认 4，且 2026-09-15 起不在设置页提供**（主人定：直接写死，避免误调）。0 = 不限（交由字符预算与分数阈值守门）；如需收紧，手改 settings.yaml 为 1–3 仍生效。实测 20 条真实任务**无一命中 4 位**（70% 只命中 1 位），故 4 是「留余量」而非「常态化占满」'),

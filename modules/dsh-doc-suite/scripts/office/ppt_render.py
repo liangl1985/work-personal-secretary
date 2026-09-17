@@ -15,9 +15,9 @@
     validate <manifest.json> [--theme standard]
     list-layouts [--theme standard]
 
-②b 范围与容错（55 号 3.1）
---------------------------
-- 只实现 cover / bullets / cards 三类；未知或未实现 layout → 退化为 bullets 并告警；
+实现范围与容错（55 号 3.1；范围随版本推进，2026-09-17 复核）
+--------------------------------------------------
+- **已实现 16 类页型**（与 ALL_LAYOUTS 一致，见 IMPLEMENTED_LAYOUTS 常量）；未知或未实现 layout → 退化为 bullets 并告警；
 - 未知字段忽略；缺必填字段 → exit 2 并指明页号；超 limits.max_slides → 保留首页 + 中段 + 末页；
 - notes 与 slides 等长按索引对齐，写入演讲者备注（单页 notes 优先）。
 

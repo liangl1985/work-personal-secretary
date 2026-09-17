@@ -2,6 +2,14 @@
 
 本插件的版本历史。
 
+## 0.5.10 — 2026-09-17（文档-实现一致性修复 · 模块说明）
+
+- `lib/settings.js` 的 `identityExpert` 描述仍写「留空 = 自动取岗位域第一位」，与实现（留空即不常驻，2026-09-14 身份退场）矛盾 → 已改；`enabledExperts` 描述里的 `/expert use <id>` → `expert_recall`。
+- `lib/inject.js` 的 `MANUAL_NOTE`（注入进 systemPrompt 的尾注）仍写「/expert off 关闭、/expert auto 恢复自动」→ 改为「下次需要时用 expert_recall 再取」；`cordis.patch.yml` 与 `lib/index.js` 头注释同批去掉 `/expert`。
+- `scripts/injection-tier-test.mjs` 头注释仍写「三级注入 + 每轮预算降级」→ 改「0.5.0 起两态（首轮全景 / 干活轮），降级链已删除」。
+- 新增 `ARCHITECTURE.md`（维护者向）。
+- 验证：五套 **103/0**。
+
 ## 0.5.9 — 2026-09-17（`general-designer` 补「文档/演示场景换算规则」· T6）
 
 **背景**：主人 2026-09-17 点名做 T6（原话「这个做，你提出的问题特别好」）。8-14 实测的结论是「**数据与内容达标，成品视觉只到勉强能用**」，根因是设计师卡的知识偏 Web/UI，给不出**文档场景的可执行资产**。

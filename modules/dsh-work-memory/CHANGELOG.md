@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 1.0.7 — 2026-09-17（镜像范围口径修正 · 模块说明）
+
+- `README.md` 的 Obsidian 镜像文件清单补 `ARCHIVE/`（与 `lib/backup.js` 实现一致）。
+- 新增 `ARCHITECTURE.md`（维护者向，含「镜像只在 remember / link / archive 三条写路径后触发」的准确口径）。
+
 ## 1.0.6 — 2026-09-16（默认路径迁移 + memoryDir 热生效）
 
 - **行为修正（本单主线）**：记忆库根目录此前是 `apply()` 时算一次的常量（旧 `lib/index.js:65` 的

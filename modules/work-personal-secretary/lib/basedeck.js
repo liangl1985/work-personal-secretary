@@ -965,8 +965,8 @@ export function resolveDeckContext(options = {}) {
     settingsFile: settingsFile,
     settingsRead: settingsRead,
     memoryDir: memoryDir,
-    // 迁移来源（旧记忆库目录）：由 api 层经**宿主设置服务**解析后注入；
-    // basedeck 自己不读 settings.yaml（那是宿主的文件与格式，不归本插件管）
+    // 迁移来源（旧记忆库目录）：由 api 层经**宿主设置服务**解析后注入。
+    // 注意：计划器**自己也会读** settings.yaml（见上方 readSettingsValues，只取 work-memory / experts 两个命名空间，用于反推工作区）；migrateFrom 仍由 api 层注入，两条口径并存。
     migrateFrom: normalizePath(options.migrateFrom),
     migrateFromSource: typeof options.migrateFromSource === 'string' ? options.migrateFromSource : '',
     libraryName: libraryName,

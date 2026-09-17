@@ -52,7 +52,7 @@ export const IDENTITY_NOTE = '（身份视角：常驻，代表使用者岗位�
 export const MATCH_NOTE = '（本轮命中：按问题归属激活；与本轮任务无关时忽略）'
 
 /** 临时注入块的尾注 */
-export const MANUAL_NOTE = '（临时注入：仅本会话生效，不常驻上下文；/expert off 关闭，/expert auto 恢复自动）'
+export const MANUAL_NOTE = '（临时注入：仅本会话生效，不常驻上下文；下次需要时用 expert_recall 再取）'
 
 /** 精简卡尾注（要求原样出现：「精简卡 · 全文用 expert_recall 取」） */
 export const CARD_NOTE = '精简卡 · 全文用 expert_recall 取'

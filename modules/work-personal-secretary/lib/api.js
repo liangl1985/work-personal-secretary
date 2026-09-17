@@ -1312,12 +1312,13 @@ export function installApi(ctx, deps = {}) {
  *   本次连同四条断言一起改掉（probe-test / settings-api-test / basedeck-test / install-test），
  *   断言仍**逐条列出完整路径集合并用相等比较**，不放宽为 includes / >=。
  *
- * 当前**精确路由集合（共 17 条）**与路由总数：
- *   API_PATHS（7）            /check /fix /fix-all /plugins /install /install-all /basedeck
- *   PAGE_PATHS（2，另一前缀） /work-personal-secretary/guide、/help
- *   CORE_API_EXACT_PATHS（5） /preflight /identity /identity/save /domain/list /domain/generate
- *   SETTINGS_API_PATHS（3）   /settings /settings/write /experts/preview（**本函数**注册）
- *   → 17 exact + 1 prefix = `apply()` 注册**总数 18 条**。
+ * 当前**精确路由集合（共 22 条）**与路由总数（2026-09-17 复核）：
+ *   API_PATHS（7）             /check /fix /fix-all /plugins /install /install-all /basedeck
+ *   PAGE_PATHS（2，另一前缀）  /work-personal-secretary/guide、/help
+ *   CORE_API_EXACT_PATHS（10） /preflight /identity /identity/save /domain/list /domain/generate
+ *                              /docs /open-doc /setup-state /dirs /dirs/new（以上以本文件 CORE_API_EXACT_PATHS 常量为准）
+ *   SETTINGS_API_PATHS（3）    /settings /settings/write /experts/preview（**本函数**注册）
+ *   → 22 exact + 1 prefix = `apply()` 注册**总数 23 条**（数字以三个常量与各自测试断言为准）。
  *   本函数另由 scripts/settings-api-test.mjs 的 [11] 段单测覆盖。
  *
  * @param {object} ctx cordis context（需 webServer）
