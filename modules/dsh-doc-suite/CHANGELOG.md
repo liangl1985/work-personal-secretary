@@ -1,3 +1,13 @@
+## 0.7.10 — 2026-09-17（CI 守卫补齐 + 运行时 lock 入库）
+
+**背景**：远端 main 的 CI「集成体本体自测」连续红（09-16 多次 push，失败点全部落在 doc-suite 的测试脚本上）。本机装有 Pillow / python-pptx 因此全绿——典型的「本机绿 ≠ CI 绿」。
+
+- **`media-test.mjs` 新增 `HAS_PIL` 守卫**：用例「落盘格式校验：云端返回 JPEG 但声明 .png → 自动转码为真 PNG」需 Pillow 造 JPEG 样本；CI（ubuntu-latest）只跑 `py_compile`、不装 pip 包，原先必然 `ModuleNotFoundError: No module named 'PIL'` 而 FAIL，现改为 **SKIP**
+- **`ppt-theme-test.mjs` 新增 `HAS_PPTX` 守卫**：6 个依赖自造母版样本（python-pptx）的用例同样改为 **SKIP**（与 `ppt-style-test.mjs` 既有 `HAS_PPTX` 写法一致）
+- **`scripts/media/runtime/package-lock.json` 入库**：仓库根 `.gitignore` 全局忽略 `package-lock.json`，使「随包运行时清单与 lock：版本一致且锁定主依赖」在 CI 必然 `ENOENT`；该 lock 属发布件的一部分（`files` 白名单含 `scripts`），故新增例外规则放行并入库（87,775 字节，仅公开 registry 元数据、无凭据）
+- **验证（本机）**：`media-test` **19/0** · `ppt-theme-test` **7/0**；**故障注入**（强制 `HAS_PIL=false` / `HAS_PPTX=false`）分别为 **18/0/1 跳过** 与 **1/0/6 跳过**，均 exit 0；CI 三步等价全量回归 **TOTAL_FAIL=0**（13 套 `*-test.mjs` + 5 套 regression / smoke-load / coexist）
+- **无运行时行为变更**：改动只在测试脚本与仓库卫生，`lib/**` 与 `scripts/**.py` 未动
+
 ## 0.7.9 — 2026-09-16（media-gen 定位写宽 + 安装段收窄）
 
 - **描述写宽**：description 与正文定位由「为**演示文稿**生成图形素材」改为「为**文档与演示**生成图形素材」—— mermaid 架构图与配图同样服务 Word 方案与报告，原先的窄描述会**降低命中率**

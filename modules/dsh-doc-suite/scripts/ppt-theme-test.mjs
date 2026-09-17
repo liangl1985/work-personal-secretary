@@ -31,6 +31,8 @@ function py(script, args, env) {
   return null;
 }
 const HAS_PY = !!py('-c', ['print(1)']);
+// python-pptx guard: CI runs py_compile only and installs no pip packages; sample-dependent cases must SKIP, not FAIL.
+const HAS_PPTX = HAS_PY && (function () { const r = py('-c', ['import pptx; print(1)']); return !!r && r.status === 0; })();
 
 // 自造「母版样本」：python-pptx 生成的 pptx 自带 theme1.xml / slideMaster / slideLayouts
 const MAKE = [
@@ -44,7 +46,7 @@ const MAKE = [
   'prs.save(sys.argv[1])',
 ].join('\n');
 const SAMPLE = path.join(TMP, 'master-sample.pptx');
-if (HAS_PY) {
+if (HAS_PPTX) {
   const r = py('-c', [MAKE, SAMPLE]);
   if (!r || r.status !== 0) console.log('  （样本生成失败：' + (r && r.stderr || '').slice(0, 120) + '）');
 }
@@ -63,7 +65,7 @@ t('实现要点齐全', function () {
 });
 
 t('list：列出内置与自定义层主题', function () {
-  if (!HAS_PY) return 'skip';
+  if (!HAS_PY || !HAS_PPTX) return 'skip';
   const r = py(THEME, ['list']);
   assert(r.status === 0, 'exit=' + r.status);
   for (const id of ['standard', 'compact', 'graphite', 'teal', 'wine']) {
@@ -73,7 +75,7 @@ t('list：列出内置与自定义层主题', function () {
 });
 
 t('inspect：只读检视母版（不写文件）', function () {
-  if (!HAS_PY) return 'skip';
+  if (!HAS_PY || !HAS_PPTX) return 'skip';
   const r = py(THEME, ['inspect', SAMPLE]);
   assert(r.status === 0, 'exit=' + r.status + ' ' + (r.stderr || '').slice(0, 160));
   for (const k of ['主题', '母版', '色板', '字体']) {
@@ -82,7 +84,7 @@ t('inspect：只读检视母版（不写文件）', function () {
 });
 
 t('import：从母版生成自定义层主题（结构完整）', function () {
-  if (!HAS_PY) return 'skip';
+  if (!HAS_PY || !HAS_PPTX) return 'skip';
   const out = path.join(TMP, 'imported.json');
   const r = py(THEME, ['import', SAMPLE, '--id', 'probe', '--name', 'Probe Master', '--out', out]);
   assert(r.status === 0 || r.status === 4, 'exit=' + r.status + ' ' + (r.stderr || '').slice(0, 200));
@@ -100,7 +102,7 @@ t('import：从母版生成自定义层主题（结构完整）', function () {
 });
 
 t('import：目标已存在时 exit 3（需 --force）', function () {
-  if (!HAS_PY) return 'skip';
+  if (!HAS_PY || !HAS_PPTX) return 'skip';
   const out = path.join(TMP, 'exists.json');
   fs.writeFileSync(out, '{}', 'utf8');
   const r = py(THEME, ['import', SAMPLE, '--id', 'exists', '--out', out]);
@@ -109,7 +111,7 @@ t('import：目标已存在时 exit 3（需 --force）', function () {
 });
 
 t('压暗算法：白底与备用底同时达标', function () {
-  if (!HAS_PY) return 'skip';
+  if (!HAS_PY || !HAS_PPTX) return 'skip';
   const probe = [
     'import sys',
     'sys.path.insert(0, r"' + OFF + '")',
@@ -126,7 +128,7 @@ t('压暗算法：白底与备用底同时达标', function () {
 });
 
 t('导入结果过对比度门禁（自造母版）', function () {
-  if (!HAS_PY) return 'skip';
+  if (!HAS_PY || !HAS_PPTX) return 'skip';
   const out = path.join(TMP, 'gate.json');
   py(THEME, ['import', SAMPLE, '--id', 'gate', '--out', out, '--force']);
   const r = py(CONTRAST, ['check', '--spec', out]);

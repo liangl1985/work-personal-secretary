@@ -36,6 +36,8 @@ function pyRun(script, args, env) {
   return null;
 }
 const HAS_PY = !!pyRun('-c', ['print(1)']);
+// Pillow guard: CI runs py_compile only and installs no pip packages; without PIL this case must SKIP, not FAIL.
+const HAS_PIL = HAS_PY && (function () { const r = pyRun('-c', ['from PIL import Image; print(1)']); return !!r && r.status === 0; })();
 
 function findMermaidDir() {
   const cands = [process.env.DSH_DOC_SUITE_MERMAID,
@@ -254,7 +256,7 @@ t('版本对齐：check 给出 Edge 与 puppeteer 期望版本的结论（需运
 });
 
 t('落盘格式校验：云端返回 JPEG 但声明 .png → 自动转码为真 PNG', function () {
-  if (!HAS_PY) return 'skip';
+  if (!HAS_PY || !HAS_PIL) return 'skip';
   const probe = [
     'import io, sys',
     'sys.path.insert(0, r"' + MEDIA + '")',
