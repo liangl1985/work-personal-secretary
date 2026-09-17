@@ -988,11 +988,16 @@ ok(isSameOrNested(join(TMP_ROOT, 'a'), join(TMP_ROOT, 'a', 'b')) === true && isS
 ok(volumeOf(deckMem) === volumeOf(deckVault), 'volumeOf：同盘返回同一卷标识')
 
 // 2026-09-16 使用者修正：跨盘只是**不建议**，不再判 block（原为 block，会把执行链卡在第一步）
-const crossChecks = pathChecks({ memoryDir: 'C:\\x', obsidianDir: 'D:\\y', env: {} })
-const crossSame = crossChecks.filter((c) => c.id === 'sameVolume')[0]
-ok(Boolean(crossSame) && crossSame.level === 'warn', '跨盘 → level=warn（不再判 block）')
-ok(Boolean(crossSame) && /不建议跨盘/.test(crossSame.detail) && /不阻断/.test(crossSame.detail),
-  '跨盘文案改成「不建议」措辞并说明可继续：' + String(crossSame && crossSame.detail).slice(0, 46) + '…')
+// 跨盘是 Windows 专属语义（需两个不同盘符）；非 win32 上 'C:\x' / 'D:\y' 都落到同一 POSIX 根，断言不成立
+if (process.platform === 'win32') {
+  const crossChecks = pathChecks({ memoryDir: 'C:\\x', obsidianDir: 'D:\\y', env: {} })
+  const crossSame = crossChecks.filter((c) => c.id === 'sameVolume')[0]
+  ok(Boolean(crossSame) && crossSame.level === 'warn', '跨盘 → level=warn（不再判 block）')
+  ok(Boolean(crossSame) && /不建议跨盘/.test(crossSame.detail) && /不阻断/.test(crossSame.detail),
+    '跨盘文案改成「不建议」措辞并说明可继续：' + String(crossSame && crossSame.detail).slice(0, 46) + '…')
+} else {
+  console.log('  · 非 win32：无盘符概念（两路径落同一 POSIX 根），跳过 2 条跨盘分级断言')
+}
 if (existsSync('E:/lina')) {
   const crossVault = join(TMP_ROOT, 'crossvault')
   mkdirSync(crossVault, { recursive: true })
@@ -1245,14 +1250,16 @@ function installSetupCtx(namespaces, extraDeps) {
   return (ctx.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
 }
 
+// 反推「镜像目录 → vault 根」的逻辑本身跨平台；但反推前会判绝对路径，故用平台自适应绝对路径（两平台都真跑）
+const VAULT_BASE = process.platform === 'win32' ? 'E:/vault' : join(TMP_ROOT, 'vaultbase')
 const hSetup1 = installSetupCtx([
-  { ns: 'work-memory', schema: SETUP_MEM_SCHEMA, value: { memoryDir: 'D:/mem/lib', obsidianSyncDir: 'E:/vault/00_全局记忆' }, revision: 3, applies: 'live' },
+  { ns: 'work-memory', schema: SETUP_MEM_SCHEMA, value: { memoryDir: 'D:/mem/lib', obsidianSyncDir: VAULT_BASE + '/00_全局记忆' }, revision: 3, applies: 'live' },
   { ns: 'experts', schema: SETUP_EXP_SCHEMA, value: { defaultDomain: 'coding' }, revision: 5, applies: 'live' },
 ])
 const ss1 = await callRoute(hSetup1, 'GET', '/setup-state')
 ok(ss1.status === 200 && ss1.body.ok === true, 'GET /setup-state → 200 ok')
 ok(ss1.body.memoryDir.value === 'D:/mem/lib' && ss1.body.memoryDir.source === 'settings', '①memoryDir 取设置里的值 + source=settings')
-ok(ss1.body.obsidianDir.value === 'E:/vault' && ss1.body.obsidianDir.source === 'derived', '①obsidianDir 由镜像目录反推出 vault 根 + source=derived')
+ok(ss1.body.obsidianDir.value === VAULT_BASE && ss1.body.obsidianDir.source === 'derived', '①obsidianDir 由镜像目录反推出 vault 根 + source=derived（' + VAULT_BASE + '）')
 ok(ss1.body.domain.id === 'coding' && ss1.body.domain.label === '代码编程' && ss1.body.domain.isPreset === true && ss1.body.domain.source === 'settings',
   '①domain 映射到预置岗位 label（coding → 代码编程）')
 ok(ss1.body.identity.exists === false && ss1.body.identity.entryId === '', '①identity 只读检查：记忆库不存在该条目 → exists=false')
@@ -1368,7 +1375,12 @@ ok(isMigrateNoise('.work-memory.lock') && isMigrateNoise('MEMORY.md.bak-20260101
   '噪声识别：锁 / 写前备份 / 原子写临时文件 / 迁移清单 / .tmp 一律不迁移')
 ok(!isMigrateNoise('MEMORY.md') && !isMigrateNoise('GRAPH.json') && !isMigrateNoise('.triage.json') && !isMigrateNoise('.access.json') && !isMigrateNoise('PROJECTS'),
   '状态文件不是噪声（含点号前缀的 .triage.json / .access.json 要迁移 —— 不按点号一刀切）')
-ok(sameFsPath('C:/A/lib/', 'c:' + BS + 'a' + BS + 'lib') === true, '路径等价：大小写与分隔符归一后是同一目录')
+// 路径大小写不敏感是 Windows 语义；POSIX 上 'C:/A/lib' 与 'c:\a\lib' 本就是不同路径（大小写敏感）
+if (process.platform === 'win32') {
+  ok(sameFsPath('C:/A/lib/', 'c:' + BS + 'a' + BS + 'lib') === true, '路径等价：大小写与分隔符归一后是同一目录')
+} else {
+  console.log('  · 非 win32：路径大小写敏感，跳过「大小写归一」那条断言')
+}
 ok(sameFsPath('C:/A/lib', 'C:/A/lib2') === false, '路径等价：不同目录为 false')
 ok(LEGACY_MEMORY_SUBDIR.replace(/\\/g, '/') === 'memories/work-memory'
   && DEFAULT_MEMORY_SUBDIR.replace(/\\/g, '/') === 'data/dsh-work-memory/memory',
@@ -1528,11 +1540,13 @@ ok(VAULT_MIRROR_DIR_NAME && listVaultModules(mvVault, [ROOT_SUBDIR_MEMORY]).inde
   '受管目录 00_全局记忆 始终排除（不受新增排除项影响）')
 
 // setup-state：把根目录与子目录名一并暴露给客户端（客户端不硬编码这两个名字）
+// 反推逻辑跨平台（纯字符串），但 buildSetupState 先判绝对路径 → 用平台自适应存储根，两平台都真跑
+const WS_ROOT = process.platform === 'win32' ? 'E:/work' : join(TMP_ROOT, 'workroot')
 const stRoot = buildSetupState({
-  memoryDirValue: 'E:/work/memory-data', obsidianSyncValue: 'E:/work/obsidian-data/00_全局记忆',
+  memoryDirValue: WS_ROOT + '/memory-data', obsidianSyncValue: WS_ROOT + '/obsidian-data/00_全局记忆',
 })
-ok(stRoot.root && stRoot.root.value === 'E:/work' && stRoot.root.source === 'derived',
-  'setup-state.root：由两个目录反推为 E:/work（source=derived）')
+ok(stRoot.root && stRoot.root.value === WS_ROOT && stRoot.root.source === 'derived',
+  'setup-state.root：由两个目录反推为存储根（source=derived；' + WS_ROOT + '）')
 ok(stRoot.rootSubdirs && stRoot.rootSubdirs.memory === 'memory-data' && stRoot.rootSubdirs.vault === 'obsidian-data',
   'setup-state.rootSubdirs：把子目录名交给客户端（唯一真相源在宿主）')
 const stNoRoot = buildSetupState({ memoryDirValue: 'C:/Users/me/mem', obsidianSyncValue: '' })
@@ -1600,8 +1614,13 @@ ok(rDirsList.body.entries.length === 2 && rDirsList.body.entries.every((e) => e.
   '①entries = 只有目录（hidden 透传）')
 ok(rDirsList.body.truncated === false && typeof rDirsList.body.message === 'string' && /已列出 2 个目录/.test(rDirsList.body.message), '①truncated 透传 + 可读 message')
 ok(dirCalls[0].op === 'list' && dirCalls[0].path === 'C:/Users/me', '①原语确实被调用且入参原样透传')
-const rDirsRoot = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent('C:/'))
-ok(rDirsRoot.body.ok === true && (rDirsRoot.body.parent === '' || rDirsRoot.body.parent === 'C:/'), '①盘符根：没有可跳的上一级（parent 为空串）')
+// 盘符根（可跳的上一级为空）是 Windows 语义；POSIX 根的 parent 由后端另行定义，不在本断言范围
+if (process.platform === 'win32') {
+  const rDirsRoot = await callRoute(dirsHandler, 'GET', '/dirs?path=' + encodeURIComponent('C:/'))
+  ok(rDirsRoot.body.ok === true && (rDirsRoot.body.parent === '' || rDirsRoot.body.parent === 'C:/'), '①盘符根：没有可跳的上一级（parent 为空串）')
+} else {
+  console.log('  · 非 win32：无盘符根，跳过该条断言')
+}
 const rDirsDefault = await callRoute(dirsHandler, 'GET', '/dirs')
 ok(rDirsDefault.status === 200 && rDirsDefault.body.ok === true && dirCalls[dirCalls.length - 1].path === undefined,
   '①不传 path 参数 → 用宿主默认位置（list(undefined)，browse 后端回落用户主目录）')
