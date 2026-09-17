@@ -31,6 +31,7 @@
 | `lib/identity.js` | 「使用者身份」条目的读 / 计划 / 整条写入（区间替换 + 写后逐字节校验 + 回滚） | `parseEntries()`(`:100-103`)、`entryBody()`(`:111`)、`locateIdentityRanges()`(`:148-160`)、`readIdentity()`(`:183-217`)、`applyIdentity()`(`:410`)、`applyIdentityAsync()`(`:429`) |
 | `lib/domain.js` | 五个预置岗位正文 + 岗位正文生成通道 | `IDENTITY_PREFIX = '使用者身份：'`(`:20`)、`DOMAIN_PRESETS`(`:70-76`)、`generateDomainContent()`(`:139`) |
 | `lib/dirs.js` | 目录选择后端：`ctx.directoryPicker` 的 **browse / native 能力分支代理**（纯逻辑，返回 `{status, body}`） | `isFullyQualifiedPath()`(`:62-67`)、`getDirectoryPicker()`(`:73-81`)、`listDirectories()`(`:160-207`)、`createChildDirectory()`(`:215-241`) |
+| `lib/import.js` | **旧知识库导入**（只管知识库）：只读扫描 + 逐项对照清单 + 按勾选只补缺失（**绝不覆盖**）+ 写后 SHA256 校验与失败回滚 | `IMPORT_LIST_LIMIT`、`IMPORT_SENSITIVE_RULES`、`walkImportFiles()`、`detectSensitiveText()`、`isSafeImportRel()`、`scanImport()`、`applyImport()` |
 | `lib/preflight.js` | 可用性检查：环境就绪三项 / 两目录合法可写 / 两目录关系 / 重名文件占用 | `PREFLIGHT_ENV_IDS`(`:32`)、`relationOf()`(`:59-68`)、`NESTING_DETAIL`(`:79-84`)、`targetState()`(`:100-125`)、`checkDirectory()`(`:128-138`)、`runPreflight()`(`:284`) |
 | `lib/setup-state.js` | 核心配置页「当前生效值」：**只走宿主 `ctx.settings.describe`**，只读、不抛 | `SETUP_STATE_KEYS`(`:33-37`)、`buildSetupState()`(`:68-112`)、`readSetupState()`(`:132-191`)、`resolveMigrateSource()`(`:213-223`) |
 | `lib/settings.js` | 本体自己的设置命名空间（`repoRoot`），schemastery **动态导入降级** | `SETTINGS_NS`(`:31`)、`DEFAULTS`(`:34-36`)、`WPS_SETTINGS_SCHEMA`(`:39-45`)、`installSettings()`(`:72-104`)、动态 import(`:23-28`) |
@@ -85,7 +86,11 @@
 | 5 `link` | `POST /basedeck { ids:['settings'], dryRun:false, overrides:{ memoryDir, obsidianSyncDir:<obsidianDir>/00_全局记忆, obsidianDir } }`（`:3242-3247`） | `planSettings`(`:1348`)/`applySettings`(`:2098-2182`) | 写 `<DSH_HOME>/settings.yaml` 的两个键 `work-memory.memoryDir`、`work-memory.obsidianSyncDir`（目标键表 `lib/basedeck.js:157-162` 前两行）；只增改目标键、其余行与注释逐字节保留（`:2150-2159` 有「非目标键变化即回滚」校验）；写前备份 `<file>.bak-<stamp>` |
 | 6 `identity` | `POST /identity/save { content, memoryDir, dryRun:false }`（`:3252-3256`） | `lib/api.js:745-760` → `applyIdentityAsync()`（`lib/identity.js:429`） | 整条改写/追加 `<memoryDir>/MEMORY.md` 里以「使用者身份：」开头的条目（`lib/identity.js:134-170`、`:264-299`）；命中 0 条追加、1 条改写并保留原 `id`、多于 1 条拒绝（`:250-255`） |
 
-写完后：六步全绿才渲染「导入引导卡」（`client/index.js:3489-3503`，出现条件 `runPhase === 'done'`）。
+写完后再渲染「旧知识库导入卡」（客户端 `ImportCard`，出现条件 `runPhase === 'done'`；**只管知识库**，记忆体已在第 1 步迁完）。
+卡上的流程是**清单 → 勾选 → 逐项对照写入**：`POST /import/scan` 只读列出源目录每个文件的对照结果
+（`copy` 缺失可补 / `same` 已存在且一致 / `conflict` 已存在但内容不同 / `occupied` 同名位置是目录），
+`POST /import/apply` 只写使用者勾选且状态为 `copy` 的条目；`same` / `conflict` / `occupied` 一律保留目标内容
+（**绝不覆盖**）；命中敏感模式的条目只列出、由使用者自己勾选确认（设计定稿 §3.4 / §12 决议 8 与 13② / §12.1）。
 
 **根目录派生与反推**（1.1.3 的目录模型）：使用者只选一个「存储根目录」，两个子目录由 `deriveRootChildren()` 派生为 `<root>/memory-data` 与 `<root>/obsidian-data`（`lib/basedeck.js:2374-2389`）；子目录名经 `GET /setup-state` 的 `rootSubdirs` 下发，客户端**不硬编码**（`lib/setup-state.js:109`、`client/index.js:3034-3037`）；载入时 `inferRootDir()` 只在两个目录正好是同一父目录下的这两个名字时才反推根目录，推不出就留空、**不猜**（`lib/basedeck.js:2397-2407`、`lib/setup-state.js:100-103`）。
 
@@ -122,7 +127,9 @@
 
 ### 3.2 HTTP 路由（JSON API）
 
-前缀 `API_ROOT = /work-personal-secretary/api`（`lib/api.js:111`）。注册方式：1 条 `prefix` + 22 条 `exact`（`API_PATHS` 7 + `PAGE_PATHS` 2 + `CORE_API_EXACT_PATHS` 10 + `SETTINGS_API_PATHS` 3），共 **23 条**（`lib/api.js:1247-1298`、`:1356-1364`；口径见 `lib/api.js:31-43` 与 `CHANGELOG.md:31`）。桌面外壳的 fetch 桥只认 exact，故 prefix 之外另注册 exact。
+前缀 `API_ROOT = /work-personal-secretary/api`（`lib/api.js:116`）。注册方式：1 条 `prefix` + 24 条 `exact`（`API_PATHS` 7 + `PAGE_PATHS` 2 + `CORE_API_EXACT_PATHS` 12 + `SETTINGS_API_PATHS` 3），共 **25 条**（注册落在 `lib/api.js:1290-1341`，计数口径注释 `lib/api.js:33-45`、`:1358-1364`）。桌面外壳的 fetch 桥只认 exact，故 prefix 之外另注册 exact。
+
+> 出处列的行号为**写作时实测快照**，随代码增补可能整体漂移；定位以「路径 + 常量 / 函数名」为准（行号可临时 grep 校准）。
 
 | 方法 + 路径 | 入参 | 语义 / 落盘 | 出处 |
 |---|---|---|---|
@@ -147,6 +154,8 @@
 | GET `/setup-state` | — | 核心配置页当前生效值 + `rootSubdirs` + `note`（只读、不抛） | `lib/api.js:857-860`、`lib/setup-state.js:132-191` |
 | GET `/dirs` | `?path=`（可省；传了必须完全限定绝对路径） | 列一层目录 `{ok, kind, path, parent, home, crumbs, entries, truncated}` | `lib/api.js:868-877`、`lib/dirs.js:160-207` |
 | POST `/dirs/new` | `{ path, name }` | 在父目录下建**一层**子目录 | `lib/api.js:880-889`、`lib/dirs.js:215-241` |
+| POST `/import/scan` | `{ from, to }` | 旧知识库导入：**只读**列清单 + 逐项对照（同源保护） | `lib/api.js:904-915`、`lib/import.js` |
+| POST `/import/apply` | `{ from, to, rels:[], dryRun? }` | 按勾选只补缺失（`dryRun` 默认 `true`；**绝不覆盖**；路径相对） | `lib/api.js:918-932`、`lib/import.js` |
 | GET `/settings` | — | 白名单 ns 的设置枚举（只读） | `lib/settings-api.js:365-384` |
 | POST `/settings/write` | `{ ns, ops:[{op:'set'\|'unset', path:[key], value?}], revision?, dryRun? }` | 写子插件设置用户层；`dryRun` 默认 `true`；冲突 409 | `lib/settings-api.js:387-472`、`lib/api.js:1356-1364` |
 | GET `/experts/preview` | `?text=`（截断 2000） | 专家打分实时预览（只读，动态加载子插件 `match.js`） | `lib/settings-api.js:490-508` |
@@ -183,6 +192,7 @@
 - `lib/basedeck.js`：`BASEDECK_ITEMS`、`BASEDECK_ID_LIST`、`BASEDECK_APPLY_ORDER`、`SETTINGS_TARGETS`、`NONE_SENTINEL_VALUE`、`MEMORY_SKELETON_DIRS`、`ENTRY_SEP`、`parseMemoryEntries()`、`appendEntriesText()`、`resolveWorkspace()`、`safeWorkspaceParam()`、`resolveDeckContext()`、`planBaseDeck()`、`applyBaseDeckItem()`(`:1809`)、`applyBaseDeck()`、`publicPlan()`、`deriveRootChildren()`、`inferRootDir()`、`memoryTopSegmentInVault()`、`listVaultModules()`、`buildVaultHomeText()`、`buildToolOverviewText()`、`deriveVaultRootFromMirror()`(`:727`)、`withMemoryDirLock()`、`withMemoryDirLockAsync()`、`assertWritableDir()`、`atomicWriteText()`、`backupFile()`、`readFileStrict()`、`walkFilesForMigrate()`(`:2997`)、`LEGACY_MEMORY_SUBDIR`(`:2948`)、`MIGRATE_SOURCE_LABELS`(`:2951`)。
 - `lib/identity.js`：`LOCK_BUSY_MESSAGE`、`withMemoryDirLock`、`withMemoryDirLockAsync`（re-export，`:45`）、`ENTRY_DELIMITER`、`IDENTITY_TAG`、`PERSONA_MARK`、`splitEntryRanges()`、`parseEntries()`、`serializeEntries()`、`entryBody()`、`entryIdOf()`、`genIdentityId()`、`todayStamp()`、`locateIdentity()`、`locateIdentityRanges()`、`makeIdentityEntry()`、`resolveMemoryFile()`、`readIdentity()`、`applyIdentity()`、`applyIdentityAsync()`。
 - `lib/dirs.js`：`DIRS_PATH_MAX`、`DIRS_NAME_MAX`、`DIRS_ERROR_TEXT`、`isFullyQualifiedPath()`、`getDirectoryPicker()`、`pickerCapability()`、`pickerDegrade()`、`badInput()`、`pickerFailure()`、`listDirectories()`、`createChildDirectory()`。
+- `lib/import.js`：`IMPORT_LIST_LIMIT`、`IMPORT_TEXT_SCAN_BYTES`、`IMPORT_SENSITIVE_RULES`、`IMPORT_ITEM_STATES`、`IMPORT_STATE_RANK`、`isSafeImportRel()`、`isPathInside()`、`walkImportFiles()`、`detectSensitiveText()`、`scanImport()`、`applyImport()`。
 - `lib/preflight.js`：`PREFLIGHT_ENV_IDS`、`MEMORY_PLUGIN_NAME`、`MIN_PYTHON`、`volumeOf()`、`relationOf()`、`isSameOrNested()`、`NESTING_DETAIL`、`canWriteTo()`、`targetState()`、`checkDirectory()`、`environmentChecks()`、`pathChecks()`、`runPreflight()`。
 - `lib/probe.js`：`PROBE_ORDER`、`PROBE_LABELS`、`STATUSES`、`FIX_KINDS`、`NODE_ENGINE_RANGE`、`MIN_PYTHON`、`RECOMMENDED_PYTHON`、`REQUIRED_PIP_PACKAGES`、`SUB_PLUGIN_NAMES`、`WPS_PROGID`、`WINGET_PACKAGE_IDS`、`WINGET_FLAGS`、`FIX_WHITELIST`、`FIX_EXECUTION_ORDER`、`AUTO_FIXABLE_IDS`、`runProbes()`、`detectDesktopVersion()`、`readModuleVersion()`。
 - `lib/settings-api.js`：`SETTINGS_NS_WHITELIST`、`SETTINGS_NS_TITLES`、`SETTINGS_API_PATHS`、`PREVIEW_TEXT_LIMIT`、`MAX_WRITE_OPS`、`SCALAR_TYPES`、`EXPERTS_CONFIG_FALLBACK`、`normalizeSchemaFields()`、`normalizeNamespace()`、`buildSettingsView()`、`validateWriteRequest()`、`sanitizeMessage()`、`expertsModuleCandidates()`、`loadExpertsModules()`、`createSettingsApi()`。
@@ -201,11 +211,10 @@
 ### 3.7 本版未实现（明确边界）
 
 1. **「工具/」三个子目录的同步**：只建目录与 `00_工具总览.md`，文档明确写「本版只建了这三个目录和这份总览，没有实现任何同步」（`lib/basedeck.js:2686-2706`，总览正文 `:2700-2702`）。
-2. **旧知识库导入的清单与勾选**：导入引导卡只给入口与纪律，选完目录只记在界面 state（`client/index.js:3022-3033` 的 `imported`），清单/勾选/实际导入的文案自述「在后续版本提供；本轮先落定入口与纪律」（`client/index.js:311`、`:3499-3501`）。
-3. **记忆镜像的实际同步**：本模块只建 `00_全局记忆` 目录并写 `work-memory.obsidianSyncDir` 设置；同步动作属于 `dsh-work-memory`（`defaults/use.zh-CN.md:30`）。
-4. **旧记忆库目录的清理**：迁移**从不删除**旧目录（`lib/basedeck.js:3128` 固定 `oldDirKept: true`、`:3141-3142`），没有「迁移后清理」实现。
-5. **`/repo-root` 在桌面外壳的 exact 可达性**：未注册 exact（见 3.2 末尾注意）。
-6. **子插件「升级」只是覆盖重装**：安装动作只有「首次安装 / 覆盖重装」两种，没有版本高低比较（`lib/install.js:1155` 的 `overwrite` 仅在版本**相同**时为 true，回显为「覆盖重装」；`upToDate` 由 `bundledVersion === installedVersion` 判定，`:774`）。安装源恒为 `<repoRoot>/modules/<id>`（`:1087`），因此「升级」= 仓库副本刷新后重装。
+2. **记忆镜像的实际同步**：本模块只建 `00_全局记忆` 目录并写 `work-memory.obsidianSyncDir` 设置；同步动作属于 `dsh-work-memory`（`defaults/use.zh-CN.md:30`）。
+3. **旧记忆库目录的清理**：迁移**从不删除**旧目录（`lib/basedeck.js:3128` 固定 `oldDirKept: true`、`:3141-3142`），没有「迁移后清理」实现。
+4. **`/repo-root` 在桌面外壳的 exact 可达性**：未注册 exact（见 3.2 末尾注意）。
+5. **子插件「升级」只是覆盖重装**：安装动作只有「首次安装 / 覆盖重装」两种，没有版本高低比较（`lib/install.js:1155` 的 `overwrite` 仅在版本**相同**时为 true，回显为「覆盖重装」；`upToDate` 由 `bundledVersion === installedVersion` 判定，`:774`）。安装源恒为 `<repoRoot>/modules/<id>`（`:1087`），因此「升级」= 仓库副本刷新后重装。
 
 ---
 
@@ -267,11 +276,11 @@
 | `scripts/defaults-test.mjs` | 说明文件健康 + **敏感过滤** + md/HTML/记忆条目三者同源 + `files` 白名单 | `npm run defaults`(`:42`) |
 | `scripts/settings-api-test.mjs` | 三条路由契约、写入校验、409、降级不崩、专家预览、**真实子插件 schema 键数静态核对** | `node scripts/settings-api-test.mjs`（`package.json` 未提供同名 npm script） |
 
-补充：`npm run check`（`package.json:36`）对 12 个文件做 `node --check`；`npm run build:defaults`（`:43`）在**改了 `defaults/*.md` 之后必须重跑**，否则 `defaults-test` 的逐字节比对会红（`scripts/build-defaults-html.mjs:7-11`）。仓库级 CI 会遍历 `*/scripts/*-test.mjs` 并逐套执行（`.github/workflows/ci.yml:47-62`）。
+补充：`npm run check`（`package.json:36`）对 13 个文件做 `node --check`；`npm run build:defaults`（`:43`）在**改了 `defaults/*.md` 之后必须重跑**，否则 `defaults-test` 的逐字节比对会红（`scripts/build-defaults-html.mjs:7-11`）。仓库级 CI 会遍历 `*/scripts/*-test.mjs` 并逐套执行（`.github/workflows/ci.yml:47-62`）。
 
 ### 4.6 已核实的注释 / 文档滞后点（维护时按代码为准）
 
-1. `lib/api.js:1315-1320` 的 `installSettingsExactRoutes` 文档注释仍写「CORE_API_EXACT_PATHS（5）→ 17 exact + 1 prefix = 总数 18 条」；实际数组是 10 项（`:130`），实际注册 **22 exact + 1 prefix = 23**，`lib/api.js:34-39` 与 `lib/index.js:17-20`（后者也写 18）同属滞后。以代码与 `:34-39` 为准。
+1. 路由计数注释：`lib/api.js` 的三处（文件头、常量注释、`installSettingsExactRoutes` 文档注释）与 `lib/index.js:16-20`、`:95-96` 已在 T5-5 一并更正为 **24 exact + 1 prefix = 25**（旧值 22 / 23、index.js 旧值 18）。以 `CORE_API_EXACT_PATHS` 常量与 `scripts/probe-test.mjs` 的集合全等断言为准。
 2. `lib/index.js:62` 的 `SUB_PLUGINS` 用途文案写「常驻一位身份专家，其余按问题归属补位」，与专家库 0.3.0「身份退场（`identityExpert` 留空 = 不常驻）」的现状不一致；同问题也出现在仓库根 `defaults/global-memory.seed.md:17` 的【专家库】条目。该字段只用于展示（不参与安装判定），但会误导维护者。
 3. `lib/basedeck.js:968-969` 注释称「basedeck 自己不读 settings.yaml」，而同一函数在 `:888-890` 确实通过 `readSettingsValues()` 读了 `<DSH_HOME>/settings.yaml`（只读、用于计划）。准确口径见 2.5 节。
 4. `.github/workflows/ci.yml:44-45` 的注释写「探针 probe 134 / 安装引擎 install 169 / 底座契约 basedeck 179 / 设置 API settings-api 109」，与 `CHANGELOG.md:36` 记录的通过数（149 / 244 / 415 / 112）不一致，注释未随脚本增补更新。

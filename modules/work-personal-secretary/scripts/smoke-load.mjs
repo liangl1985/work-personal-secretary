@@ -3223,5 +3223,165 @@ effectQueue = []
 d20cTree = expand(reg.render({ initialTab: 'config' }))
 ok(Boolean(d20Layer(d20cTree)), '配置页：native 不可用时同样打开应用内浏览器')
 
+console.log('\n[21] 旧知识库导入卡（清单 → 勾选 → 逐项对照写入）')
+
+const I21_SCAN = {
+  ok: true, code: 'ok',
+  from: 'D:/old/vault', to: 'D:/ws/obsidian-data',
+  message: '源目录 D:/old/vault → 知识库 D:/ws/obsidian-data：可补 2 个缺失文件（30 字节）；已存在且一致 1 个（跳过）；同名但内容不同 1 个（保留目标，不覆盖）；其中 1 个命中敏感模式（未预勾选，需你确认）',
+  stats: { total: 4, copy: 2, same: 1, conflict: 1, occupied: 0, sensitive: 1, noise: 0, bytes: 30, listed: 4 },
+  truncated: false,
+  items: [
+    { rel: 'a.md', bytes: 20, state: 'copy', sensitive: [] },
+    { rel: '子目录/secret.md', bytes: 10, state: 'copy', sensitive: [{ id: 'email', label: '电子邮箱', line: 1 }] },
+    { rel: 'c.md', bytes: 5, state: 'conflict', sensitive: [] },
+    { rel: 'b.md', bytes: 5, state: 'same', sensitive: [] },
+  ],
+}
+let i21ApplyBody = null
+const D21_ROOT = {
+  ok: true, kind: 'browse', path: 'D:/old', parent: 'D:/',
+  crumbs: [{ name: 'D:', path: 'D:/' }, { name: 'old', path: 'D:/old' }],
+  entries: [{ name: 'vault', path: 'D:/old/vault' }], truncated: false, message: '',
+}
+// 进入子目录后要回它自己的 path（否则「选用此目录」会把父目录当源，测试就测不到真源了）
+const D21_SUB = {
+  ok: true, kind: 'browse', path: 'D:/old/vault', parent: 'D:/old',
+  crumbs: [{ name: 'D:', path: 'D:/' }, { name: 'old', path: 'D:/old' }, { name: 'vault', path: 'D:/old/vault' }],
+  entries: [], truncated: false, message: '',
+}
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
+  if (u.indexOf('/import/scan') >= 0) return jsonRes(I21_SCAN)
+  if (u.indexOf('/import/apply') >= 0) {
+    try { i21ApplyBody = JSON.parse(String((opts && opts.body) || '{}')) } catch (err) { i21ApplyBody = null }
+    return jsonRes({
+      ok: true, dryRun: false, copied: [{ rel: 'a.md' }], skipped: [], rejected: [], bytesWritten: 20,
+      detail: '已补 1 个文件（20 字节）到 D:/ws/obsidian-data；写后大小 + SHA256 校验通过；源目录只读，全程未改动',
+    })
+  }
+  if (u.indexOf('/preflight') >= 0) return jsonRes({ ok: true, ready: true, checks: [], summary: { total: 0, ok: 0, warn: 0, block: 0 } })
+  if (u.indexOf('/basedeck') >= 0) {
+    let body = {}
+    try { body = JSON.parse(String((opts && opts.body) || '{}')) } catch (err) { body = {} }
+    if ((opts && opts.method) !== 'POST') return jsonRes({ ok: true, dryRun: true, migrateFrom: '', results: [], wroteAny: false })
+    return jsonRes({ ok: true, dryRun: false, results: (body.ids || []).map((id) => ({ id: id, ok: true, dryRun: false, action: '写入 ' + id, target: 'D:/fake/' + id })), wroteAny: true })
+  }
+  if (u.indexOf('/identity/save') >= 0) return jsonRes({ ok: true, status: 'rewrite', entryId: 'id-1', detail: '已整条改写「使用者身份」条目' })
+  if (u.indexOf('/setup-state') >= 0) return jsonRes({
+    ok: true, memoryDir: { value: 'D:/ws/memory-data', source: 'settings' },
+    obsidianDir: { value: 'D:/ws/obsidian-data', source: 'settings' },
+    domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' },
+  })
+  if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/dirs') >= 0) return jsonRes(u.indexOf('vault') >= 0 ? D21_SUB : D21_ROOT)
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let i21Tree = expand(reg.render({ initialTab: 'core' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(80)
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+const i21Gate = findButtons(i21Tree).filter((b) => label(b) === '点击此处继续')[0]
+if (i21Gate) i21Gate.props.onClick()
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+const i21Inputs = findAll(i21Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
+if (i21Inputs[0]) i21Inputs[0].props.onChange({ target: { value: 'D:/ws' } })
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+const i21Sel = findAll(i21Tree, (x) => x.type === 'select', [])[0]
+if (i21Sel) i21Sel.props.onChange({ target: { value: 'infosec' } })
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+const i21Save = findButtons(i21Tree).filter((b) => label(b) === '保存配置并开始')[0]
+ok(Boolean(i21Save), '导入卡前置：保存按钮存在（目录 + 岗位已齐）')
+if (i21Save) i21Save.props.onClick()
+await tick(200)
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+let i21Text = collect(i21Tree, []).join(' | ')
+ok(i21Text.indexOf('已有旧知识库要带过来？') >= 0, '链条跑完后出现导入卡')
+
+// ① 选源目录（应用内浏览器）→ 自动列清单
+calls.length = 0
+const i21BrowseBtn = findButtons(i21Tree).filter((b) => label(b) === '浏览… 选择知识库文件夹')[0]
+ok(Boolean(i21BrowseBtn), '导入卡有「浏览… 选择知识库文件夹」入口')
+if (i21BrowseBtn) i21BrowseBtn.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+const i21Entry = findAll(i21Tree, (x) => x.props && x.props['data-dir-entry'] === 'D:\\old\\vault', [])[0]
+ok(Boolean(i21Entry), '选目录弹层列出源目录候选')
+if (i21Entry) i21Entry.props.onClick()
+await tick(60)
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+const i21Pick = findAll(i21Tree, (x) => x.props && x.props['data-dir-pick'], [])[0]
+if (i21Pick) i21Pick.props.onClick()
+await tick(100)
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+i21Text = collect(i21Tree, []).join(' | ')
+const i21ScanCall = calls.filter((c) => c.url.indexOf('/import/scan') >= 0)[0]
+ok(Boolean(i21ScanCall), '选用源目录后自动发 POST /import/scan（只读列清单）')
+ok(Boolean(i21ScanCall) && String(i21ScanCall.body).indexOf('vault') >= 0 && String(i21ScanCall.body).indexOf('obsidian-data') >= 0,
+  '扫描请求带上源目录与知识库目录')
+ok(i21Text.indexOf('缺失·可补') >= 0 && i21Text.indexOf('已存在·内容不同') >= 0 && i21Text.indexOf('已存在·一致') >= 0,
+  '清单按逐项对照结果渲染（可补 / 冲突 / 一致）')
+ok(i21Text.indexOf('子目录/secret.md') >= 0, '清单逐项显示相对路径（含子目录）')
+ok(i21Text.indexOf('敏感：电子邮箱 L1') >= 0, '敏感项带标签与行号（供使用者确认）')
+
+// ② 默认勾选：可补且非敏感 → 勾上；敏感 / 冲突 / 一致 → 不勾（后两者不可勾）
+const i21RowOf = (tree, rel) => findAll(tree, (x) => x.props && x.props['data-import-rel'] === rel, [])[0]
+const i21BoxOf = (tree, rel) => {
+  const row = i21RowOf(tree, rel)
+  if (!row) return null
+  return (row.children || []).filter((c) => c && c.type === 'input')[0] || null
+}
+const i21A = i21BoxOf(i21Tree, 'a.md')
+const i21Secret = i21BoxOf(i21Tree, '子目录/secret.md')
+const i21C = i21BoxOf(i21Tree, 'c.md')
+const i21B = i21BoxOf(i21Tree, 'b.md')
+ok(Boolean(i21A) && i21A.props.checked === true && i21A.props.disabled !== true, '可补项默认勾选（a.md）')
+ok(Boolean(i21Secret) && i21Secret.props.checked !== true && i21Secret.props.disabled !== true, '敏感项默认不勾、但可手动勾（子目录/secret.md）')
+ok(Boolean(i21C) && i21C.props.disabled === true, '冲突项不可勾（c.md：保留目标，不覆盖）')
+ok(Boolean(i21B) && i21B.props.disabled === true, '已一致项不可勾（b.md）')
+
+// ③ 手动勾上敏感项 → 写入所选
+if (i21Secret) i21Secret.props.onChange()
+await tick(50)
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+const i21ApplyBtn = findButtons(i21Tree).filter((b) => label(b).indexOf('写入所选') >= 0)[0]
+ok(Boolean(i21ApplyBtn) && i21ApplyBtn.props.disabled !== true, '「写入所选」可点（实测 ' + String(i21ApplyBtn && label(i21ApplyBtn)) + '）')
+ok(Boolean(i21ApplyBtn) && label(i21ApplyBtn).indexOf('（2）') >= 0, '按钮计数等于勾选数（2）')
+if (i21ApplyBtn) i21ApplyBtn.props.onClick()
+await tick(150)
+hookCursor = 0
+effectQueue = []
+i21Tree = expand(reg.render({ initialTab: 'core' }))
+ok(Boolean(i21ApplyBody) && i21ApplyBody.dryRun === false, '写入请求显式 dryRun:false')
+ok(Boolean(i21ApplyBody) && String(i21ApplyBody.rels.join(',')) === 'a.md,子目录/secret.md',
+  '只上报可勾选项（rels 只含 state=copy）：' + String(i21ApplyBody && i21ApplyBody.rels))
+ok(Boolean(i21ApplyBody) && String(i21ApplyBody.to).indexOf('obsidian-data') >= 0, '写入目标用派生出来的知识库目录')
+i21Text = collect(i21Tree, []).join(' | ')
+ok(i21Text.indexOf('本次已补 1 个文件') >= 0, '写入后回执显示已补数量')
+ok(collect(i21RowOf(i21Tree, 'a.md'), []).join('|').indexOf('已存在·一致') >= 0, '已补的那一行就地变成「已存在·一致」')
+
 console.log('\n结果：' + pass + ' 通过 / ' + fail + ' 失败')
 process.exit(fail === 0 ? 0 : 1)
