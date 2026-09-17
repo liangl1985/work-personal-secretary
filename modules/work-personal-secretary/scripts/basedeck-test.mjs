@@ -23,6 +23,7 @@
  *  [23] ⑪ 目录选择：完全限定路径判定 / browse 列举与建目录 / native 与缺服务降级 / 非法入参 400 / 同源保护
  *  [25] ⑫ 旧知识库导入：清单逐项对照 / 只补缺失不覆盖 / 敏感标记 / 路径护栏 / dry-run / 失败回滚 / 两条 exact 路由
  *  [26] T5-7 目录布局识别：根下有 memory-data/obsidian-data → new；根上直接有 🏠 主页.md / 00_全局记忆 → legacy；两者都有 → mixed
+ *  [27] T5-4 配置收尾镜像同步：dry-run 不触发 / 真写后同步到 00_全局记忆 / 未配镜像目录与设置缺失只跳过 / 候选路径 profile→repo→bundled
  *
  * 隔离红线（本测试的全部保证）：
  *   - 所有夹具（假 DSH_HOME / 假仓库 / 假工作区 / 假设置 / 假记忆库）都在 os.tmpdir() 下自建；
@@ -89,7 +90,7 @@ import {
 import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
 import { NESTING_DETAIL, isSameOrNested, pathChecks, relationOf, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
-import { buildSetupState, resolveMigrateSource } from '../lib/setup-state.js'
+import { buildSetupState, readObsidianSyncDir, resolveMigrateSource } from '../lib/setup-state.js'
 import { isFullyQualifiedPath, listDirectories } from '../lib/dirs.js'
 import {
   IMPORT_LIST_LIMIT,
@@ -99,6 +100,7 @@ import {
   isSafeImportRel,
   scanImport,
 } from '../lib/import.js'
+import { memoryMirrorCandidates } from '../lib/mirror-sync.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MODULE_DIR = join(HERE, '..')
@@ -1887,6 +1889,62 @@ section('[26] 目录布局识别（detectVaultLayout）：新 / 旧 / 混合 / �
   ok(detectVaultLayout('D:/ws', { existsSync: () => false }).layout === 'empty', '目录存在但两种都没有 → empty')
   ok(detectVaultLayout('', { existsSync: () => false }).layout === 'unknown', '空串 → unknown')
   ok(detectVaultLayout('D:/ws', { existsSync: () => { throw new Error('EACCES') } }).layout === 'empty', 'fs 抛错时吞掉不崩（→ empty）')
+}
+
+// ───────────────────── [27] T5-4 配置收尾：写身份成功后同步一次记忆镜像 ─────────────────────
+section('[27] T5-4 配置收尾镜像同步（POST /identity/save 的 mirror 字段）')
+{
+  const mirrorRoot = join(TMP_ROOT, 'mirrorcase')
+  const mirrorMem = join(mirrorRoot, 'memory-data')
+  const mirrorVault = join(mirrorRoot, 'vault')
+  const mirrorOut = join(mirrorVault, VAULT_MIRROR_DIR_NAME)
+  mkdirSync(mirrorMem, { recursive: true })
+  rmSync(mirrorVault, { recursive: true, force: true })
+  const ctxOf = (value) => installSetupCtx([
+    { ns: 'work-memory', schema: SETUP_MEM_SCHEMA, value: value, revision: 1, applies: 'live' },
+  ])
+
+  // ① dry-run 不触发（只有真写成功才有收尾动作）
+  const hDry = ctxOf({ memoryDir: mirrorMem, obsidianSyncDir: mirrorOut })
+  const mDry = await callRoute(hDry, 'POST', '/identity/save', { memoryDir: mirrorMem, content: '从事信息安全售前工作。' }, REQ_HEADERS)
+  ok(mDry.body.dryRun === true && mDry.body.mirror && mDry.body.mirror.skipped === true && mDry.body.mirror.reason === '未触发',
+    '①dry-run 不触发镜像同步（mirror.skipped + 未触发）')
+  ok(!existsSync(mirrorVault), '①dry-run 后镜像目录没有被创建')
+
+  // ② 真写成功 → 触发一次同步（profile / repo 两个候选在夹具里都不存在，落到 bundled）
+  const hReal = ctxOf({ memoryDir: mirrorMem, obsidianSyncDir: mirrorOut })
+  const mReal = await callRoute(hReal, 'POST', '/identity/save', { memoryDir: mirrorMem, content: '从事信息安全售前工作。', dryRun: false }, REQ_HEADERS)
+  const mirror = mReal.body.mirror || {}
+  ok(mReal.body.ok === true && mReal.body.wroteAny === true, '②真写身份成功（wroteAny=true）')
+  ok(mirror.ok === true && mirror.files >= 1 && mirror.source === 'bundled',
+    '②写身份后同步了记忆镜像：files=' + mirror.files + ' · source=' + mirror.source + ' · pruned=' + mirror.pruned)
+  ok(existsSync(join(mirrorOut, 'MEMORY.md')), '②镜像目录确实出现 MEMORY.md（不是只回了个 ok）')
+  ok(readFileSync(join(mirrorOut, 'MEMORY.md'), 'utf8') === readFileSync(join(mirrorMem, 'MEMORY.md'), 'utf8'),
+    '②镜像内容与记忆库逐字节一致')
+  ok(mirror.dir === undefined && mirror.reason === undefined, '②响应只回数值与枚举，不回传路径')
+
+  // ③ 没配镜像目录 → 跳过，且不影响写入结果
+  const hNone = ctxOf({ memoryDir: mirrorMem })
+  const mNone = await callRoute(hNone, 'POST', '/identity/save', { memoryDir: mirrorMem, content: 'x', dryRun: false }, REQ_HEADERS)
+  ok(mNone.body.ok === true && mNone.body.mirror.skipped === true && /缺少记忆库目录或镜像目录/.test(String(mNone.body.mirror.reason)),
+    '③未配置镜像目录 → 跳过（写入结果不受影响）')
+
+  // ④ 设置服务缺失 → 取不到镜像目录，同样只跳过
+  const hNoSettings = installSetupCtx(null)
+  const mNoSettings = await callRoute(hNoSettings, 'POST', '/identity/save', { memoryDir: mirrorMem, content: 'y', dryRun: false }, REQ_HEADERS)
+  ok(mNoSettings.body.ok === true && mNoSettings.body.mirror.skipped === true, '④设置服务缺失 → 仍写成功，只跳过镜像同步')
+  ok(await readObsidianSyncDir({}) === '', '④readObsidianSyncDir 无设置服务 → 空串（不抛）')
+
+  // ⑤ 候选路径纯函数（与 expertsModuleCandidates 同构）
+  ok(memoryMirrorCandidates({}).length === 0, '⑤三个根目录都空 → 无候选（明确降级，不猜）')
+  const cand = memoryMirrorCandidates({ profileDir: 'P', repoRoot: 'R', moduleDir: 'M' })
+  ok(cand.map((c) => c.source).join(',') === 'profile,repo,bundled', '⑤候选顺序 = profile → repo → bundled')
+  // 用 indexOf >= 0（bundled 候选是 join(moduleDir,'..',…)；moduleDir 为单段相对路径时会被 path 规范化掉前两段）
+  ok(cand.every((c) => c.file.split(BS).join('/').indexOf('dsh-work-memory/lib/backup.js') >= 0),
+    '⑤候选统一指向 dsh-work-memory/lib/backup.js（同仓库同批发布）')
+  const candReal = memoryMirrorCandidates({ moduleDir: MODULE_DIR })
+  ok(candReal.length === 1 && candReal[0].file.split(BS).join('/').indexOf('/dsh-work-memory/lib/backup.js') > 0,
+    '⑤绝对 moduleDir（真实调用形态）→ bundled 候选是完整的同级模块路径')
 }
 
 // ───────────────────── 收尾 ─────────────────────

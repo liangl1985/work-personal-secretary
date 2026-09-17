@@ -73,7 +73,7 @@ body{margin:0;padding:0;background:#f4f6f8}
 <p><strong>三条自动提醒</strong></p>
 <p>摘要里会直接出现提醒：全局条目超过 20 条该整理了、超过 7 天没做周保养、有待判断的条目等你定夺。看到提醒就顺手处理一下。</p>
 <p><strong>备份与镜像</strong></p>
-<ul><li><strong>自动备份</strong>：每次写库后复制一份整库，保留最近 7 份。</li><li><strong>镜像</strong>：把记忆内容同步一份到你的知识库里（00_全局记忆 文件夹），方便你用笔记软件直接翻。只在你「记住 / 建关联 / 冷记忆被召回」之后同步，所以<strong>刚配好时镜像区是空的，这是正常的</strong>。</li></ul>
+<ul><li><strong>自动备份</strong>：每次写库后复制一份整库，保留最近 7 份。</li><li><strong>镜像</strong>：把记忆内容同步一份到你的知识库里（00_全局记忆 文件夹），方便你用笔记软件直接翻。<strong>配置向导跑到最后一步（写你的身份）时会同步一次</strong>，所以你配好就能看到内容；之后只在你「记住 / 建关联 / 冷记忆被召回」之后再同步。</li></ul>
 <p><strong>七条命令</strong>（在 DSH 里直接输入）</p>
 <table><thead><tr><th>命令</th><th>作用</th></tr></thead><tbody><tr><td>/memory_review</td><td>看待确认的关键记忆（批准要回面板点）</td></tr><tr><td>/memory_archive</td><td>立刻执行归档</td></tr><tr><td>/memory_backup</td><td>立刻手动备份</td></tr><tr><td>/memory_audit</td><td>分类巡检：各范围条数、可疑条目、关联枢纽与孤儿</td></tr><tr><td>/memory_maintain</td><td>周保养：到期转冷 + 未来 7 天到期清单 + 转热候选</td></tr><tr><td>/memory_promote</td><td>把归档里的某条按原样取回热区</td></tr><tr><td>/memory_triage</td><td>转冷预审：列队列、或逐条判保留/转冷</td></tr></tbody></table>
 <p><strong>边界（要知道的）</strong></p>
@@ -161,8 +161,8 @@ body{margin:0;padding:0;background:#f4f6f8}
 <p>你在核心配置页选的<strong>存储根目录</strong>就是根。它下面由插件自动建两个文件夹：</p>
 <table><thead><tr><th>文件夹</th><th>装什么</th></tr></thead><tbody><tr><td>memory-data</td><td>记忆库：你的偏好、决定、项目记录、日志、归档</td></tr><tr><td>obsidian-data</td><td>知识库：你的资料、笔记、文档，以及 00_全局记忆 镜像</td></tr></tbody></table>
 <p>这两个名字是插件定好的，别改名、别搬走；要换位置就在设置里改根目录。<strong>如果你以前已经填过别的路径</strong>，页面会显示为「已单独指定」并原样保留，它不会擅自改你的路径。</p>
-<p><strong>镜像区为什么一开始是空的</strong></p>
-<p>镜像就是把记忆同步一份到知识库的 00_全局记忆 文件夹里，方便你用笔记软件直接翻。它只在记忆库<strong>发生写入之后</strong>才同步，所以刚配好时是空的，属正常。</p>
+<p><strong>镜像区什么时候有内容</strong></p>
+<p>镜像就是把记忆同步一份到知识库的 00_全局记忆 文件夹里，方便你用笔记软件直接翻。<strong>配置向导跑到最后一步（写你的身份）时会同步一次</strong>，配好就能看到内容；之后每次记忆库<strong>发生写入</strong>（记住 / 建关联 / 冷记忆被召回）也会再同步一次。</p>
 <p><strong>工具文件夹本版只有框架</strong></p>
 <p>知识库里会看到一个工具文件夹，下面分技能、脚本、MCP 三个子目录。这个版本<strong>只建了框架、不做同步</strong>，需要什么先手工放。</p>
 <p><strong>已有旧知识库怎么搬</strong></p>

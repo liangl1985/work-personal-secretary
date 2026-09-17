@@ -174,11 +174,13 @@ settings.watch(next => { cfg = next; Object.assign(liveArchiveCfg/liveBackupCfg)
 
 ### 2.3 Obsidian 镜像**何时**被同步（重点）
 
-`syncMemoryToObsidian()` **不是定时任务、也不在每轮注入时执行**；只在以下三处被调用：
+`syncMemoryToObsidian()` **不是定时任务、也不在每轮注入时执行**。本模块内有以下三处调用：
 
 1. `memory_remember` **成功写库之后**（`handleRemember` 的锁外懒任务，与归档/备份同批）—— `lib/tools.js:142-146`、`57-63`；
 2. `memory_link` 建边成功之后（锁内直接调用）—— `lib/tools.js:243-249`；
 3. `memory_recall(scope=archive)` 命中并转热之后（`promoted.length > 0` 才同步）—— `lib/tools.js:171-174`。
+
+**第四处来自集成体**（2026-09-17 起，T5-4）：`work-personal-secretary` 的「一键配置」执行链跑到最后一步（`POST /identity/save` 真写身份）时会**尽力调用一次** —— 配置动作本身不经过上面三条写路径，不补这一次，使用者刚配好时镜像区就是空的。集成体侧按候选目录加载 `lib/backup.js` 而非包入口（其 `lib/index.js` 顶层依赖宿主 peer），失败只影响那一次同步、不判配置失败；实现见 `modules/work-personal-secretary/lib/mirror-sync.js`，本模块为此在 `lib/index.js` 额外导出了 `syncMemoryToObsidian`（公开入口，供宿主环境使用）。
 
 同步语义（`lib/backup.js:90-147`）：
 

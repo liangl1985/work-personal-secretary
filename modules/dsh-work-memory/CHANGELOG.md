@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 1.0.9 — 2026-09-17（供集成体调用的镜像同步导出 · T5-4）
+
+- `lib/index.js` 新增 `export { syncMemoryToObsidian } from './backup.js'`：集成体（work-personal-secretary）在「一键配置」执行链收尾后要触发一次镜像同步（T5-4），这是给它用的**包入口导出**。本模块**自身的触发点不变**（仍是 remember / link / 冷召回转热三条写路径，见 `lib/tools.js:61`）。
+- 集成体侧实际按候选目录加载 `lib/backup.js`：本包 `lib/index.js` 顶层 import 了宿主 peer `@deepseek-ai/dsh-tools`，集成体侧无法保证可解析（实测 `ERR_MODULE_NOT_FOUND`）。本导出作为**公开入口**保留，供宿主环境直接使用。
+- 影响面：仅新增一个导出，**本模块运行行为不变**；集成体侧需重启 DSH 才生效（其 `lib/**` 变更）。
+
 ## 1.0.8 — 面板补「立即备份 / 立即归档」（2026-09-17）
 
 - **补两个面板按钮**：后端 `POST /backup/run` 与 `POST /archive/run` 早已在白名单里（`lib/api.js:228`、`:238`），

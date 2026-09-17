@@ -1,5 +1,16 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.6 — 2026-09-17（T5-4 配置收尾补一次镜像同步 · T5-5 导入卡复核提交）
+
+- **T5-4「一键配置跑完镜像区仍为空」**：镜像同步（`syncMemoryToObsidian`）原本只在 work-memory 的三条写路径（remember / link / 冷召回转热）后触发，「一键配置」不经过它们，于是使用者跑完六步后知识库里的 `00_全局记忆` 仍是空的。现补一次收尾触发：
+  - 新增 `lib/mirror-sync.js`：`syncMirrorBestEffort()` 在执行链**最后一步**（`POST /identity/save` 真写成功）后同步一次；`dryRun` 不触发；找不到实现 / 同步失败一律降级并回可读 reason，**不改变本次写入结果**。
+  - **入口怎么选（实测三条路）**：不用裸包名 `import('dsh-work-memory')`（集成体零依赖，repo 直跑解析不到该包）；不导 `lib/index.js`（其顶层 import 宿主 peer `@deepseek-ai/dsh-tools`，集成体侧无法保证可解析，实测 `ERR_MODULE_NOT_FOUND`）；最终按候选目录（profile → repo → bundled）加载 `lib/backup.js` —— 该文件只用 node 内置，且与本体同仓库、同批次发布。
+  - `lib/setup-state.js` 新增只读 `readObsidianSyncDir(ctx)`：取 `work-memory.obsidianSyncDir` 的**原值**。`/setup-state` 返回的 `obsidianDir` 是**反推出来的知识库根**（供页面展示），与同步函数要的镜像目录不是一个东西。
+  - `POST /identity/save` 响应新增 `mirror` 字段（`{ok, skipped, source?, files?, pruned?, reason?}`；只回数值与枚举，不回路径）。
+- **T5-5 导入卡（子代理交付，复核后随本版提交）**：`scripts/basedeck-test.mjs` 的 ⑫ 段改用独立夹具（修掉夹具复用导致的 CI 三条红），节号重排 `[25]`（T5-7 段改 `[26]`）；`scripts/smoke-load.mjs` 新增 `[21]` 导入卡端到端 20 条断言；路由计数口径 24 exact + 1 prefix = 25。
+- **文档**：`ARCHITECTURE.md` 文件表补 `lib/mirror-sync.js`、`npm run check` 覆盖 13 → 14 文件、3.7 删去已落地的「旧知识库导入」与「记忆镜像的实际同步」两项。
+- ⚠️ 需重启 DSH（`lib/**`、`client/**` 变更）。
+
 ## 1.1.5 — 2026-09-17（静态检查进 CI · profile 探针 · 目录布局识别 · 桌宠测试进 CI）
 
 - **T5-2 未定义标识符静态检查**：新增 `tsconfig.checkjs.json` + `scripts/check-undefined.mjs`，补 `node --check` 抓不到的「引用了本文件既未声明、也未 import 的名字」（只认 TS2304 / TS2552）。只读、零第三方依赖；本机找不到 tsc 时**跳过放行**（不把没装 tsc 的人弄红），CI 用 `--require-tsc` 判失败。**上线当天即抓到两处真缺陷**——本轮 T5-7 开发中 `lib/basedeck.js` 少 `existsSync` import、`lib/api.js` 少 `detectVaultLayout` import，`node --check` 全部放行。`package.json` 加 `check:undefined`。

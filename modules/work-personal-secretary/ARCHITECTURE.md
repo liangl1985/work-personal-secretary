@@ -32,8 +32,9 @@
 | `lib/domain.js` | 五个预置岗位正文 + 岗位正文生成通道 | `IDENTITY_PREFIX = '使用者身份：'`(`:20`)、`DOMAIN_PRESETS`(`:70-76`)、`generateDomainContent()`(`:139`) |
 | `lib/dirs.js` | 目录选择后端：`ctx.directoryPicker` 的 **browse / native 能力分支代理**（纯逻辑，返回 `{status, body}`） | `isFullyQualifiedPath()`(`:62-67`)、`getDirectoryPicker()`(`:73-81`)、`listDirectories()`(`:160-207`)、`createChildDirectory()`(`:215-241`) |
 | `lib/import.js` | **旧知识库导入**（只管知识库）：只读扫描 + 逐项对照清单 + 按勾选只补缺失（**绝不覆盖**）+ 写后 SHA256 校验与失败回滚 | `IMPORT_LIST_LIMIT`、`IMPORT_SENSITIVE_RULES`、`walkImportFiles()`、`detectSensitiveText()`、`isSafeImportRel()`、`scanImport()`、`applyImport()` |
+| `lib/mirror-sync.js` | **记忆镜像收尾同步**（T5-4）：执行链最后一步写身份成功后，尽力同步一次 `00_全局记忆`；入口按候选目录（profile → repo → bundled）加载 work-memory 的 `lib/backup.js`，失败只降级不阻断 | `memoryMirrorCandidates()`、`syncMirrorBestEffort()` |
 | `lib/preflight.js` | 可用性检查：环境就绪三项 / 两目录合法可写 / 两目录关系 / 重名文件占用 | `PREFLIGHT_ENV_IDS`(`:32`)、`relationOf()`(`:59-68`)、`NESTING_DETAIL`(`:79-84`)、`targetState()`(`:100-125`)、`checkDirectory()`(`:128-138`)、`runPreflight()`(`:284`) |
-| `lib/setup-state.js` | 核心配置页「当前生效值」：**只走宿主 `ctx.settings.describe`**，只读、不抛 | `SETUP_STATE_KEYS`(`:33-37`)、`buildSetupState()`(`:68-112`)、`readSetupState()`(`:132-191`)、`resolveMigrateSource()`(`:213-223`) |
+| `lib/setup-state.js` | 核心配置页「当前生效值」：**只走宿主 `ctx.settings.describe`**，只读、不抛 | `SETUP_STATE_KEYS`(`:33-37`)、`buildSetupState()`(`:68-112`)、`readSetupState()`、`readObsidianSyncDir()`（单取镜像目录**原值**，T5-4）、`resolveMigrateSource()` |
 | `lib/settings.js` | 本体自己的设置命名空间（`repoRoot`），schemastery **动态导入降级** | `SETTINGS_NS`(`:31`)、`DEFAULTS`(`:34-36`)、`WPS_SETTINGS_SCHEMA`(`:39-45`)、`installSettings()`(`:72-104`)、动态 import(`:23-28`) |
 | `lib/settings-api.js` | 配置页宿主侧：白名单 ns 只读枚举 / 白名单写入（revision 栅栏）/ 专家打分预览 | `SETTINGS_NS_WHITELIST`(`:36`)、`SETTINGS_API_PATHS`(`:42`)、`validateWriteRequest()`(`:206-265`)、`sanitizeMessage()`(`:271-276`)、`createSettingsApi()`(`:346-508`) |
 | `lib/md.js` | 极简 Markdown → HTML（随包说明网页），零依赖 + 输出转义 + 链接白名单 | `renderMarkdown()`(`:80-142`)、`renderFragment()`(`:182-189`)、`renderPage()`(`:197-208`)、`PAGE_CSS`(`:152-171`)、`DOC_SCOPE_CLASS = 'wps-doc'`(`:145`) |
@@ -146,7 +147,7 @@
 | GET `/preflight` | `?memoryDir=&obsidianDir=&workspace=` | 只读可用性检查 `{ok, ready, checks[], summary, checkedAt}` | `lib/api.js:698-728`、`lib/preflight.js:284` |
 | POST `/preflight` | 同上三个字段 | 同语义（同源保护） | `lib/api.js:701-707` |
 | GET `/identity` | `?memoryDir=`（只允许配置的记忆库目录或其子路径，否则 403） | 身份条目状态与正文 | `lib/api.js:733-742`、`lib/identity.js:183-217` |
-| POST `/identity/save` | `{ content(≤4000), memoryDir?, dryRun? }` | `dryRun` 默认 `true`；整条写入身份（异步锁） | `lib/api.js:745-760`、`lib/identity.js:429` |
+| POST `/identity/save` | `{ content(≤4000), memoryDir?, dryRun? }` | `dryRun` 默认 `true`；整条写入身份（异步锁）。**真写成功时**追加一次尽力而为的记忆镜像同步（T5-4），响应多一个 `mirror` 字段（`{ok, skipped, source?, files?, pruned?, reason?}`） | `lib/api.js`、`lib/identity.js:429`、`lib/mirror-sync.js` |
 | GET `/domain/list` | — | 五个预置岗位正文 `{items:[{id,label,content}], maxChars}` | `lib/api.js:763-771`、`lib/domain.js:70-76` |
 | POST `/domain/generate` | `{ name, content, provider?, model? }` | 生成岗位正文；`promptEnhancer` → `llm` → 无模型服务时 **503** | `lib/api.js:775-804`、`lib/domain.js:139` |
 | GET `/docs` | — | 两个说明文件的存在性与路径（服务端拼路径） | `lib/api.js:807-818` |
@@ -196,7 +197,8 @@
 - `lib/preflight.js`：`PREFLIGHT_ENV_IDS`、`MEMORY_PLUGIN_NAME`、`MIN_PYTHON`、`volumeOf()`、`relationOf()`、`isSameOrNested()`、`NESTING_DETAIL`、`canWriteTo()`、`targetState()`、`checkDirectory()`、`environmentChecks()`、`pathChecks()`、`runPreflight()`。
 - `lib/probe.js`：`PROBE_ORDER`、`PROBE_LABELS`、`STATUSES`、`FIX_KINDS`、`NODE_ENGINE_RANGE`、`MIN_PYTHON`、`RECOMMENDED_PYTHON`、`REQUIRED_PIP_PACKAGES`、`SUB_PLUGIN_NAMES`、`WPS_PROGID`、`WINGET_PACKAGE_IDS`、`WINGET_FLAGS`、`FIX_WHITELIST`、`FIX_EXECUTION_ORDER`、`AUTO_FIXABLE_IDS`、`runProbes()`、`detectDesktopVersion()`、`readModuleVersion()`。
 - `lib/settings-api.js`：`SETTINGS_NS_WHITELIST`、`SETTINGS_NS_TITLES`、`SETTINGS_API_PATHS`、`PREVIEW_TEXT_LIMIT`、`MAX_WRITE_OPS`、`SCALAR_TYPES`、`EXPERTS_CONFIG_FALLBACK`、`normalizeSchemaFields()`、`normalizeNamespace()`、`buildSettingsView()`、`validateWriteRequest()`、`sanitizeMessage()`、`expertsModuleCandidates()`、`loadExpertsModules()`、`createSettingsApi()`。
-- `lib/setup-state.js`：`SETUP_STATE_NAMESPACES`、`SETUP_STATE_KEYS`、`pickKeyValue()`、`buildSetupState()`、`readSetupState()`、`resolveMigrateSource()`。
+- `lib/setup-state.js`：`SETUP_STATE_NAMESPACES`、`SETUP_STATE_KEYS`、`pickKeyValue()`、`buildSetupState()`、`readSetupState()`、`readObsidianSyncDir()`、`resolveMigrateSource()`。
+- `lib/mirror-sync.js`：`memoryMirrorCandidates()`、`syncMirrorBestEffort()`。
 - `lib/settings.js`：`SETTINGS_NS`、`DEFAULTS`、`WPS_SETTINGS_SCHEMA`、`installSettings()`。
 - `lib/md.js`：`escapeHtml()`、`renderInline()`、`renderMarkdown()`、`DOC_SCOPE_CLASS`、`PAGE_CSS`、`renderFragment()`、`renderPage()`。
 - `lib/domain.js`：`IDENTITY_PREFIX`、`DOMAIN_MAX_CHARS`、`DOMAIN_NAME_MAX_CHARS`、`DOMAIN_PURPOSE`、`DOMAIN_PRESETS`、`isPresetDomainId()`、`findPresetDomain()`、`normalizeDomainText()`、`buildDomainPrompt()`、`generateDomainContent()`。
@@ -211,7 +213,7 @@
 ### 3.7 本版未实现（明确边界）
 
 1. **「工具/」三个子目录的同步**：只建目录与 `00_工具总览.md`，文档明确写「本版只建了这三个目录和这份总览，没有实现任何同步」（`lib/basedeck.js:2686-2706`，总览正文 `:2700-2702`）。
-2. **记忆镜像的实际同步**：本模块只建 `00_全局记忆` 目录并写 `work-memory.obsidianSyncDir` 设置；同步动作属于 `dsh-work-memory`（`defaults/use.zh-CN.md:30`）。
+2. **镜像的持续同步**不属本模块：本模块只在执行链收尾触发**一次**（见 3.2 的 `/identity/save`）；此后仍由 `dsh-work-memory` 在其三条写路径后各自触发，本模块不接管、不做定时或文件监听。
 3. **旧记忆库目录的清理**：迁移**从不删除**旧目录（`lib/basedeck.js:3128` 固定 `oldDirKept: true`、`:3141-3142`），没有「迁移后清理」实现。
 4. **`/repo-root` 在桌面外壳的 exact 可达性**：未注册 exact（见 3.2 末尾注意）。
 5. **子插件「升级」只是覆盖重装**：安装动作只有「首次安装 / 覆盖重装」两种，没有版本高低比较（`lib/install.js:1155` 的 `overwrite` 仅在版本**相同**时为 true，回显为「覆盖重装」；`upToDate` 由 `bundledVersion === installedVersion` 判定，`:774`）。安装源恒为 `<repoRoot>/modules/<id>`（`:1087`），因此「升级」= 仓库副本刷新后重装。
@@ -276,7 +278,7 @@
 | `scripts/defaults-test.mjs` | 说明文件健康 + **敏感过滤** + md/HTML/记忆条目三者同源 + `files` 白名单 | `npm run defaults`(`:42`) |
 | `scripts/settings-api-test.mjs` | 三条路由契约、写入校验、409、降级不崩、专家预览、**真实子插件 schema 键数静态核对** | `node scripts/settings-api-test.mjs`（`package.json` 未提供同名 npm script） |
 
-补充：`npm run check`（`package.json:36`）对 13 个文件做 `node --check`；`npm run build:defaults`（`:43`）在**改了 `defaults/*.md` 之后必须重跑**，否则 `defaults-test` 的逐字节比对会红（`scripts/build-defaults-html.mjs:7-11`）。仓库级 CI 会遍历 `*/scripts/*-test.mjs` 并逐套执行（`.github/workflows/ci.yml:47-62`）。
+补充：`npm run check`（`package.json:36`）对 14 个文件做 `node --check`；`npm run build:defaults`（`:43`）在**改了 `defaults/*.md` 之后必须重跑**，否则 `defaults-test` 的逐字节比对会红（`scripts/build-defaults-html.mjs:7-11`）。仓库级 CI 会遍历 `*/scripts/*-test.mjs` 并逐套执行（`.github/workflows/ci.yml:47-62`）。
 
 ### 4.6 已核实的注释 / 文档滞后点（维护时按代码为准）
 

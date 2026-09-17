@@ -30,6 +30,13 @@ import { installSettings } from './settings.js'
 export const name = 'work-memory'
 export const inject = ['systemPrompt', 'tools', 'commands', 'settings', 'webServer']
 
+/**
+ * 供集成体（work-personal-secretary）在「一键配置」执行链收尾时调用一次（T5-4）。
+ * 本模块自身的触发点仍只有三条写路径（remember / link / 冷召回转热，见 lib/tools.js:61）；
+ * 这里把同一实现**导出**，避免集成体为了调它去依赖本包的非公开子路径。
+ */
+export { syncMemoryToObsidian } from './backup.js'
+
 export function apply(ctx, config = {}) {
   // 0.3.0：配置来自原生设置命名空间（组合配置作 base 层，设置页写用户覆盖层）
   const settings = installSettings(ctx, config)

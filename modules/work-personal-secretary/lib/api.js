@@ -103,7 +103,7 @@ import {
 import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
 // 1.1.3 新增能力的宿主侧实现（T6 可用性检查 / T7 身份写入 / T8 岗位生成 / T9 随包网页）
 import { runPreflight } from './preflight.js'
-import { readSetupState, resolveMigrateSource } from './setup-state.js'
+import { readObsidianSyncDir, readSetupState, resolveMigrateSource } from './setup-state.js'
 import { applyIdentityAsync, readIdentity } from './identity.js'
 import { DOMAIN_MAX_CHARS, DOMAIN_NAME_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFIX, generateDomainContent } from './domain.js'
 import { renderFragment, renderMarkdown, renderPage } from './md.js'
@@ -111,6 +111,8 @@ import { renderFragment, renderMarkdown, renderPage } from './md.js'
 import { createChildDirectory, listDirectories } from './dirs.js'
 // 旧知识库导入（清单 → 勾选 → 逐项对照写入；只补缺失、不覆盖）
 import { applyImport, scanImport } from './import.js'
+// 记忆镜像同步（T5-4）：执行链收尾后尽力同步一次，失败不阻断配置
+import { syncMirrorBestEffort } from './mirror-sync.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
@@ -754,14 +756,38 @@ export function installApi(ctx, deps = {}) {
         try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
         const dirParam = typeof body.memoryDir === 'string' ? body.memoryDir.trim().slice(0, 1024) : ''
         // 用**异步**锁版本：等待 .work-memory.lock 时让出事件循环，不阻塞宿主进程
+        const targetMemoryDir = dirParam || currentMemoryDir()
         const result = await applyIdentityAsync({
-          memoryDir: dirParam || currentMemoryDir(),
+          memoryDir: targetMemoryDir,
           content: typeof body.content === 'string' ? body.content.slice(0, 4000) : '',
           now: installNow,
           dryRun: body.dryRun !== false,
           env: installEnv,
         })
-        return sendJson(res, 200, result.ok ? result : failBody(result))
+        // T5-4：执行链**最后一步**（写身份）落地后，尽力同步一次记忆镜像。
+        // 镜像同步原本只在 work-memory 的三条写路径后触发（remember / link / 冷召回转热），
+        // 「一键配置」不经过它们，于是使用者跑完六步后镜像区仍是空的。这里补一次触发。
+        // 口径：dryRun 不触发；同步失败**不改变**本次写入结果（只回一个 mirror 字段供界面/日志）。
+        let mirror = { ok: false, skipped: true, reason: '未触发' }
+        if (result.ok && body.dryRun === false) {
+          try {
+            const repoInfo = currentRepoRoot()
+            mirror = await syncMirrorBestEffort({
+              memoryDir: targetMemoryDir,
+              // 镜像目录取设置原值；setup-state 的 obsidianDir 是反推出来的知识库根，不是它
+              obsidianDir: await readObsidianSyncDir(ctx),
+              paths: {
+                profileDir: currentProfileDir(),
+                repoRoot: repoInfo && typeof repoInfo.repoRoot === 'string' ? repoInfo.repoRoot : '',
+                moduleDir: installModuleDir,
+              },
+              logger: ctx.logger,
+            })
+          } catch (err) {
+            mirror = { ok: false, skipped: true, reason: '镜像同步调用失败（不影响写入）：' + sanitizeErr(err) }
+          }
+        }
+        return sendJson(res, 200, result.ok ? { ...result, mirror: mirror } : failBody(result))
       }
 
       // GET /domain/list —— 五个预置岗位的正文（只读；客户端下拉直接取用）

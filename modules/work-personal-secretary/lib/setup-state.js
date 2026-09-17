@@ -190,6 +190,29 @@ export async function readSetupState(ctx, deps = {}) {
   return state
 }
 
+/**
+ * 单独读「记忆镜像目录」＝ work-memory.obsidianSyncDir 的**原值**（不反推）。
+ *
+ * 为什么单独给一个口：`readSetupState` 返回的 `obsidianDir` 是**知识库根目录**
+ * （由镜像目录反推出来、给页面展示用），而镜像同步函数要的是**镜像目录本身**
+ * （通常是 `<知识库根>/00_全局记忆`）。两者不是一个东西，反推再拼回来会多一层约定耦合。
+ *
+ * 同一条纪律：只走 `ctx.settings.describe`，不读 settings.yaml；服务缺失 / 读取失败 → 空串，**不抛**。
+ * @param {object} ctx cordis context
+ * @returns {Promise<string>}
+ */
+export async function readObsidianSyncDir(ctx) {
+  const settings = (ctx && ctx.settings && typeof ctx.settings.describe === 'function') ? ctx.settings : null
+  if (!settings) return ''
+  try {
+    const described = await settings.describe({ redactSecrets: true })
+    const view = buildSettingsView(described, { writable: false })
+    return pickKeyValue(view, SETUP_STATE_KEYS.obsidianSyncDir.ns, SETUP_STATE_KEYS.obsidianSyncDir.key).value
+  } catch (e) {
+    return ''
+  }
+}
+
 /** 目录存在性判定（静默：不存在 / 无权限都算「不是目录」） */
 function isDirQuiet(dir) {
   try { return statSync(dir).isDirectory() } catch (e) { return false }
