@@ -121,6 +121,9 @@ window.__ModuleLoader__.load({
       'panel.failed': '读取失败',
       'panel.none': '资源通道未就绪（无提供方）',
       'panel.admin': '配置请在 设置 → 插件 中调整',
+      'panel.backupRun': '立即备份',
+      'panel.archiveRun': '立即归档',
+      'panel.archiveRunConfirm': '确认归档？',
     }
     const EN = {
       'tab.title': 'Memory',
@@ -164,6 +167,9 @@ window.__ModuleLoader__.load({
       'panel.failed': 'Read failed',
       'panel.none': 'Resource channel unavailable (no provider)',
       'panel.admin': 'Configure under Settings → Plugins',
+      'panel.backupRun': 'Back up now',
+      'panel.archiveRun': 'Archive now',
+      'panel.archiveRunConfirm': 'Confirm archive?',
     }
     const localT = (key) => ZH[key] ?? key
 
@@ -305,12 +311,13 @@ window.__ModuleLoader__.load({
     // ------------------------------------------------ 原生状态：store 席位
     const panelStore = defineStore({
       persist: 'work-memory.panel',
-      init: () => ({ scope: 'global', name: '', newName: '', confirmArchive: false, expanded: '', draft: '', search: '', revision: 0, busy: false, message: '' }),
+      init: () => ({ scope: 'global', name: '', newName: '', confirmArchive: false, confirmArchiveRun: false, expanded: '', draft: '', search: '', revision: 0, busy: false, message: '' }),
       actions: {
         setScope: (d, scope) => { d.scope = scope; d.confirmArchive = false; d.expanded = '' },
         setName: (d, value) => { d.name = value; d.confirmArchive = false; d.expanded = '' },
         setNewName: (d, value) => { d.newName = value },
         setConfirmArchive: (d, value) => { d.confirmArchive = value },
+        setConfirmArchiveRun: (d, value) => { d.confirmArchiveRun = value },
         /** 展开/收起某条记忆的「相关」列表（再点一次收起） */
         toggleExpanded: (d, id) => { d.expanded = d.expanded === id ? '' : id },
         setDraft: (d, value) => { d.draft = value },
@@ -377,6 +384,7 @@ window.__ModuleLoader__.load({
       const fileScope = scope === 'project' || scope === 'daily'
       const newName = useStore((s) => s.newName)
       const confirmArchive = useStore((s) => s.confirmArchive)
+      const confirmArchiveRun = useStore((s) => s.confirmArchiveRun)
       const listKind = scope === 'daily' ? 'dailies' : 'projects'
       const listsRes = useResource(fileScope ? addr('lists', { kind: listKind, r: revision }) : '')
       const fileList = Array.isArray(listsRes?.value?.list) ? listsRes.value.list : []
@@ -499,6 +507,21 @@ window.__ModuleLoader__.load({
         }
       }
 
+      /** 立即备份：调宿主 /backup/run（与 /memory_backup 命令同一入口，全量复制、保留最近 N 份） */
+      async function runBackup() {
+        await act('/backup/run', {})
+      }
+
+      /**
+       * 立即归档：调宿主 /archive/run（与 /memory_archive 命令同一入口）。
+       * 两步确认 —— 归档会按 TTL 移动条目，误点代价高。
+       */
+      async function runArchiveNow() {
+        if (!confirmArchiveRun) { actions.setConfirmArchiveRun(true); return }
+        actions.setConfirmArchiveRun(false)
+        await act('/archive/run', {})
+      }
+
       /** 归档当前项目分类：整文件移入 ARCHIVE/（两步确认，不物理删除） */
       async function archiveProject() {
         if (!pickedName) return
@@ -589,6 +612,11 @@ window.__ModuleLoader__.load({
             value: search,
             onChange: (e) => actions.setSearch(e.target.value),
           }),
+        ),
+        h('div', { className: 'lm-row' },
+          h('button', { className: 'lm-btn small', disabled: busy, onClick: runBackup }, tr('panel.backupRun')),
+          h('button', { className: 'lm-btn small' + (confirmArchiveRun ? ' danger' : ''), disabled: busy, onClick: runArchiveNow },
+            confirmArchiveRun ? tr('panel.archiveRunConfirm') : tr('panel.archiveRun')),
         ),
         h('div', { className: 'lm-section' },
           h('h3', null, scope === 'archive' ? tr('panel.archive') : tr('panel.entries') + (scope === 'archive' ? '' : ' · ' + (fileScope ? pickedName || '-' : String(entries.length)))),

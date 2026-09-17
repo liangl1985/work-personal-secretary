@@ -1011,35 +1011,6 @@ export function apply(ctx: Context): void {
         },
       }))
 
-      // GET: composite action strips. The client fetches the WebP lazily so the
-      // browser bundle stays small and strip decode never blocks startup; a long
-      // immutable cache makes repeated action switches instant.
-      const stripDir = new URL('../assets/pet/action-sheets/', import.meta.url)
-      const stripFiles = new Set(STRIP_ACTIONS.map(action => `${action}.webp`))
-      disposers.push(ws.register({
-        kind: 'prefix',
-        path: '/workspace-tokenpet/strips/',
-        handler: async (req, res) => {
-          const method = String((req as { method?: unknown })?.method ?? '').toUpperCase()
-          if (method !== 'GET') { json(res, 405, { error: 'method not allowed' }); return }
-          const rawUrl = (req as { url?: unknown })?.url
-          const url = typeof rawUrl === 'string' ? new URL(rawUrl, 'http://localhost') : null
-          const file = url?.pathname.split('/').pop() ?? ''
-          if (!stripFiles.has(file)) { json(res, 404, { error: 'unknown strip' }); return }
-          try {
-            const data = await readFile(new URL(file, stripDir))
-            const sr = res as { writeHead(c: number, h: Record<string, string>): void; end(b: unknown): void }
-            sr.writeHead(200, {
-              'content-type': 'image/webp',
-              'content-length': String(data.byteLength),
-              'cache-control': 'public, max-age=31536000, immutable',
-            })
-            sr.end(data)
-          } catch {
-            json(res, 404, { error: 'strip file not found on disk' })
-          }
-        },
-      }))
 
       // ---- Character packs (runtime-selectable skins) ----------------------
       // Listing is a directory scan and every file is read per request, so a new

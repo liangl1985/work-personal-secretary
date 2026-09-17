@@ -64,7 +64,7 @@
 | `POST /workspace-tokenpet/prompt/enhance` | `src/index.ts:753` | 使用者主动触发，经既有模型路由增强；**不改写、不记录完整提示词**（`README.md:42-43`） | 不落盘（消息以 `source.kind='plugin'` 注入，:803） |
 | `GET /workspace-tokenpet/skins` | `src/index.ts:1040` | `listSkinPacks` 扫描套装目录 → 清单（`manifestUrl`） | 读 `~/.dsh/data/workspace-tokenpet/skins/`（`src/skins.ts:81`） |
 | `GET /workspace-tokenpet/skins/file?id=&file=` | `src/index.ts:1074` | `readSkinFile` + 路径校验（`isSafeSkinId`/`isSafeSkinFile`，`src/skins.ts:207`） | 读套装文件 |
-| `GET /workspace-tokenpet/skins/`（前缀） / `/strips/`（前缀） | `src/index.ts:1088` / :1009 | 兼容开放 Web 载体的前缀路由（桌面载体只认 exact，`README.md:24-26`） | 读套装文件 / 内置条带 |
+| `GET /workspace-tokenpet/skins/`（前缀） | `src/index.ts:1088` | 兼容开放 Web 载体的前缀路由（桌面载体只认 exact，`README.md:24-26`） | 读套装文件 |
 
 > 路由**方法**（GET/POST）取自 `src/index.ts:13-15` 的文件头注释与 `README.md:36-43`；`webServer.register({kind,path,handler})` 的 handler 内部**没有** `req.method` 分支（`src/index.ts` 全文无 `req.method`），即方法语义由各 handler 的读写行为定义。
 
@@ -95,7 +95,7 @@
 
 ### HTTP 路由（宿主半注册的精确/前缀路由）
 
-`GET`：`/workspace-tokenpet/usage`（`src/index.ts:951`）、`/usage/lifetime`（:901）、`/usage/trend`（:854）、`/usage/trend/status`（:824）、`/index/status`（:650）、`/skins`（:1040）、`/skins/file`（:1074）、前缀 `/skins/`（:1088）、前缀 `/strips/`（:1009）。
+`GET`：`/workspace-tokenpet/usage`（`src/index.ts:951`）、`/usage/lifetime`（:901）、`/usage/trend`（:854）、`/usage/trend/status`（:824）、`/index/status`（:650）、`/skins`（:1040）、`/skins/file`（:1074）、前缀 `/skins/`（:1088）。
 `POST`：`/usage/reset`（:966）、`/usage/restore`（:988）、`/usage/lifetime/clear-history`（:923）、`/usage/trend/repair`（:876）、`/usage/trend/repair/cancel`（:887）、`/index/build`（:695）、`/index/sync`（:713）、`/index/cancel`（:739）、`/prompt/enhance`（:753）。
 错误契约示例：`index/build` 发现已有可用索引时返回 409「usable index already exists; use /workspace-tokenpet/index/sync」（:702）；`index/sync` 无可用索引时返回 409「no usable index exists; run /workspace-tokenpet/index/build first」（:720）。
 

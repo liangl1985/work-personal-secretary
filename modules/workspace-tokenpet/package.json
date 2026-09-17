@@ -1,6 +1,6 @@
 {
   "name": "workspace-tokenpet",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "DSH 桌面宠物（独立模块）：多形象套装运行时化、用量与上下文面板、趋势维护、开关与默认形象设置。",
   "type": "module",
   "main": "lib/index.js",

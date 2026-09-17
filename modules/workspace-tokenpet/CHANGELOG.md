@@ -7,6 +7,18 @@
 > 1.0.0 之前的条目**保留原文**：其中「补丁 / patches / 上游基线 / 定制层」等措辞属于当时的
 > 历史形态记录，对应的文件已在 1.0.0 中删除。
 
+## 1.0.3 — 死路由清理（2026-09-17）
+
+- **删除 `/workspace-tokenpet/strips/`（prefix）遗留路由**：它读 `../assets/pet/action-sheets/`，
+  而本模块**没有 `assets/` 目录**（2026-09-17 逐插件盘点实测），且 prefix 形态在桌面载体本就 404
+  （`src/skins.ts:107-113` 的实测结论）。1.0.2 已用 exact 路由 `/workspace-tokenpet/builtin-strip`
+  取代它，客户端从未调用过它，属彻底死代码。删除后 `src/index.ts` 1180 → 1151 行；
+  **`STRIP_ACTIONS` 常量保留**（新路由仍在用）。
+- `ARCHITECTURE.md` 的路由表与路由清单同步去掉该路由（两处）。
+- 影响面：仅宿主半（`src/index.ts` → `lib/index.js` 已重建）；**客户端未改动**，不需刷新前端缓存。
+- 门禁：`tsc -p tsconfig.json` 重建 exit 0 · `typecheck` exit 0 · `node --import tsx --test tests/lina-skins.test.mjs` exit 0。
+- 来源：2026-09-17 主会话处理待办 **T6-⑤**（死路由处置）。
+
 ## 1.0.2 — 启动开销与用量索引（2026-09-17）
 
 ### 内置图集改为按需取（启动路径不再背 22.5 MB）

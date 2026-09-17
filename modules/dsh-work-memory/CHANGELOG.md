@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## 1.0.8 — 面板补「立即备份 / 立即归档」（2026-09-17）
+
+- **补两个面板按钮**：后端 `POST /backup/run` 与 `POST /archive/run` 早已在白名单里（`lib/api.js:228`、`:238`），
+  但客户端从未调用（2026-09-17 逐插件盘点发现）—— 使用者只能靠 `/memory_backup`、`/memory_archive` 命令
+  或「写库时懒触发」来备份与归档。现于右侧「记忆库」面板加两个按钮：
+  - **立即备份** → `/backup/run`（全量复制、保留最近 N 份）；
+  - **立即归档** → `/archive/run`，**两步确认**（先变「确认归档？」并转危险色，再点才执行）——
+    归档会按 TTL 移动条目，误点代价高。
+- 中英文案各三条（`panel.backupRun` / `panel.archiveRun` / `panel.archiveRunConfirm`）。
+- 影响面：**仅客户端**（`client/index.js`），宿主半未改动；**需重启 DSH 生效**（客户端 bundle 在启动时加载）。
+- 门禁：`node --check client/index.js` exit 0 · `node scripts/regression.mjs` 87/0。
+- 来源：2026-09-17 逐插件盘点发现的「有接口、没按钮」（待办 T6-⑥）。
+
 ## 1.0.7 — 2026-09-17（镜像范围口径修正 · 模块说明）
 
 - `README.md` 的 Obsidian 镜像文件清单补 `ARCHIVE/`（与 `lib/backup.js` 实现一致）。
