@@ -10,9 +10,9 @@
     "对账",
     "投标技术文件"
   ],
-  "version": "1.3",
-  "updated": "2026-09-15",
-  "_note": "内置默认层。使用者自定义层放 ~/.dsh/data/dsh-doc-suite/templates/<id>.json，同名键深度覆盖本文件。v1.1 依据 36_投标文件格式画像（主人真实投标文件实测）：页面上下 3.17/左右 2.54、heading_1=14pt 黑体加粗、heading_2/3=12pt 黑体、新增 doc_title 角色与表格列对齐规则。",
+  "version": "1.4",
+  "updated": "2026-09-17",
+  "_note": "内置默认层。使用者自定义层放 ~/.dsh/data/dsh-doc-suite/templates/<id>.json，同名键深度覆盖本文件。字号与角色口径依 36_投标文件格式画像（heading_1=14pt 黑体加粗、heading_2/3=12pt 黑体、doc_title 角色与表格列对齐规则）。**页边距自 2026-09-17 起改为通用默认（上 2.54 / 下 2.54 / 左 3.17 / 右 3.17 cm，主人定）** —— 原投标口径（上下 3.17 / 左右 2.54）属私有口径，按「私有口径进自定义层」原则留给使用者自建（如 bid.json），不再随内置层分发。",
   "colors": {
     "_note": "色板 v1.2（2026-09-15）：文字色与装饰色分离。accent / semantic.warn 用于文字与关键数据（对白底对比度均 >=4.5:1，WCAG 实测）；accent_decor / warn_decor 用于底纹/边框/图形等装饰场景，保留原亮色。依据 39_多套文档风格方案 的对比度实测。",
     "primary": "1F4E79",
@@ -888,10 +888,10 @@
       "size": "A4",
       "orientation": "portrait",
       "margins_cm": {
-        "top": 3.17,
-        "bottom": 3.17,
-        "left": 2.54,
-        "right": 2.54
+        "top": 2.54,
+        "bottom": 2.54,
+        "left": 3.17,
+        "right": 3.17
       }
     },
     "fonts": {

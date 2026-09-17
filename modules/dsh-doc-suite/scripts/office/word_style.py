@@ -13,7 +13,7 @@ from docx.enum.table import WD_ALIGN_VERTICAL
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from docx.shared import Cm, Pt
+from docx.shared import Cm, Pt, RGBColor
 
 from doc_roles import classify_paragraph, detect_numbering_scheme, resolve_column_align
 from style_spec import assert_content_unchanged, word_snapshot
@@ -272,6 +272,22 @@ def _ensure_style(doc, name: str):
         return st
 
 
+def _set_style_color(style, hexv: str) -> None:
+    """设置命名样式的字体颜色，并**清掉 themeColor**。
+
+    2026-09-17（公文风格）：python-docx 默认模板的 Heading 色走 `w:themeColor="accent1"`，
+    只写 `w:color w:val` 时 WPS 仍可能按主题色渲染（实测公文标题呈蓝色）；
+    故写入 val 后显式删掉 themeColor，规格里的 color 才真正生效。
+    """
+    col = style.font.color
+    col.rgb = RGBColor.from_string(hexv.lstrip("#").upper())
+    el = col._element
+    if el is not None:
+        el.attrib.pop(qn("w:themeColor"), None)
+        el.attrib.pop(qn("w:themeTint"), None)
+        el.attrib.pop(qn("w:themeShade"), None)
+
+
 def _apply_doc_title(par, tcfg: dict, size_pt: float) -> None:
     """封面大标题：直接格式（不新建样式，避免污染文档样式表）。"""
     pf = par.paragraph_format
@@ -285,6 +301,8 @@ def _apply_doc_title(par, tcfg: dict, size_pt: float) -> None:
         run.font.size = Pt(float(size_pt))
         if tcfg.get("bold") is not None:
             run.font.bold = bool(tcfg["bold"])
+        if tcfg.get("color"):
+            run.font.color.rgb = RGBColor.from_string(str(tcfg["color"]).lstrip("#").upper())
         _set_rfonts(run._element, tcfg.get("latin", "仿宋"), tcfg.get("ea", "仿宋"))
 
 
@@ -392,6 +410,8 @@ def apply_word_style(src, spec: dict, out=None, dry_run: bool = False) -> dict:
         style.font.size = Pt(size_pt)
         if "bold" in cfg:
             style.font.bold = bool(cfg["bold"])
+        if cfg.get("color"):
+            _set_style_color(style, str(cfg["color"]))
         _set_rfonts(style.element, fdef.get("latin", "仿宋"), fdef.get("ea", "仿宋"))
         pf = style.paragraph_format
         if cfg.get("align") in _ALIGN:

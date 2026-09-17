@@ -58,13 +58,35 @@ def _set_east_asia(rpr, font=EAST_ASIA_FONT):
     rfonts.set(qn("w:eastAsia"), font)
 
 
+def _runs_md(para) -> str:
+    """把段落 runs 拼成行内 Markdown（加粗 run 包 `**`）。
+
+    2026-09-17 修：导出侧此前用 `para.text`（纯文本），与生成侧的 `**加粗**` 解析不对称，
+    导致「导出 md → 再生成」往返丢失加粗。加粗标记不紧贴空白（与 _MD_BOLD_RE 的 `**非空**` 对齐）；
+    表格单元格不加粗（单元格按 ` | ` 切分且生成侧对单元格不做行内解析，写 `**` 会被当字面量）。
+    """
+    parts = []
+    for r in para.runs:
+        t = r.text or ""
+        if not t:
+            continue
+        core = t.strip()
+        if r.bold and core:
+            lead = t[: len(t) - len(t.lstrip())]
+            trail = t[len(t.rstrip()) :]
+            parts.append(lead + "**" + core + "**" + trail)
+        else:
+            parts.append(t)
+    return "".join(parts)
+
+
 def read_docx(path):
     from docx import Document
 
     doc = Document(path)
     out = []
     for para in doc.paragraphs:
-        text = para.text.strip()
+        text = _runs_md(para).strip()
         if not text:
             continue
         style = (para.style.name or "").lower()

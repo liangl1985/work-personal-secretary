@@ -1,0 +1,168 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "govdoc",
+  "name": "党政机关公文",
+  "extends": "standard",
+  "mood": "庄重、规范、不装饰",
+  "best_for": [
+    "公文",
+    "通知",
+    "通报",
+    "请示",
+    "报告（上行文）",
+    "函",
+    "纪要（正式印发）"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-17",
+  "_note": "公文风格（依 GB/T 9704-2012《党政机关公文格式》要点，2026-09-17 新增；主人定 Word 只保留「standard 标准 + 公文」两套对外口径）。extends=standard，只写差异键。查证数值（两处来源交叉一致）：页边距 上3.7/下3.5/左2.8/右2.6 cm、版心 156×225 mm；正文三号仿宋；层次序数 一、用黑体 · （一）用楷体 · 1./(1) 用仿宋；公文标题二号小标宋居中；每页 22 行、每行 28 字；页码四号半角宋体阿拉伯数字、编排在版心下边缘之下（一字线上距版心下边缘 7mm）。来源：北京市老干部局《图解〈党政机关公文格式2012版〉国家标准及WORD制作方法》· 保山学院纪检监察网（均 2026-09-17 读取）。⚠️ 字体口径：沿用主人 2026-09-15 决定「用 仿宋 而非 仿宋_GB2312（后者多数机器未装、有回退风险）」；公文标题规范为二号方正小标宋简体，本机未装该字体，故用 宋体 + 加粗 等价替代（装有小标宋者改 doc_title.ea 为「方正小标宋简体」、bold 改 false 即可）。出口径以 specs 与国标原文为准。",
+  "word": {
+    "page": {
+      "margins_cm": {
+        "top": 3.7,
+        "bottom": 3.5,
+        "left": 2.8,
+        "right": 2.6
+      }
+    },
+    "fonts": {
+      "body": {
+        "latin": "Times New Roman",
+        "ea": "仿宋"
+      },
+      "h1": {
+        "latin": "Times New Roman",
+        "ea": "黑体"
+      },
+      "h2": {
+        "latin": "Times New Roman",
+        "ea": "楷体"
+      },
+      "h3": {
+        "latin": "Times New Roman",
+        "ea": "仿宋"
+      },
+      "h4": {
+        "latin": "Times New Roman",
+        "ea": "仿宋"
+      },
+      "table": {
+        "latin": "Times New Roman",
+        "ea": "仿宋"
+      }
+    },
+    "allowed_fonts": [
+      "仿宋",
+      "黑体",
+      "楷体",
+      "宋体",
+      "Times New Roman"
+    ],
+    "doc_title": {
+      "_note": "公文标题：二号（22pt）、居中。规范为方正小标宋简体；本机无该字体，用 宋体 加粗等价替代。",
+      "align": "center",
+      "bold": true,
+      "sizes_pt": {
+        "cover": 22,
+        "subtitle": 16,
+        "project": 16,
+        "party": 16,
+        "code": 16
+      },
+      "default_size_pt": 22,
+      "latin": "Times New Roman",
+      "ea": "宋体",
+      "space_before_pt": 0,
+      "space_after_pt": 12,
+      "color": "000000"
+    },
+    "styles": {
+      "Normal": {
+        "font": "body",
+        "size_pt": 16,
+        "bold": false,
+        "align": "justify",
+        "line_spacing": 1.75,
+        "first_line_chars": 2,
+        "space_before_pt": 0,
+        "space_after_pt": 0,
+        "size_name": "三号",
+        "color": "000000"
+      },
+      "Heading 1": {
+        "font": "h1",
+        "size_pt": 16,
+        "bold": false,
+        "align": "left",
+        "line_spacing": 1.75,
+        "first_line_chars": 2,
+        "space_before_pt": 0,
+        "space_after_pt": 0,
+        "outline_level": 0,
+        "size_name": "三号",
+        "color": "000000"
+      },
+      "Heading 2": {
+        "font": "h2",
+        "size_pt": 16,
+        "bold": false,
+        "align": "left",
+        "line_spacing": 1.75,
+        "first_line_chars": 2,
+        "space_before_pt": 0,
+        "space_after_pt": 0,
+        "outline_level": 1,
+        "size_name": "三号",
+        "color": "000000"
+      },
+      "Heading 3": {
+        "font": "h3",
+        "size_pt": 16,
+        "bold": false,
+        "align": "left",
+        "line_spacing": 1.75,
+        "first_line_chars": 2,
+        "space_before_pt": 0,
+        "space_after_pt": 0,
+        "outline_level": 2,
+        "size_name": "三号",
+        "color": "000000"
+      },
+      "Heading 4": {
+        "font": "h4",
+        "size_pt": 16,
+        "bold": false,
+        "align": "left",
+        "line_spacing": 1.75,
+        "first_line_chars": 2,
+        "space_before_pt": 0,
+        "space_after_pt": 0,
+        "outline_level": 3,
+        "size_name": "三号",
+        "color": "000000"
+      },
+      "Heading 5": {
+        "font": "h4",
+        "size_pt": 16,
+        "bold": false,
+        "align": "left",
+        "line_spacing": 1.75,
+        "first_line_chars": 2,
+        "space_before_pt": 0,
+        "space_after_pt": 0,
+        "outline_level": 4,
+        "size_name": "三号",
+        "color": "000000"
+      }
+    },
+    "roles": {
+      "_note": "层次序数识别沿用 standard 的编号体系（含中文数字「一、」）。",
+      "numbering": {
+        "heading_1": "一、",
+        "heading_2": "（一）",
+        "heading_3": "1.",
+        "heading_4": "（1）"
+      }
+    }
+  }
+}

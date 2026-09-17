@@ -21,9 +21,11 @@ description: 处理 Word 文档（.docx/.doc/.wps）：提取全文与表格、�
 | `edit` | `edit <file> --replace "旧=新" [--replace "a=b"] [--out out.docx]` | `--replace` **必填**、可重复；不加 `--out` 则原地保存 |
 | `convert` | `convert <src> <dst>` | **两个都是位置参数**（没有 `--to`） |
 | `compare` | `compare A.docx B.docx --out-dir <目录> [--author 名] [--allow-tracked]` | `--out-dir` **必填**，产出 `diff.txt`+`diff.html`+`tracked.docx` |
-| `apply-style` | `apply-style <file> [--spec standard] [--out out.docx] [--dry-run]` | **对已有 docx 套版式**（页面/命名样式/字体四属性/行距 1.5/首行缩进 2 字符）；**内容零改动断言**不通过则拒绝产出、原文件不动 |
-| `table-style` | `table-style <file> [--spec standard] [--out out.docx] [--dry-run]` | 表格样式：表头底纹+加粗+居中、边框、跨页重复表头、表内字号（10.5pt） |
+| `apply-style` | `apply-style <file> [--spec standard|govdoc|compact] [--out out.docx] [--dry-run]` | **对已有 docx 套版式**（页面/命名样式/字体四属性/行距 1.5/首行缩进 2 字符）；**内容零改动断言**不通过则拒绝产出、原文件不动 |
+| `table-style` | `table-style <file> [--spec standard|govdoc|compact] [--out out.docx] [--dry-run]` | 表格样式：表头底纹+加粗+居中、边框、跨页重复表头、表内字号（10.5pt） |
 
+
+> **内置规格**（`--spec`）：**`standard`** 标准商务（上下 2.54 / 左右 3.17 cm、全文仿宋、正文小四 12pt、行距 1.5）· **`govdoc`** 党政机关公文（上 3.7 / 下 3.5 / 左 2.8 / 右 2.6 cm、正文三号 16pt 仿宋、一、黑体／（一）楷体、公文标题二号居中，依 GB/T 9704-2012）· **`compact`** 内部纪要（密排小字）。自定义层放 `~/.dsh/data/dsh-doc-suite/templates/<id>.json`（**不进发布件**）；规格真相源是 `specs/*.json`，改后用 `py -3 <DOC_SUITE_SCRIPTS>\spec_sync.py --check` 校验。
 ## 常用命令
 
 ```bat

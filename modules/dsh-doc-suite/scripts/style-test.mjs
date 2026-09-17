@@ -52,7 +52,8 @@ t('规格含 word/excel 两段与必需字段', () => {
   for (const k of ['id', 'colors', 'word', 'excel']) assert(s[k], '缺少 ' + k);
   for (const k of ['page', 'fonts', 'styles', 'table']) assert(s.word[k], 'word 缺少 ' + k);
   for (const k of ['font', 'header', 'border', 'column_rules', 'print']) assert(s.excel[k], 'excel 缺少 ' + k);
-  assert(s.word.page.margins_cm.left === 2.54 && s.word.page.margins_cm.top === 3.17, '页面应为 上下 3.17 / 左右 2.54 cm');
+  assert(s.word.page.margins_cm.left === 3.17 && s.word.page.margins_cm.right === 3.17 && s.word.page.margins_cm.top === 2.54 && s.word.page.margins_cm.bottom === 2.54,
+    '页面应为通用默认 上下 2.54 / 左右 3.17 cm（2026-09-17 主人定；原投标口径移自定义层）');
   assert(s.word.styles.Normal.line_spacing === 1.5, 'Normal 行距应为 1.5 倍');
   assert(s.word.styles.Normal.first_line_chars === 2, '正文首行缩进应为 2 字符');
 });
@@ -95,7 +96,7 @@ t('doc_roles.py 角色识别模块齐全（A2.1）', () => {
 t('规格 v1.1：doc_title / roles / align_rules 与主人拍板字号', () => {
   const s = globalThis.SPEC;
   assert(String(s.version) >= '1.1', 'version 应 >= 1.1');
-  assert(s.word.page.margins_cm.top === 3.17 && s.word.page.margins_cm.left === 2.54, '页面应 上下3.17 / 左右2.54');
+  assert(s.word.page.margins_cm.top === 2.54 && s.word.page.margins_cm.left === 3.17, '页面应 上下2.54 / 左右3.17');
   assert(s.word.doc_title && s.word.doc_title.default_size_pt === 18, 'doc_title 默认字号应为 18pt');
   assert(s.roles && s.roles.title_zone, 'roles 段缺失');
   const h = s.word.styles;
