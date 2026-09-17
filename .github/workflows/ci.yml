@@ -26,6 +26,14 @@ jobs:
         run: |
           for f in $(git ls-files '*.js' '*.mjs'); do node --check "$f"; done
 
+      # 未定义标识符静态检查（T5-2）：`node --check` 只查语法，抓不到 `ENTRY_SEP is not defined`
+      # 这类「引用了未声明也未 import 的名字」缺陷；这里用 tsc 的 checkJs，只认 TS2304 / TS2552。
+      # 只在 CI 侧装 typescript 与 @types/node（本机无此依赖时脚本自行跳过，不把本地弄红）。
+      - name: 未定义标识符静态检查（tsc --checkJs · 宿主侧 lib）
+        run: |
+          npm install -g typescript@5.6.3 @types/node@22
+          DSH_TSC_ROOT="$(npm root -g)" node modules/work-personal-secretary/scripts/check-undefined.mjs --require-tsc --typeRoots "$(npm root -g)/@types"
+
       - name: 子项目回归
         run: |
           for t in $(git ls-files '*/scripts/regression.mjs'); do

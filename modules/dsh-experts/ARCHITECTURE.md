@@ -128,5 +128,5 @@
 - **写入路径的边界**：纪律块读取路径的兜底顺序是「本模块 `disciplineMemoryDir` → work-memory 设置 `memoryDir` → `$DSH_HOME/data/dsh-work-memory/memory` → `~/.dsh/data/dsh-work-memory/memory`」，另有扫描 `<base>/memories/*`（含 `PROJECTS` 子目录者）的兜底（`lib/discipline.js:88-127`）；配错只会「读不到」并打印一行明示，不会写坏记忆。
 - **合规红线**：`review: "pending"` 的 11 位不能据其直接对外出专业结论（`NOTICE:118-126`）；来源未标注/不确定的条目不随发布件分发（`NOTICE:115`）。
 - **已知文档-实现偏差（维护时留意，非功能缺陷）**：
-  - `identityExpert` 的 schema 描述写「留空 = 自动取本人岗位域第一位」（`lib/settings.js:82`），但实现是**留空即不常驻**（`lib/store.js:204-213` 的注释与代码），`README.md:124`、`cordis.patch.yml:28` 与实现一致。
+  - `identityExpert`（**2026-09-17 复校：已一致**）：schema 描述现为「留空 = 不常驻任何身份专家」（`lib/settings.js:82`），与实现（`lib/store.js:204-213`）及 `README.md:124`、`cordis.patch.yml:28` 一致；先前的「描述写自动取岗位域第一位」已随描述修正消除。
   - `scripts/injection-tier-test.mjs` 头部注释第 4 条仍写「预算降级顺序……」（`scripts/injection-tier-test.mjs:9`），而同文件 :131 的断言已声明旧降级链删除、现测试的是截断（:135-169）——头部注释过期。

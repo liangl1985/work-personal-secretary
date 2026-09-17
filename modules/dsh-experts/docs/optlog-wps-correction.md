@@ -1,6 +1,6 @@
 # WPS 平台口径修正 · 记录（2026-09-14）
 
-> 依据：E:/lina/临时任务文件夹/experts-research/00-WPS平台资料.md（本机实测 + 外部参考）
+> 依据：<工作区>/临时任务文件夹/experts-research/00-WPS平台资料.md（本机实测 + 外部参考）
 > 范围：general 域全部文档 / 呈现类专家
 > 触发：主人明确"本机 Word / Excel / PPT 处理走 **WPS**，不是 Microsoft Office"
 

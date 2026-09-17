@@ -33,6 +33,8 @@
     "README.md"
   ],
   "scripts": {
+    "profile:check": "node scripts/profile-sync-check.mjs",
+    "check:undefined": "node scripts/check-undefined.mjs",
     "check": "node --check lib/index.js && node --check lib/probe.js && node --check lib/api.js && node --check lib/install.js && node --check lib/basedeck.js && node --check lib/md.js && node --check lib/preflight.js && node --check lib/identity.js && node --check lib/domain.js && node --check lib/setup-state.js && node --check lib/dirs.js && node --check client/index.js",
     "smoke": "node scripts/smoke-load.mjs",
     "probe": "node scripts/probe-test.mjs",

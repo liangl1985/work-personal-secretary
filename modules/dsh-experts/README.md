@@ -197,7 +197,7 @@ dsh-experts/
 
 ```bash
 node scripts/regression.mjs          # 32 项：索引 / 域配额 / persona 三段 / 匹配（职能键去重、补位不污染）/ 注入组装 / review 断言
-node scripts/injection-tier-test.mjs # 16 项：精简卡确定性 / 首轮全景与干活轮两态 / 全局形态 / 红线截断 / 默认值三处一致
+node scripts/injection-tier-test.mjs # 24 项：精简卡确定性 / 首轮全景与干活轮两态 / 全局形态 / 红线截断 / 默认值三处一致
 node scripts/smoke-load.mjs          # 18 项：mock ctx 真跑 apply()（命令与工具）
 node scripts/coexist.mjs             # 7 项：与 dsh-work-memory 同 ctx 共存的契约测试
 node scripts/card-preview.mjs --all  # L1 卡验收：FAIL / WARN 分级，退出码 0/1 可接 CI

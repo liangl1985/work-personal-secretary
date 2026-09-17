@@ -185,7 +185,7 @@ settings.watch(next => { cfg = next; Object.assign(liveArchiveCfg/liveBackupCfg)
 - 同步范围 `names = ['MEMORY.md','USER.md','GRAPH.json','PROJECTS','DAILY','ARCHIVE']`（**含冷归档**，为的是"迁走镜像即完整迁走记忆"）—— `lib/backup.js:92-94`、`108`；
 - **`prune` 默认开**：镜像里多出来、主库已不存在的文件会被删掉，但**只在上述名字范围内**清理，镜像目录里其它内容（如手工维护的历史归档）不动 —— `lib/backup.js:95-96`、`128-145`；
 - 与主库同名回填无损；`obsidianSyncDir` 为空即不同步 —— `lib/backup.js:97`、`59`。
-- 注意：`README.md:75` 描述镜像范围为"`MEMORY.md / USER.md / PROJECTS/ / DAILY/ / GRAPH.json`"，**未提到 ARCHIVE**，与代码不一致；以 `lib/backup.js:108` 为准。
+- 镜像范围（**2026-09-17 复校：已一致**）：`README.md:75` 现含 `ARCHIVE`，与 `lib/backup.js:108` 一致；此前的"`MEMORY.md / USER.md / PROJECTS/ / DAILY/ / GRAPH.json`"，**未提到 ARCHIVE**，与代码不一致；以 `lib/backup.js:108` 为准。
 
 面板浏览、`/memory_audit`、`/memory_backup`、`/memory_archive`、`/memory_maintain`、`/memory_triage` **都不触发镜像同步**（这些路径未调用 `maybeSync`/`syncMemoryToObsidian`）。
 
@@ -357,4 +357,4 @@ settings.watch(next => { cfg = next; Object.assign(liveArchiveCfg/liveBackupCfg)
 
 - **无逐版回退记录**（见 4.1）；
 - **无备份一键恢复命令**：`/memory_backup` 只做备份，恢复需手工拷贝（4.3 已标注）；
-- `README.md:75` 的镜像范围描述未含 `ARCHIVE`，与 `lib/backup.js:108` 不一致（以代码为准）。
+- `README.md:75` 的镜像范围描述**已含** `ARCHIVE`，与 `lib/backup.js:108` 一致（2026-09-17 复校；先前不一致已消除）。

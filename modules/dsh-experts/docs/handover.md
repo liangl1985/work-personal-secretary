@@ -2,7 +2,7 @@
 
 > 生成：2026-09-14
 > 用途：上下文异常或换会话时，凭本文件 + design-v2.md 即可无损续做
-> 位置：E:/lina/DSH插件/src/work-personal-secretary/modules/dsh-experts/docs/handover.md
+> 位置：<仓库>/modules/dsh-experts/docs/handover.md
 
 ---
 
@@ -16,7 +16,7 @@
 
 1. 本文件（进度与续做入口）
 2. docs/design-v2.md（域体系 / 16 位名单 / 退场 10 位 / 能力轴 / 机制改动）
-3. 项目记忆 C:/Users/liangl/.dsh/memories/lina/PROJECTS/dsh-experts.md（历次决策）
+3. 项目记忆 <DSH_HOME>/memories/lina/PROJECTS/dsh-experts.md（历次决策）
 
 ---
 
@@ -68,7 +68,7 @@
 
 ## 4. 已完成来源调研（可复用结论）
 
-> 完整映射见 E:/lina/临时任务文件夹/experts-research/00-来源清单.md（含 16 位 → 来源文件映射、目录地图、4 处需自撰）
+> 完整映射见 <工作区>/临时任务文件夹/experts-research/00-来源清单.md（含 16 位 → 来源文件映射、目录地图、4 处需自撰）
 
 
 - **DSH 插件市场**：awesome-dsh-plugin.com，收录 3632 个插件；目录源文件
@@ -152,8 +152,8 @@
 ## 4.6 索引落盘与匹配验证（2026-09-14 完成）
 
 - 新 `experts/index.json` 已写入：**19 条**，域分布 infosec 4 / accounting 4 / hr 1 / coding 3 / finance 2 / general 5；每条含 id / name / domain / role_tag / when_to_use / trigger_keywords / file / source。校验：0 问题（id 无重复、file 全部存在、关键词与标签非空）。
-- 旧索引备份：`E:/lina/backup/dsh-experts/index-v1-20260914.json`。
-- 旧域文件已归档 **19 个**到 `E:/lina/backup/dsh-experts/retired-20260914/`（presales 5 / aftersales 4 / finance 旧 5 / doc 3 / legal 2），空目录 presales、aftersales、legal、doc 已移除。
+- 旧索引备份：`<工作区>/backup/dsh-experts/index-v1-20260914.json`。
+- 旧域文件已归档 **19 个**到 `<工作区>/backup/dsh-experts/retired-20260914/`（presales 5 / aftersales 4 / finance 旧 5 / doc 3 / legal 2），空目录 presales、aftersales、legal、doc 已移除。
 - **匹配验证（10 条真实任务，selectExperts + defaultDomain=infosec）**：等保→infosec-djbh(1.05) · 工控方案投标→infosec-ics-security(0.80) · 增值税→accounting-tax(0.65) · 公文排版→general-typeset(0.70) · A股回测→finance-quant(0.50) · 劳动合同→hr-labor-law(0.45) · 电力 SCADA→infosec-ics-security(0.95)，**全部命中正确**。
 - **P1 缺陷已修（2026-09-14）**：`lib/match.js` 两处同时落地——① 去重粒度由 `domain` 改为 **`role_tag[0]`（职能键）**，缺字段回落 domain；② 补位新增 `ref.evidence > 0 && item.evidence === 0 → 跳过`（纯先验不补位）。
 - **新增开发工具 `scripts/card-preview.mjs`**（正式保留）：调用插件自身 buildPersonaCard 校验卡契约，`--all` 遍历 index.json 全部专家，检查「方法 1-3 首句 ≤90 / 交付段 ≤90 / 卡长 500-620」，退出码 0/1 可进 CI。**比人工审计严格**——首跑抓出 7 位方法首句超长，infosec 4 位已当场修至 WARN。
@@ -279,11 +279,11 @@
 
 | 用途 | 路径 |
 |---|---|
-| 源码仓库（改这里） | E:/lina/DSH插件/src/work-personal-secretary/modules/dsh-experts |
-| profile 副本（安装产物） | C:/Users/liangl/.dsh/profiles/desktop/node_modules/dsh-experts |
-| 研究资料（来源仓库） | E:/lina/临时任务文件夹/experts-research/src |
+| 源码仓库（改这里） | <仓库>/modules/dsh-experts |
+| profile 副本（安装产物） | <DSH_HOME>/profiles/desktop/node_modules/dsh-experts |
+| 研究资料（来源仓库） | <工作区>/临时任务文件夹/experts-research/src |
 | 回归脚本 | 源码仓库 scripts/regression.mjs、injection-tier-test.mjs、smoke-load.mjs、coexist.mjs |
-| 项目记忆 | C:/Users/liangl/.dsh/memories/lina/PROJECTS/dsh-experts.md |
+| 项目记忆 | <DSH_HOME>/memories/lina/PROJECTS/dsh-experts.md |
 
 代理：Windows 系统代理 = 127.0.0.1:7890；git 需显式传参：
     git -c http.proxy=http://127.0.0.1:7890 -c https.proxy=http://127.0.0.1:7890 clone --depth 1 <url>

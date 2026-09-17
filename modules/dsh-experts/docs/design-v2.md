@@ -4,7 +4,7 @@
 > 日期：2026-09-14（v2.1 冻结域体系）
 > 目标版本：0.1.4 -> 0.2.0（架构级重构）
 > 依据：与使用者的设计讨论（2026-09-14）+ DSH 官方机制核验
-> 源码：E:/lina/DSH插件/src/work-personal-secretary/modules/dsh-experts
+> 源码：<工作区>/DSH插件/src/work-personal-secretary/modules/dsh-experts
 
 ---
 

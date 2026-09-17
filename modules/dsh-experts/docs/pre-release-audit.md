@@ -73,7 +73,7 @@
 
 | 专家 | 位置 | 偏差 | 证据 | 建议 | 级别 |
 |---|---|---|---|---|---|
-| **general-typeset** | 角色段第 2 段 | **把 gongwen-skill 当作"本工作区的执行工具链"，但本机并未安装该技能** —— 使用者照做会**调用失败** | 实测 E:/lina/.dsh/skills 仅 9 项（image-vision、knowledge-base、office-word/excel/ppt、pdf-tools、skill-management、web-fetch、workflow-authoring）；全局 ~/.dsh/skills 为空；dsh-doc-suite/skills 仅 office-* + pdf-tools。gongwen-skill 只存在于研究目录 experts-research/src/gongwen-skill（163 文件，**未安装**） | 改为"由 dsh-doc-suite 技能执行"；若保留 gongwen 口径须写明"尚未安装、需先安装" | **A** |
+| **general-typeset** | 角色段第 2 段 | **把 gongwen-skill 当作"本工作区的执行工具链"，但本机并未安装该技能** —— 使用者照做会**调用失败** | 实测 <工作区>/.dsh/skills 仅 9 项（image-vision、knowledge-base、office-word/excel/ppt、pdf-tools、skill-management、web-fetch、workflow-authoring）；全局 ~/.dsh/skills 为空；dsh-doc-suite/skills 仅 office-* + pdf-tools。gongwen-skill 只存在于研究目录 experts-research/src/gongwen-skill（163 文件，**未安装**） | 改为"由 dsh-doc-suite 技能执行"；若保留 gongwen 口径须写明"尚未安装、需先安装" | **A** |
 | general-typeset | 方法 2 | **把实现参数写成标准条文**：GB/T 9704—2012 只规定"一般每面排 22 行，每行排 28 个字，并撑满版心"，**没有行距数值**；29pt 是为达成 22 行的实现值（版心高 225mm≈637.8pt ÷ 22 ≈ 29pt）；"段前段后 0"亦非标准条文 | 甘肃省政协办公厅官方解读引标准原文，无"行距"条 | 改为"行距取可实现每面 22 行的固定值（常用 29 磅）"，条文与实现参数分开 | **B** |
 | general-office | 方法 5 / 方法 9 | 断言"旧格式与**公式重算**走 WPS COM"，但技能文档明确 **recalc 对 .xls 未实测** | office-excel/SKILL.md:68 "旧格式 .xls/.et 的读取与 PDF 导出走 WPS COM…；**recalc 对 .xls 未实测**" | 拆开：读取/导出可走 COM；**.xls 的公式重算标"未实测"** | **B** |
 | general-fact-check | 方法 8（中文权威源清单） | 未说明**访问门槛**：知网/万方需机构订阅；裁判文书网自 2021 年起检索大幅限缩（需登录、大量文书下架）。写"优先查"会让人以为一定拿得到 | 公开事实；本机无任何订阅凭证。实测巨潮资讯网 HTTP 200、裁判文书网首页 200（检索受限）；国家标准全文公开系统因跨源重定向未能实测（工具限制） | 补门槛说明：拿不到全文时降级为摘要并标"未见原文" | **C** |
