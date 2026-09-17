@@ -29,43 +29,94 @@ body{margin:0;padding:0;background:#f4f6f8}
 <body>
 <article class="wps-doc" aria-label="工作秘书 · 安装引导">
 <h1>工作秘书 · 安装引导</h1>
-<p>本页由插件自带（不是外链）。按顺序做完，回到「设置 → 工作秘书 → 安装与检查」点一次「重新检测」。</p>
-<div class="callout"><p>先看结论：<strong>Python 与 Python 依赖</strong>是文档能力的硬前置，<strong>WPS Office</strong> 是比对、重算、透视与格式转换的执行环境；<strong>Obsidian</strong> 与<strong>桌面形象</strong>可选。子插件可只装需要的。</p></div>
-<h2>一、Python（3.10 以上，建议 3.12）</h2>
-<p>Windows 统一用 <code>py -3</code> 调用，不要用 <code>python</code>，它可能是应用商店的占位程序。</p>
+<div class="callout"><p>这份指引写给<strong>第一次安装 DSH 插件</strong>的人。全程不需要懂编程，也不用记住任何命令。 两种装法任选一种：<strong>不想敲命令</strong>就走「方式一」，把一段话复制给 DSH，剩下的交给它；<strong>习惯自己动手</strong>就走「方式二」。</p></div>
+<h2>一、先弄清楚：要装什么、装完能做什么</h2>
+<p>「工作秘书」是一个能力包，装进 DSH 之后，你的对话助手就多了五样本事：</p>
+<ol><li><strong>记事情</strong>：你随口说的偏好、决定、进展，它自己记下来，以后自动记得。</li><li><strong>处理文档</strong>：Word、Excel、PPT、PDF 的读取、生成、核对与格式转换。</li><li><strong>多一种专业角度</strong>：需要时按专家视角回答（售前、财务、法务、代码等）。</li><li><strong>画图</strong>：你在对话里写一段流程图代码，它直接渲染成图。</li><li><strong>桌面形象</strong>：屏幕上有个小形象陪着，能看用量、能点击互动。</li></ol>
+<p>装完之后，设置里会多出一个<strong>工作秘书</strong>分区，下面四个页签：<strong>安装与检查</strong>、<strong>核心配置</strong>、<strong>配置</strong>、<strong>关于与致谢</strong>。</p>
+<h2>二、动手之前，确认三件事</h2>
+<table><thead><tr><th>要确认的事</th><th>怎么确认</th><th>不符合怎么办</th></tr></thead><tbody><tr><td>你已经在用 DSH Desktop</td><td>能打开 DSH 的对话窗口</td><td>先去装 DSH Desktop，装好再回来</td></tr><tr><td>你手上有「工作秘书集成体」文件夹</td><td>里面有 modules 文件夹，里面又有几个插件文件夹</td><td>从发布页下载或克隆这个集成体仓库</td></tr><tr><td>需要时能装软件</td><td>装 Python 和 WPS 时会弹权限提示</td><td>用管理员账号登录，或找管电脑的人帮忙</td></tr></tbody></table>
+<div class="callout"><p>集成体文件夹放在哪都行，路径里<strong>尽量别有中文和空格</strong>，能少一类麻烦。</p></div>
+<h2>三、两种安装方式，选一种</h2>
+<table><thead><tr><th></th><th>方式一：交给 DSH 装</th><th>方式二：自己动手装</th></tr></thead><tbody><tr><td>适合谁</td><td>不想碰命令行的人</td><td>习惯自己操作的人</td></tr><tr><td>你要做的</td><td>复制一段话发给 DSH，然后按它说的做</td><td>照着下面的命令一步步敲</td></tr><tr><td>大概耗时</td><td>5 分钟（不含下载）</td><td>10 分钟（不含下载）</td></tr><tr><td>出错时</td><td>把报错原文贴给 DSH，它会接着处理</td><td>对照第六节排查</td></tr></tbody></table>
+<h3>方式一：把下面整段复制给 DSH</h3>
+<p><strong>第一步</strong>：复制下面方框里的<strong>全部文字</strong>（从「我刚拿到」到「谢谢」）。</p>
+<pre><code>我刚拿到一份 DSH 插件集成体，名字叫「工作秘书」。请你帮我装到本机 DSH 上，全程你来做，我不懂命令行。
+
+请按这个顺序办：
+1. 先确认本机 DSH 可用：运行 dsh --version，把版本号告诉我。
+2. 再找到这份集成体的文件夹。如果找不到，直接问我路径，不要猜。
+3. 装本体，命令是：dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/work-personal-secretary
+   如果我的 DSH 用的不是 desktop 这个 profile，请告诉我怎么查、怎么换。
+4. 装完告诉我一句「需要重启 DSH」，我重启完再回来找你。
+5. 重启之后，帮我把五个子插件装上：dsh-work-memory、dsh-doc-suite、dsh-experts、dsh-mermaid、workspace-tokenpet。
+   能命令行装就命令行装；不能的话，告诉我应该点界面里的哪个按钮，我来点。
+6. 运行环境也要帮我看看：Python 3.10 以上、八个 Python 包、WPS Office。先检测哪些已经有，只装缺的，装之前把命令给我看一眼。
+7. 最后帮我核对一遍：环境依赖是否全绿、五个子插件是否都装上了，用一张小清单告诉我。
+
+做事的时候请注意：
+- 每做完一步，用一句话告诉我结果和下一步要我做什么，不要一次说一大堆。
+- 报错就把原始报错发我，并给出解决办法；不要跳过错误继续往下做。
+- 不要动我其他的插件，不要删我的文件；如果某一步会覆盖或删除东西，先问我。
+- 装的东西如果很大或者要下载很久，先跟我说预计多大、多久。
+
+谢谢。</code></pre>
+<p><strong>第二步</strong>：把这段话粘贴到 DSH 的对话框里发送，然后按它说的做（它可能会问你文件夹在哪、要不要重启）。</p>
+<p><strong>第三步</strong>：它说需要重启时，重启 DSH 一次。</p>
+<p><strong>第四步</strong>：重启后回到这里，走第五节的六项检查。</p>
+<h3>方式二：自己动手装</h3>
+<p><strong>第 1 步 · 装本体</strong>。打开命令行（Windows 上推荐 PowerShell），执行：</p>
+<pre><code>dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/work-personal-secretary</code></pre>
+<ul><li>把 <code>&lt;集成体目录&gt;</code> 换成你那份集成体文件夹的真实路径，两边不要留尖括号。</li><li>把 <code>desktop</code> 换成你自己的 profile 名（桌面版默认就是 desktop）。</li><li>命令执行完没报红字、最后一行类似「added」就是成功。</li></ul>
+<p><strong>第 2 步 · 重启 DSH</strong>。本体要重启之后才会在设置里出现。</p>
+<p><strong>第 3 步 · 装五个子插件</strong>。重启后打开 DSH，进<strong>设置 → 工作秘书 → 安装与检查</strong>，在「子插件」分组里逐个点<strong>安装</strong>；也可以点整批安装，它会一项一项做、做完立刻回显。</p>
+<p><strong>第 4 步 · 看缺什么</strong>。同一页看「环境依赖」分组：缺哪一项，点右侧的<strong>依赖安装工具</strong>，它会给出该敲的命令。页面上还有<strong>查看安装引导</strong>与<strong>使用说明</strong>两个入口，随时可以回来看。</p>
+<h2>四、运行环境与程序安装</h2>
+<p>先把结论说清楚，省得你装了半天发现不该装：</p>
+<table><thead><tr><th>要装的东西</th><th>必须吗</th><th>不装会怎样</th></tr></thead><tbody><tr><td>Python 3.10 以上（建议 3.12）</td><td><strong>必须</strong>（文档能力要用）</td><td>文档功能全不可用</td></tr><tr><td>八个 Python 包</td><td><strong>必须</strong>（文档能力要用）</td><td>文档功能全不可用</td></tr><tr><td>WPS Office</td><td><strong>必须</strong>（文档比对、重算、导出要用）</td><td>文档的比对、重算、导出用不了</td></tr><tr><td>Obsidian</td><td>可选</td><td>只是看不到知识库与记忆镜像</td></tr><tr><td>桌面形象</td><td>可选</td><td>屏幕上没有小形象，其他功能照用</td></tr></tbody></table>
+<div class="callout"><p>这个能力包<strong>不会替你安装</strong>解释器或 WPS。要么你自己装，要么按下面「交给 DSH」的方式让它装。</p></div>
+<h3>4.1 Python</h3>
+<p><strong>交给 DSH（省事）</strong>：把下面这段话发给 DSH。</p>
+<pre><code>请帮我在本机装好工作秘书需要的运行环境，我不懂命令行。
+
+1. Python：需要 3.10 以上，建议 3.12。先查本机有没有（Windows 上用 py -3 --version 查），已经有了就跳过。
+2. 八个 Python 包：python-docx、openpyxl、python-pptx、PyMuPDF、pdfplumber、pypdf、Pillow、pywin32。
+3. WPS Office：装完不用额外配置。
+
+要求：先检测、只装缺的；每条命令先给我看再执行；需要管理员权限时提醒我；装完用一张小清单告诉我哪些是新装的、哪些原本就有。</code></pre>
+<p><strong>自己装</strong>：Windows 上用这行命令（会从微软的应用商店源安装）：</p>
 <pre><code>winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements --silent</code></pre>
-<p>安装后新开一个窗口验证：</p>
-<pre><code>py -3 --version</code></pre>
-<p>若从官网下载安装，安装向导第一步要勾选「Add Python to PATH」。</p>
-<h2>二、Python 依赖（8 个包）</h2>
+<ul><li>装完<strong>新开一个命令行窗口</strong>再验证，输入 <code>py -3 --version</code>，能看到版本号即可。</li><li>Windows 上请用 <code>py -3</code> 来调用，不要用 <code>python</code>：它可能是应用商店的占位程序，看着像装了其实没装。</li><li>如果你是从官网下载安装包手动装的，安装向导第一屏记得勾上「Add Python to PATH」。</li></ul>
+<h3>4.2 八个 Python 包</h3>
+<p>Python 装好后，命令行执行：</p>
 <pre><code>py -3 -m pip install python-docx openpyxl python-pptx PyMuPDF pdfplumber pypdf Pillow pywin32</code></pre>
-<table><thead><tr><th>包</th><th>用途</th></tr></thead><tbody><tr><td><code>python-docx</code> / <code>openpyxl</code> / <code>python-pptx</code></td><td>Word / Excel / PPT 读写与样式</td></tr><tr><td><code>PyMuPDF</code> / <code>pdfplumber</code> / <code>pypdf</code></td><td>PDF 文本、表格与页操作</td></tr><tr><td><code>Pillow</code></td><td>图片处理（插图与导出）</td></tr><tr><td><code>pywin32</code></td><td>调用 WPS COM（比对、重算、导出）</td></tr></tbody></table>
-<p>网络不稳定时可在命令后加 <code>-i https://pypi.tuna.tsinghua.edu.cn/simple</code>。</p>
-<h2>三、WPS Office</h2>
+<p>每个包是干什么的：</p>
+<table><thead><tr><th>包</th><th>用途</th></tr></thead><tbody><tr><td>python-docx · openpyxl · python-pptx</td><td>Word / Excel / PPT 的读写与样式</td></tr><tr><td>PyMuPDF · pdfplumber · pypdf</td><td>PDF 的文本、表格与页面操作</td></tr><tr><td>Pillow</td><td>图片处理（插图、导出图片）</td></tr><tr><td>pywin32</td><td>调用本机 WPS 完成比对、重算与导出</td></tr></tbody></table>
+<ul><li>网络慢或装不动时，在命令末尾加：<code>-i https://pypi.tuna.tsinghua.edu.cn/simple</code>。</li><li>这一步不需要管理员权限；如果报权限错误，多半是装到了系统目录，改用上面的命令重来一次。</li></ul>
+<h3>4.3 WPS Office</h3>
+<p><strong>自己装</strong>：</p>
 <pre><code>winget install -e --id Kingsoft.WPSOffice.CN --accept-source-agreements --accept-package-agreements --silent</code></pre>
-<p>装完无需额外配置。文档能力通过 COM 调用本机 WPS，实测 ProgID 为 <code>KWPS.Application</code>。</p>
-<div class="callout"><p>文档能力依赖 WPS 的商用许可，本集成体不做任何代理或破解动作。</p></div>
-<h2>四、Obsidian（可选）</h2>
-<p>只用于知识库与记忆镜像，不装不影响其他能力。</p>
-<h2>五、五个子插件</h2>
-<pre><code>dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-work-memory
-dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-doc-suite
-dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-experts
-dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-mermaid
-dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/workspace-tokenpet</code></pre>
-<p>或在「安装与检查」页逐个安装。<strong>装完需要重启 DSH</strong>。</p>
-<h2>六、升级与排障（容易踩的三条）</h2>
-<ol><li><strong>子插件升级</strong>：在「安装与检查」页点升级即可。插件内部会把新版本先落到临时目录、<strong>逐文件校验 SHA256</strong>、再原子替换，并同步更新 profile 的依赖登记；中途失败不会留下半成品。</li><li><strong>记忆库换目录想免重启</strong>：需要 <code>dsh-work-memory</code> <strong>≥ 1.0.6</strong>；更低版本改目录后要重启 DSH 才生效。</li><li><strong>自测脚本</strong>（在集成体根目录跑，均不依赖宿主运行时）：</li></ol>
-<pre><code>node modules/work-personal-secretary/scripts/smoke-load.mjs      # 装载冒烟
-node modules/work-personal-secretary/scripts/probe-test.mjs       # 探针
-node modules/work-personal-secretary/scripts/install-test.mjs     # 安装器
-node modules/work-personal-secretary/scripts/basedeck-test.mjs    # 配置底座
-node modules/work-personal-secretary/scripts/settings-api-test.mjs
-node modules/work-personal-secretary/scripts/identity-test.mjs
-node modules/work-personal-secretary/scripts/defaults-test.mjs    # 本页与 md 同源</code></pre>
-<p><code>node --check &lt;文件&gt;.js</code> 只查语法，不查未定义标识符。</p>
-<h2>七、自检</h2>
-<p>回到「安装与检查」点「重新检测」。六项依赖全绿、五个子插件全部「已装」即完成。</p>
+<ul><li>装完不需要额外配置，插件会直接调用本机已有的 WPS。</li><li>文档能力依赖 WPS 的商用许可；这个能力包不会做任何代理或破解动作。</li><li>已经装了 Microsoft Office 也建议补装 WPS：比对、重算、导出这三类操作走的是 WPS。</li></ul>
+<h3>4.4 Obsidian（可选）</h3>
+<p>只用于看知识库与记忆镜像，不装不影响其他能力。想要就自己去官网装，装完不用配置，插件会自动对接。</p>
+<h2>五、装完自己验一遍</h2>
+<p>回到<strong>设置 → 工作秘书 → 安装与检查</strong>，对照下表逐项看：</p>
+<table><thead><tr><th>检查点</th><th>在哪看</th><th>正常的样子</th></tr></thead><tbody><tr><td>环境依赖</td><td>「环境依赖」分组</td><td>Python、Python 依赖、WPS 三类都是绿色</td></tr><tr><td>子插件</td><td>「子插件」分组</td><td>五种子插件都显示<strong>已装</strong>，且版本不低于内置版本</td></tr><tr><td>旧知识库</td><td>「已有旧知识库要带过来？」卡片</td><td>有旧知识库才用它；没有就忽略</td></tr><tr><td>核心配置</td><td>切到<strong>核心配置</strong>页</td><td>记忆库目录、知识库目录、工作岗位三项都填好</td></tr><tr><td>一键配置</td><td>核心配置页的执行链</td><td>点<strong>保存配置并开始</strong>后，四步依次打勾</td></tr><tr><td>实际能力</td><td>回对话里试一句</td><td>让它读一份 Word，能读出来就说明链路通了</td></tr></tbody></table>
+<p>四项以上都是正常状态，安装就算完成。任何一项不对，看下一节。</p>
+<h2>六、出问题了怎么办</h2>
+<p><strong>命令行提示找不到 dsh</strong>：DSH 的命令行工具没加进系统路径。改用 DSH 自带的命令行窗口，或者走方式一让 DSH 自己装。</p>
+<p><strong>装完重启了，设置里还是没有「工作秘书」</strong>：多半是装到了别的 profile。确认命令里的 profile 名和你实际在用的是同一个（桌面版默认 desktop），然后重启一次。</p>
+<p><strong>子插件装上了，但「环境依赖」还是红的</strong>：环境是独立检测的，装完 Python 或 WPS 后要<strong>新开一个命令行窗口</strong>、并在页面上点一次<strong>重新检测</strong>，它才会读到新的环境。</p>
+<p><strong>文档功能报错</strong>：先看「安装与检查」页的 Python 依赖与 WPS 两项是不是绿的；再看装的是不是 3.10 以上；然后按页面给的命令补装缺的包。</p>
+<p><strong>Windows 上找不到 py -3 命令</strong>：说明 Python 没装好或没进系统路径。重装时勾上「Add Python to PATH」，或直接用 winget 那条命令重装。</p>
+<p><strong>五个子插件里某一个装不上</strong>：先看是不是缺前置环境（文档能力需要 Python 与 WPS）；也可以只装需要的那几个，五个之间没有依赖顺序。</p>
+<p><strong>忘记把集成体文件夹放哪了</strong>：在 DSH 里直接问「帮我找一下本机的工作秘书集成体目录」，它会替你搜。</p>
+<h2>七、升级与卸载</h2>
+<h3>升级</h3>
+<p>在<strong>安装与检查</strong>页点<strong>升级</strong>即可。插件内部的做法是：先把新版本下到临时目录、<strong>逐个文件校验完整性与哈希</strong>、再整体替换，并同步更新 profile 的登记。中途失败不会留下半成品，不需要你手工清理。</p>
+<h3>卸载</h3>
+<pre><code>dsh plugin --profile desktop remove &lt;包名&gt;</code></pre>
+<ul><li>卸载后重启 DSH。</li><li><strong>你的数据不会被删</strong>：记忆内容、知识库、桌面形象的素材都保留在原处，重装后照旧可用。</li><li>桌面形象的素材位于 DSH 数据目录下的 workspace-tokenpet/skins 文件夹，属于你自己的资产；插件文件夹里那份只是随包附带的副本，安装时<strong>只补缺失、不覆盖</strong>你改过的。</li></ul>
 <p>---</p>
 <p>本页随插件分发，不含任何个人信息与外部跳转。</p>
 </article>
