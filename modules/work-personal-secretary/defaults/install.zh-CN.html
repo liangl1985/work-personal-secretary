@@ -54,7 +54,17 @@ dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-experts
 dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/dsh-mermaid
 dsh plugin --profile desktop add &lt;集成体目录&gt;/modules/workspace-tokenpet</code></pre>
 <p>或在「安装与检查」页逐个安装。<strong>装完需要重启 DSH</strong>。</p>
-<h2>六、自检</h2>
+<h2>六、升级与排障（容易踩的三条）</h2>
+<ol><li><strong>子插件升级</strong>：在「安装与检查」页点升级即可。插件内部会把新版本先落到临时目录、<strong>逐文件校验 SHA256</strong>、再原子替换，并同步更新 profile 的依赖登记；中途失败不会留下半成品。</li><li><strong>记忆库换目录想免重启</strong>：需要 <code>dsh-work-memory</code> <strong>≥ 1.0.6</strong>；更低版本改目录后要重启 DSH 才生效。</li><li><strong>自测脚本</strong>（在集成体根目录跑，均不依赖宿主运行时）：</li></ol>
+<pre><code>node modules/work-personal-secretary/scripts/smoke-load.mjs      # 装载冒烟
+node modules/work-personal-secretary/scripts/probe-test.mjs       # 探针
+node modules/work-personal-secretary/scripts/install-test.mjs     # 安装器
+node modules/work-personal-secretary/scripts/basedeck-test.mjs    # 配置底座
+node modules/work-personal-secretary/scripts/settings-api-test.mjs
+node modules/work-personal-secretary/scripts/identity-test.mjs
+node modules/work-personal-secretary/scripts/defaults-test.mjs    # 本页与 md 同源</code></pre>
+<p><code>node --check &lt;文件&gt;.js</code> 只查语法，不查未定义标识符。</p>
+<h2>七、自检</h2>
 <p>回到「安装与检查」点「重新检测」。六项依赖全绿、五个子插件全部「已装」即完成。</p>
 <p>---</p>
 <p>本页随插件分发，不含任何个人信息与外部跳转。</p>

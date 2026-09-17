@@ -59,5 +59,9 @@
   "publishConfig": {
     "access": "public"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "scripts": {
+    "test": "node scripts/style-test.mjs && node scripts/media-test.mjs && node scripts/ppt-render-test.mjs && node scripts/ppt-style-test.mjs && node scripts/ppt-theme-test.mjs",
+    "spec:check": "py -3 scripts/spec_sync.py --check"
+  }
 }

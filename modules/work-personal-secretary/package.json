@@ -40,7 +40,8 @@
     "basedeck": "node scripts/basedeck-test.mjs",
     "identity": "node scripts/identity-test.mjs",
     "defaults": "node scripts/defaults-test.mjs",
-    "build:defaults": "node scripts/build-defaults-html.mjs"
+    "build:defaults": "node scripts/build-defaults-html.mjs",
+    "test": "node scripts/smoke-load.mjs && node scripts/probe-test.mjs && node scripts/install-test.mjs && node scripts/basedeck-test.mjs && node scripts/settings-api-test.mjs && node scripts/identity-test.mjs && node scripts/defaults-test.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

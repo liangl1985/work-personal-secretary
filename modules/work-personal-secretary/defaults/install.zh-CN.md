@@ -61,7 +61,25 @@ dsh plugin --profile desktop add <集成体目录>/modules/workspace-tokenpet
 
 或在「安装与检查」页逐个安装。**装完需要重启 DSH**。
 
-## 六、自检
+## 六、升级与排障（容易踩的三条）
+
+1. **子插件升级**：在「安装与检查」页点升级即可。插件内部会把新版本先落到临时目录、**逐文件校验 SHA256**、再原子替换，并同步更新 profile 的依赖登记；中途失败不会留下半成品。
+2. **记忆库换目录想免重启**：需要 `dsh-work-memory` **≥ 1.0.6**；更低版本改目录后要重启 DSH 才生效。
+3. **自测脚本**（在集成体根目录跑，均不依赖宿主运行时）：
+
+```
+node modules/work-personal-secretary/scripts/smoke-load.mjs      # 装载冒烟
+node modules/work-personal-secretary/scripts/probe-test.mjs       # 探针
+node modules/work-personal-secretary/scripts/install-test.mjs     # 安装器
+node modules/work-personal-secretary/scripts/basedeck-test.mjs    # 配置底座
+node modules/work-personal-secretary/scripts/settings-api-test.mjs
+node modules/work-personal-secretary/scripts/identity-test.mjs
+node modules/work-personal-secretary/scripts/defaults-test.mjs    # 本页与 md 同源
+```
+
+`node --check <文件>.js` 只查语法，不查未定义标识符。
+
+## 七、自检
 
 回到「安装与检查」点「重新检测」。六项依赖全绿、五个子插件全部「已装」即完成。
 

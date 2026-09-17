@@ -68,6 +68,11 @@ jobs:
           for f in $(git ls-files '*.py'); do python3 -m py_compile "$f"; done
           echo "Python 语法自检通过"
 
+      # dsh-doc-suite 的 Python 侧单测（零第三方依赖：只用标准库 + 本模块 py）
+      - name: Python 单元测试（dsh-doc-suite）
+        run: |
+          python3 modules/dsh-doc-suite/scripts/tests/test_python.py
+
       - name: 子项目必需文件自检
         run: |
           fail=0
