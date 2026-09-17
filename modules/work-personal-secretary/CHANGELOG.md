@@ -1,5 +1,14 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.5 — 2026-09-17（静态检查进 CI · profile 探针 · 目录布局识别 · 桌宠测试进 CI）
+
+- **T5-2 未定义标识符静态检查**：新增 `tsconfig.checkjs.json` + `scripts/check-undefined.mjs`，补 `node --check` 抓不到的「引用了本文件既未声明、也未 import 的名字」（只认 TS2304 / TS2552）。只读、零第三方依赖；本机找不到 tsc 时**跳过放行**（不把没装 tsc 的人弄红），CI 用 `--require-tsc` 判失败。**上线当天即抓到两处真缺陷**——本轮 T5-7 开发中 `lib/basedeck.js` 少 `existsSync` import、`lib/api.js` 少 `detectVaultLayout` import，`node --check` 全部放行。`package.json` 加 `check:undefined`。
+- **T5-3 profile 同步探针**：新增 `scripts/profile-sync-check.mjs`（按各模块 `files` 白名单逐文件 SHA256；Junction 判 LINK；退出码 0/1/2）与 `npm run profile:check`（刻意**不进** test 链——它依赖本机 profile）。
+- **T5-7 目录布局识别**：新增 `detectVaultLayout()`（纯函数、可注入 fs 便于单测）：根下存在 `memory-data`/`obsidian-data` → `new`；根上直接有 `🏠 主页.md`/`00_全局记忆` → `legacy`；两者都有 → `mixed`。`GET /setup-state` 增 `vaultLayout` 字段，核心配置页在 `legacy`/`mixed` 时给出提示与搬迁指引。`basedeck-test` 新增 `[24]` 段 9 项断言。
+- **CI 两步**：①「未定义标识符静态检查」（全局装 typescript + @types/node，用 `DSH_TSC_ROOT`/`--typeRoots` 指到全局）；②「workspace-tokenpet 独立测试」——实测该测试**不需要 tsx**（`node --test` 直接 exit 0，只用 node 内置 + `lib/skins.js`），故并入既有的「不装包」设计。
+- **文档**：`dsh-experts` 三条口径滞后修正与私有路径脱敏（`docs/` 下 4 个文件，全 6 模块清零）；`workspace-tokenpet` 按实测修正版本基线 / 行数 / 体积口径（详见其 1.0.3 段与交接文档 §11.8）。
+- ⚠️ 需重启 DSH（`lib/**`、`client/**`、`defaults/**` 变更）。
+
 ## 1.1.4 — 2026-09-17（随包说明补齐 · 文档-实现一致性修复 · 模块说明）
 
 - **随包说明重写（面向使用者视角 · 2026-09-17 第二轮）**：主人指出原稿偏技术、且安装缺「不想敲命令的人怎么装」这条路 → `install.zh-CN.md` 重写为**新用户指引**（88 → 211 行）：新增「先弄清楚装什么、装完能做什么」「动手前确认三件事」「**两种安装方式并列**」（方式一＝复制一段提示词交给 DSH、由它安装；方式二＝手动敲命令）、依赖与环境安装同样双路径（Python / 八个包 / WPS 各给两种）、装完六项自查表、七条排障；`use.zh-CN.md` 重写为**非技术读者版**（59 → 247 行）：每个能力给「以前怎么做 / 现在怎么做」对照与可直接照说的例句、按功能分组讲设置项、十二条 Q&A、数据留存与卸载。两份 HTML 由 `scripts/build-defaults-html.mjs` 重生成（`defaults-test` 59/0）。

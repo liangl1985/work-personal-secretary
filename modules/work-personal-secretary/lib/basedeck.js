@@ -2407,6 +2407,36 @@ export function inferRootDir(memoryDir, obsidianDir) {
 }
 
 /**
+ * 识别一个目录属于「新版目录模型」还是「旧版知识库布局」（T5-7）。
+ *
+ * 判据（都只看**一层**，不递归、不读文件内容）：
+ *   · 新：根下存在 `memory-data/` 或 `obsidian-data/`（`deriveRootChildren` 的产物）；
+ *   · 旧：根上直接有 `🏠 主页.md` 或 `00_全局记忆/`（1.1.3 之前的 vault 布局）。
+ * 两者都有 → `mixed`（搬迁途中）；都没有 → `empty`；目录为空串 → `unknown`。
+ *
+ * 用途：使用者选存储根目录时，页面据此告诉他「这是旧布局、可走导入」还是「已经是新布局」。
+ * @param {string} dir 待判定目录
+ * @param {{existsSync?:Function}} [deps] 注入 fs 便于单测
+ * @returns {{layout:'new'|'legacy'|'mixed'|'empty'|'unknown', evidence:string[]}}
+ */
+export function detectVaultLayout(dir, deps = {}) {
+  const exists = typeof deps.existsSync === 'function' ? deps.existsSync : existsSync
+  const d = typeof dir === 'string' ? dir.trim() : ''
+  if (!d) return { layout: 'unknown', evidence: [] }
+  const hit = (name) => { try { return exists(join(d, name)) === true } catch { return false } }
+  const newHits = [ROOT_SUBDIR_MEMORY, ROOT_SUBDIR_VAULT].filter(hit)
+  const legacyHits = [VAULT_MIRROR_DIR_NAME, VAULT_HOME_FILE].filter(hit)
+  const evidence = []
+  for (const n of newHits) evidence.push('新布局：' + n)
+  for (const n of legacyHits) evidence.push('旧布局：' + n)
+  let layout = 'empty'
+  if (newHits.length > 0 && legacyHits.length > 0) layout = 'mixed'
+  else if (newHits.length > 0) layout = 'new'
+  else if (legacyHits.length > 0) layout = 'legacy'
+  return { layout, evidence }
+}
+
+/**
  * 记忆库目录落在知识库里的**第一级目录名**（不在知识库内返回空串）。
  * 用途：记忆库不是业务模块，它若被放进知识库（使用者「单独指定」时可能），
  * 不该被 `listVaultModules` 登记进 `🏠 主页.md` 的「业务模块」段。

@@ -23,6 +23,8 @@
  *   POST /domain/generate     —— 岗位正文生成（同源保护；promptEnhancer → llm → 503 手填）
  *   GET  /dirs[?path=]        —— 目录选择：列一层目录（ctx.directoryPicker 的 browse 原语代理；只读）
  *   POST /dirs/new            —— 目录选择：在父目录下建一个子目录（同源保护；只建一层）
+ *   POST /import/scan         —— 旧知识库导入：列清单 + 逐项对照（**只读**，绝不落盘；同源保护）
+ *   POST /import/apply        —— 旧知识库导入：按勾选只补缺失（同源保护；dryRun 默认 true；绝不覆盖）
  *
  * 1.1.3 随包网页（**路径冻结**，用 kind:'exact' 挂在 /work-personal-secretary 下）：
  *   GET  /work-personal-secretary/guide —— 安装引导页（text/html；正文来自 defaults/install.zh-CN.md）
@@ -33,10 +35,10 @@
  *   - 桌面载体的 fetch 桥（合成 origin http://dsh.internal）**只认精确路由**，因此 prefix 之外另注册 exact：
  *       API_PATHS（7）            /check /fix /fix-all /plugins /install /install-all /basedeck
  *       PAGE_PATHS（2，另一前缀） /work-personal-secretary/guide、/help
- *       CORE_API_EXACT_PATHS（10）/preflight /identity /identity/save /domain/list /domain/generate
- *                                 /docs /open-doc /setup-state /dirs /dirs/new
+ *       CORE_API_EXACT_PATHS（12）/preflight /identity /identity/save /domain/list /domain/generate
+ *                                 /docs /open-doc /setup-state /dirs /dirs/new /import/scan /import/apply
  *       SETTINGS_API_PATHS（3）   /settings /settings/write /experts/preview
- *     → **exact 共 22 条**；加 1 条 prefix，`apply()` 注册的**路由总数 = 23**。
+ *     → **exact 共 24 条**；加 1 条 prefix，`apply()` 注册的**路由总数 = 25**。
  *   - 前 19 条在本函数内注册（handler 是本地闭包）；P4 三条由文件末尾的 installSettingsExactRoutes
  *     注册，并在 lib/index.js 的 apply 里**已接线**（1.1.3 起按产品决策方案 A）。
  *   - 既有 7 条精确路由的集合与顺序一字不动；四条测试断言（probe-test / settings-api-test /
@@ -91,6 +93,7 @@ import {
   BASEDECK_ID_LIST,
   BASEDECK_OUTPUT_LIMIT,
   applyBaseDeck,
+  detectVaultLayout,
   planBaseDeck,
   publicPlan,
   resolveDeckContext,
@@ -106,6 +109,8 @@ import { DOMAIN_MAX_CHARS, DOMAIN_NAME_MAX_CHARS, DOMAIN_PRESETS, IDENTITY_PREFI
 import { renderFragment, renderMarkdown, renderPage } from './md.js'
 // 目录选择后端（宿主 ctx.directoryPicker 的 browse / native 能力分支代理）
 import { createChildDirectory, listDirectories } from './dirs.js'
+// 旧知识库导入（清单 → 勾选 → 逐项对照写入；只补缺失、不覆盖）
+import { applyImport, scanImport } from './import.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
@@ -127,7 +132,7 @@ export const PAGE_PATHS = ['/guide', '/help']
  * 所以在 installApi 内与 API_PATHS、PAGE_PATHS 一起注册；不含 P4 三条
  * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
  */
-export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new']
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new', '/import/scan', '/import/apply']
 
 /**
  * 两个说明文档的**唯一映射**（单一真相源 = defaults 下的 md）：
@@ -856,7 +861,10 @@ export function installApi(ctx, deps = {}) {
       // 绝不读 ~/.dsh/settings.yaml）。设置服务缺失 / 记忆库不可读 → 各字段按 none 降级 + 可读 note，不抛异常。
       if (req.method === 'GET' && (sub === '/setup-state' || sub === '/setup-state/')) {
         const state = await readSetupState(ctx, { env: installEnv, dshHome: basedeckDshHome })
-        return sendJson(res, 200, state)
+        // T5-7：识别「新版目录模型 / 旧版知识库布局」，供客户端在核心配置页提示。
+        // 判定对象优先用反推出来的存储根目录，其次用知识库目录；两者都空则 unknown。
+        const layoutTarget = String((state.root && state.root.value) || (state.obsidianDir && state.obsidianDir.value) || '')
+        return sendJson(res, 200, { ...state, vaultLayout: detectVaultLayout(layoutTarget) })
       }
 
       // ⑪ 目录选择后端（1.1.3 · 方案 A）—— 宿主的 ctx.directoryPicker 是**可判别能力**：
@@ -886,6 +894,41 @@ export function installApi(ctx, deps = {}) {
         }
         const result = await createChildDirectory(ctx, { path: body.path, name: body.name, platform: platform })
         return sendJson(res, result.status, result.body)
+      }
+
+      // ⑫ 旧知识库导入（T5-5）：清单 → 勾选 → 逐项对照写入。
+      //   POST /import/scan  { from, to }               —— **只读**列清单 + 逐项对照（同源保护）
+      //   POST /import/apply { from, to, rels, dryRun } —— 按勾选只补缺失（同源保护；dryRun 默认 true）
+      // 纪律（设计定稿 §3.4 与 §12 决议 8 / 13②）：只读源目录、只补还没有的文件、**绝不覆盖现有文件**；
+      // 先列清单再由使用者勾选；已存在 / 冲突 / 被占用的条目一律保留目标，只有清单里 state='copy' 的条目才可能被写入。
+      if (req.method === 'POST' && (sub === '/import/scan' || sub === '/import/scan/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const result = scanImport({
+          from: typeof body.from === 'string' ? body.from.trim().slice(0, 1024) : '',
+          to: typeof body.to === 'string' ? body.to.trim().slice(0, 1024) : '',
+          env: installEnv,
+        })
+        return sendJson(res, result.ok ? 200 : 400, result)
+      }
+
+      // POST /import/apply：只补缺失、不覆盖；dryRun 默认 true（不带 dryRun:false 绝不写盘）
+      if (req.method === 'POST' && (sub === '/import/apply' || sub === '/import/apply/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        // 勾选清单可能很长（每条一个相对路径），上限放到 512KB
+        try { body = await readBody(req, 512 * 1024) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const result = applyImport({
+          from: typeof body.from === 'string' ? body.from.trim().slice(0, 1024) : '',
+          to: typeof body.to === 'string' ? body.to.trim().slice(0, 1024) : '',
+          rels: Array.isArray(body.rels) ? body.rels.slice(0, 5000) : body.rels,
+          dryRun: body.dryRun !== false,
+          env: installEnv,
+        })
+        return sendJson(res, result.ok ? 200 : 400, result)
       }
 
       // GET /check —— 七项只读环境检查
@@ -1312,13 +1355,13 @@ export function installApi(ctx, deps = {}) {
  *   本次连同四条断言一起改掉（probe-test / settings-api-test / basedeck-test / install-test），
  *   断言仍**逐条列出完整路径集合并用相等比较**，不放宽为 includes / >=。
  *
- * 当前**精确路由集合（共 22 条）**与路由总数（2026-09-17 复核）：
+ * 当前**精确路由集合（共 24 条）**与路由总数（2026-09-17 复核）：
  *   API_PATHS（7）             /check /fix /fix-all /plugins /install /install-all /basedeck
  *   PAGE_PATHS（2，另一前缀）  /work-personal-secretary/guide、/help
- *   CORE_API_EXACT_PATHS（10） /preflight /identity /identity/save /domain/list /domain/generate
- *                              /docs /open-doc /setup-state /dirs /dirs/new（以上以本文件 CORE_API_EXACT_PATHS 常量为准）
+ *   CORE_API_EXACT_PATHS（12）/preflight /identity /identity/save /domain/list /domain/generate
+ *                              /docs /open-doc /setup-state /dirs /dirs/new /import/scan /import/apply（以上以本文件 CORE_API_EXACT_PATHS 常量为准）
  *   SETTINGS_API_PATHS（3）    /settings /settings/write /experts/preview（**本函数**注册）
- *   → 22 exact + 1 prefix = `apply()` 注册**总数 23 条**（数字以三个常量与各自测试断言为准）。
+ *   → 24 exact + 1 prefix = `apply()` 注册**总数 25 条**（数字以三个常量与各自测试断言为准）。
  *   本函数另由 scripts/settings-api-test.mjs 的 [11] 段单测覆盖。
  *
  * @param {object} ctx cordis context（需 webServer）

@@ -18,11 +18,12 @@
 - 影响面：仅宿主半（`src/index.ts` → `lib/index.js` 已重建）；**客户端未改动**，不需刷新前端缓存。
 - 门禁：`tsc -p tsconfig.json` 重建 exit 0 · `typecheck` exit 0 · `node --import tsx --test tests/lina-skins.test.mjs` exit 0。
 - 来源：2026-09-17 主会话处理待办 **T6-⑤**（死路由处置）。
+- **同批（T4 支线）**：本模块的 `tests/lina-skins.test.mjs` **已接入仓库 CI**（`.github/workflows/ci.yml` 新增 `node --test modules/workspace-tokenpet/tests/*.test.mjs`）。关键实测：该测试**不需要 tsx**（`node --test` 直接通过，只用 node 内置 + `lib/skins.js`），因此不需要在 CI 里 `npm install`，与既有「不装包」设计兼容。
 
 ## 1.0.2 — 启动开销与用量索引（2026-09-17）
 
 ### 内置图集改为按需取（启动路径不再背 22.5 MB）
-- `src/client/pet-action-sheets.generated.ts` 不再内嵌 12 段 WebP data URI：**22,510,039 B → 6,304 B**；
+- `src/client/pet-action-sheets.generated.ts` 不再内嵌 12 段 WebP data URI：**22,510,041 B → 6,304 B**；
   12 条 spec 的 `sheet` 改为 `/workspace-tokenpet/builtin-strip?file=<name>`，**其余字段（frameW / frameH /
   bodyHeight / feetY / frames / cols / rows / delaysMs / loop / pingPong / totalMs）逐字保留**。
 - 新增 **exact** 路由 `GET /workspace-tokenpet/builtin-strip?file=<action>.webp`：从包内 `skins/default/`

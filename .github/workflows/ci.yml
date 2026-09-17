@@ -34,6 +34,12 @@ jobs:
           npm install -g typescript@5.6.3 @types/node@22
           DSH_TSC_ROOT="$(npm root -g)" node modules/work-personal-secretary/scripts/check-undefined.mjs --require-tsc --typeRoots "$(npm root -g)/@types"
 
+      # 桌宠（workspace-tokenpet）的独立测试（T4 支线）：纯 node:test + lib/*.js，
+      # **零依赖**（实测 `node --test` 直接通过，不需要 tsx / 不需要 npm install），
+      # 因此可以并入本工作流既有的「不装包」设计。
+      - name: workspace-tokenpet 独立测试（node:test）
+        run: node --test modules/workspace-tokenpet/tests/*.test.mjs
+
       - name: 子项目回归
         run: |
           for t in $(git ls-files '*/scripts/regression.mjs'); do

@@ -21,6 +21,8 @@
  *  [15] 真实环境**只读快照**首尾比对（证明本次开发未写入真实工作区 / 真实设置文件）
  *  [22] ⑧ 迁移旧记忆库：只补缺失不覆盖 / 旧目录只读 / 逐文件校验 / 失败回滚 / 失败即停后续步骤 / 来源三级顺序
  *  [23] ⑪ 目录选择：完全限定路径判定 / browse 列举与建目录 / native 与缺服务降级 / 非法入参 400 / 同源保护
+ *  [24] ⑫ 旧知识库导入：清单逐项对照 / 只补缺失不覆盖 / 敏感标记 / 路径护栏 / dry-run / 失败回滚 / 两条 exact 路由
+ *  [24] T5-7 目录布局识别：根下有 memory-data/obsidian-data → new；根上直接有 🏠 主页.md / 00_全局记忆 → legacy；两者都有 → mixed
  *
  * 隔离红线（本测试的全部保证）：
  *   - 所有夹具（假 DSH_HOME / 假仓库 / 假工作区 / 假设置 / 假记忆库）都在 os.tmpdir() 下自建；
@@ -81,12 +83,22 @@ import {
   deriveRootChildren,
   inferRootDir,
   memoryTopSegmentInVault,
+  detectVaultLayout,
+  VAULT_HOME_FILE,
 } from '../lib/basedeck.js'
 import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
 import { NESTING_DETAIL, isSameOrNested, pathChecks, relationOf, runPreflight, volumeOf } from '../lib/preflight.js'
 import { detectBom } from '../lib/install.js'
 import { buildSetupState, resolveMigrateSource } from '../lib/setup-state.js'
 import { isFullyQualifiedPath, listDirectories } from '../lib/dirs.js'
+import {
+  IMPORT_LIST_LIMIT,
+  IMPORT_SENSITIVE_RULES,
+  applyImport,
+  detectSensitiveText,
+  isSafeImportRel,
+  scanImport,
+} from '../lib/import.js'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MODULE_DIR = join(HERE, '..')
@@ -1686,6 +1698,155 @@ ok(isFullyQualifiedPath('D:/ws', 'win32') === true, '⑦路径判定对其它盘
 const dirsExact = dirs.ctx.routes.filter((r) => r.kind === 'exact').map((r) => r.path)
 ok(dirsExact.indexOf(API_ROOT + '/dirs') >= 0 && dirsExact.indexOf(API_ROOT + '/dirs/new') >= 0, '⑦两条 exact 路由确实注册（桌面载体可达）')
 
+section('[24] 旧知识库导入：清单 → 勾选 → 逐项对照写入（POST /import/scan · POST /import/apply）')
+// 口径（设计定稿 §3.4 / §12 决议 8 与 13②）：只读源目录、只补还没有的文件、**绝不覆盖现有文件**、
+// 先列清单再由使用者勾选；命中敏感模式的条目只列出、由使用者确认（§12.1）。
+
+const IMP_TMP = join(TMP_ROOT, 'import')
+const IMP_SRC = join(IMP_TMP, 'srcvault')
+const IMP_DST = join(IMP_TMP, 'dstvault')
+assertInsideTmp(IMP_SRC, 'import src'); assertInsideTmp(IMP_DST, 'import dst')
+mkdirSync(join(IMP_SRC, '子目录'), { recursive: true })
+mkdirSync(IMP_DST, { recursive: true })
+writeFileSync(join(IMP_SRC, 'a.md'), '# 新文件\n', 'utf8')
+writeFileSync(join(IMP_SRC, '子目录', 'nested.md'), 'nested\n', 'utf8')
+writeFileSync(join(IMP_SRC, 'b.md'), 'same\n', 'utf8')
+writeFileSync(join(IMP_DST, 'b.md'), 'same\n', 'utf8')
+writeFileSync(join(IMP_SRC, 'c.md'), 'source differs\n', 'utf8')
+writeFileSync(join(IMP_DST, 'c.md'), 'target keeps me\n', 'utf8')
+writeFileSync(join(IMP_SRC, 'secret.md'), '联系我 someone@example.com\n', 'utf8')
+writeFileSync(join(IMP_SRC, 'a.md.bak-20260101'), 'noise\n', 'utf8')
+writeFileSync(join(IMP_SRC, 'tmp.tmp'), 'noise\n', 'utf8')
+writeFileSync(join(IMP_SRC, 'occupied.md'), 'x\n', 'utf8')
+mkdirSync(join(IMP_DST, 'occupied.md'), { recursive: true })
+
+const impScan = scanImport({ from: IMP_SRC, to: IMP_DST, env: {} })
+ok(impScan.ok === true && impScan.code === 'ok', '①scanImport 正常返回 ok（只读，未落盘）')
+const impState = (rel) => { const it = impScan.items.filter((x) => x.rel === rel)[0]; return it ? it.state : '(missing)' }
+ok(impState('a.md') === 'copy', '①目标缺失 → copy（可补）')
+ok(impState('子目录/nested.md') === 'copy', '①子目录里的文件同样列出（相对路径用 / 分隔）')
+ok(impState('b.md') === 'same', '①目标已有且字节相同 → same（无需写）')
+ok(impState('c.md') === 'conflict', '①目标已有但内容不同 → conflict（保留目标）')
+ok(impState('occupied.md') === 'occupied', '①目标同名位置是目录 → occupied（保留目标）')
+ok(impScan.stats.noise === 2, '①备份 / 临时文件计入 noise（实测 ' + impScan.stats.noise + '）')
+ok(impScan.items.every((x) => x.rel !== 'a.md.bak-20260101' && x.rel !== 'tmp.tmp'), '①噪声文件不在一级清单里')
+ok(impScan.stats.copy === 3 && impScan.stats.sensitive === 1, '①统计：可补 3 · 敏感 1（实测 ' + impScan.stats.copy + ' / ' + impScan.stats.sensitive + '）')
+const impSecret = impScan.items.filter((x) => x.rel === 'secret.md')[0]
+ok(Boolean(impSecret) && impSecret.sensitive.length > 0 && Boolean(impSecret.sensitive[0].label), '①敏感项带可读标签（供使用者确认）')
+ok(JSON.stringify(impSecret.sensitive).indexOf('someone@example.com') < 0, '①敏感回执只给标签与行号，不抄原文')
+ok(impScan.items[0].state === 'copy', '①清单排序：可补项排在最前（先让使用者决定补什么）')
+ok(impScan.from.indexOf('\\') < 0 && impScan.to.indexOf('\\') < 0, '①回执路径一律 POSIX 形态')
+
+section('[24a] 纯函数：敏感模式与相对路径护栏')
+ok(detectSensitiveText('api_key = "abcdef1234567890"').filter((x) => x.id === 'credential').length === 1, '②凭据模式命中')
+ok(detectSensitiveText('手机 13800138000').filter((x) => x.id === 'phone').length === 1, '②手机号模式命中')
+ok(detectSensitiveText('这是一段干净的正文').length === 0, '②干净正文不误报')
+ok(isSafeImportRel('子目录/a.md') === true && isSafeImportRel('../escape.md') === false
+  && isSafeImportRel('C:/x.md') === false && isSafeImportRel('/abs.md') === false && isSafeImportRel('a//b.md') === false,
+  '②相对路径护栏：.. / 盘符 / 绝对 / 空段一律拒绝')
+
+section('[24b] 逐项对照写入：只补缺失、绝不覆盖')
+const impDry = applyImport({ from: IMP_SRC, to: IMP_DST, rels: ['a.md', '子目录/nested.md'], env: {} })
+ok(impDry.ok === true && impDry.dryRun === true && impDry.copied.length === 0, '③applyImport 默认 dry-run（不落盘）')
+ok(!existsSync(join(IMP_DST, 'a.md')) && !existsSync(join(IMP_DST, '子目录', 'nested.md')), '③dry-run 后目标侧确实没有新文件')
+ok(impDry.planned.length === 2 && impDry.planned.every((p) => p.to.indexOf('\\') < 0), '③dry-run 给出计划（POSIX 路径）')
+
+const impApply = applyImport({
+  from: IMP_SRC, to: IMP_DST,
+  rels: ['a.md', '子目录/nested.md', 'b.md', 'c.md', 'occupied.md'],
+  dryRun: false, env: {},
+})
+ok(impApply.ok === true && impApply.copied.length === 2, '④只写入 copy 项（实测 ' + impApply.copied.length + '）')
+ok(impApply.rejected.filter((r) => r.rel === 'c.md')[0].reason === 'conflict', '④冲突项被拒写（reason=conflict）')
+ok(impApply.rejected.filter((r) => r.rel === 'b.md')[0].reason === 'same', '④已一致项被拒写（reason=same）')
+ok(impApply.rejected.filter((r) => r.rel === 'occupied.md')[0].reason === 'occupied', '④被目录占用项被拒写（reason=occupied）')
+ok(readFileSync(join(IMP_DST, 'c.md'), 'utf8') === 'target keeps me\n', '④冲突文件的目标内容逐字未变（**绝不覆盖**）')
+ok(readFileSync(join(IMP_DST, 'b.md'), 'utf8') === 'same\n', '④已一致文件未改动')
+ok(existsSync(join(IMP_DST, 'a.md')) && readFileSync(join(IMP_DST, 'a.md'), 'utf8') === '# 新文件\n', '④缺失文件已补，内容与源逐字一致')
+ok(impApply.bytesWritten > 0 && /校验通过/.test(impApply.detail), '④写后大小 + SHA256 校验通过')
+
+const impBad = applyImport({ from: IMP_SRC, to: IMP_DST, rels: ['../escape.md', 'not-there.md', ''], dryRun: false, env: {} })
+ok(impBad.ok === true && impBad.copied.length === 0, '⑤非法 / 不在清单 / 空的勾选项一个都不写')
+ok(impBad.rejected.filter((r) => r.reason === 'bad-path').length === 1
+  && impBad.rejected.filter((r) => r.reason === 'not-in-list').length === 1
+  && impBad.rejected.filter((r) => r.reason === 'empty').length === 1, '⑤三类拒写原因可读（bad-path / not-in-list / empty）')
+ok(!existsSync(join(IMP_TMP, 'escape.md')), '⑤路径穿越没有产生任何文件')
+
+// ⑥ apply 每次都**重新对照**目标：目标已有同名不同内容的文件 → 即使勾选也拒写
+const IMP_SRC2 = join(IMP_TMP, 'src2')
+const IMP_DST2 = join(IMP_TMP, 'dst2')
+mkdirSync(IMP_SRC2, { recursive: true }); mkdirSync(IMP_DST2, { recursive: true })
+writeFileSync(join(IMP_SRC2, 'race.md'), 'from source\n', 'utf8')
+writeFileSync(join(IMP_DST2, 'race.md'), 'arrived later\n', 'utf8')
+const impRace = applyImport({ from: IMP_SRC2, to: IMP_DST2, rels: ['race.md'], dryRun: false, env: {} })
+ok(impRace.ok === true && impRace.copied.length === 0 && impRace.rejected.filter((r) => r.reason === 'conflict').length === 1,
+  '⑥apply 内部重新对照 → 目标已有且内容不同时拒写（不依赖调用方手里的旧清单）')
+ok(readFileSync(join(IMP_DST2, 'race.md'), 'utf8') === 'arrived later\n', '⑥拒写时目标内容未被覆盖')
+
+// ⑦ 失败回滚：注入 io 让第二个文件复制失败
+const IMP_SRC3 = join(IMP_TMP, 'src3')
+const IMP_DST3 = join(IMP_TMP, 'dst3')
+mkdirSync(IMP_SRC3, { recursive: true }); mkdirSync(IMP_DST3, { recursive: true })
+writeFileSync(join(IMP_SRC3, 'x1.md'), 'one\n', 'utf8')
+writeFileSync(join(IMP_SRC3, 'x2.md'), 'two\n', 'utf8')
+let impCopyCount = 0
+const impIo = {
+  copyFileSync(src, dst) {
+    impCopyCount += 1
+    if (impCopyCount === 2) throw new Error('模拟复制失败')
+    copyFileSync(src, dst)
+  },
+}
+const impFail = applyImport({ from: IMP_SRC3, to: IMP_DST3, rels: ['x1.md', 'x2.md'], dryRun: false, env: {}, io: impIo })
+ok(impFail.ok === false && impFail.code === 'copy-failed' && /已回滚/.test(impFail.error), '⑦复制失败 → ok:false + 可读中文（含「已回滚」）')
+ok(!existsSync(join(IMP_DST3, 'x1.md')) && !existsSync(join(IMP_DST3, 'x2.md')), '⑦回滚把本轮已复制的文件删净')
+
+section('[24c] 源 / 目标关系护栏与 API 路由')
+const impSame = scanImport({ from: IMP_SRC, to: IMP_SRC, env: {} })
+ok(impSame.ok === false && impSame.code === 'same-dir', '⑧源目录与知识库目录相同 → 明确拒绝')
+const impNested = scanImport({ from: IMP_SRC, to: join(IMP_SRC, '子目录'), env: {} })
+ok(impNested.ok === false && impNested.code === 'nested', '⑧源目标互相包含 → 明确拒绝')
+const impNoFrom = scanImport({ from: '', to: IMP_DST, env: {} })
+ok(impNoFrom.ok === false && impNoFrom.code === 'bad-from' && /选择/.test(impNoFrom.error), '⑧未选源目录 → 可读中文')
+const impNoTo = scanImport({ from: IMP_SRC, to: '', env: {} })
+ok(impNoTo.ok === false && impNoTo.code === 'bad-to' && /保存配置并开始/.test(impNoTo.error), '⑧没有知识库目录 → 可读中文（提示先完成一键配置）')
+
+const impCtx = makeMockCtx()
+installApi(impCtx, {
+  platform: 'win32', repoRoot: FAKE_REPO, moduleDir: MODULE_DIR, env: {}, now: FIXED_NOW,
+  dshHome: join(TMP_ROOT, 'impdsh', '.dsh'), profileDir: join(TMP_ROOT, 'impprofile'),
+})
+const impHandler = prefixHandler(impCtx)
+ok(CORE_API_EXACT_PATHS.indexOf('/import/scan') > 0 && CORE_API_EXACT_PATHS.indexOf('/import/apply') > 0, '⑨两条路径进 CORE_API_EXACT_PATHS')
+const impRouteExact = impCtx.routes.filter((r) => r.kind === 'exact').map((r) => r.path)
+ok(impRouteExact.indexOf(API_ROOT + '/import/scan') >= 0 && impRouteExact.indexOf(API_ROOT + '/import/apply') >= 0,
+  '⑨两条 exact 路由确实注册（桌面载体的 fetch 桥只认 exact）')
+
+const impScanRoute = await callRoute(impHandler, 'POST', '/import/scan', { from: IMP_SRC, to: IMP_DST }, REQ_HEADERS)
+ok(impScanRoute.status === 200 && impScanRoute.body.ok === true && Array.isArray(impScanRoute.body.items),
+  '⑨POST /import/scan → 200 + 清单（只读，绝不写盘）')
+const impScanCross = await callRoute(impHandler, 'POST', '/import/scan', { from: IMP_SRC, to: IMP_DST }, CROSS_HEADERS)
+ok(impScanCross.status === 403, '⑨跨站 POST /import/scan → 403')
+const impApplyDry = await callRoute(impHandler, 'POST', '/import/apply', { from: IMP_SRC, to: IMP_DST, rels: ['子目录/nested.md'] }, REQ_HEADERS)
+ok(impApplyDry.status === 200 && impApplyDry.body.dryRun === true && impApplyDry.body.copied.length === 0,
+  '⑨POST /import/apply 默认 dryRun:true（不带 dryRun:false 绝不写盘）')
+ok(!existsSync(join(IMP_DST, '子目录', 'nested.md')), '⑨默认 dry-run 后目标侧没有新文件')
+const impApplyCross = await callRoute(impHandler, 'POST', '/import/apply',
+  { from: IMP_SRC, to: IMP_DST, rels: ['子目录/nested.md'], dryRun: false }, CROSS_HEADERS)
+ok(impApplyCross.status === 403 && !existsSync(join(IMP_DST, '子目录', 'nested.md')), '⑨跨站写请求 403 且没有写入')
+const impApplyRoute = await callRoute(impHandler, 'POST', '/import/apply',
+  { from: IMP_SRC, to: IMP_DST, rels: ['子目录/nested.md'], dryRun: false }, REQ_HEADERS)
+ok(impApplyRoute.status === 200 && impApplyRoute.body.ok === true && impApplyRoute.body.copied.length === 1,
+  '⑨POST /import/apply（dryRun:false）→ 真补 1 个文件')
+ok(existsSync(join(IMP_DST, '子目录', 'nested.md')), '⑨落盘后目标侧确有该文件')
+const impBadRoute = await callRoute(impHandler, 'POST', '/import/scan', { from: '', to: IMP_DST }, REQ_HEADERS)
+ok(impBadRoute.status === 400 && impBadRoute.body.ok === false, '⑨入参错误 → 400 + ok:false（可读中文）')
+
+ok(readFileSync(join(IMP_SRC, 'a.md'), 'utf8') === '# 新文件\n' && readFileSync(join(IMP_SRC, 'c.md'), 'utf8') === 'source differs\n',
+  '⑩源目录全程只读（内容逐字未变）')
+ok(IMPORT_LIST_LIMIT >= 100 && IMPORT_SENSITIVE_RULES.length >= 5,
+  '⑩清单上限与敏感规则表已导出（上限 ' + IMPORT_LIST_LIMIT + ' · 规则 ' + IMPORT_SENSITIVE_RULES.length + ' 条）')
+
 section('[15] 真实环境只读快照首尾比对')
 let realDrift = 0
 for (const b of REAL_BEFORE) {
@@ -1697,6 +1858,25 @@ for (const b of REAL_BEFORE) {
 }
 ok(realDrift === 0, '真实 settings.yaml / MEMORY.md / 工作区 AGENTS.md / 技能清单 全部未被触碰')
 ok(safeWorkspaceParam(REAL_WS || 'relative').ok === (REAL_WS ? true : false) || REAL_WS === '', 'safeWorkspaceParam 只接受绝对路径的已存在目录')
+
+// ───────────────────── [24] T5-7 目录布局识别 ─────────────────────
+section('[24] 目录布局识别（detectVaultLayout）：新 / 旧 / 混合 / 空 / 未知')
+{
+  const norm = (p) => String(p).replace(/\\/g, '/')
+  const mk = (list) => { const s = new Set(list.map(norm)); return (p) => s.has(norm(p)) }
+  const only = (name) => mk([join('D:/ws', name)])
+  ok(detectVaultLayout('D:/ws', { existsSync: only(ROOT_SUBDIR_MEMORY) }).layout === 'new', '根下有 memory-data → new')
+  ok(detectVaultLayout('D:/ws', { existsSync: only(ROOT_SUBDIR_VAULT) }).layout === 'new', '根下有 obsidian-data → new')
+  ok(detectVaultLayout('D:/ws', { existsSync: only(VAULT_MIRROR_DIR_NAME) }).layout === 'legacy', '根上直接有 00_全局记忆 → legacy（旧布局）')
+  ok(detectVaultLayout('D:/ws', { existsSync: only(VAULT_HOME_FILE) }).layout === 'legacy', '根上直接有 🏠 主页.md → legacy（旧布局）')
+  const both = mk([join('D:/ws', ROOT_SUBDIR_MEMORY), join('D:/ws', VAULT_HOME_FILE)])
+  const mixed = detectVaultLayout('D:/ws', { existsSync: both })
+  ok(mixed.layout === 'mixed', '新旧痕迹都有 → mixed')
+  ok(mixed.evidence.length === 2, 'mixed 时给出两条依据（实测 ' + mixed.evidence.length + '）')
+  ok(detectVaultLayout('D:/ws', { existsSync: () => false }).layout === 'empty', '目录存在但两种都没有 → empty')
+  ok(detectVaultLayout('', { existsSync: () => false }).layout === 'unknown', '空串 → unknown')
+  ok(detectVaultLayout('D:/ws', { existsSync: () => { throw new Error('EACCES') } }).layout === 'empty', 'fs 抛错时吞掉不崩（→ empty）')
+}
 
 // ───────────────────── 收尾 ─────────────────────
 

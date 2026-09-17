@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.4'
+    const BUILD = 'v1.1.5'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -256,6 +256,8 @@ window.__ModuleLoader__.load({
       gateLoadFailed: '未能取到环境检测结果',
       coreDirsTitle: '目录与岗位',
       coreDirsSub: '选一个存储根目录，记忆体与知识库各自在它下面新建自己的文件夹；岗位与三项齐备后才能保存。',
+      coreVaultLegacy: '检测到旧版知识库布局：这个目录根上直接有 🏠 主页.md 或 00_全局记忆，而新版布局是「根目录 + memory-data / obsidian-data 两个子目录」。要搬迁旧知识库用下面的导入卡；也可以直接把它当作存储根目录——插件只在它下面新建自己的子目录，不动你原有内容。',
+      coreVaultMixed: '这个目录里同时有新布局（memory-data / obsidian-data）与旧布局（🏠 主页.md / 00_全局记忆）的痕迹，像是搬迁途中，请确认以哪一份为准。',
       coreFieldRoot: '存储根目录',
       coreFieldRootHint: '选一个文件夹。记忆体与知识库会在这个文件夹下各自新建一个自己的子文件夹（下面的两个目录），各自要建立的东西只放在自己的文件夹里，互不干扰。',
       coreFieldMemoryDir: '记忆库目录',
@@ -307,8 +309,29 @@ window.__ModuleLoader__.load({
       importBrowse: '浏览… 选择知识库文件夹',
       importNote: '纪律：只读源目录、只补还没有的文件、不覆盖现有文件、先给预览再逐项对照确认后才落盘。',
       importPlaceholder: '选择后先列清单，由你勾选要带过来的条目，确认后才写入。',
-      importPicked: '已选目录：',
-      importLater: '清单与勾选（条目归类）在后续版本提供；本轮先落定入口与纪律。',
+      importPicked: '源目录：',
+      importScanning: '正在列出清单并逐项对照…',
+      importScanFailed: '列清单失败',
+      importRescan: '重新列清单',
+      importSelectAll: '全选可补项',
+      importSelectNone: '全不选',
+      importStateCopy: '缺失·可补',
+      importStateSame: '已存在·一致',
+      importStateConflict: '已存在·内容不同',
+      importStateOccupied: '已被目录占用',
+      importSumCopy: '可补 {n}',
+      importSumSame: '已一致 {n}',
+      importSumConflict: '冲突 {n}',
+      importSumSensitive: '敏感 {n}',
+      importSensitiveTag: '敏感',
+      importSensitiveHint: '标「敏感」的条目命中了个人路径 / 凭据 / 联系方式等模式，默认不勾选；确认要带过来时请自己勾上。',
+      importApply: '写入所选（{n}）',
+      importApplyHint: '只补缺失：已存在、冲突与被占用的条目一律保留目标内容，绝不覆盖',
+      importApplying: '写入中…',
+      importApplyFailed: '写入失败',
+      importNoneSelected: '还没有勾选任何可补的条目',
+      importApplied: '本次已补 {copied} 个文件；已存在跳过 {skipped} 个；不可写已忽略 {rejected} 个',
+      importTruncated: '清单较长，只列前 {n} 项；请缩小源目录范围后重新列清单',
       modalTitle: '新建岗位',
       modalName: '岗位名称',
       modalNameHint: '会出现在岗位下拉里，建议用中文简称；10 字以内',
@@ -874,8 +897,29 @@ window.__ModuleLoader__.load({
       importBrowse: 'Browse… choose a vault folder',
       importNote: 'Rules: read the source only, add what is missing, never overwrite existing files, show a preview before writing.',
       importPlaceholder: 'After choosing, a list appears and you tick the entries to bring over; nothing is written before you confirm.',
-      importPicked: 'Selected directory: ',
-      importLater: 'The list and the per-entry selection (how items are categorized) come in a later version; this version settles the entry point and the rules.',
+      importPicked: 'Source folder: ',
+      importScanning: 'Listing the entries and comparing them one by one…',
+      importScanFailed: 'Could not list the entries',
+      importRescan: 'List again',
+      importSelectAll: 'Select all addable',
+      importSelectNone: 'Select none',
+      importStateCopy: 'missing · can add',
+      importStateSame: 'present · identical',
+      importStateConflict: 'present · differs',
+      importStateOccupied: 'occupied by a folder',
+      importSumCopy: '{n} to add',
+      importSumSame: '{n} identical',
+      importSumConflict: '{n} conflicting',
+      importSumSensitive: '{n} sensitive',
+      importSensitiveTag: 'sensitive',
+      importSensitiveHint: 'Entries tagged sensitive matched patterns such as personal paths, credentials or contact details. They are not checked by default — tick them yourself if you really want them brought over.',
+      importApply: 'Write selected ({n})',
+      importApplyHint: 'Adds what is missing only: present, conflicting and occupied entries keep the target content and are never overwritten',
+      importApplying: 'Writing…',
+      importApplyFailed: 'Write failed',
+      importNoneSelected: 'No addable entry is selected yet',
+      importApplied: 'Added {copied} file(s) this run; {skipped} skipped as already present; {rejected} ignored as not writable',
+      importTruncated: 'The list is long and only the first {n} entries are shown; narrow the source folder and list again',
       modalTitle: 'New job',
       modalName: 'Job name',
       modalNameHint: 'Appears in the job list; a short label works best. Up to 10 characters.',
@@ -1579,6 +1623,20 @@ window.__ModuleLoader__.load({
       cfgChips: { display: 'flex', gap: '6px', flexWrap: 'wrap', margin: '6px 0' },
       cfgTh: { textAlign: 'left', color: '#8a8f98', fontWeight: 600, fontSize: '11.5px', padding: '5px 7px', borderBottom: '1px solid #eceef1' },
       cfgTd: { padding: '6px 7px', borderBottom: '1px solid #f6f7f9', verticalAlign: 'top', fontSize: '12px' },
+
+      // ── 旧知识库导入（T5-5：清单 + 勾选） ────────────────────────
+      importList: {
+        border: '1px solid #eef0f2', borderRadius: '9px', background: '#fbfcfd',
+        maxHeight: '260px', overflow: 'auto', margin: '8px 0',
+      },
+      importRow: {
+        display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap',
+        padding: '5px 9px', borderBottom: '1px solid #f2f4f7', fontSize: '12px', cursor: 'pointer',
+      },
+      importRel: {
+        fontFamily: 'Consolas, "Courier New", monospace', fontSize: '11.5px', color: '#1f2328',
+        wordBreak: 'break-all',
+      },
     }
 
     function badge(text, extra) {
@@ -1674,6 +1732,15 @@ window.__ModuleLoader__.load({
       if (n < 1000) return String(Math.round(n)) + ' ms'
       const sec = n < 10000 ? (n / 1000).toFixed(1) : String(Math.round(n / 1000))
       return sec + ' s (' + String(Math.round(n)) + ' ms)'
+    }
+
+    /** 字节 → 可读大小（导入清单里给使用者一个量级感） */
+    function formatBytes(n) {
+      const v = Number(n)
+      if (!isFinite(v) || v < 0) return ''
+      if (v < 1024) return String(v) + ' B'
+      if (v < 1024 * 1024) return (v / 1024).toFixed(1) + ' KB'
+      return (v / 1024 / 1024).toFixed(1) + ' MB'
     }
 
     /** 只保留末尾 max 行（接口 output 已由宿主截断到 8000 字符） */
@@ -2789,8 +2856,10 @@ window.__ModuleLoader__.load({
       memoryDir: '', obsidianDir: '', domainId: '', custom: [],
       // 「一个存储根目录 + 各自新建自己的子文件夹」模型：rootDir 是使用者唯一要选的目录，
       // 两个派生目录默认只读跟随；memCustom / obsCustom = 该目录已被「单独指定」改写，不再跟随。
-      rootDir: '', memCustom: false, obsCustom: false, rootSubdirs: null,
+      rootDir: '', memCustom: false, obsCustom: false, rootSubdirs: null, vaultLayout: null,
       modal: null, run: null, imported: '', pickError: '', openHint: null,
+      // 旧知识库导入（T5-5）：null = 还没选目录；形状见 IMPORT_RUN_DEFAULT
+      importRun: null,
       // 当前生效值（GET /setup-state）：用于预填三个字段并标注来源；setupFilled = 已预填过
       setup: { phase: 'loading', data: null, error: '' }, setupFilled: false,
       // 应用内目录浏览器（方案 A）；null = 未打开。形状见 DIR_BROWSER_DEFAULT
@@ -2798,6 +2867,34 @@ window.__ModuleLoader__.load({
       // D3：三项全绿后由使用者点「点击此处继续」才展开配置表单
       gateConfirmed: false,
     }
+    /**
+     * 「旧知识库导入」卡的 state 骨架（T5-5）。
+     * phase：idle（未选目录）· run（正在列清单）· ready（清单已列，可勾选）· apply（正在写入）
+     *      · error（列清单失败）
+     * selected：rel → true 的勾选表（只有 items 里 state='copy' 的条目可能被勾上）
+     */
+    const IMPORT_RUN_DEFAULT = {
+      phase: 'idle', from: '', to: '', items: [], selected: {}, stats: null,
+      truncated: false, error: '', message: '', applied: null,
+    }
+
+    /** 由清单重算汇总（写入后本地更新用；口径与宿主 scanImport 的 stats 一致） */
+    function importStatsOf(items) {
+      const list = Array.isArray(items) ? items : []
+      const pick = (st) => list.filter((x) => x && x.state === st)
+      const copy = pick('copy')
+      return {
+        total: list.length,
+        copy: copy.length,
+        same: pick('same').length,
+        conflict: pick('conflict').length,
+        occupied: pick('occupied').length,
+        sensitive: copy.filter((x) => Array.isArray(x.sensitive) && x.sensitive.length > 0).length,
+        bytes: copy.reduce((acc, x) => acc + (Number(x.bytes) || 0), 0),
+        listed: list.length,
+      }
+    }
+
     /**
      * 防御性归一：state 形状异常时（hook 替身槽位错位、热更中途等）退回默认骨架，
      * 保证读取与 setState 更新都不抛、页面不白屏。真机由 React 保证形状，这里是兜底。
@@ -2897,6 +2994,8 @@ window.__ModuleLoader__.load({
               }
               const subs = (body.rootSubdirs && typeof body.rootSubdirs === 'object') ? body.rootSubdirs : null
               next.rootSubdirs = subs
+              // T5-7：目录布局识别（new / legacy / mixed / empty / unknown），用于提示旧布局
+              next.vaultLayout = (body.vaultLayout && typeof body.vaultLayout === 'object') ? body.vaultLayout : null
             }
             if (!alreadyFilled && !String(prev.domainId || '').trim() && typeof dom.id === 'string' && dom.id) {
               if (dom.isPreset === true) {
@@ -2970,7 +3069,7 @@ window.__ModuleLoader__.load({
         // 存储根目录走 setRoot：两个派生目录要跟着一起重算（其余字段仍是直接写值）
         if (target.key === 'rootDir') setRoot(path)
         else if (target.key) setField(target.key, path)
-        if (target.import) setSt((prev) => Object.assign({}, prev, { imported: path, browse: null }))
+        if (target.import) { setSt((prev) => Object.assign({}, prev, { browse: null })); openImport(path) }
         else setSt((prev) => Object.assign({}, prev, { browse: null }))
         setPickError('')
       }
@@ -3024,12 +3123,143 @@ window.__ModuleLoader__.load({
         if (typeof fn !== 'function') { openDirBrowser({ import: true }); return }
         setPickError('')
         Promise.resolve().then(() => fn()).then((dir) => {
-          if (typeof dir === 'string' && dir.trim()) setSt((prev) => Object.assign({}, prev, { imported: dir.trim() }))
+          if (typeof dir === 'string' && dir.trim()) openImport(dir.trim())
         }).catch((err) => {
           const msg = String((err && err.message) || err)
           if (msg.indexOf('native capability') >= 0 || msg.indexOf('系统目录选择器') >= 0) { openDirBrowser({ import: true }); return }
           setPickError(t('initPickFailed') + msg)
         })
+      }
+
+      // ── 旧知识库导入（T5-5）：清单 → 勾选 → 逐项对照写入 ──────────
+      // 纪律（设计定稿 §3.4 / §12 决议 8 与 13②）：只读源目录、只补还没有的文件、**绝不覆盖现有文件**；
+      // 先列清单再由使用者勾选 —— 宿主只接受清单里 state='copy' 的条目，其余（已存在 / 冲突 / 被占用）
+      // 一律保留目标内容。敏感命中的条目默认不勾选（§12.1：先列出、由使用者确认后才写入）。
+      function setImport(patch) {
+        setSt((prev) => {
+          const cur = (prev.importRun && typeof prev.importRun === 'object') ? prev.importRun : Object.assign({}, IMPORT_RUN_DEFAULT)
+          return Object.assign({}, prev, { importRun: Object.assign({}, cur, patch) })
+        })
+      }
+      /**
+       * 列清单：POST /import/scan（**只读**，宿主绝不落盘）→ 逐项对照
+       * （缺失·可补 / 已存在·一致 / 已存在·内容不同 / 已被目录占用）。
+       * 默认只勾「缺失可补且未命中敏感模式」的条目。
+       */
+      async function scanImportDir(dir, opts) {
+        const from = String(dir || '').trim()
+        const to = String(obsidianDir || '').trim()
+        if (!from) return
+        const keepItems = Boolean(opts && opts.keepItems)
+        setSt((prev) => {
+          const prevRun = (prev.importRun && typeof prev.importRun === 'object') ? prev.importRun : null
+          return Object.assign({}, prev, {
+            imported: from,
+            importRun: Object.assign({}, IMPORT_RUN_DEFAULT, {
+              phase: 'run', from: from, to: to,
+              items: keepItems && prevRun ? (prevRun.items || []) : [],
+            }),
+          })
+        })
+        try {
+          const res = await postFull('/import/scan', { from: from, to: to }, 180000)
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (!res.ok || body.ok === false) {
+            setImport({ phase: 'error', error: t('importScanFailed') + '：' + String(body.error || body.message || ('HTTP ' + res.status)) })
+            return
+          }
+          const items = Array.isArray(body.items) ? body.items : []
+          const selected = {}
+          for (const it of items) {
+            if (it && it.state === 'copy' && !(Array.isArray(it.sensitive) && it.sensitive.length)) selected[it.rel] = true
+          }
+          setSt((prev) => Object.assign({}, prev, {
+            imported: String(body.from || from),
+            importRun: {
+              phase: 'ready', from: String(body.from || from), to: String(body.to || to),
+              items: items, selected: selected,
+              stats: (body.stats && typeof body.stats === 'object') ? body.stats : importStatsOf(items),
+              truncated: body.truncated === true,
+              error: '', message: String(body.message || ''), applied: null,
+            },
+          }))
+        } catch (err) {
+          setImport({ phase: 'error', error: t('importScanFailed') + '：' + String((err && err.message) || err) })
+        }
+      }
+      /** 选完目录（native 或应用内浏览器）→ 立刻列清单 */
+      function openImport(dir) {
+        const from = String(dir || '').trim()
+        if (!from) return
+        setImport({ phase: 'run', from: from, applied: null })
+        scanImportDir(from)
+      }
+      function importToggle(rel) {
+        const r = String(rel || '')
+        if (!r) return
+        setSt((prev) => {
+          const cur = (prev.importRun && typeof prev.importRun === 'object') ? prev.importRun : Object.assign({}, IMPORT_RUN_DEFAULT)
+          const selected = Object.assign({}, cur.selected || {})
+          if (selected[r]) delete selected[r]
+          else selected[r] = true
+          return Object.assign({}, prev, { importRun: Object.assign({}, cur, { selected: selected }) })
+        })
+      }
+      function importSelectAll(flag) {
+        setSt((prev) => {
+          const cur = (prev.importRun && typeof prev.importRun === 'object') ? prev.importRun : Object.assign({}, IMPORT_RUN_DEFAULT)
+          const selected = {}
+          if (flag) {
+            for (const it of (Array.isArray(cur.items) ? cur.items : [])) {
+              if (it && it.state === 'copy') selected[it.rel] = true
+            }
+          }
+          return Object.assign({}, prev, { importRun: Object.assign({}, cur, { selected: selected }) })
+        })
+      }
+      /**
+       * 写入所选：POST /import/apply（dryRun:false）—— 只补缺失、绝不覆盖。
+       * 写入成功后把已补项就地标成「已存在·一致」并取消勾选（不再重扫，避免整页闪动）。
+       */
+      async function runImport() {
+        const cur = st.importRun || IMPORT_RUN_DEFAULT
+        if (cur.phase === 'run' || cur.phase === 'apply') return
+        const rels = (Array.isArray(cur.items) ? cur.items : [])
+          .filter((it) => it && it.state === 'copy' && cur.selected && cur.selected[it.rel])
+          .map((it) => it.rel)
+        if (rels.length === 0) { setImport({ error: t('importNoneSelected') }); return }
+        setImport({ phase: 'apply', error: '', message: '', applied: null })
+        try {
+          const res = await postFull('/import/apply', { from: cur.from, to: cur.to, rels: rels, dryRun: false }, 10 * 60 * 1000)
+          const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+          if (!res.ok || body.ok === false) {
+            setImport({ phase: 'ready', error: t('importApplyFailed') + '：' + String(body.error || body.message || ('HTTP ' + res.status)) })
+            return
+          }
+          const copied = Array.isArray(body.copied) ? body.copied : []
+          const skipped = Array.isArray(body.skipped) ? body.skipped : []
+          const rejected = Array.isArray(body.rejected) ? body.rejected : []
+          const done = {}
+          for (const c of copied) { if (c && c.rel) done[c.rel] = true }
+          setSt((prev) => {
+            const p = (prev.importRun && typeof prev.importRun === 'object') ? prev.importRun : Object.assign({}, IMPORT_RUN_DEFAULT)
+            const items = (Array.isArray(p.items) ? p.items : []).map((it) =>
+              (it && done[it.rel]) ? Object.assign({}, it, { state: 'same', sensitive: [] }) : it)
+            const selected = {}
+            for (const k of Object.keys(p.selected || {})) { if (!done[k]) selected[k] = true }
+            return Object.assign({}, prev, {
+              importRun: Object.assign({}, p, {
+                phase: 'ready', items: items, selected: selected,
+                stats: importStatsOf(items),
+                error: '',
+                message: String(body.detail || ''),
+                applied: { copied: copied.length, skipped: skipped.length, rejected: rejected.length, bytes: Number(body.bytesWritten) || 0 },
+              }),
+            })
+          })
+        } catch (err) {
+          setImport({ phase: 'ready', error: t('importApplyFailed') + '：' + String((err && err.message) || err) })
+        }
       }
       /** 子目录名与路径拼接：名字来自宿主 GET /setup-state 的 rootSubdirs（前端不硬编码） */
       const rootSubs = (st.rootSubdirs && typeof st.rootSubdirs === 'object') ? st.rootSubdirs : {}
@@ -3433,6 +3663,8 @@ window.__ModuleLoader__.load({
           derivedDirField('memoryDir', t('coreFieldMemoryDir'), t('coreFieldMemoryDirHint'), st.memoryDir, st.memCustom === true),
           derivedDirField('obsidianDir', t('coreFieldObsidianDir'), t('coreFieldObsidianDirHint'), st.obsidianDir, st.obsCustom === true),
           domainField,
+          st.vaultLayout && st.vaultLayout.layout === 'legacy' ? h('div', { key: 'vlayout', style: S.warnLine }, t('coreVaultLegacy')) : null,
+          st.vaultLayout && st.vaultLayout.layout === 'mixed' ? h('div', { key: 'vlayout', style: S.note }, t('coreVaultMixed')) : null,
           st.domains.phase === 'error' ? h('div', { key: 'derr', style: S.warnLine }, t('coreDomainMissing') + '：' + st.domains.error) : null,
           domainNeedsContent ? h('div', { key: 'dneed', style: S.warnLine }, t('coreDomainNeedsContent')) : null,
           st.setup.phase === 'error'
@@ -3485,22 +3717,15 @@ window.__ModuleLoader__.load({
         ]),
       ]) : null
 
-      // ── 渲染：导入引导卡（五项全绿后出现；本轮只给入口与纪律）──
-      const importCard = runPhase === 'done' ? h('div', { key: 'imp', style: S.card }, [
-        h('div', { key: 'head', style: S.cardHead }, [
-          h('h3', { key: 'title', style: S.cardTitle }, t('importTitle')),
-          h('div', { key: 'sub', style: S.cardSub }, t('importSub')),
-        ]),
-        h('div', { key: 'body', style: S.cardBody }, [
-          h('div', { key: 'note', style: S.note }, t('importNote')),
-          h('div', { key: 'act', style: S.actions }, [
-            h('button', { key: 'b', type: 'button', style: S.btn, onClick: () => pickImport() }, t('importBrowse')),
-          ]),
-          st.imported
-            ? h('div', { key: 'picked', style: S.note }, t('importPicked') + st.imported + ' · ' + t('importLater'))
-            : h('div', { key: 'ph', style: S.labelHint }, t('importPlaceholder')),
-        ]),
-      ]) : null
+      // ── 渲染：导入引导卡（六项全绿后出现；T5-5：清单 → 勾选 → 逐项对照写入）──
+      const importCard = runPhase === 'done' ? h(ImportCard, {
+        key: 'imp', t: t, state: st.importRun,
+        onBrowse: () => pickImport(),
+        onScan: () => scanImportDir((st.importRun && st.importRun.from) || st.imported),
+        onToggle: (rel) => importToggle(rel),
+        onSelectAll: (flag) => importSelectAll(flag),
+        onApply: () => runImport(),
+      }) : null
 
       const coreBody = h('div', { key: 'core', style: gated ? S.gatedBody : null }, [dirsCard, chainCard, importCard])
 
@@ -3524,6 +3749,112 @@ window.__ModuleLoader__.load({
       }) : null
 
       return h('div', null, (gated ? [gateCard, coreBody] : [coreBody]).concat([modalNode, browseNode]))
+    }
+
+
+    /**
+     * 「旧知识库导入」卡（T5-5）：列清单 → 勾选 → 逐项对照写入。
+     * 纯展示 + 回调：网络动作都在 CorePage 的 scanImportDir / runImport 里。
+     * 可勾选性由宿主清单定：只有 state='copy'（目标确实缺失）的条目能勾；
+     * 已存在·一致 / 已存在·内容不同 / 已被目录占用一律 disabled（**不覆盖**是硬纪律）。
+     */
+    function ImportCard(props) {
+      const t = props.t
+      const s = (props.state && typeof props.state === 'object') ? props.state : {}
+      const phase = String(s.phase || 'idle')
+      const items = Array.isArray(s.items) ? s.items : []
+      const copyItems = items.filter((x) => x && x.state === 'copy')
+      const selectedMap = (s.selected && typeof s.selected === 'object') ? s.selected : {}
+      const selectedCount = copyItems.filter((x) => selectedMap[x.rel]).length
+      const busy = phase === 'run' || phase === 'apply'
+      const stats = (s.stats && typeof s.stats === 'object') ? s.stats : null
+      const btnStyle = (extra) => Object.assign({}, S.btn, extra || null, busy ? S.btnDisabled : null)
+      const nodes = [
+        h('div', { key: 'note', style: S.note }, t('importNote')),
+        h('div', { key: 'act', style: S.actions }, [
+          h('button', { key: 'b', type: 'button', disabled: busy, style: btnStyle(null), onClick: () => props.onBrowse() }, t('importBrowse')),
+          s.from ? h('span', { key: 'p', style: S.labelHint }, t('importPicked') + String(s.from)) : null,
+        ]),
+      ]
+      if (phase === 'idle') nodes.push(h('div', { key: 'ph', style: S.labelHint }, t('importPlaceholder')))
+      if (phase === 'run') nodes.push(h('div', { key: 'run', style: S.note }, t('importScanning')))
+      if (s.error) nodes.push(h('div', { key: 'err', style: S.warnLine }, String(s.error)))
+      if (phase === 'ready' || phase === 'apply') {
+        if (stats) nodes.push(h('div', { key: 'sum', style: S.actions }, [
+          badge(fillAll(t('importSumCopy'), { n: String(stats.copy || 0) }), S.badgeOk),
+          badge(fillAll(t('importSumSame'), { n: String(stats.same || 0) }), S.badgeSkip),
+          badge(fillAll(t('importSumConflict'), { n: String(stats.conflict || 0) }), stats.conflict ? S.badgeMissing : S.badgeSkip),
+          stats.sensitive ? badge(fillAll(t('importSumSensitive'), { n: String(stats.sensitive) }), S.badgeWarn) : null,
+        ]))
+        if (s.message) nodes.push(h('div', { key: 'msg', style: S.labelHint }, String(s.message)))
+        nodes.push(h('div', { key: 'tools', style: S.toolbar }, [
+          h('button', {
+            key: 'all', type: 'button', disabled: busy || copyItems.length === 0,
+            style: btnStyle(copyItems.length === 0 ? S.btnDisabled : null),
+            onClick: () => props.onSelectAll(true),
+          }, t('importSelectAll')),
+          h('button', {
+            key: 'none', type: 'button', disabled: busy || selectedCount === 0,
+            style: btnStyle(selectedCount === 0 ? S.btnDisabled : null),
+            onClick: () => props.onSelectAll(false),
+          }, t('importSelectNone')),
+          h('button', { key: 'rs', type: 'button', disabled: busy, style: btnStyle(null), onClick: () => props.onScan() }, t('importRescan')),
+        ]))
+        nodes.push(h('div', { key: 'list', style: S.importList }, items.map((it) => {
+          const sen = Array.isArray(it.sensitive) ? it.sensitive : []
+          const checked = it.state === 'copy' && Boolean(selectedMap[it.rel])
+          return h('label', { key: it.rel, style: S.importRow, 'data-import-rel': it.rel }, [
+            h('input', {
+              key: 'c', type: 'checkbox', style: S.check, checked: checked,
+              disabled: busy || it.state !== 'copy',
+              'data-import-state': it.state,
+              onChange: () => props.onToggle(it.rel),
+            }),
+            h('span', { key: 'r', style: S.importRel }, String(it.rel)),
+            h('span', { key: 'st', style: Object.assign({}, S.badge, importStateStyle(it.state)) }, importStateLabel(t, it.state)),
+            (Number(it.bytes) > 0) ? h('span', { key: 'b', style: S.actionHint }, formatBytes(it.bytes)) : null,
+            sen.length ? h('span', { key: 'sen', style: Object.assign({}, S.badge, S.badgeWarn) },
+              t('importSensitiveTag') + '：' + sen.map((x) => String(x.label || '') + (x.line ? (' L' + x.line) : '')).join(' / ')) : null,
+          ])
+        })))
+        if (s.truncated) nodes.push(h('div', { key: 'tr', style: S.warnLine }, fillAll(t('importTruncated'), { n: String(items.length) })))
+        if (stats && stats.sensitive) nodes.push(h('div', { key: 'senh', style: S.warnLine }, t('importSensitiveHint')))
+        nodes.push(h('div', { key: 'go', style: S.actions }, [
+          h('button', {
+            key: 'a', type: 'button', disabled: busy || selectedCount === 0,
+            style: Object.assign({}, S.btn, S.btnPrimary, (busy || selectedCount === 0) ? S.btnDisabled : null),
+            onClick: () => props.onApply(),
+          }, phase === 'apply' ? t('importApplying') : fillAll(t('importApply'), { n: String(selectedCount) })),
+          h('span', { key: 'h', style: S.actionHint }, t('importApplyHint')),
+        ]))
+        if (s.applied) nodes.push(h('div', { key: 'done', style: S.note }, fillAll(t('importApplied'), {
+          copied: String(s.applied.copied || 0),
+          skipped: String(s.applied.skipped || 0),
+          rejected: String(s.applied.rejected || 0),
+        })))
+      }
+      return h('div', { style: S.card }, [
+        h('div', { key: 'head', style: S.cardHead }, [
+          h('h3', { key: 'title', style: S.cardTitle }, t('importTitle')),
+          h('div', { key: 'sub', style: S.cardSub }, t('importSub')),
+        ]),
+        h('div', { key: 'body', style: S.cardBody }, nodes),
+      ])
+    }
+
+    /** 导入清单里一行的状态 → 双语文案（key 在 ZH/EN 两侧都有） */
+    function importStateLabel(t, state) {
+      if (state === 'copy') return t('importStateCopy')
+      if (state === 'same') return t('importStateSame')
+      if (state === 'conflict') return t('importStateConflict')
+      if (state === 'occupied') return t('importStateOccupied')
+      return String(state || '')
+    }
+    /** 导入清单里一行的状态 → 徽标色（可补=绿；冲突/被占用=红；已一致=灰） */
+    function importStateStyle(state) {
+      if (state === 'copy') return S.badgeOk
+      if (state === 'conflict' || state === 'occupied') return S.badgeMissing
+      return S.badgeSkip
     }
 
     /** 新建岗位对话框（1.1.3）：岗位名称 / 岗位内容 / [自动生成] / 保存 */

@@ -1,6 +1,6 @@
 # workspace-tokenpet · 模块说明（维护者向）
 
-本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/workspace-tokenpet/`）；宿主源码行号对应 `src/*.ts`（`README.md:93` 明示 **`src/**` 是唯一真源**，`lib/**` 与 `client/client.js` 是随包分发的构建产物）。当前包版本 **1.0.1**（`package.json:3`）。
+本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/workspace-tokenpet/`）；宿主源码行号对应 `src/*.ts`（`README.md:93` 明示 **`src/**` 是唯一真源**，`lib/**` 与 `client/client.js` 是随包分发的构建产物）。当前包版本 **1.0.3**（`package.json:3`）。
 
 ## 1. 架构
 
@@ -25,7 +25,7 @@
 
 | 文件 | 行数 | 职责（引自文件头注释） |
 |---|---|---|
-| `src/index.ts` | 1133 | 宿主半入口：webServer 精确路由、跨会话累计用量、单飞后台协调器（:1-30） |
+| `src/index.ts` | 1150 | 宿主半入口：webServer 精确路由、跨会话累计用量、单飞后台协调器（:1-30） |
 | `src/usage.ts` | 338 | 宿主侧 token 用量聚合与今日本地时区趋势（:1） |
 | `src/session-usage-index.ts` | 185 | 按会话的用量折叠索引，带廉价增量失效；索引只是优化，缺失即回退折叠会话日志（:1-5） |
 | `src/lifetime-ledger.ts` | 310 | 持久、**不可回滚**的终身 token 账本（:1） |
@@ -59,7 +59,7 @@
 | `POST /workspace-tokenpet/usage/lifetime/clear-history` | `src/index.ts:923` | **不可逆**清空，需确认串 | 写 `lifetime-ledger.json`（`src/lifetime-contract.ts:1-2`） |
 | `GET /workspace-tokenpet/usage/trend` / `/trend/status` | `src/index.ts:854` / :824 | 读小时投影快照 | 读 `hourly-trend-index.json`（`src/hourly-trend-index.ts:276`） |
 | `POST /workspace-tokenpet/usage/trend/repair` / `/repair/cancel` | `src/index.ts:876` / :887 | 缺 `listSnapshots()` 时以 `supportsSnapshots()` 守卫优雅降级 | 写 `hourly-trend-index.json`（:262-269 原子写） |
-| `GET /workspace-tokenpet/index/status` | `src/index.ts:650` | 只读持久索引 + 上次单飞头检查结果，不等完整会话检查（:17-20） | 读 `session-usage-index.json` |
+| `GET /workspace-tokenpet/index/status` | `src/index.ts:662` | 只读持久索引 + 上次单飞头检查结果，不等完整会话检查（:17-20） | 读 `session-usage-index.json` |
 | `POST /workspace-tokenpet/index/build` / `/index/sync` / `/index/cancel` | `src/index.ts:695` / :713 / :739 | 单飞后台协调器：启动后 2–5s 一次 reconcile、`session/flush`/`session/disposed` 合并去抖增量、5–10 分钟低频兜底（:20-25） | 写 `session-usage-index.json`（:174-176） |
 | `POST /workspace-tokenpet/prompt/enhance` | `src/index.ts:753` | 使用者主动触发，经既有模型路由增强；**不改写、不记录完整提示词**（`README.md:42-43`） | 不落盘（消息以 `source.kind='plugin'` 注入，:803） |
 | `GET /workspace-tokenpet/skins` | `src/index.ts:1040` | `listSkinPacks` 扫描套装目录 → 清单（`manifestUrl`） | 读 `~/.dsh/data/workspace-tokenpet/skins/`（`src/skins.ts:81`） |
@@ -87,7 +87,7 @@
 
 ### 体积事实（客户端 bundle）
 
-- **`client/client.js` = 477.6 KiB（489,037 B）**（1.0.2 起）。1.0.1 及以前为 **21.93 MiB**（22,992,786 B），其中内嵌 12 条 `data:image/webp;base64`（base64 字符 22,900,509，解码约 16.38 MiB）—— 即当时约 22 MB 的 bundle 里约 16 MB 是 base64 WebP 图集。1.0.2 把这 12 段改为 exact 路由按需提供，bundle 只保留元数据。
+- **`client/client.js` = 477.6 KiB（489,037 B）**（1.0.2 起）。1.0.1 及以前为 **21.93 MiB**（22,992,786 B），其中内嵌 12 条 `data:image/webp;base64`（base64 字符合计 **22,504,104**，解码约 **16,878,078 B ≈ 16.10 MiB**）—— 即当时约 22 MB 的 bundle 里约 16 MB 是 base64 WebP 图集。1.0.2 把这 12 段改为 exact 路由按需提供，bundle 只保留元数据。
 - **它随页面启动一并加载**：bundle 自身以 `window.__ModuleLoader__.load({ id: "workspace-tokenpet", factory … })` 自注册（`client/client.js:1`；由 `tsdown.config.mjs:40-42` 注入 banner/footer，:2 说明由 dsh web 插件表在 `/plugins/workspace-tokenpet/client.js` 提供）。宿主侧 `@deepseek-ai/dsh-client-modules/lib/index.js:183` 把各插件客户端 bundle 组合成 `/plugins/??<id>/client.js,…&rev=…` combo URL，其 `README.zh.md:74` 说明宿主注入 `window.__ModuleLoader__` queue facade、application combo 的 preload 与**阻塞 parser 的 bootstrap combo 脚本**后，才进入外壳启动；`README.zh.md:46` 另说明客户端 bundle 必须构建好，缺失会「大声失败」。本模块 `README.md:93-95` 同口径：产物随包分发、宿主按 id 装载客户端半。
 - 该体积不进入发布物的额外副本：`tsdown.config.mjs:24-27` 刻意不产出 sourcemap、也不单独分发 action-sheet 文件（它们与内嵌字节重复）。
 
@@ -95,7 +95,7 @@
 
 ### HTTP 路由（宿主半注册的精确/前缀路由）
 
-`GET`：`/workspace-tokenpet/usage`（`src/index.ts:951`）、`/usage/lifetime`（:901）、`/usage/trend`（:854）、`/usage/trend/status`（:824）、`/index/status`（:650）、`/skins`（:1040）、`/skins/file`（:1074）、前缀 `/skins/`（:1088）。
+`GET`：`/workspace-tokenpet/usage`（`src/index.ts:951`）、`/usage/lifetime`（:901）、`/usage/trend`（:854）、`/usage/trend/status`（:824）、`/index/status`（:662）、`/skins`（:1040）、`/skins/file`（:1074）、前缀 `/skins/`（:1088）。
 `POST`：`/usage/reset`（:966）、`/usage/restore`（:988）、`/usage/lifetime/clear-history`（:923）、`/usage/trend/repair`（:876）、`/usage/trend/repair/cancel`（:887）、`/index/build`（:695）、`/index/sync`（:713）、`/index/cancel`（:739）、`/prompt/enhance`（:753）。
 错误契约示例：`index/build` 发现已有可用索引时返回 409「usable index already exists; use /workspace-tokenpet/index/sync」（:702）；`index/sync` 无可用索引时返回 409「no usable index exists; run /workspace-tokenpet/index/build first」（:720）。
 
@@ -136,7 +136,7 @@
 
 ### 版本回退
 
-1. **改版本号 → 重新构建 → 重装**：`package.json:3` 的 `version`（当前 `1.0.1`）是安装器判定的版本口径；回退时把版本号改回目标值，`npm install && npm run build`（重出 `lib/` 与 `client/client.js`），再由集成体安装器重装。
+1. **改版本号 → 重新构建 → 重装**：`package.json:3` 的 `version`（当前 `1.0.3`）是安装器判定的版本口径；回退时把版本号改回目标值，`npm install && npm run build`（重出 `lib/` 与 `client/client.js`），再由集成体安装器重装。
 2. **集成体安装是原子替换**：安装器把 `modules/workspace-tokenpet` 整体复制到 `<profile>/node_modules/workspace-tokenpet` 并写入 profile 的 `dsh.profile.bundles`，过程为**原子替换 + 逐文件 SHA256 校验，失败即回滚**（`README.md:61-63`）。
 3. **开发态手动挂载**：`dsh plugin --profile desktop add link:<本模块目录>`（`README.md:72-76`）；**宿主半改动需重启 DSH Desktop，只改客户端时刷新页面即可**（`README.md:76`）——即客户端回退有时不需要重启。
 4. **`git revert`**：源码与素材都在仓库内，回到历史提交后按上面重建/重装；版本历史见 `CHANGELOG.md`（顶部为最新条目，`CHANGELOG.md:10`）。
