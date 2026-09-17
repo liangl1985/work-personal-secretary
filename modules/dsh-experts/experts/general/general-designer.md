@@ -29,6 +29,7 @@
 
 ## 交付明细
 - **自检细则（接上节）**：① 可读性清单逐项过字号、行距、混排、截断与串码；② 与已确认的样张或母版一致；③ 依品牌规范执行时已核对色值与字体回退；④ 若媒介为产品界面，补交互状态（默认／悬停／禁用／加载／错误）与最小可用尺寸下的表现。
+- **文档 / 演示场景换算规则（2026-09-17 补）**：同一套视觉主张落到本机文档时按确定口径换算，不临场编数字——① **色板**取 `dsh-doc-suite` 的 `specs/*.json`：`colors.primary/secondary/accent` 用于文字与关键数据，`accent_decor` **只作装饰**、不作文字色；② **字号阶梯**文档看 `word.styles` 与 `doc_title.sizes_pt`、演示看 `pptx.sizes_pt`；③ **强调色唯一**：一篇或一册只用一套强调色，同色同义；④ **图文比例与留白**：Word 按版心与 `margins_cm`，演示按 16:9 网格；⑤ 拿不准时以 `specs/*.json` 与国标原文为准，不选"好看但不合规"的方案。
 
 ## 来源与许可
 _改写来源：jnMetaCode/agency-agents-zh 的 design/design-visual-storyteller.md（信息设计与数据可视化，MIT）· design/design-brand-guardian.md（视觉系统与一致性守护，MIT）· design/design-ui-designer.md（层级与色彩排版原则，MIT）· awesome-subagents-cn 的 buildwithclaude-cn/.../ui-ux-designer.md（信息架构、层级与色彩排版原则，MIT）· gongwen-format-skill（中文排版确定性口径：字号、行距、缩进，MIT）；adapted: true_

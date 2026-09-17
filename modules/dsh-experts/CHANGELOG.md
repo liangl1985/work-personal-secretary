@@ -2,6 +2,15 @@
 
 本插件的版本历史。
 
+## 0.5.9 — 2026-09-17（`general-designer` 补「文档/演示场景换算规则」· T6）
+
+**背景**：主人 2026-09-17 点名做 T6（原话「这个做，你提出的问题特别好」）。8-14 实测的结论是「**数据与内容达标，成品视觉只到勉强能用**」，根因是设计师卡的知识偏 Web/UI，给不出**文档场景的可执行资产**。
+
+- **交付明细新增一条「文档 / 演示场景换算规则」**：① **色板**取 `dsh-doc-suite` 的 `specs/*.json`（`primary/secondary/accent` 用于文字与关键数据，`accent_decor` **只作装饰**）；② **字号阶梯**文档看 `word.styles` 与 `doc_title.sizes_pt`、演示看 `pptx.sizes_pt`；③ **强调色唯一**（一篇／一册一套，同色同义）；④ **图文比例与留白**按版心 `margins_cm`（Word）与 16:9 网格（演示）；⑤ 以 `specs/*.json` 与国标原文为准，不选「好看但不合规」的方案
+- **单一真相源纪律**：本卡**不重复维护数字**，一律指向 `specs/*.json`（与 0.5.8 的 `general-typeset` 同口径，避免「卡片说 A、规格做 B」）
+- **验证**：`regression` **48/0** · `card-preview --all` **FAIL 0 · WARN 0 · OK 19**（`general-designer` 正文 3107 / 卡 550）
+- ⚠️ **需重启 DSH**：改的是 `experts/**`（persona 正文）
+
 ## 0.5.8 — 2026-09-17（`general-typeset` 风格选型对齐：三套内置 + 公文已落地）
 
 **背景**：主人 2026-09-17 提出「避免表述不同但实质一致／不一致的问题一直修」。核查发现本卡仍写「随包内置只有这两个（standard/compact）……正式发文 → `govdoc`（尚未落地）」，而 dsh-doc-suite 0.7.11 已新增 `specs/govdoc.json`（GB/T 9704-2012）—— **卡片与规格不一致**。
