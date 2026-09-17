@@ -71,7 +71,9 @@ jobs:
       - name: 子项目必需文件自检
         run: |
           fail=0
-          for pkg in $(git ls-files | grep -E '(^|/)package.json$'); do
+          # 只检查子项目包（modules/<name>/package.json）；scripts/ 下的是随包运行时清单（如 media/runtime），
+          # 不适用 README/CHANGELOG/LICENSE 门禁 —— 此缺陷此前被上一步「集成体本体自测」的红灯掩盖（2026-09-17 修复）
+          for pkg in $(git ls-files | grep -E '(^|/)package.json$' | grep -v '/scripts/'); do
             d=$(dirname "$pkg")
             for f in README.md CHANGELOG.md LICENSE; do
               if [ -f "$d/$f" ]; then :; else echo "缺少 $d/$f"; fail=1; fi
