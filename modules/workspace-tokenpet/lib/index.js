@@ -678,16 +678,28 @@ export function apply(ctx) {
                         });
                     }
                     else {
-                        // Full historical backfill remains explicit. Lifetime can still
-                        // credit live sessions and freshly closed IDs without constructing
-                        // the usage index or reading unrelated historical logs.
+                        // No persistent index exists yet. Lifetime can already credit live
+                        // sessions and freshly closed IDs, so refresh that first.
                         operation.promise = refreshLifetimeLedger();
                         await operation.promise;
-                        if (ownsOperation(operation))
-                            indexOperation = undefined;
-                        indexTerminal = undefined;
-                        indexError = undefined;
-                        settleTrailingSync();
+                        if (!ownsOperation(operation))
+                            return;
+                        // Then build the persistent usage index ONCE, in the background.
+                        // Without it, every panel read and every 清空/恢复 re-folds all
+                        // session logs on demand; with it those reads hit the cached folds
+                        // and later passes take the incremental branch above. Progress goes
+                        // through the existing index/status contract and the build shares
+                        // the operation controller, so /index/cancel still aborts it.
+                        operation.progress = initialIndexProgress('building', 0);
+                        const built = buildSessionUsageIndex(sessionQuery, usageIndex, {
+                            signal: operation.controller.signal,
+                            // Yield often: the host must stay responsive while this runs.
+                            yieldEvery: 4,
+                            onProgress: (next) => { if (indexOperation === operation)
+                                operation.progress = { ...next, status: 'building' }; },
+                        });
+                        operation.promise = built;
+                        void built.then(result => completeOperation(operation, result), error => failOperation(operation, error));
                         return;
                     }
                     operation.promise = promise;
@@ -1220,6 +1232,46 @@ export function apply(ctx) {
                     const id = url?.searchParams.get('id') ?? '';
                     const file = url?.searchParams.get('file') ?? '';
                     await serveSkinFile(res, id, file);
+                },
+            }));
+            // GET: built-in strip artwork for the embedded-default character.
+            // The client asks for one action WebP at a time; nothing is embedded in
+            // the browser bundle, so the startup path carries no image payload.
+            // EXACT + query only: the desktop carrier resolves exact routes only
+            // (see skins.ts:107-113) and a prefix form answers 404 there.
+            const builtinStripDir = new URL('../skins/default/', import.meta.url);
+            const builtinStripFiles = new Set(STRIP_ACTIONS.map(action => `${action}.webp`));
+            disposers.push(ws.register({
+                kind: 'exact',
+                path: '/workspace-tokenpet/builtin-strip',
+                handler: async (req, res) => {
+                    const method = String(req?.method ?? '').toUpperCase();
+                    if (method !== 'GET') {
+                        json(res, 405, { error: 'method not allowed' });
+                        return;
+                    }
+                    const rawUrl = req?.url;
+                    const url = typeof rawUrl === 'string' ? new URL(rawUrl, 'http://localhost') : null;
+                    const file = url?.searchParams.get('file') ?? '';
+                    // Whitelist the twelve known strip names; never resolve a caller path.
+                    if (!builtinStripFiles.has(file)) {
+                        json(res, 404, { error: 'unknown strip' });
+                        return;
+                    }
+                    try {
+                        const data = await readFile(new URL(file, builtinStripDir));
+                        const sr = res;
+                        sr.writeHead(200, {
+                            'content-type': 'image/webp',
+                            'content-length': String(data.byteLength),
+                            // Built-in artwork is immutable per release, so a long cache is safe.
+                            'cache-control': 'public, max-age=31536000, immutable',
+                        });
+                        sr.end(data);
+                    }
+                    catch {
+                        json(res, 404, { error: 'strip file not found on disk' });
+                    }
                 },
             }));
             disposers.push(ws.register({

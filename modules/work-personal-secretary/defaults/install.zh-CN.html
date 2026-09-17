@@ -31,8 +31,9 @@ body{margin:0;padding:0;background:#f4f6f8}
 <h1>工作秘书 · 安装引导</h1>
 <div class="callout"><p>这份指引写给<strong>第一次安装 DSH 插件</strong>的人。全程不需要懂编程，也不用记住任何命令。 两种装法任选一种：<strong>不想敲命令</strong>就走「方式一」，把一段话复制给 DSH，剩下的交给它；<strong>习惯自己动手</strong>就走「方式二」。</p></div>
 <h2>一、先弄清楚：要装什么、装完能做什么</h2>
-<p>「工作秘书」是一个能力包，装进 DSH 之后，你的对话助手就多了五样本事：</p>
-<ol><li><strong>记事情</strong>：你随口说的偏好、决定、进展，它自己记下来，以后自动记得。</li><li><strong>处理文档</strong>：Word、Excel、PPT、PDF 的读取、生成、核对与格式转换。</li><li><strong>多一种专业角度</strong>：需要时按专家视角回答（售前、财务、法务、代码等）。</li><li><strong>画图</strong>：你在对话里写一段流程图代码，它直接渲染成图。</li><li><strong>桌面形象</strong>：屏幕上有个小形象陪着，能看用量、能点击互动。</li></ol>
+<p>「工作秘书」是一个能力包，装进 DSH 之后，你的对话助手就多了五样本事。它们各自独立，可以只装你要的：</p>
+<table><thead><tr><th>插件</th><th>它是干嘛的</th></tr></thead><tbody><tr><td><strong>记忆库</strong></td><td>替你把偏好、决定、项目进展记下来，每次对话自动带上这些背景</td></tr><tr><td><strong>文档能力</strong></td><td>读写 Word、Excel、PPT、PDF：提取内容、套版式、做比对、转格式</td></tr><tr><td><strong>专家库</strong></td><td>按不同行业的专业视角回答你（售前、财务、法务、代码、排版……）</td></tr><tr><td><strong>图表</strong></td><td>把一段流程或结构描述直接画成图</td></tr><tr><td><strong>桌面小宠物</strong></td><td>屏幕角落一个小形象：看用量、跟着任务做动作，还能帮你把提示词写清楚</td></tr></tbody></table>
+<p>每个插件具体怎么用，看随包的<strong>使用说明</strong>（「安装与检查」页有入口）。</p>
 <p>装完之后，设置里会多出一个<strong>工作秘书</strong>分区，下面四个页签：<strong>安装与检查</strong>、<strong>核心配置</strong>、<strong>配置</strong>、<strong>关于与致谢</strong>。</p>
 <h2>二、动手之前，确认三件事</h2>
 <table><thead><tr><th>要确认的事</th><th>怎么确认</th><th>不符合怎么办</th></tr></thead><tbody><tr><td>你已经在用 DSH Desktop</td><td>能打开 DSH 的对话窗口</td><td>先去装 DSH Desktop，装好再回来</td></tr><tr><td>你手上有「工作秘书集成体」文件夹</td><td>里面有 modules 文件夹，里面又有几个插件文件夹</td><td>从发布页下载或克隆这个集成体仓库</td></tr><tr><td>需要时能装软件</td><td>装 Python 和 WPS 时会弹权限提示</td><td>用管理员账号登录，或找管电脑的人帮忙</td></tr></tbody></table>
@@ -102,7 +103,7 @@ body{margin:0;padding:0;background:#f4f6f8}
 <h2>五、装完自己验一遍</h2>
 <p>回到<strong>设置 → 工作秘书 → 安装与检查</strong>，对照下表逐项看：</p>
 <table><thead><tr><th>检查点</th><th>在哪看</th><th>正常的样子</th></tr></thead><tbody><tr><td>环境依赖</td><td>「环境依赖」分组</td><td>Python、Python 依赖、WPS 三类都是绿色</td></tr><tr><td>子插件</td><td>「子插件」分组</td><td>五种子插件都显示<strong>已装</strong>，且版本不低于内置版本</td></tr><tr><td>旧知识库</td><td>「已有旧知识库要带过来？」卡片</td><td>有旧知识库才用它；没有就忽略</td></tr><tr><td>核心配置</td><td>切到<strong>核心配置</strong>页</td><td>记忆库目录、知识库目录、工作岗位三项都填好</td></tr><tr><td>一键配置</td><td>核心配置页的执行链</td><td>点<strong>保存配置并开始</strong>后，四步依次打勾</td></tr><tr><td>实际能力</td><td>回对话里试一句</td><td>让它读一份 Word，能读出来就说明链路通了</td></tr></tbody></table>
-<p>四项以上都是正常状态，安装就算完成。任何一项不对，看下一节。</p>
+<p>六项逐条对过、都没有异常，安装就算完成。哪一项不对，看下一节。</p>
 <h2>六、出问题了怎么办</h2>
 <p><strong>命令行提示找不到 dsh</strong>：DSH 的命令行工具没加进系统路径。改用 DSH 自带的命令行窗口，或者走方式一让 DSH 自己装。</p>
 <p><strong>装完重启了，设置里还是没有「工作秘书」</strong>：多半是装到了别的 profile。确认命令里的 profile 名和你实际在用的是同一个（桌面版默认 desktop），然后重启一次。</p>
