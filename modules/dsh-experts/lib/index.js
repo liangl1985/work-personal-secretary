@@ -460,7 +460,7 @@ function listText(c, { compact = false } = {}) {
     }
     lines.push('')
   }
-  lines.push('用法：/expert use <id> 临时注入 ｜ /expert auto 恢复自动 ｜ /expert off 关闭本会话注入')
+  lines.push('用法：直接说「用 xx 专家看这个」即可临时切视角（助手用 expert_recall 取该专家全文）；专家库开关与阈值在 设置 → 插件 → 插件配置 → experts。注：/expert 系列命令已于 0.3.0 移除')
   return lines.join('\n')
 }
 

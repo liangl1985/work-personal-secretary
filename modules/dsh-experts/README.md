@@ -1,7 +1,7 @@
 # dsh-experts · 专家库模块
 
 > `work-personal-secretary` 集成体的专家库子模块：把"每次临场手写专家人设"变成"按需调用现成专家定义"。
-> **默认每轮注入 2 位**（按问题归属命中的对口专家；注入上限写死 4，设置页不提供该项），
+> **默认每轮注入上限 4 位**（按问题归属命中的对口专家；该项写死 4、设置页不提供，实现口径见 `lib/limits.js:12-15`），
 > 且按**会话阶段**注入：首轮把命中的专家**全部**以精简卡代入（约 0.5–0.6 千字符/位），后续判定要干活的专家才给**全文** —— 常态单轮开销约为全文口径的 1/4；
 > 需要全文时用 `expert_recall` 现取现用（派子代理时内联进 prompt），绝不把 19 位全部加载。
 
@@ -154,7 +154,7 @@ dsh-experts/
 │   ├── capability.js       # 能力层（层 3）：技能条目映射、指针行、开放命中与预算守门
 │   ├── discipline.js       # 交付层（层 4）：纪律块只读解析（项目记忆 + mtime/size 指纹）
 │   ├── limits.js           # 注入上限、预算、成本常量与归一化（硬边界 / 夹取）
-│   └── settings.js         # 设置命名空间（16 项，免重启）
+│   └── settings.js         # 设置命名空间（DEFAULTS 20 键；设置页暴露 19 项；除 injectOrder 外免重启）
 ├── scripts/                # 自测与工具：regression / injection-tier-test / smoke-load / coexist /
 │                           #   card-preview（L1 卡验收器）/ capability-test（能力层）/
 │                           #   skill-index（扫技能源→生成 experts/skills.auto.json 兜底索引）

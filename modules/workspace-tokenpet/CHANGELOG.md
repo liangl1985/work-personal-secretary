@@ -7,6 +7,32 @@
 > 1.0.0 之前的条目**保留原文**：其中「补丁 / patches / 上游基线 / 定制层」等措辞属于当时的
 > 历史形态记录，对应的文件已在 1.0.0 中删除。
 
+## 1.0.2 — 启动开销与用量索引（2026-09-17）
+
+### 内置图集改为按需取（启动路径不再背 22.5 MB）
+- `src/client/pet-action-sheets.generated.ts` 不再内嵌 12 段 WebP data URI：**22,510,039 B → 6,304 B**；
+  12 条 spec 的 `sheet` 改为 `/workspace-tokenpet/builtin-strip?file=<name>`，**其余字段（frameW / frameH /
+  bodyHeight / feetY / frames / cols / rows / delaysMs / loop / pingPong / totalMs）逐字保留**。
+- 新增 **exact** 路由 `GET /workspace-tokenpet/builtin-strip?file=<action>.webp`：从包内 `skins/default/`
+  读取，文件名白名单＝`STRIP_ACTIONS`（12 项），响应头 `image/webp` + `max-age=31536000, immutable`；
+  未知文件名 404、非 GET 405。**必须 exact**：桌面载体只解析 exact 路由（`src/skins.ts:107-113` 记录的
+  实测结论），prefix 形态会 404 —— 本模块既有的 `/workspace-tokenpet/strips/` prefix 路由因此始终不可用，本次未沿用。
+- `client/client.js`：**22,992,786 B → 489,037 B**（−97.9%，gzip 254.69 kB）。
+- 真机验证（DSH Desktop 2.0.10 · dsh-host-webserver 0.1.5-rc.2）：重启后启动卡顿消失；
+  `skins/default/*.webp` 的 atime 在启动时刻被更新，证明新路由被真实调用；`npm test` 8/8 通过。
+
+### 用量索引不再「每次重算」
+- 此前 `session-usage-index.json` **从不自动生成**：`runAutoIndexSync`（`src/index.ts:633-643`）在无索引时
+  只刷新 Lifetime，全量构建只在显式 `POST /index/build` 时发生 → 面板读取与 清空/恢复 每次都重新 fold
+  全部 session 日志（本机实测 224 个 session、解压 738.3 MB 文本 ≈ 5.6 s）。
+- 现在无索引时会在后台**自动建立一次**：单飞、共享 operation controller（`/index/cancel` 仍可中止）、
+  `yieldEvery: 4` 让步；建立后 `persisted=true`，后续走既有增量路径。
+- 真机验证：首次重启后生成 `session-usage-index.json`（63,179 B，149 个 session 已索引）。
+
+### 回退
+- 源码与 profile 旧版备份：`E:\lina\backup\tokenpet-2026-09-17\`（`index.ts.bak`、`pet-action-sheets.generated.ts.bak`、`profile-before/`）。
+  `client/client.js` 是构建产物，**回退必须重新 `npm run build`** 并同步 profile 副本，不能只换源码。
+
 ## 1.0.1 — 构建完整性（2026-09-14）
 
 ### 补入两个构建输入（此前从未入库）
