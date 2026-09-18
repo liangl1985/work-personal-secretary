@@ -86,6 +86,9 @@ import {
   memoryTopSegmentInVault,
   detectVaultLayout,
   VAULT_HOME_FILE,
+  BASEDECK_ITEMS,
+  VAULT_TIPS_SOURCE_FILE,
+  VAULT_TOOL_TIPS_FILE,
 } from '../lib/basedeck.js'
 import { API_PATHS, API_ROOT, CORE_API_EXACT_PATHS, PAGE_PATHS, PAGE_ROOT, installApi, openWithSystem } from '../lib/api.js'
 import { NESTING_DETAIL, isSameOrNested, pathChecks, relationOf, runPreflight, volumeOf } from '../lib/preflight.js'
@@ -814,13 +817,14 @@ const wsRejectPlan = planBaseDeck(Object.assign({ overrides: { workspace: homedi
 ok(wsRejectPlan.workspaceSource === 'none' && wsRejectPlan.workspace === '', 'overrides 传家目录 → 被拒并回落 none（不写主目录）')
 
 section('[14] 真实素材（真实 defaults）只读兼容性')
-const realTpl = join(MODULE_DIR, '..', '..', 'defaults', 'AGENTS.zh-CN.md')
-const realSeed = join(MODULE_DIR, '..', '..', 'defaults', 'global-memory.seed.md')
+const realTpl = join(MODULE_DIR, 'defaults', 'AGENTS.zh-CN.md')
+const realSeed = join(MODULE_DIR, 'defaults', 'global-memory.seed.md')
 const realTplLoaded = loadAgentsTemplate(realTpl, { generatorVersion: GEN_VERSION, now: FIXED_NOW })
 ok(realTplLoaded.ok === true && realTplLoaded.templateVersion === 1, '真实 AGENTS 模板可编译（template-version=1）')
 const realSeedLoaded = loadMemorySeed(realSeed)
-ok(realSeedLoaded.ok === true && realSeedLoaded.entries.length === 3, '真实记忆种子解析出 3 条条目')
-ok(realSeedLoaded.entries.every((e) => e.indexOf('AGENTS.md') > 0), '种子条目都是指向指令层的指针（单一真源）')
+ok(realSeedLoaded.ok === true && realSeedLoaded.entries.length === 4, '真实记忆种子解析出 4 条条目（三条指令层指针 + 一条工具技能指针）')
+ok(realSeedLoaded.entries.filter((e) => e.indexOf('AGENTS.md') > 0).length === 3, '语言 / 协作 / 专家库三条仍是指向指令层的指针（单一真源）')
+ok(realSeedLoaded.entries.some((e) => e.indexOf('工具/技能') > 0), '新增「工具与技能」指针，指向知识库 工具/技能 目录')
 const realPlan = planBaseDeck(opts({ workspace: WS_CLEAN, templateFile: realTpl, seedFile: realSeed }))
 ok(realPlan.items.filter((i) => i.id === 'agentsMd')[0].preview.contentHash.indexOf('sha256:') === 0, '真实模板可产出 content-hash')
 ok(inspectSimpleYaml('a:' + NL + '  b: 1' + NL).ok === true, '最小 YAML 扫描器可用')
@@ -897,9 +901,31 @@ ok(STARTER_TODOS.every((t) => projBodies[2].indexOf(t) > 0), '待办条目含设
 
 ok(readdirSync(deckVault).sort().join(',') === '.obsidian,00_全局记忆,工具,🏠 主页.md', '知识库骨架 = 主页 + 00_全局记忆 + 工具 + .obsidian')
 ok(readdirSync(join(deckVault, '工具')).sort().join(',') === '00_工具总览.md,MCP,技能,脚本', '工具/ = 工具总览 + 技能/脚本/MCP')
-ok(readdirSync(join(deckVault, '工具', '技能')).length === 0 && readdirSync(join(deckVault, '工具', '脚本')).length === 0
-  && readdirSync(join(deckVault, '工具', 'MCP')).length === 0,
-  '工具/ 三个子目录都建出来但**不造内容**')
+ok(readdirSync(join(deckVault, '工具', '技能')).join(',') === VAULT_TOOL_TIPS_FILE,
+  '工具/技能 = 随包技巧正文（恰好一个文件）')
+ok(readdirSync(join(deckVault, '工具', '脚本')).length === 0 && readdirSync(join(deckVault, '工具', 'MCP')).length === 0,
+  '工具/脚本 与 工具/MCP 仍只建目录、不造内容')
+// [18.x] 技巧正文（vault-tips）：计划 / 落盘一致 / 幂等 / 冲突拒写 / 顺序下标不变
+const tipsTarget = join(deckVault, '工具', '技能', VAULT_TOOL_TIPS_FILE)
+const tipsSource = join(MODULE_DIR, 'defaults', VAULT_TIPS_SOURCE_FILE)
+ok(planDeck.items.filter((i) => i.id === 'knowledgeDeck')[0].files.some((f) => f.name.indexOf(VAULT_TOOL_TIPS_FILE) >= 0),
+  '干跑计划里出现技巧正文目标文件')
+const tipsSourceText = readFileSync(tipsSource, 'utf8')
+ok(readFileSync(tipsTarget, 'utf8') === tipsSourceText, '技巧正文落盘内容与随包源逐字节一致')
+ok(sha256Text(readFileSync(tipsTarget, 'utf8')) === sha256Text(tipsSourceText), '技巧正文 SHA256 与随包源一致')
+const tipsReload = planBaseDeck(deckOpts).items.filter((i) => i.id === 'knowledgeDeck')[0]
+ok(tipsReload.status === 'up_to_date', '幂等：内容未变 → knowledgeDeck 判 up_to_date（不重写）')
+const tipsSecond = applyBaseDeck(['knowledgeDeck'], Object.assign({}, deckOpts, { dryRun: false })).results[0]
+ok(tipsSecond.bytesWritten === 0, '幂等：二次执行零字节写入')
+const conflictVault = join(TMP_ROOT, 'deckvault-conflict')
+mkdirSync(join(conflictVault, '工具', '技能', VAULT_TOOL_TIPS_FILE), { recursive: true })
+const conflictItem = planBaseDeck(Object.assign({}, deckOpts, { obsidianDir: conflictVault })).items.filter((i) => i.id === 'knowledgeDeck')[0]
+ok(conflictItem.status === 'broken' && /[一-龥]/.test(conflictItem.detail), '同名位置被占用 → broken 且给中文原因：' + conflictItem.detail.slice(0, 48))
+const conflictApply = applyBaseDeck(['knowledgeDeck'], Object.assign({}, deckOpts, { obsidianDir: conflictVault, dryRun: false })).results[0]
+ok(conflictApply.ok === false && conflictApply.bytesWritten === 0, '冲突时 apply 层确实拒写（ok=false / 零字节写入）')
+ok(BASEDECK_ITEMS.map((i) => i.id).join(',') === 'agentsMd,memorySeed,skills,settings,dirs,memoryDeck,knowledgeDeck,migrateMemory',
+  'BASEDECK_ITEMS 顺序与内容未变（仍是八项、未新增第九项）')
+ok(BASEDECK_ITEMS[1].id === 'memorySeed' && BASEDECK_ITEMS[6].id === 'knowledgeDeck', '既有调用方按下标取项仍成立（[1] / [6]）')
 const vaultApp = JSON.parse(readFileSync(join(deckVault, '.obsidian', 'app.json'), 'utf8'))
 ok(vaultApp.alwaysUpdateLinks === true, '.obsidian/app.json 为可解析的最小配置')
 // 主人 2026-09-16 裁定：这部分本版不做（插件里没有相应设计），但**必须写清现状**——

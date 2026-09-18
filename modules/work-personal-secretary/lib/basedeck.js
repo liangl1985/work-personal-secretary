@@ -941,9 +941,9 @@ export function resolveDeckContext(options = {}) {
   const memoryRoot = memoryDir ? dirname(memoryDir) : ''
 
   const templateFile = normalizePath(options.templateFile)
-    || join(moduleDir, '..', '..', 'defaults', 'AGENTS.zh-CN.md')
+    || join(moduleDir, 'defaults', 'AGENTS.zh-CN.md')
   const seedFile = normalizePath(options.seedFile)
-    || join(moduleDir, '..', '..', 'defaults', 'global-memory.seed.md')
+    || join(moduleDir, 'defaults', 'global-memory.seed.md')
 
   const skillsSourceDir = normalizePath(options.skillsSourceDir)
     || (repoRootInfo.repoRoot ? join(repoRootInfo.repoRoot, 'modules', DOC_SUITE_MODULE, SKILLS_DIR_NAME) : '')
@@ -2363,6 +2363,9 @@ export const VAULT_MIRROR_DIR_NAME = '00_全局记忆'
 export const VAULT_TOOLS_DIR_NAME = '工具'
 export const VAULT_TOOL_SUBDIRS = ['技能', '脚本', 'MCP']
 export const VAULT_TOOL_OVERVIEW_FILE = '00_工具总览.md'
+/** 技巧正文：随包源（模块 defaults/）→ 落到知识库 工具/<技能子目录>/ 下的文件名 */
+export const VAULT_TIPS_SOURCE_FILE = 'vault-tips.zh-CN.md'
+export const VAULT_TOOL_TIPS_FILE = 'DSH与插件使用技巧.md'
 export const VAULT_OBSIDIAN_DIR_NAME = '.obsidian'
 export const VAULT_APP_JSON_FILE = 'app.json'
 
@@ -2780,11 +2783,25 @@ function planKnowledgeDeck(ctx) {
       break
     }
   }
+  // 技巧正文：源在模块 defaults/（随包），落到知识库 工具/技能/ 下。
+  // 【顺序与幂等】本项属 step 5（knowledgeDeck）；全局记忆里的**指针**属 step 3（memorySeed），
+  // 即「指针先落盘、正文后落盘」。两者都走下面同一套「已存在即保留不覆盖」的幂等逻辑：
+  // 内容未变不重写；中途失败**重跑一键配置即可自愈**。指针文案不校验正文是否存在——
+  // 读不到源文件时只跳过正文（见 tipsNote），不影响指针与其余文件。
+  const tipsText = readTextOf(join(ctx.moduleDir, 'defaults', VAULT_TIPS_SOURCE_FILE))
   const fileSpecs = [
     { name: VAULT_HOME_FILE, path: join(vault, VAULT_HOME_FILE), content: buildVaultHomeText(modules), note: '总入口（含已登记的 ' + modules.length + ' 个业务模块）' },
     { name: VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_OVERVIEW_FILE, path: join(vault, VAULT_TOOLS_DIR_NAME, VAULT_TOOL_OVERVIEW_FILE), content: buildToolOverviewText(), note: '工具入口与同步纪律' },
     { name: VAULT_OBSIDIAN_DIR_NAME + '/' + VAULT_APP_JSON_FILE, path: join(vault, VAULT_OBSIDIAN_DIR_NAME, VAULT_APP_JSON_FILE), content: VAULT_APP_JSON_TEXT, note: '.obsidian 最小配置' },
   ]
+  if (tipsText) {
+    fileSpecs.push({
+      name: VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[0] + '/' + VAULT_TOOL_TIPS_FILE,
+      path: join(vault, VAULT_TOOLS_DIR_NAME, VAULT_TOOL_SUBDIRS[0], VAULT_TOOL_TIPS_FILE),
+      content: tipsText,
+      note: '随包技巧正文（源 defaults/' + VAULT_TIPS_SOURCE_FILE + '）',
+    })
+  }
   for (const s of fileSpecs) {
     const strict = readFileStrict(s.path)
     if (strict.exists && !strict.readable) {
@@ -2810,7 +2827,8 @@ function planKnowledgeDeck(ctx) {
   const status = broken ? 'broken' : (missingDirs.length === 0 && writes.length === 0 ? 'up_to_date' : (dirs.every((d) => d.state === 'missing') ? 'append' : 'update'))
   const action = broken ? '结构不可安全写入，已停止'
     : (status === 'up_to_date' ? '已是最新无需写入' : '将只补缺失的目录与文件（不覆盖任何已有内容）')
-  const detail = broken || ('模块骨架登记 ' + modules.length + ' 个（' + (modules.join('、') || '暂无') + '）；目录缺失 ' + missingDirs.length + ' / ' + dirs.length + '；待写入 ' + writes.length + ' 个文件')
+  const tipsNote = tipsText ? '' : '；技巧正文源缺失（defaults/' + VAULT_TIPS_SOURCE_FILE + '），已跳过该文件'
+  const detail = broken || ('模块骨架登记 ' + modules.length + ' 个（' + (modules.join('、') || '暂无') + '）；目录缺失 ' + missingDirs.length + ' / ' + dirs.length + '；待写入 ' + writes.length + ' 个文件' + tipsNote)
 
   return makeItem(spec, {
     status: status,

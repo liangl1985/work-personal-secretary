@@ -62,7 +62,7 @@ dsh plugin --profile <profile> add <模块目录或包名>
 
 ### 首次使用
 
-1. **让默认约定生效**（二选一）：把 `defaults/global-memory.seed.md` 的语言偏好写入全局记忆；或把 `defaults/AGENTS.zh-CN.md` 复制到会话工作区根目录作 `AGENTS.md`（**指令层**，约束力强于记忆层）。
+1. **让默认约定生效**（二选一）：把 `modules/work-personal-secretary/defaults/global-memory.seed.md` 的语言偏好写入全局记忆；或把 `modules/work-personal-secretary/defaults/AGENTS.zh-CN.md` 复制到会话工作区根目录作 `AGENTS.md`（**指令层**，约束力强于记忆层）。
 2. **确认岗位**：装了 `dsh-experts` 时执行 `/expert setup <域>` 写入「身份专家」；`/expert list` 查看全部专家，`/expert why <任务文本>` 看打分理由。
 3. **自检文档环境**：`/doc-doctor`（等价于 `py -3 modules/dsh-doc-suite/doctor.py`）逐项检测 Python 依赖与 WPS COM 通道。
 4. **记忆库首装为空**：人设、偏好与业务记忆由使用者自己写入，**包内不含任何记忆数据**。
@@ -169,9 +169,9 @@ py -3 modules/dsh-doc-suite/doctor.py --emit-skill-paths
 > 这些是**产品默认行为**，不是可选项；发布/交付件必须做到"首装即适用"。发布前逐项核对 [`RELEASE-CHECKLIST.md`](RELEASE-CHECKLIST.md)。
 
 1. **语言：尽量使用简体中文回答与思维**——回答用简体中文；**推理痕迹也尽量用简体中文**（分析、判断、计划、自查都是中文）；代码、命令、路径、包名、API/字段名、日志与报错原文、专有名词**保留英文，不硬翻**。
-   - 随包提供两样（`defaults/` 目录）：
-     - [`defaults/global-memory.seed.md`](defaults/global-memory.seed.md) —— **全局记忆种子**（首次使用时写入全局记忆即可，让默认语言生效）；
-     - [`defaults/AGENTS.zh-CN.md`](defaults/AGENTS.zh-CN.md) —— **工作区指令模板**（复制到工作区根目录；走 DSH 指令层，约束力强于记忆层）。
+   - 随包提供两样（都在 `modules/work-personal-secretary/defaults/`）：
+     - [`global-memory.seed.md`](modules/work-personal-secretary/defaults/global-memory.seed.md) —— **全局记忆种子**（首次使用时写入全局记忆即可，让默认语言生效）；
+     - [`AGENTS.zh-CN.md`](modules/work-personal-secretary/defaults/AGENTS.zh-CN.md) —— **工作区指令模板**（复制到工作区根目录；走 DSH 指令层，约束力强于记忆层）。
 2. **总控兼读制**——主对话（对话本体）= 总控 + 读稿人：拆解、派单、核对、监督、纠正、对外沟通，**保持轻量**；绝大多数工作交**专家子代理**执行，主对话对成果负责。
 3. **敏感行业例外（红线）**——军工 / 商密 / 烟草 / 数据安全类内容由主上下文直接处理，**不派子代理**。
 4. **记忆纪律**——全局记忆永不遗忘；热记忆按 TTL 转冷；冷归档被用到即转热；转冷前先做预审，拿不准的由助手判定、不整批推给使用者。

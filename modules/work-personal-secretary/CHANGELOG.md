@@ -1,5 +1,19 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.7 — 2026-09-18（知识库「工具/技能」自动写入随包技巧正文 + 全局记忆指针 + 随包路径修正）
+
+> **同批修正（2026-09-18）**：指令层模板 `AGENTS.zh-CN.md` 与记忆种子 `global-memory.seed.md` 原放在**仓库根 `defaults/`**（在包外，`files` 白名单无法覆盖）——npm / 复制安装形态下 `agentsMd` 与 `memorySeed` 两项**实测 broken**（「找不到指令层模板 / 找不到记忆种子文件」）；本机因为是 junction 指回源码树才一直没暴露。已把两份文件 `git mv` 进**本模块 `defaults/`**（与说明文档、技巧正文同处），`lib/basedeck.js:943-946` 的两条默认路径改为 `join(moduleDir, 'defaults', …)`，并同步 `scripts/basedeck-test.mjs` 的 `realTpl` / `realSeed` 与 README / RELEASE-CHECKLIST / ARCHITECTURE 的路径口径。**收益：npm / 复制 / 仓库三种形态全部可用。**
+
+**背景**：发布版使用者的知识库里，「工具/技能」目录此前只建空壳；而放在安装目录里的说明文档**不会被使用者发现**。主人 2026-09-18 定：正文由**配置底座自动写入知识库「工具/技能」**，全局记忆里放一条**指针**。
+
+- **新增随包正文** `defaults/vault-tips.zh-CN.md`（**64 条 / 8 类**）：每条标**来源性质**（官方规定 / 本机实测 / 本项目自研约定），版本敏感条目带 `⚠️ 版本敏感`；开篇固定四行元信息（版本基线 · 开发者预览与破坏性变更 · 安全说明要点 · 官方文档站）。内容按官方 master（`@deepseek-ai/dsh-root 0.1.6-alpha.2`，核对日 2026-09-18）逐条校正，**去本机私有**（盘符、称呼、代理端口一律不出现，路径用占位符）。
+- **配置底座 step 5（`knowledgeDeck`）新增一个文件**：把上述正文写到 `<obsidianDir>/工具/技能/DSH与插件使用技巧.md`，复用既有「已存在即保留不覆盖」的幂等逻辑与严格读取/冲突判定；**未新增第九项、未改动 `BASEDECK_ITEMS` 的顺序与下标**（既有调用方按下标取项的行为不变）。
+- **配置底座 step 3（`memorySeed`）新增一条指针**：`defaults/global-memory.seed.md` 追加「【工具与技能】…见知识库「工具/技能」目录下的 DSH与插件使用技巧.md」。指针先落盘、正文后落盘（step 3 → step 5），两者都幂等；中途失败**重跑一键配置即可自愈**；**指针文案不校验正文是否存在**。
+- **测试**：`basedeck-test.mjs` 新增/改写断言 —— 干跑计划含新目标、落盘逐字节与 SHA256 与源一致、幂等（二次执行零字节）、同名位置被占用时 `broken` 且 apply 层拒写（中文原因）、`BASEDECK_ITEMS` 顺序与下标未变；种子条目断言按新增指针同步（3 → 4 条）。读数：**500 通过 / 0 失败**。
+- **顺带修正**：`ARCHITECTURE.md` 中 `planKnowledgeDeck` / `fileExists` 等**行号引用按改动后实测更新**（原引用已有 ±20 行漂移）。
+
+**回退**：删除 `defaults/vault-tips.zh-CN.md`；删除 `lib/basedeck.js` 的两个 `VAULT_TIPS_*` 常量与 `planKnowledgeDeck` 内的 tips 段；回退 `scripts/basedeck-test.mjs` 的对应断言；删除 `defaults/global-memory.seed.md` 的【工具与技能】指针；本文件删本段；版本改回 1.1.6。
+
 ## 1.1.6 — 2026-09-17（T5-4 配置收尾补一次镜像同步 · T5-5 导入卡复核提交）
 
 - **T5-4「一键配置跑完镜像区仍为空」**：镜像同步（`syncMemoryToObsidian`）原本只在 work-memory 的三条写路径（remember / link / 冷召回转热）后触发，「一键配置」不经过它们，于是使用者跑完六步后知识库里的 `00_全局记忆` 仍是空的。现补一次收尾触发：

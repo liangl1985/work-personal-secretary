@@ -43,7 +43,7 @@
 | `scripts/` | 七套自测（不依赖宿主运行时）+ 一个生成脚本 | `smoke-load.mjs`、`probe-test.mjs`、`install-test.mjs`、`basedeck-test.mjs`、`settings-api-test.mjs`、`identity-test.mjs`、`defaults-test.mjs`、`build-defaults-html.mjs` |
 | `README.md` / `CHANGELOG.md` / `NOTICE` / `LICENSE` | 使用者与维护者文档、第三方致谢、MIT 许可 | `README.md:33-56`（目录结构）、`README.md:61-87`（配置项与设计约定） |
 
-**本模块不含** `specs/`、`skills/`、`templates/`（这些属于子模块 `modules/dsh-doc-suite`，见其目录）。**另有一份同名但不同处的 `defaults/`**：仓库根 `defaults/AGENTS.zh-CN.md`（指令层模板）与仓库根 `defaults/global-memory.seed.md`（记忆种子），由 `lib/basedeck.js:943-946` 从**模块目录向上两级**取（`join(moduleDir, '..', '..', 'defaults', …)`）。`README.md:73` 明确提示「与模块内的说明文档目录不是同一处」。
+**本模块不含** `specs/`、`skills/`、`templates/`（这些属于子模块 `modules/dsh-doc-suite`，见其目录）。**本模块的 `defaults/` 是随包默认资产的唯一出处**：指令层模板 `AGENTS.zh-CN.md`、记忆种子 `global-memory.seed.md`、使用/安装说明（`use.zh-CN.md` / `install.zh-CN.md` 及其 HTML）与技巧清单 `vault-tips.zh-CN.md` 同处一个目录，全部随包分发。`lib/basedeck.js:943-946` 直接按 `join(moduleDir, 'defaults', …)` 取模板与种子——**2026-09-18 修正**：此前它们放在仓库根 `defaults/`（包外），`files` 白名单无法覆盖，npm/复制安装形态下会读不到（实测 `agentsMd` / `memorySeed` 均 broken），已迁入模块内并同步路径。
 
 ### 1.3 与宿主的关系（依赖与降级）
 
@@ -83,7 +83,7 @@
 | 1 `check` | `POST /preflight { memoryDir, obsidianDir, workspace:'' }`（`:3187`） | `lib/api.js:698-728` → `runPreflight()`（`lib/preflight.js:284`）；有 `level:'block'` 或 `ready!==true` 即停 | 无（只读） |
 | 2 `migrateMemory` | 先 `GET /basedeck` 只读取顶层 `migrateFrom`（`:3215-3217`）；无旧目录则显示「无需迁移」且不发写请求；否则 `POST /basedeck { ids:['migrateMemory'], dryRun:false, overrides }`（`:3218-3222`） | `lib/api.js:1167` → `applyBaseDeck()`（`lib/basedeck.js:2241`）→ `planMigrateMemory`(`:3027-3137`) / `applyMigrateMemory`(`:3143`、`:3178`） | 复制**缺失文件**到 `<memoryDir>`；噪音文件（锁/备份/临时）不迁移（`:2963-2975`、`:3111`）；同名不同内容一律保留目标（`conflicts`，`:3086`）；**从不删除旧目录**（`:3128`、`:3141-3142`） |
 | 3 `memoryDeck` | `POST /basedeck { ids:['memoryDeck'], dryRun:false, overrides }`（`:3204-3210`） | `planMemoryDeck`(`lib/basedeck.js:2493-2629`) → `applyDeckFiles`(`:2811`)/`applyDeckFilesLocked`(`:2829`) | `<memoryDir>/` 下建 `PROJECTS`/`DAILY`/`ARCHIVE`（`:2332`）；`MEMORY.md` 追加「使用者身份」占位条目（`:2537`，已存在同前缀条目则跳过 `:2538-2539`）；新建 `USER.md`、`GRAPH.json`（`:2549-2563`）；`PROJECTS/工作秘书.md` 补四条（`:2566-2605`，正文分别来自模块内 `defaults/use.zh-CN.md`、`defaults/install.zh-CN.md`，`:2579-2585`） |
-| 4 `knowledgeDeck` | 同上，`ids:['knowledgeDeck']` | `planKnowledgeDeck`(`:2709-2801`) → 同一写回器 | `<obsidianDir>/` 下建 `00_全局记忆`、`工具/`（`技能`/`脚本`/`MCP`）、新建 `🏠 主页.md`、`工具/00_工具总览.md`、`.obsidian/app.json`（`:2725-2757`）；**已存在一律保留不覆盖**（`:2770-2775`） |
+| 4 `knowledgeDeck` | 同上，`ids:['knowledgeDeck']` | `planKnowledgeDeck`(`:2742`) → 同一写回器 | `<obsidianDir>/` 下建 `00_全局记忆`、`工具/`（`技能`/`脚本`/`MCP`）、新建 `🏠 主页.md`、`工具/00_工具总览.md`、`.obsidian/app.json`（`fileSpecs` `:2792`）；**`工具/技能/` 下另写一份随包技巧正文 `DSH与插件使用技巧.md`**（源＝模块内 `defaults/vault-tips.zh-CN.md`）；**已存在一律保留不覆盖**（`:2817`） |
 | 5 `link` | `POST /basedeck { ids:['settings'], dryRun:false, overrides:{ memoryDir, obsidianSyncDir:<obsidianDir>/00_全局记忆, obsidianDir } }`（`:3242-3247`） | `planSettings`(`:1348`)/`applySettings`(`:2098-2182`) | 写 `<DSH_HOME>/settings.yaml` 的两个键 `work-memory.memoryDir`、`work-memory.obsidianSyncDir`（目标键表 `lib/basedeck.js:157-162` 前两行）；只增改目标键、其余行与注释逐字节保留（`:2150-2159` 有「非目标键变化即回滚」校验）；写前备份 `<file>.bak-<stamp>` |
 | 6 `identity` | `POST /identity/save { content, memoryDir, dryRun:false }`（`:3252-3256`） | `lib/api.js:745-760` → `applyIdentityAsync()`（`lib/identity.js:429`） | 整条改写/追加 `<memoryDir>/MEMORY.md` 里以「使用者身份：」开头的条目（`lib/identity.js:134-170`、`:264-299`）；命中 0 条追加、1 条改写并保留原 `id`、多于 1 条拒绝（`:250-255`） |
 
@@ -114,7 +114,7 @@
 
 ### 2.5 幂等、并发与一致性
 
-- **只补缺失、不覆盖**是本模块的统一纪律：`memoryDeck`/`knowledgeDeck`（`lib/basedeck.js:2608-2612`、`:2778-2782`）、`skills`（`:1308-1314`，本地改过的只报告差异不覆盖）、迁移（`:3098-3103`）、桌宠素材（`lib/install.js:233-321`）。
+- **只补缺失、不覆盖**是本模块的统一纪律：`memoryDeck`/`knowledgeDeck`（`lib/basedeck.js`：`planMemoryDeck` `:2526`、知识库侧判定 `:2817`）、`skills`（`:1308-1314`，本地改过的只报告差异不覆盖）、迁移（`:3098-3103`）、桌宠素材（`lib/install.js:233-321`）。
 - **记忆库写入共用一把锁** `.work-memory.lock`（`lib/basedeck.js:1551-1561`）：`memorySeed` 与 `memoryDeck` 在**锁内重算计划再写**（`:1965-1977`、`:2811-2827`），`identity.js` 通过 re-export 复用同一实现（`lib/identity.js:44-45`），避免「各写一把锁」。同步等待上限 1s、异步 5s、陈旧锁 10s 可抢占（`:1554-1558`）。
 - **两处取设置值的路径不同**（维护时要注意）：`/basedeck` 的计划器 `resolveDeckContext()` **直接读** `<DSH_HOME>/settings.yaml`（`lib/basedeck.js:888-890`、`readSettingsValues` `:565`）；而 `/setup-state` `lib/setup-state.js:4-7` 明确只走宿主 `ctx.settings.describe`、不读该文件。写设置一律走 `ctx.settings.mutate`（`lib/api.js:500-533`）。
 
@@ -212,7 +212,7 @@
 
 ### 3.7 本版未实现（明确边界）
 
-1. **「工具/」三个子目录的同步**：只建目录与 `00_工具总览.md`，文档明确写「本版只建了这三个目录和这份总览，没有实现任何同步」（`lib/basedeck.js:2686-2706`，总览正文 `:2700-2702`）。
+1. **「工具/」三个子目录的同步**：只建目录、`00_工具总览.md` 与**一份随包技巧正文**（`工具/技能/DSH与插件使用技巧.md`，源＝模块内 `defaults/vault-tips.zh-CN.md`），**未实现任何持续同步**；总览正文明确写「本版只建了这三个目录和这份总览，没有实现任何同步」。
 2. **镜像的持续同步**不属本模块：本模块只在执行链收尾触发**一次**（见 3.2 的 `/identity/save`）；此后仍由 `dsh-work-memory` 在其三条写路径后各自触发，本模块不接管、不做定时或文件监听。
 3. **旧记忆库目录的清理**：迁移**从不删除**旧目录（`lib/basedeck.js:3128` 固定 `oldDirKept: true`、`:3141-3142`），没有「迁移后清理」实现。
 4. **`/repo-root` 在桌面外壳的 exact 可达性**：未注册 exact（见 3.2 末尾注意）。
