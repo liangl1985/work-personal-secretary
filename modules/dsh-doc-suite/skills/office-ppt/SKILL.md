@@ -188,7 +188,7 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_render.py render "方案.manifest.json" "�
 
 **Word / Excel 用的文档规格另有 4 套**（`standard` / `govdoc` / `compact` / `report`，加 `--spec <id>`）：它们改的是字号、页边距、表格与标题层级，**不是 PPT 主题**，清单与用法见 `skills/office-word/SKILL.md` 与模块 `README.md`；本技能不重复维护。十套都只写与 `standard` 的差异（`extends`），未写的部分自动继承基准。
 
-- 用法：Word/Excel 套样式用 `--spec <id>`，PPT 渲染用 `--theme <id>`；`ppt_theme.py list` 列出全部（含自定义层）。
+- 用法：Word/Excel 套样式用 `--spec <id>`，PPT 渲染用 `--theme <id>`；**跨格式会被拒绝**（如 `--spec dusk` 用在 Word 上 → exit 2 + 中文提示与「本格式可用」清单）；`ppt_theme.py list` 只列可用于 PPT 的主题（自定义层未标注 `for` 的仍列出，标注「未标注格式」）。
 - 自定义层放 `~/.dsh/data/dsh-doc-suite/templates/`（**不进发布件**）；公司母版导入件（品牌色板等）留这一层。
 
 ## 八、注意事项（踩过的坑）

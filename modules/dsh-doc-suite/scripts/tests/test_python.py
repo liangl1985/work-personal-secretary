@@ -8,6 +8,7 @@
   [C] 深度合并  spec_sync.deep_merge    —— 对象深度覆盖、数组整体替换、不改原对象
   [D] 规格校验  spec_sync.validate      —— 合法规格通过；缺 styles / pptx 几何越界 → SystemExit(2)；extends 派生件合并后通过
   [E] 随包模板  specs/*.json           —— 全部内置规格校验通过；report 与 WPS 三套（dusk/azure/crimson）的 accent 与 pptx 几何完整
+  [F] 适用格式  style_spec.for_format  —— 顶层 for 声明与实际一致；跨格式误用被拒且错误信息给出可用清单；无 for 的自定义层规格放行
 
 用法：
   py -3 modules/dsh-doc-suite/scripts/tests/test_python.py
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -31,6 +33,7 @@ for _p in (str(SCRIPTS), str(OFFICE)):
 import ppt_contrast  # noqa: E402
 import ppt_theme  # noqa: E402
 import spec_sync  # noqa: E402
+import style_spec  # noqa: E402
 
 
 def _standard():
@@ -140,6 +143,91 @@ class TestBuiltinSpecs(unittest.TestCase):
                 self.assertIn(key, pptx, spec_id + ' 缺 pptx.' + key)
             layouts = [k for k in pptx['layouts'] if not k.startswith('_')]
             self.assertEqual(len(layouts), 16, spec_id + ' 页型应为 16 类，实得 %d' % len(layouts))
+
+
+class TestForFormat(unittest.TestCase):
+    """[F] 顶层 for（适用格式）：声明与实际一致；跨格式强校验；无 for 放行。"""
+
+    EXPECTED = {
+        'standard': ['word', 'excel', 'ppt'],
+        'govdoc': ['word', 'excel'],
+        'compact': ['word', 'excel'],
+        'report': ['word', 'excel'],
+        'graphite': ['ppt'],
+        'teal': ['ppt'],
+        'wine': ['ppt'],
+        'dusk': ['ppt'],
+        'azure': ['ppt'],
+        'crimson': ['ppt'],
+    }
+
+    def _declared(self):
+        got = {}
+        for p in sorted(SPECS.glob('*.json')):
+            if p.name.endswith('.schema.json'):
+                continue
+            got[p.stem] = json.loads(p.read_text(encoding='utf-8')).get('for')
+        return got
+
+    def test_builtin_for_matches_expectation(self):
+        got = self._declared()
+        self.assertEqual(sorted(got), sorted(self.EXPECTED), '内置规格集合与预期不一致')
+        for spec_id, expected in self.EXPECTED.items():
+            self.assertEqual(got[spec_id], expected, spec_id + ' 的 for 声明不符')
+
+    def test_validate_rejects_bad_for(self):
+        bad_value = _standard()
+        bad_value['for'] = ['word', 'pdf']
+        with self.assertRaises(SystemExit):
+            spec_sync.validate('probe', bad_value, {'probe': bad_value})
+        bad_type = _standard()
+        bad_type['for'] = 'word'
+        with self.assertRaises(SystemExit):
+            spec_sync.validate('probe', bad_type, {'probe': bad_type})
+        empty = _standard()
+        empty['for'] = []
+        with self.assertRaises(SystemExit):
+            spec_sync.validate('probe', empty, {'probe': empty})
+
+    def test_cross_format_rejected_with_hint(self):
+        old = style_spec.USER_DIR
+        style_spec.USER_DIR = Path(tempfile.mkdtemp())     # 隔离：不读使用者真实自定义层
+        try:
+            with self.assertRaises(style_spec.SpecError) as cm:
+                style_spec.load_spec('dusk', for_format='word')
+            msg = str(cm.exception)
+            self.assertIn('PPT', msg)
+            self.assertIn('Word', msg)
+            self.assertIn('本格式可用', msg)
+            self.assertIn('standard', msg, '错误信息应给本格式可用的规格 id')
+            with self.assertRaises(style_spec.SpecError):
+                style_spec.load_spec('govdoc', for_format='ppt')
+            self.assertEqual(style_spec.load_spec('dusk', for_format='ppt')['id'], 'dusk')
+            self.assertEqual(style_spec.load_spec('standard', for_format='word')['id'], 'standard')
+            self.assertEqual(style_spec.load_spec('report', for_format='excel')['id'], 'report')
+            # 文件路径形式与 id 形式同样受校验
+            with self.assertRaises(style_spec.SpecError):
+                style_spec.load_spec(str(SPECS / 'dusk.json'), for_format='word')
+            self.assertEqual(style_spec.load_spec(str(SPECS / 'dusk.json'), for_format='ppt')['id'], 'dusk')
+        finally:
+            style_spec.USER_DIR = old
+
+    def test_custom_layer_without_for_is_allowed(self):
+        raw = {
+            'schema': 'dsh-doc-suite/style-spec@1',
+            'id': 'nofor',
+            'word': {'page': {}, 'fonts': {}},
+            'excel': {'font': {}, 'header': {}, 'border': {}, 'print': {}},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, 'nofor.json').write_text(json.dumps(raw), encoding='utf-8')
+            old = style_spec.USER_DIR
+            style_spec.USER_DIR = Path(tmp)
+            try:
+                for fmt in ('word', 'excel', 'ppt'):
+                    self.assertEqual(style_spec.load_spec('nofor', for_format=fmt)['id'], 'nofor')
+            finally:
+                style_spec.USER_DIR = old
 
 
 if __name__ == '__main__':

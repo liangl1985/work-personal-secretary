@@ -29,6 +29,12 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MODULE = HERE.parent
 SPECS = MODULE / "specs"
+
+# "适用格式"口径与 style_spec 共用同一份真值（2026-09-18 起）
+_OFFICE = HERE / "office"
+if str(_OFFICE) not in sys.path:
+    sys.path.insert(0, str(_OFFICE))
+from style_spec import FOR_FORMATS  # noqa: E402
 REQ_TOP = ("schema", "id", "word", "excel")
 REQ_WORD = ("page", "fonts")
 REQ_EXCEL = ("font", "header", "border", "print")
@@ -369,6 +375,15 @@ def validate(name, s, specs_by_id=None):
     for k in ("schema", "id"):
         if k not in s:
             errs.append("缺顶层键 %s" % k)
+    # for 字段（2026-09-18）：声明规格适用格式；缺省不报错（兼容自定义层老规格）
+    if "for" in s:
+        declared = s["for"]
+        if not isinstance(declared, list) or not declared:
+            errs.append("for 应为非空数组（取值 word / excel / ppt）")
+        else:
+            for item in declared:
+                if item not in FOR_FORMATS:
+                    errs.append("for 含非法值 %r（只允许 word / excel / ppt）" % (item,))
     if "extends" in s:
         # 继承件（部分规格）：校验自身覆盖段结构 + **合并基座后**校验 pptx 几何
         base_id = s.get("extends")

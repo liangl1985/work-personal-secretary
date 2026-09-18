@@ -107,6 +107,9 @@ def _friendly(exc: Exception):
     if name == "InvalidFileException":
         return (f"文件格式不受支持: {msg}",
                 ".xls 旧格式请走 convert / recalc / summary（WPS COM 通道），openpyxl 只吃 .xlsx/.xlsm。")
+    if name == "SpecError":
+        # style_spec.SpecError（规格缺字段 / 跨格式误用等）：消息本身已是中文单行
+        return (msg, None)
     if name == "KeyError":
         return (f"找不到对象: {msg}",
                 "工作表名或字段名可能写错；先用 summary（Excel）/ info 确认可用名称。")

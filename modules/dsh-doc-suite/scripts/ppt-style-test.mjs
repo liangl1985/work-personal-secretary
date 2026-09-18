@@ -172,16 +172,27 @@ t('端到端：表格单元格与备注的字体同时被统一', function () {
   assert(fonts['微软雅黑'] >= 12, '统一到的 run 数偏少：' + JSON.stringify(fonts));
 });
 
-t('端到端：--spec report 套样式（内容零改动 · 原文件不动）', function () {
+t('端到端：--spec dusk 套样式（PPT 主题 · 内容零改动 · 原文件不动）', function () {
   if (!HAS_PPTX) return 'skip';
-  const src = makeSample('report-spec.pptx');
-  const out = path.join(TMP, 'report-spec-out.pptx');
+  const src = makeSample('dusk-spec.pptx');
+  const out = path.join(TMP, 'dusk-spec-out.pptx');
   const textsBefore = readBack(src).texts;
-  const r = pyRun(STYLE, ['apply-style', src, '--spec', 'report', '--out', out]);
+  const r = pyRun(STYLE, ['apply-style', src, '--spec', 'dusk', '--out', out]);
   assert(r.status === 0, 'exit=' + r.status + ' ' + (r.stderr || '').slice(0, 160));
   assert(fs.existsSync(out), '未产出');
   assert(JSON.stringify(readBack(out).texts) === JSON.stringify(textsBefore), '文本发生变化（零改动断言应已拦下）');
   assert(JSON.stringify(readBack(src).texts) === JSON.stringify(textsBefore), '原文件文本被改动');
+});
+
+t('跨格式：Word/Excel 规格（report）用于 PPT → exit 2 且给出可用清单', function () {
+  if (!HAS_PPTX) return 'skip';
+  const src = makeSample('cross-spec.pptx');
+  const out = path.join(TMP, 'cross-out.pptx');
+  const r = pyRun(STYLE, ['apply-style', src, '--spec', 'report', '--out', out]);
+  assert(r.status === 2, 'exit=' + r.status);
+  assert((r.stderr || '').includes('不能用于 PPT') && r.stderr.includes('本格式可用'),
+    '跨格式拒绝信息不完整：' + (r.stderr || '').slice(0, 200));
+  assert(!fs.existsSync(out), '被拒时不应产出文件');
 });
 
 t('端到端：--text-color 只改未显式设色的 run', function () {

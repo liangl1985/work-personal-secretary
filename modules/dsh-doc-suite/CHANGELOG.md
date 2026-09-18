@@ -1,3 +1,46 @@
+## 0.7.14 — 2026-09-18（规格按格式强约束：顶层 `for` + 跨格式拒绝）
+
+**背景**：主人 2026-09-18 定「PPT 用的那几套只能给 PPT」。此前 `dusk` 等 6 套只覆盖 `pptx` 段与色板，`--spec dusk` 用在 Word 上会被接受（合并 `standard` 的 word 段 + dusk 的色板）—— 属误用，本次堵死。
+
+### 一、规格新增顶层 `for`（10 套）
+
+| `for` | 规格 |
+|---|---|
+| word · excel · ppt | `standard` |
+| word · excel | `govdoc` · `compact` · `report` |
+| ppt | `graphite` · `teal` · `wine` · `dusk` · `azure` · `crimson` |
+
+### 二、加载期强校验（`style_spec.load_spec`）
+
+- 新增可选参数 `for_format`（`word` / `excel` / `ppt`）：**合并 extends 之后**取顶层 `for`；声明了 `for` 且不含该格式 → `SpecError`，中文单行「规格/主题 X 是给 <用途> 用的，不能用于 <当前格式>；本格式可用：<清单>」；**未声明 `for` 的规格放行**（兼容使用者自定义层老文件，如公司母版导入件 `tdhx.json`）。
+- `--spec <文件路径>` 形式同样受校验。
+- 各入口已传格式：`word_tool.py`（apply-style / table-style）→ word · `excel_tool.py` → excel · `ppt_style.py` → ppt · `ppt_render.load_theme()` → ppt。
+- `cli_guard` 新增 `SpecError` 分支：直接输出中文单行（不再带异常类名），exit 2。
+
+### 三、校验与列表
+
+- `spec_sync.validate()`：`for` 若存在必须是非空数组且元素 ∈ `word`/`excel`/`ppt`；缺省不报错（兼容老规格）。
+- `ppt_theme.py list`：只列 `for` 含 `ppt` 的主题；自定义层未标注 `for` 的仍列出并标注「未标注格式」；新增「用于」列。
+
+### 四、测试（`scripts/tests/test_python.py` 13 → **17**）
+
+- 新增 `TestForFormat`：① 10 套 `for` 与预期逐一致；② `validate` 拒绝非法取值 / 非数组 / 空数组；③ 跨格式拒绝且错误信息含「本格式可用」与可用 id（含文件路径形式）；④ 无 `for` 的自定义层规格在三种格式下均放行（临时目录构造，**不读使用者真实自定义层**）。
+
+### 五、文档
+
+- `README.md` · `ARCHITECTURE.md`（1.3 规格体系）· `skills/office-ppt|office-word|office-excel/SKILL.md` · 随包使用说明 `defaults/use.zh-CN.md`（两张表各补一句）同步「跨格式会被拒绝并提示可用清单」。
+
+### 六、验证
+
+- `py -3 scripts/spec_sync.py --check` **exit 0**（10 套 · 0 项不达标）
+- `py -3 scripts/tests/test_python.py` **17 / 0**
+- 真机：`ppt_render.py render --theme dusk` **exit 0**；`word_tool.py apply-style --spec dusk` **exit 2** + 中文提示
+- `node scripts/defaults-test.mjs` **59 / 0**
+
+### 七、回退
+
+删除 10 套 json 的 `for` 字段与 `style_spec` / `spec_sync` / 各入口 / `cli_guard` / `ppt_theme` 的相应改动，版本改回 **0.7.13**。
+
 ## 0.7.13 — 2026-09-18（report 模板随包 · WPS 模板导入三套 · 断言补齐 · 口径修正）
 
 **背景**：待办 T2 —— 汇报用模板原只存在于使用者自定义层（`~/.dsh/data/dsh-doc-suite/templates/report.json`），**换机即无**；本次升格为随包内置资产。

@@ -346,7 +346,7 @@ def validate_manifest(manifest, schema):
 def load_theme(theme_id):
     """加载主题规格并做 ②a 几何校验（复用 spec_sync，渲染器与校验器同一口径）。"""
     try:
-        spec = style_spec.load_spec(theme_id)
+        spec = style_spec.load_spec(theme_id, for_format="ppt")
     except style_spec.SpecError as exc:
         raise cli_guard.InputError(str(exc))
     except json.JSONDecodeError as exc:

@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "report",
+  "for": ["word","excel"],
   "name": "汇报报告",
   "extends": "standard",
   "mood": "数据优先、结论前置",

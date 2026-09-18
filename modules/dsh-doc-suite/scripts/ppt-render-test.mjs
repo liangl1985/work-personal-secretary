@@ -260,14 +260,15 @@ t('list-layouts：11 类已实现 + 5 类未实现', function () {
   for (const k of NEED) assert(txt.includes(k), 'list-layouts 未列出 ' + k);
 });
 
-t('随包主题模板齐备且可加载（report + WPS 三套 · 不需 python-pptx · CI 真跑）', function () {
-  const themes = [['report', 'A34A00'], ['dusk', '4F6C97'], ['azure', '0060E0'], ['crimson', 'BC0300']];
+t('随包主题模板齐备且可加载（WPS 三套 · 不需 python-pptx · CI 真跑）', function () {
+  const themes = [['dusk', '4F6C97'], ['azure', '0060E0'], ['crimson', 'BC0300']];
   for (const pair of themes) {
     const id = pair[0], accent = pair[1];
     const specFile = path.join(mod, 'specs', id + '.json');
     assert(fs.existsSync(specFile), '内置模板缺失：specs/' + id + '.json');
     const cfg = JSON.parse(fs.readFileSync(specFile, 'utf8'));
     assert(cfg.id === id && cfg.extends === 'standard', id + ' 规格基本字段不符');
+    assert(Array.isArray(cfg.for) && cfg.for.length === 1 && cfg.for[0] === 'ppt', id + ' 的 for 应为 [ppt]');
     assert(cfg.colors && cfg.colors.accent === accent, id + ' 强调色应为 ' + accent + '，实得 ' + ((cfg.colors || {}).accent));
   }
   for (const pair of themes) {
@@ -278,6 +279,14 @@ t('随包主题模板齐备且可加载（report + WPS 三套 · 不需 python-p
     assert(r.stdout.includes(id), '未报告主题 id：' + id);
     assert((r.stdout.match(/✔/g) || []).length >= 20, id + ' 几何不完整（✔ 不足）');
   }
+  // 文档规格（report 声明 for 不含 ppt）不得当作 PPT 主题：必须被拒且给出可用清单
+  const repCfg = JSON.parse(fs.readFileSync(path.join(mod, 'specs', 'report.json'), 'utf8'));
+  assert(Array.isArray(repCfg.for) && repCfg.for.indexOf('ppt') === -1, 'report 的 for 不应含 ppt');
+  const rr = pyRun(RENDER, ['list-layouts', '--theme', 'report']);
+  if (!rr) return 'skip';
+  assert(rr.status === 2, 'report 用于 PPT 应 exit 2，实得 ' + rr.status);
+  assert((rr.stderr || '').includes('不能用于 PPT') && rr.stderr.includes('本格式可用'),
+    '跨格式拒绝信息不完整：' + (rr.stderr || '').slice(0, 200));
 });
 
 t('render：11 页整册 → exit 0 且页数正确', function () {

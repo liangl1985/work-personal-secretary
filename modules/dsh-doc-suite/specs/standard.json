@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "standard",
+  "for": ["word","excel","ppt"],
   "name": "标准商务",
   "mood": "专业、克制、可信",
   "best_for": [

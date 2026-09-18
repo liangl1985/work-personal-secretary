@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "crimson",
+  "for": ["ppt"],
   "name": "红色党政",
   "extends": "standard",
   "mood": "红色主调、党政语境、庄重热烈",

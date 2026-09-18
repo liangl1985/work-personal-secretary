@@ -20,6 +20,11 @@ BUILTIN_DIR = Path(__file__).resolve().parents[2] / "specs"
 USER_DIR = Path.home() / ".dsh" / "data" / "dsh-doc-suite" / "templates"
 DEFAULT_SPEC = "standard"
 
+# 规格/主题的适用格式（顶层 for 字段，2026-09-18 起；见 0.7.14）
+#   声明了 for 的规格**只能**用于列出的格式；未声明 for 的按"全部格式可用"放行（兼容使用者自定义层老文件）。
+FOR_FORMATS = ("word", "excel", "ppt")
+FORMAT_LABELS = {"word": "Word", "excel": "Excel", "ppt": "PPT"}
+
 
 class SpecError(Exception):
     """规格文件缺失/格式错误（使用者层面，友好打印）。"""
@@ -85,8 +90,60 @@ def _load_by_id(spec_id: str, _seen: set | None = None) -> dict:
     return raw
 
 
-def load_spec(spec_arg: str | None = None) -> dict:
-    """spec_arg 可以是：内置 id（standard）/ 自定义 id / 规格文件路径。"""
+def resolve_for(spec_id: str):
+    """返回该 id **合并（含 extends 与自定义层覆盖）后**的 for；未声明→ None（视作全部格式可用）。"""
+    try:
+        spec = _load_by_id(spec_id)
+    except SpecError:
+        return None
+    declared = spec.get("for")
+    return declared if isinstance(declared, list) and declared else None
+
+
+def _available_for(fmt: str) -> list:
+    """列出两层里**合并后**可用于 fmt 的规格 id；未声明 for 的按可用计。"""
+    ids: set = set()
+    for d in (BUILTIN_DIR, USER_DIR):
+        if not d.is_dir():
+            continue
+        for p in sorted(d.glob("*.json")):
+            if not p.name.endswith(".schema.json"):
+                ids.add(p.stem)
+    out_ids = []
+    for sid in sorted(ids):
+        declared = resolve_for(sid)
+        if declared is None or fmt in declared:
+            out_ids.append(sid)
+    return out_ids
+
+
+def _check_for_format(spec: dict, fmt: str) -> None:
+    """按格式强校验：声明了 for 且不含 fmt → SpecError（中文单行 + 本格式可用清单）。
+
+    校验在**合并（含 extends）之后**做 —— 派生件继承基座的 for，也可用自身 for 收窄。
+    """
+    if fmt not in FOR_FORMATS:
+        return
+    declared = spec.get("for")
+    if declared is None:
+        return
+    label = FORMAT_LABELS[fmt]
+    sid = spec.get("id")
+    if not isinstance(declared, list) or not declared:
+        raise SpecError(f"规格/主题 {sid} 的 for 字段无效（应为非空数组，取值 word / excel / ppt）")
+    if fmt in declared:
+        return
+    uses = "/".join(FORMAT_LABELS.get(str(x), str(x)) for x in declared)
+    avail = "、".join(_available_for(fmt)) or "（无）"
+    raise SpecError(f"规格/主题 {sid} 是给 {uses} 用的，不能用于 {label}；本格式可用：{avail}")
+
+
+def load_spec(spec_arg: str | None = None, for_format: str | None = None) -> dict:
+    """spec_arg 可以是：内置 id（standard）/ 自定义 id / 规格文件路径。
+
+    for_format（word / excel / ppt，可选）：合并（含 extends）后按顶层 for 做**格式强校验**；
+    未声明 for 的规格放行（兼容使用者自定义层老文件，如公司母版导入件）。
+    """
     name = (spec_arg or DEFAULT_SPEC).strip()
     path = Path(name)
     if path.exists() and path.is_file():
@@ -95,8 +152,11 @@ def load_spec(spec_arg: str | None = None) -> dict:
         base = _load_by_id(base_id) if base_id else {}
         merged = deep_merge(base, data) if base else data
         merged.setdefault("id", base_id or path.stem)
-        return merged
-    return _load_by_id(name)
+    else:
+        merged = _load_by_id(name)
+    if for_format:
+        _check_for_format(merged, for_format)
+    return merged
 
 
 def describe_spec(spec: dict) -> str:

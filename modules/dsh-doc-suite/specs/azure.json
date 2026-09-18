@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "azure",
+  "for": ["ppt"],
   "name": "蓝色简约",
   "extends": "standard",
   "mood": "蓝色极简、留白充裕、职场清爽",

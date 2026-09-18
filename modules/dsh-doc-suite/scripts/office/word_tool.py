@@ -535,7 +535,7 @@ def cmd_apply_style(args):
     import style_spec
     import word_style
 
-    spec = style_spec.load_spec(args.spec)
+    spec = style_spec.load_spec(args.spec, for_format="word")
     style_spec.check_spec_supported(spec)
     src = Path(args.file)
     print(style_spec.describe_spec(spec))
@@ -567,7 +567,7 @@ def cmd_table_style(args):
     import style_spec
     import word_style
 
-    spec = style_spec.load_spec(args.spec)
+    spec = style_spec.load_spec(args.spec, for_format="word")
     style_spec.check_spec_supported(spec)
     src = Path(args.file)
     print(style_spec.describe_spec(spec))

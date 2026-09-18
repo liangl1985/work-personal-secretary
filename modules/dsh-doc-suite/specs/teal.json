@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "teal",
+  "for": ["ppt"],
   "name": "青蓝技术",
   "extends": "standard",
   "mood": "清爽、技术感、透气",

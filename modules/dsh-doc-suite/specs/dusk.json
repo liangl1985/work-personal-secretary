@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "dusk",
+  "for": ["ppt"],
   "name": "暗色商务",
   "extends": "standard",
   "mood": "深蓝墨色、商务克制、沉稳对比",

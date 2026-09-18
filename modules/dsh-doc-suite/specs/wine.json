@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "wine",
+  "for": ["ppt"],
   "name": "酒红正式",
   "extends": "standard",
   "mood": "正式、传统、仪式感",

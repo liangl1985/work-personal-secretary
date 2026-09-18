@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "graphite",
+  "for": ["ppt"],
   "name": "石墨工程",
   "extends": "standard",
   "mood": "克制、工程感、重数据",

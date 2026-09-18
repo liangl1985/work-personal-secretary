@@ -58,6 +58,7 @@
 - 格式与两层：只用标准库 `json`；**内置层 `specs/` < 使用者自定义层 `~/.dsh/data/dsh-doc-suite/templates/`**，同名键**深度覆盖**，与 DSH 原生设置"schema 默认 ← base ← 用户覆盖"同构 —— `scripts/office/style_spec.py:4-7`、`19-21`；
 - 加载顺序：内置 → 自定义覆盖 → 若声明 `extends` 则递归继承基座（带循环检测）；`load_spec()` 也接受**规格文件路径** —— `scripts/office/style_spec.py:57-99`；
 - 深度合并语义：dict 递归、其它类型整体替换 —— `scripts/office/style_spec.py:46-54`。
+- **适用格式 `for`（2026-09-18 起）**：顶层 `for` 声明该规格可用于哪些格式（`word` / `excel` / `ppt`）；`load_spec(..., for_format=...)` 在**合并 extends 之后**校验 —— 声明了 `for` 且不含该格式 → `SpecError`（中文单行 +「本格式可用」清单）；**未声明 `for` 的规格放行**（兼容自定义层老文件，如公司母版导入件 `tdhx.json`）；`--spec <文件路径>` 形式同样受校验 —— `scripts/office/style_spec.py:21、93、112、133`。声明口径：`standard` = word·excel·ppt；`govdoc`·`compact`·`report` = word·excel；`graphite`·`teal`·`wine`·`dusk`·`azure`·`crimson` = ppt。入口已传格式：`word_tool.py`→word · `excel_tool.py`→excel · `ppt_style.py` 与 `ppt_render.load_theme()`→ppt；`ppt_theme.py list` 只列可用于 PPT 的（未标注 `for` 的照列并标注）—— `scripts/office/ppt_theme.py:163`。
 
 各规格一览（以文件头字段为准）：
 
@@ -71,7 +72,7 @@
 | `dusk` / `azure` / `crimson` | 暗色商务 / 蓝色简约 / 红色党政 | `standard` | **由 WPS 模板库 pptx 导入**（`theme4.xml` + `slideMaster4.xml`，各 11 个版式）：只搬色板 / 字体 / 页面尺寸，文字强调色按 WCAG AA 压暗 | `specs/dusk.json:1-52`、`specs/azure.json:1-53`、`specs/crimson.json:1-54` |
 
 - **色值口径**：颜色只允许"6 位 hex"或"可用色角色（顶层 `colors` 键 / `pptx.color_roles` 键）"，这是"换主题不失效"的前提 —— `scripts/spec_sync.py:94-103`；
-- **规格校验**：完整规格必须有 `schema`/`id`/`word`/`excel`，`word.styles.Normal` 必填；`pptx` 段可选，出现则按几何契约校验；`extends` 件按**合并基座后**的几何校验 —— `scripts/spec_sync.py:367-410`；
+- **规格校验**：完整规格必须有 `schema`/`id`/`word`/`excel`，`word.styles.Normal` 必填；`pptx` 段可选，出现则按几何契约校验；`extends` 件按**合并基座后**的几何校验；`for` 若存在必须是非空数组且元素 ∈ `word`/`excel`/`ppt`（缺省不报错）—— `scripts/spec_sync.py:37、373、385`；
 - **对比度门禁**：逐规格算"文字 vs 背景"的 WCAG AA 比值，不达标即 `exit 4`；装饰色（`accent_decor`/`rule`/`chart_series`）不检 —— `scripts/spec_sync.py:639-662`、`scripts/office/ppt_contrast.py:4-16`；
 - **manifest 字段规范** `specs/ppt-manifest.schema.json` 属"字段规范"而非样式规格，不参与规格校验但随 `specs/` 同步 —— `scripts/spec_sync.py:60-62`。
 

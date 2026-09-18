@@ -36,6 +36,7 @@ for _p in (str(SCRIPTS),):
         sys.path.insert(0, _p)
 
 import cli_guard  # noqa: E402
+import style_spec  # noqa: E402
 from ppt_contrast import is_hex6, ratio  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
@@ -173,16 +174,25 @@ def cmd_list(args):
             except Exception as exc:               # noqa: BLE001
                 print("  ⚠️ %s 读取失败：%s" % (p.name, exc), file=sys.stderr)
                 continue
-            rows.append({"id": cfg.get("id") or p.stem, "name": cfg.get("name", ""),
-                         "mood": cfg.get("mood", ""), "source": src,
+            sid = str(cfg.get("id") or p.stem)
+            # 只列可用于 PPT 的：按**合并后**的 for 判断（自定义层覆盖内置同 id 时以内层为准）；
+            # 未声明 for 的保留并标注（兼容使用者自定义层老文件，如公司母版导入件）
+            declared = style_spec.resolve_for(sid)
+            if isinstance(declared, list) and "ppt" not in declared:
+                continue
+            uses = "ppt" if isinstance(declared, list) else "未标注格式"
+            rows.append({"id": sid, "name": cfg.get("name", ""),
+                         "mood": cfg.get("mood", ""), "source": src, "for": uses,
                          "extends": cfg.get("extends", ""), "file": str(p)})
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
         return 0
-    print("%-12s %-14s %-8s %-8s %s" % ("id", "名称", "来源", "extends", "风格"))
+    print("%-12s %-14s %-8s %-8s %-12s %s" % ("id", "名称", "来源", "extends", "用于", "风格"))
     for r in rows:
-        print("%-12s %-14s %-8s %-8s %s" % (r["id"], r["name"], r["source"], r["extends"] or "-", r["mood"]))
-    print("\n共 %d 套（内置 %s，自定义层 %s）" % (len(rows), BUILTIN, CUSTOM))
+        print("%-12s %-14s %-8s %-8s %-12s %s" % (r["id"], r["name"], r["source"], r["extends"] or "-", r["for"], r["mood"]))
+    print("\n共 %d 套可用于 PPT（内置 %s，自定义层 %s）" % (len(rows), BUILTIN, CUSTOM))
+    print("说明：本表只列 for 含 ppt 的主题；未标注格式的按\"全部格式可用\"处理。"
+          "Word / Excel 的文档规格见 skills/office-word、office-excel。")
     return 0
 
 

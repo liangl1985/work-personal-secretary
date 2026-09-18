@@ -149,7 +149,7 @@ def _print_report(rep, prefix=""):
 
 
 def cmd_apply_style(args):
-    spec = style_spec.load_spec(args.spec)
+    spec = style_spec.load_spec(args.spec, for_format="ppt")
     src = Path(args.file)
     print(style_spec.describe_spec(spec))
     if args.dry_run:

@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "compact",
+  "for": ["word","excel"],
   "name": "内部纪要",
   "extends": "standard",
   "mood": "简练、密排、不装饰",

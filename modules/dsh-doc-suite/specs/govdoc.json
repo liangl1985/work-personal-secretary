@@ -1,6 +1,7 @@
 {
   "schema": "dsh-doc-suite/style-spec@1",
   "id": "govdoc",
+  "for": ["word","excel"],
   "name": "党政机关公文",
   "extends": "standard",
   "mood": "庄重、规范、不装饰",

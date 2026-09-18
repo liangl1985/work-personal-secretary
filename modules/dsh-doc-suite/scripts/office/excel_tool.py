@@ -474,7 +474,7 @@ def cmd_apply_style(args):
     import style_spec
     import excel_style
 
-    spec = style_spec.load_spec(args.spec)
+    spec = style_spec.load_spec(args.spec, for_format="excel")
     style_spec.check_spec_supported(spec)
     src = Path(args.file)
     if not src.name.lower().endswith((".xlsx", ".xlsm")):

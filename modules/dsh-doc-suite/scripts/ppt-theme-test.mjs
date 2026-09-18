@@ -68,8 +68,11 @@ t('list：列出内置与自定义层主题', function () {
   if (!HAS_PY || !HAS_PPTX) return 'skip';
   const r = py(THEME, ['list']);
   assert(r.status === 0, 'exit=' + r.status);
-  for (const id of ['standard', 'compact', 'graphite', 'teal', 'wine']) {
-    assert(r.stdout.includes(id), '清单缺 ' + id);
+  for (const id of ['standard', 'graphite', 'teal', 'wine', 'dusk', 'azure', 'crimson']) {
+    assert(r.stdout.includes(id), '清单缺可用于 PPT 的 ' + id);
+  }
+  for (const id of ['compact', 'report', 'govdoc']) {
+    assert(!new RegExp('^' + id + '\\s', 'm').test(r.stdout), '文档规格不应出现在 PPT 主题清单：' + id);
   }
   assert(r.stdout.includes('内置'), '未标注来源');
 });

@@ -25,7 +25,7 @@ description: 处理 Word 文档（.docx/.doc/.wps）：提取全文与表格、�
 | `table-style` | `table-style <file> [--spec standard|govdoc|compact] [--out out.docx] [--dry-run]` | 表格样式：表头底纹+加粗+居中、边框、跨页重复表头、表内字号（10.5pt） |
 
 
-> **内置规格**（`--spec`）：**`standard`** 标准商务（上下 2.54 / 左右 3.17 cm、全文仿宋、正文小四 12pt、行距 1.5）· **`govdoc`** 党政机关公文（上 3.7 / 下 3.5 / 左 2.8 / 右 2.6 cm、正文三号 16pt 仿宋、一、黑体／（一）楷体、公文标题二号居中，依 GB/T 9704-2012）· **`compact`** 内部纪要（密排小字）。自定义层放 `~/.dsh/data/dsh-doc-suite/templates/<id>.json`（**不进发布件**）；规格真相源是 `specs/*.json`，改后用 `py -3 <DOC_SUITE_SCRIPTS>\spec_sync.py --check` 校验。
+> **内置规格**（`--spec`）：**`standard`** 标准商务（上下 2.54 / 左右 3.17 cm、全文仿宋、正文小四 12pt、行距 1.5）· **`govdoc`** 党政机关公文（上 3.7 / 下 3.5 / 左 2.8 / 右 2.6 cm、正文三号 16pt 仿宋、一、黑体／（一）楷体、公文标题二号居中，依 GB/T 9704-2012）· **`compact`** 内部纪要（密排小字）。自定义层放 `~/.dsh/data/dsh-doc-suite/templates/<id>.json`（**不进发布件**）；规格真相源是 `specs/*.json`，改后用 `py -3 <DOC_SUITE_SCRIPTS>\spec_sync.py --check` 校验。**跨格式会被拒绝**：演示主题（`graphite`/`teal`/`wine`/`dusk`/`azure`/`crimson`）不能用于 Word，报错会列出 Word 可用的规格。
 ## 常用命令
 
 ```bat
