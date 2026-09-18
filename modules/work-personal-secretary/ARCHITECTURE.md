@@ -3,7 +3,7 @@
 > **读者**：本模块的维护者。
 > **路径约定**：本文所有相对路径以**本文件所在目录**（`modules/work-personal-secretary/`）为基准；`<DSH_HOME>` 指 DSH 的数据根（默认 `~/.dsh`）、`<profile>` 指当前 profile 目录、`<workspace>` 指会话工作区、`<memoryDir>` 指记忆库目录、`<obsidianDir>` 指知识库（vault）根目录。
 > **口径**：只写**已实现**的行为；未实现的一律标注「本版未实现」。每条结论附 `相对路径:行号`。代码与注释/文档不一致时，本文以**代码**为准，并在 4.6 节列出已核实的不一致点。
-> **版本基线**：`package.json:3` = `1.1.4`；`client/index.js:45` 的 `BUILD = 'v1.1.4'`（由 `scripts/smoke-load.mjs:2019-2027` 断言与 `package.json` 同步）。注意 `CHANGELOG.md:3` 与 `CHANGELOG.md:41` 分别把 1.1.3、1.2.0 段标注为**未发布** —— 版本号不等于已发布 tag。
+> **版本基线**：`package.json:3` = `1.1.8`；`client/index.js:45` 的 `BUILD = 'v1.1.8'`（由 `scripts/smoke-load.mjs:2019-2027` 断言与 `package.json` 同步）。注意 `CHANGELOG.md:3` 与 `CHANGELOG.md:41` 分别把 1.1.3、1.2.0 段标注为**未发布** —— 版本号不等于已发布 tag。
 
 ---
 

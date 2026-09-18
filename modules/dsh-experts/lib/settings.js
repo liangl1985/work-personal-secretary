@@ -88,7 +88,7 @@ export const EXPERTS_SETTINGS_SCHEMA = z ? z.object({
     .description('把匹配范围**收窄**到这些专家（id 逗号分隔，如 infosec-bid-proposal,accounting-tax）；留空 = 不收窄。范围外的专家不参与自动匹配，仍可用 expert_recall 现取现用'),
 
   expertInjectMax: z.natural().default(4)
-    .description('**persona 注入软上限**：**默认 4，且 2026-09-15 起不在设置页提供**（主人定：直接写死，避免误调）。0 = 不限（交由字符预算与分数阈值守门）；如需收紧，手改 settings.yaml 为 1–3 仍生效。实测 20 条真实任务**无一命中 4 位**（70% 只命中 1 位），故 4 是「留余量」而非「常态化占满」'),
+    .description('**persona 注入软上限**：**默认 4，且 2026-09-15 起不在设置页提供**（使用者定：直接写死，避免误调）。0 = 不限（交由字符预算与分数阈值守门）；如需收紧，手改 settings.yaml 为 1–3 仍生效。实测 20 条真实任务**无一命中 4 位**（70% 只命中 1 位），故 4 是「留余量」而非「常态化占满」'),
 
   skillInjectEnabled: z.boolean().default(true)
     .description('是否注入**能力层指针**（工具 / 技能专家）：从本轮任务识别要用的技能，只注入一行「去哪拿」的指针（约 100 字符/条），做法原文由 skill 工具按需加载。它独立于 persona 命中，**不占** expertInjectMax 配额，也不受 enabledDomains 收窄'),

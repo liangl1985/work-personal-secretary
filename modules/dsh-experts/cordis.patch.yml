@@ -28,7 +28,7 @@
         identityExpert: ''        # 可选常驻的身份专家（id）；**留空 = 不常驻**（身份由 work-memory 记忆承担）
         enabledDomains: ''        # 把匹配范围收窄到这些域（逗号分隔）；留空 = 全量参与（岗位只作排序先验）
         enabledExperts: ''        # 把匹配范围收窄到这些专家 id（逗号分隔）；留空 = 不收窄
-        expertInjectMax: 4        # persona 软上限 **写死 4**（2026-09-15 主人定，设置页不提供该项）；0 = 不限；手改 settings.yaml 可收紧到 1–3
+        expertInjectMax: 4        # persona 软上限 **写死 4**（2026-09-15 使用者定，设置页不提供该项）；0 = 不限；手改 settings.yaml 可收紧到 1–3
         expertSecondThreshold: 0.3 # **域专家**第 2/3 位的相对门槛（证据 ≥ 最强 × 该值）；2026-09-15 由 0.8 调为 0.3（0.8 时实测 70% 任务只命中 1 位）
         expertGeneralMax: 1       # **通用型专家**（核查/排版/文档/演示/设计）的独立配额与绝对门槛 —— 与域专家分开评分
         expertGeneralMinEvidence: 0.2

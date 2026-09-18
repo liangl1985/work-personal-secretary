@@ -136,7 +136,7 @@
 
 ### 版本回退
 
-1. **改版本号 → 重新构建 → 重装**：`package.json:3` 的 `version`（当前 `1.0.3`）是安装器判定的版本口径；回退时把版本号改回目标值，`npm install && npm run build`（重出 `lib/` 与 `client/client.js`），再由集成体安装器重装。
+1. **改版本号 → 重新构建 → 重装**：`package.json:3` 的 `version`（当前 `1.0.4`）是安装器判定的版本口径；回退时把版本号改回目标值，`npm install && npm run build`（重出 `lib/` 与 `client/client.js`），再由集成体安装器重装。
 2. **集成体安装是原子替换**：安装器把 `modules/workspace-tokenpet` 整体复制到 `<profile>/node_modules/workspace-tokenpet` 并写入 profile 的 `dsh.profile.bundles`，过程为**原子替换 + 逐文件 SHA256 校验，失败即回滚**（`README.md:61-63`）。
 3. **开发态手动挂载**：`dsh plugin --profile desktop add link:<本模块目录>`（`README.md:72-76`）；**宿主半改动需重启 DSH Desktop，只改客户端时刷新页面即可**（`README.md:76`）——即客户端回退有时不需要重启。
 4. **`git revert`**：源码与素材都在仓库内，回到历史提交后按上面重建/重装；版本历史见 `CHANGELOG.md`（顶部为最新条目，`CHANGELOG.md:10`）。

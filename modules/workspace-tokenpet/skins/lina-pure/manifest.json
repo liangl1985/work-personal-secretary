@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "id": "lina-pure",
-  "name": "莉娜·纯欲乖巧版",
+  "name": "小秘书·纯欲乖巧版",
   "nameLocalized": {
-    "zh-CN": "莉娜·纯欲乖巧版",
+    "zh-CN": "小秘书·纯欲乖巧版",
     "en-US": "Lina - Pure & Sweet"
   },
   "version": "1.0.0",
-  "author": "lina",
+  "author": "workspace-tokenpet",
   "license": "private",
   "canvas": {
     "width": 360,

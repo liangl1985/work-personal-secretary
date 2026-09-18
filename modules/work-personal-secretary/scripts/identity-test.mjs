@@ -126,7 +126,7 @@ ok(rd3.count === 1 && rd3.entryId === 'abc123def456' && rd3.content === '从事�
 // ───────────────────── [4] 改写 ─────────────────────
 section('[4] 改写：保留 id / 日期更新 / 其余条目逐字未变')
 const persona = '[id:persona0001] [2026-09-01] [tag:关键] ' + PERSONA_MARK + '：知性、温柔、包容、温顺。'
-const other = '[id:daily00001] [2026-09-15] [tag:常规] 今日日志：与主人过了一遍方案。'
+const other = '[id:daily00001] [2026-09-15] [tag:常规] 今日日志：与使用者过了一遍方案。'
 writeFileSync(memFile, t3.replace(/\n$/, '') + ENTRY_DELIMITER + persona + ENTRY_DELIMITER + other + '\n', 'utf8')
 const before4 = readFileSync(memFile, 'utf8')
 const r4 = applyIdentity({ memoryFile: memFile, content: '从事财务与会计工作。', now: NOW2, dryRun: false })

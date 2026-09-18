@@ -19,7 +19,7 @@ import re
 # ---- 标题性判据（2026-09-15 修：正文里的编号引导句曾被误升为标题）----
 # 一条「像标题」的编号段落必须同时满足：够短、无句末标点、不含句子级逗号。
 # 真标题（如「1.2.1 安全通信网络」「（一）系统概述」）能过；正文句（如「（1）本项目按等保三级建设，…」）过不了。
-MAX_HEADING_LEVEL = 5          # 最大标题层级（主人 2026-09-15：最多用到 5 级）
+MAX_HEADING_LEVEL = 5          # 最大标题层级（使用者 2026-09-15：最多用到 5 级）
 HEADING_MAX_CHARS = 40         # 编号标题长度上限，超过视为正文
 _HEADING_TAIL = ("。", "；", "！", "？", "，", ",", ";", ".")   # 以此收尾 → 不是标题
 _HEADING_INNER = ("。", "；", "！", "？", "，", ",", ";")          # 含这些 → 不是标题
@@ -103,7 +103,7 @@ def detect_numbering_scheme(texts) -> str:
 def number_role(text: str | None, max_chars: int = HEADING_MAX_CHARS, scheme: str = "dotted") -> str | None:
     """编号模式 -> 角色（无编号、或不像标题时返回 None）。
 
-    2026-09-15 修（主人：最多用到 5 级标题）：
+    2026-09-15 修（使用者：最多用到 5 级标题）：
       * 点号体系按**编号深度**定层级 —— 1 → h1、1.1 → h2、1.2.1 → h3、1.2.3.4 → h4、1.2.3.4.5 → h5，
         不再把 1.1.2 一律压成 heading_2（原实现按 1–3 段点号一律判 h2）；
       * 加**标题性判据**（长度 ≤ max_chars、不以句末标点收尾、不含句子级逗号），
@@ -235,7 +235,7 @@ def resolve_column_align(header, values, table_spec: dict) -> str:
     for kw in serial:
         if kw and str(kw).strip().lower() in h:
             return str(ar.get("serial_align", "center"))
-    # 表头语义兜底：该列**暂时为空**（如主人未填单价）时，也能按表头判为数值列
+    # 表头语义兜底：该列**暂时为空**（如使用者未填单价）时，也能按表头判为数值列
     for kw in ar.get("numeric_headers") or []:
         if kw and str(kw).strip().lower() in h:
             return str(ar.get("numeric_align", "right"))

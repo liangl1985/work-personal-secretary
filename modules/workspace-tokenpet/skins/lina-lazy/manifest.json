@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "id": "lina-lazy",
-  "name": "莉娜·慵懒性感版",
+  "name": "小秘书·慵懒性感版",
   "nameLocalized": {
-    "zh-CN": "莉娜·慵懒性感版",
+    "zh-CN": "小秘书·慵懒性感版",
     "en-US": "Lina - Lazy & Alluring"
   },
   "version": "1.0.0",
-  "author": "lina",
+  "author": "workspace-tokenpet",
   "license": "private",
   "canvas": {
     "width": 360,

@@ -20,9 +20,12 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# ר�ҿ�����ĵ���design-v2 / handover / optlog-* / pre-release-audit������⣨2026-09-14 ���˶���
+# 专家库开发文档（design-v2 / handover / optlog-* / pre-release-audit）不入库（2026-09-14 使用者定）
 modules/dsh-experts/docs/
 *.bak-*
+
+# 专家库能力层兜底索引：由本机 scripts/skill-index.mjs 生成，内容含本机绝对路径 → 不入库（2026-09-18 定）
+modules/dsh-experts/experts/skills.auto.json
 
 # dsh-doc-suite media runtime lock must be tracked (media-test asserts it; CI has no lock otherwise)
 !modules/dsh-doc-suite/scripts/media/runtime/package-lock.json

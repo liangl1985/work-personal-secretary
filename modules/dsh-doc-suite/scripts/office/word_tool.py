@@ -193,7 +193,7 @@ def md_to_docx(doc, text):
         s = line.strip()
         m = _MD_HEADING_RE.match(s)
         if m:
-            # 支持 1–6 级标题（主人 2026-09-15：最多用到 5 级；6 级及以上按模板可容）
+            # 支持 1–6 级标题（使用者 2026-09-15：最多用到 5 级；6 级及以上按模板可容）
             doc.add_heading(_strip_md(m.group(2)), level=min(len(m.group(1)), 6))
         elif re.match(r"^[-*]\s+", s):
             para = doc.add_paragraph(style="List Bullet")

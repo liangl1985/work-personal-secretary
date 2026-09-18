@@ -574,7 +574,7 @@ ok(countSchemaKeys(expSettingsFile) === 19, 'experts schema 19 键（0.3.x 四�
 const expSrc = readFileSync(expSettingsFile, 'utf8')
 ok(/defaultDomain: 'infosec',/.test(expSrc), "DEFAULTS.defaultDomain = 'infosec'（0.3.x 域重划：presales → infosec，settings.js:46）")
 ok(/identityExpert: '',/.test(expSrc), "DEFAULTS.identityExpert = ''（身份退场：留空 = 不常驻，settings.js:47）")
-ok(/expertInjectMax: 4,/.test(expSrc), 'DEFAULTS.expertInjectMax = 4（2026-09-15 主人定：写死 4、设置页不提供该项，settings.js:50）')
+ok(/expertInjectMax: 4,/.test(expSrc), 'DEFAULTS.expertInjectMax = 4（2026-09-15 使用者定：写死 4、设置页不提供该项，settings.js:50）')
 ok(/expertInjectMax: z\.natural\(\)\.default\(4\)/.test(expSrc), 'schema 默认值 = 4（settings.js:88，写死 4 后的第二处一致点）')
 // limits.js 无外部依赖：直接动态 import 做行为刻度（比正则匹配源码更稳），边界口径 = 0 不限 / 负数回落 4 / 硬上限 4
 const expLimits = await import(pathToFileURL(join(MODULES_DIR, 'dsh-experts', 'lib', 'limits.js')).href)

@@ -1,13 +1,13 @@
 # 发布检查清单（work-personal-secretary）
 
-> ⛔ **本次不适用**：`v1.1.3` 及 `1.2.0` 经主人 2026-09-17 裁定**不发布**（原因见根 `/CHANGELOG.md` 的 1.1.3 段与 `modules/work-personal-secretary/CHANGELOG.md`）。本清单保留给**下一次真正发布**时使用；本次不做逐项打勾。
+> ✅ **本次适用（2026-09-18 发布 `v1.1.8`）**：本次发布 = 集成体 `v1.1.8` + 四个子模块 patch 版（`dsh-doc-suite` 0.7.16 · `dsh-experts` 0.5.13 · `dsh-work-memory` 1.0.9 · `workspace-tokenpet` 1.0.4）。逐项打勾见下；未过的项目已在根 `CHANGELOG.md` 的「已知边界」中如实标注，不静默带过。
 
-> 📌 **发布节奏（2026-09-17 主人定）**：此后一律**小步 patch、不再开大版本**；非必要不打 Release。当前对外发布版为 `v1.0.0`（Latest）；`v1.1.0` 草稿已于 2026-09-17 删除（tag 保留）；`v1.1.1`–`v1.1.3` 与 `1.2.0` 均不发布。
-> 📌 **CI 状态（2026-09-17）**：远端 `main` 已追平本地 1.1.3；Linux runner 上的测试平台问题已修（见根 `CHANGELOG.md` 与 `modules/dsh-doc-suite/CHANGELOG.md` 的 0.7.10 段）。
+> 📌 **发布节奏（2026-09-17 使用者定）**：此后一律**小步 patch、不再开大版本**。**当前对外发布版 = `v1.1.8`**（2026-09-18 发布，含 `1.1.4`–`1.1.8` 五个开发版的合并内容）。历史：`v1.0.0`（原 Latest）；`v1.1.0` 草稿已删（tag 保留）；`v1.1.1`–`v1.1.3` 与 `1.2.0` **不发布**，仅作代码历史保留。
+> 📌 **CI 状态（2026-09-18）**：远端 `main` 已追平本地；最近一次 push 触发的 run（`730830f`）为 **success**（Node 22 / 24 双版本）。Linux runner 的平台适配问题已修（见根 `CHANGELOG.md` 与 `modules/dsh-doc-suite/CHANGELOG.md` 的 0.7.10 段）。
 
-> 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线：**DSH Desktop 2.0.9 / host `dsh 0.1.5-rc.1`**（升 DSH 后先重跑本清单）。
+> 每次发布/交付前逐项打勾；任何一项不满足就不发。宿主基线（2026-09-18 实测）：**DSH Desktop 2.0.10 / host `dsh 0.1.5-rc.2`**（官方 master `@deepseek-ai/dsh-root 0.1.6-alpha.2`）；升 DSH 后先重跑本清单。
 >
-> 集成体版本：**对外发布基线 `v1.0.0`**（见根 [`CHANGELOG.md`](CHANGELOG.md)）；**当前开发版 `1.1.4`**（按「不发布」收尾）。子模块**当前实际版本**（2026-09-17 实测，以各自 `package.json` 为准）：`dsh-work-memory` **1.0.7** · `dsh-doc-suite` **0.7.12** · `dsh-experts` **0.5.10** · `workspace-tokenpet` **1.0.1**（独立项目模块）· 第三方 `dsh-mermaid` 0.4.0。四者已实装本机 desktop。
+> 集成体版本：**对外发布版 `v1.1.8`**（见根 [`CHANGELOG.md`](CHANGELOG.md) 的 v1.1.8 段）。子模块**当前实际版本**（2026-09-18 实测，以各自 `package.json` 为准）：`dsh-work-memory` **1.0.9** · `dsh-doc-suite` **0.7.16** · `dsh-experts` **0.5.13** · `workspace-tokenpet` **1.0.4**（独立项目模块）· 第三方 `dsh-mermaid` 0.4.0。四者已实装本机 desktop。
 
 ## 一、默认约定必须随包生效（2026-09-11 定）
 
@@ -24,6 +24,8 @@
   - 检索方式：`git grep -n -i -e '<私有名>' -e '主人'`，命中项须为通用表述（使用者/助手）
 - [x] **不得出现私有路径**：`E:\...` / `E:/...`（**正反斜杠两种写法都要扫**）、`~/.dsh/memories/<私有名>`、私有工作区/知识库目录名、第三方克隆目录等；默认路径必须通用（如 `~/.dsh/data/dsh-work-memory/memory`）
   - 检索方式：`git grep -n -i -E 'E:[\\/]'`、`git grep -n -i -E '\.dsh/memories/'`、`git grep -n -i '<私有名>'`（含注释与测试夹具，不只文档）
+  - ✅ **2026-09-18 复查与例外登记（本次发布的整改项）**：对**随包件**（各模块 `package.json` 的 `files` 白名单，含注释、规格 `_note`、夹具与 CHANGELOG）做全量重扫 —— 私有盘符路径 **0 命中**；私有助手名与私有称呼**仅剩反面断言**，**有意保留并在下条登记**。整改明细见根 [`CHANGELOG.md`](CHANGELOG.md) v1.1.8 段第三节与各模块 patch 段。
+- [x] **例外登记（有意保留，不得当红线遗漏）**：以下命中**不是夹带私有身份，而是守卫本身**——① `modules/work-personal-secretary/scripts/smoke-load.mjs:134` · `probe-test.mjs:550` · `defaults-test.mjs:44-47` 的**私有名黑名单数组**（用途：断言"这些词不得出现在随包文案里"）；② `modules/dsh-doc-suite/scripts/tests/test_python.py` 的 `COMPANY_KEYS` **资产检测指纹表**（用途：断言随包母版与全部 XML/rels 里公司标识串 **0 命中**）。**删除任一项都会失去对应防护**，故保留；若将来要彻底不出现这些字面，应改为「由外部配置文件提供指纹」而非删除断言。
 - [x] `cordis.patch.yml` 及各模块默认配置**中性**：无个人路径、无称呼
 - [x] 个性化只走**设置页用户层**（不写进包内默认层）
 - [x] 包内**不含任何记忆数据**（首装记忆为空，人设由首轮对话填充）

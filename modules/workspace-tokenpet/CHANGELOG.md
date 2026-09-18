@@ -7,6 +7,14 @@
 > 1.0.0 之前的条目**保留原文**：其中「补丁 / patches / 上游基线 / 定制层」等措辞属于当时的
 > 历史形态记录，对应的文件已在 1.0.0 中删除。
 
+## 1.0.4 — 2026-09-18（皮肤显示名中性化）
+
+- **随包皮肤显示名去掉私有助手名**：`skins/lina-pure/manifest.json` 与 `skins/lina-lazy/manifest.json` 的 `name` / `zh-CN` 由私有名开头改为「**小秘书**·纯欲乖巧版 / **小秘书**·慵懒性感版」；`author` 由私有名改为 `workspace-tokenpet`。
+- **`lina-*` 技术 id 保留不动**（`skinId`、目录名、测试文件名、历史版本号 `0.2.1-lina.1`）—— 按 2026-09-13 既定口径（只中性化中文称呼，技术 id 保持稳定，避免破坏既有安装）。
+- **已知边界（务必知悉）**：皮肤素材安装策略是「**只补缺失、绝不覆盖**」，因此**已装环境不会自动更新已存在的 manifest** —— 本机已装的 `lina-pure` / `lina-lazy` 显示名仍是旧值；要更新需**删掉该套装目录后重装**，或手工改 `~/.dsh/data/workspace-tokenpet/skins/<套装>/manifest.json`。
+- **验证**：`node --test tests/*.test.mjs` **8 pass / 0 fail**；两份 manifest 仍为合法 JSON（解析 2/2）。
+- **回退**：改回 1.0.3 并恢复两份 manifest 的名称（或检回上一提交）。
+
 ## 1.0.3 — 死路由清理（2026-09-17）
 
 - **删除 `/workspace-tokenpet/strips/`（prefix）遗留路由**：它读 `../assets/pet/action-sheets/`，
@@ -43,7 +51,7 @@
 - 真机验证：首次重启后生成 `session-usage-index.json`（63,179 B，149 个 session 已索引）。
 
 ### 回退
-- 源码与 profile 旧版备份：`E:\lina\backup\tokenpet-2026-09-17\`（`index.ts.bak`、`pet-action-sheets.generated.ts.bak`、`profile-before/`）。
+- 源码与 profile 旧版备份：`<工作区>\backup\tokenpet-2026-09-17\`（`index.ts.bak`、`pet-action-sheets.generated.ts.bak`、`profile-before/`）。
   `client/client.js` 是构建产物，**回退必须重新 `npm run build`** 并同步 profile 副本，不能只换源码。
 
 ## 1.0.1 — 构建完整性（2026-09-14）

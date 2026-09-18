@@ -2182,7 +2182,7 @@ ok(iMem >= 0 && iObs > iMem && iJob > iObs, '字段顺序：记忆库目录 → 
 const findSave = () => findButtons(t4Tree).filter((b) => label(b) === '保存配置并开始')[0]
 ok(Boolean(findSave()) && findSave().props.disabled === true, '三项未齐时保存按钮 disabled')
 
-// 新模型（主人 2026-09-16 定）：使用者只选**一个存储根目录**，两个目录由它派生；
+// 新模型（使用者 2026-09-16 定）：使用者只选**一个存储根目录**，两个目录由它派生；
 // 本夹具的 /setup-state 是 404（没有生效值），所以根目录为空、两个目录按「自动派生」显示为只读空值。
 const t4Inputs = () => findAll(t4Tree, (x) => x.type === 'input' && x.props && x.props.type === 'text', [])
 ok(t4Inputs().length === 3, '存储根目录 + 两个派生目录共 3 个输入框（实测 ' + t4Inputs().length + '）')
@@ -2631,7 +2631,7 @@ hookCursor = 0
 effectQueue = []
 e16Core = expand(reg.render({ initialTab: 'core' }))
 const e16CoreText = collect(e16Core, []).join(' | ')
-// 主人 2026-09-16 改口径：一个存储根目录 + 两边各自新建自己的子文件夹；
+// 使用者 2026-09-16 改口径：一个存储根目录 + 两边各自新建自己的子文件夹；
 // 知识库**只新建不搬迁**（要搬必须由使用者指定、逐项对照），记忆体才自动迁移。
 ok(e16CoreText.indexOf('存储根目录') >= 0 && e16CoreText.indexOf('各自新建一个自己的子文件夹') >= 0,
   '目录卡出现「存储根目录」主字段并说明两个子文件夹各自新建')

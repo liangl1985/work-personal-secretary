@@ -1,6 +1,15 @@
+## 0.7.16 — 2026-09-18（发布前中立性整改 · 随包件私有信息清零）
+
+> 发布门禁项（RELEASE-CHECKLIST 第二节），**不改功能、不改任何规格数值**。
+
+- **私有称呼 → 「使用者」**：`specs/standard.json`（7 处 `_note`）· `specs/govdoc.json`（1 处）· `scripts/office/doc_roles.py`（3）· `scripts/office/ppt_render.py`（2）· `scripts/office/word_style.py`（1）· `scripts/office/word_tool.py`（1）· `scripts/style-test.mjs`（2）· 本文件（31 处历史条目）。全部落在**注释 / 规格 `_note` / 断言标题文本**上，**未触碰任何规格键值**（页边距、字号、字体、色板、几何真值、`for` 字段一律未变）。
+- **私有盘符路径清零**：本文件历史条目里的私有工作区样张与备份路径 → `<工作区>\…`。
+- **验证**：`npm test` 五套 **24 / 19 / 26 / 13 / 7**（全 0 失败）· `scripts/spec_sync.py --check` **exit 0**（10 套规格 · 0 项对比度不达标）· `scripts/tests/test_python.py` **20 tests OK** · `py_compile` **4/4**，改动 JSON 解析 **2/2**。
+- **回退**：纯文本整改，回退即改回 0.7.15。
+
 ## 0.7.15 — 2026-09-18（随包母版模板三套 + 两条制作路径）
 
-**背景**：主人 2026-09-18 验收通过三份母版，并要求「母版放在随包里」「制作 PPT 时能使用」。此前 `templates/` 只放说明、母版 pptx 不随包，做 PPT 仍要从零排版。
+**背景**：使用者 2026-09-18 验收通过三份母版，并要求「母版放在随包里」「制作 PPT 时能使用」。此前 `templates/` 只放说明、母版 pptx 不随包，做 PPT 仍要从零排版。
 
 ### 一、随包三套母版（`assets/templates/`）
 
@@ -25,7 +34,7 @@
 
 ### 四、断言（零第三方依赖）
 
-`scripts/tests/test_python.py` 新增 `TestTemplateAssets` 三条（单测 17 → **20**）：① 三份母版存在且可解析（各 1 个 `slideMaster` + 11 个 `slideLayout`）；② 全部 XML/rels 里公司串（天地和兴 / TDHX / 4008108981 / INDUSTRIAL NETWORK SECURITY）**0 命中**；③ manifest 登记与磁盘文件一一对应（数量 + 文件名 + 字节数 + SHA256）。用标准库 `zipfile` 直读包结构，**不引入 python-pptx 依赖**。
+`scripts/tests/test_python.py` 新增 `TestTemplateAssets` 三条（单测 17 → **20**）：① 三份母版存在且可解析（各 1 个 `slideMaster` + 11 个 `slideLayout`）；② 全部 XML/rels 里**公司标识串**（公司名 / 英文缩写 / 客服电话 / 英文标语；指纹表见 `scripts/tests/test_python.py` 的 `COMPANY_KEYS`）**0 命中**；③ manifest 登记与磁盘文件一一对应（数量 + 文件名 + 字节数 + SHA256）。用标准库 `zipfile` 直读包结构，**不引入 python-pptx 依赖**。
 
 ### 五、验证（2026-09-18 本机）
 
@@ -40,7 +49,7 @@
 删除 `assets/templates/` 三个 pptx 与 `assets/manifest.json` 的 `templates` 段；`templates/README.md`、`SKILL.md` 第八节、`README.md` 增段、`use.zh-CN.md` 增段、`test_python.py` 的 `TestTemplateAssets` 按 diff 回退；版本改回 **0.7.14**；CHANGELOG 删本段；HTML 重新生成。
 ## 0.7.14 — 2026-09-18（规格按格式强约束：顶层 `for` + 跨格式拒绝）
 
-**背景**：主人 2026-09-18 定「PPT 用的那几套只能给 PPT」。此前 `dusk` 等 6 套只覆盖 `pptx` 段与色板，`--spec dusk` 用在 Word 上会被接受（合并 `standard` 的 word 段 + dusk 的色板）—— 属误用，本次堵死。
+**背景**：使用者 2026-09-18 定「PPT 用的那几套只能给 PPT」。此前 `dusk` 等 6 套只覆盖 `pptx` 段与色板，`--spec dusk` 用在 Word 上会被接受（合并 `standard` 的 word 段 + dusk 的色板）—— 属误用，本次堵死。
 
 ### 一、规格新增顶层 `for`（10 套）
 
@@ -139,19 +148,19 @@
 
 ## 0.7.11 — 2026-09-17（standard 页边距中性化 · 公文风格 govdoc · read_docx 往返保真 · 样式颜色支持）
 
-**背景**：主人 2026-09-17 定「Word 对外保留 `standard`（标准）+ 公文两套口径」，并给出 `standard` 的页边距基准（通用默认）。
+**背景**：使用者 2026-09-17 定「Word 对外保留 `standard`（标准）+ 公文两套口径」，并给出 `standard` 的页边距基准（通用默认）。
 
 ### 一、`standard` 页边距改通用默认（私有口径出清）
 
-- `specs/standard.json` 的 `word.page.margins_cm`：**上 3.17 / 下 3.17 / 左 2.54 / 右 2.54 → 上 2.54 / 下 2.54 / 左 3.17 / 右 3.17 cm**（主人给的基准）。规格 `1.3 → 1.4`
-- 原值取自主人投标文件（私有口径），按「私有口径进自定义层」原则**留给使用者自建**（如 `~/.dsh/data/dsh-doc-suite/templates/bid.json`），不再随内置层分发；`_note` 与 README 同步改写
+- `specs/standard.json` 的 `word.page.margins_cm`：**上 3.17 / 下 3.17 / 左 2.54 / 右 2.54 → 上 2.54 / 下 2.54 / 左 3.17 / 右 3.17 cm**（使用者给的基准）。规格 `1.3 → 1.4`
+- 原值取自使用者投标文件（私有口径），按「私有口径进自定义层」原则**留给使用者自建**（如 `~/.dsh/data/dsh-doc-suite/templates/bid.json`），不再随内置层分发；`_note` 与 README 同步改写
 
 ### 二、新增公文风格 `specs/govdoc.json`（GB/T 9704-2012 要点）
 
 - `extends = standard`，只写差异键：页边距 **上 3.7 / 下 3.5 / 左 2.8 / 右 2.6 cm**（版心 156×225 mm）· 正文 **三号 16pt 仿宋** · 行距 1.75（≈28pt／每页 22 行）· 层次序数 一、黑体／（一）楷体／1. 仿宋 · 公文标题 **二号 22pt 居中** · `allowed_fonts = 仿宋 / 黑体 / 楷体 / 宋体 / Times New Roman`
-- **字体口径**：沿用主人 2026-09-15 决定「用 `仿宋` 而非 `仿宋_GB2312`（后者多数机器未装）」；公文标题规范为方正小标宋简体，本机未装，故用 **宋体 + 加粗**等价替代（装有小标宋者改 `doc_title.ea` 即可）
+- **字体口径**：沿用使用者 2026-09-15 决定「用 `仿宋` 而非 `仿宋_GB2312`（后者多数机器未装）」；公文标题规范为方正小标宋简体，本机未装，故用 **宋体 + 加粗**等价替代（装有小标宋者改 `doc_title.ea` 即可）
 - **数值出处**（2026-09-17 联网查证，两处来源交叉一致）：北京市老干部局《图解〈党政机关公文格式2012版〉国家标准及WORD制作方法》· 保山学院纪检监察网。**出口径以国标原文与 `specs/govdoc.json` 为准**
-- 样张：`E:\lina\.dsh\tmp\govdoc-sample\gov2-p1.png`（一页公文，可目检）
+- 样张：`<工作区>\.dsh\tmp\govdoc-sample\gov2-p1.png`（一页公文，可目检）
 
 ### 三、`read_docx` 往返保真（修「导出丢加粗」）
 
@@ -164,7 +173,7 @@
 - `word_style.py` 的样式应用与 `_apply_doc_title` 新增 `color` 键；并**显式清除 `w:themeColor` / `themeTint` / `themeShade`** —— python-docx 默认模板的 Heading 色走主题色，只写 `w:color w:val` 时 WPS 仍按主题渲染（样张目检抓出：标题原为蓝色）
 - `govdoc` 的 Normal / Heading 1–5 / doc_title 设 `color: "000000"`；`standard` 未改（标题沿用主色，商务风）
 
-### 五、待办处置（主人 2026-09-17 明确）
+### 五、待办处置（使用者 2026-09-17 明确）
 
 - **「32 页 < 10 秒」性能目标撤销**：当初为估算值，且 WPS 云端线已不做，该指标无意义（55 号「未确认」项关闭）
 - **`import_slides` 白名单不做**：使用者习惯各异，不设白名单；若将来实现导入，按实际案例出现过的类型定义支持面
@@ -369,7 +378,7 @@
 
 - 新增 `scripts/ppt-theme-test.mjs` **7 例**（实现要点 / list / inspect / import 结构 / 已存在 exit 3 / 压暗双背景达标 / 导入结果过门禁）；**不依赖任何使用者业务文件**（用自造 pptx 当母版样本）
 - 全套绿：`spec_sync` 0 · `ppt_contrast` 6 套全达标 · `style-test` 24/0 · `ppt-render-test` 24/0 · `ppt-style-test` 11/0 · `media-test` 17/0 · `ppt-theme-test` **7/0**
-- 仓库 ↔ profile 逐文件 SHA256 一致；**工作区技能目录**（`E:\lina\.dsh\skills\`）同步更新
+- 仓库 ↔ profile 逐文件 SHA256 一致；**工作区技能目录**（`<工作区>\.dsh\skills\`）同步更新
 
 ### 五、回退
 
@@ -408,7 +417,7 @@
 
 - `gen_diagram.py` 新增 `--strict-tools`（只在指定目录找运行时，不回退环境变量与标准位置）：便于验证 / 排查指定目录；`media-test` 的「运行时缺失」用例据此改为严格模式（运行时已迁标准位置后原假设不再成立）
 - 3 套主题的 `chart_series.s4` 与 `colors.semantic.pass` 同步为 `4E7A2B`
-- `specs/` 下两个历史备份 `standard.json.bak-20260916-*` **移出发布件** → `E:\lina\backup\2026-09-16-specs-bak-清理-前\`
+- `specs/` 下两个历史备份 `standard.json.bak-20260916-*` **移出发布件** → `<工作区>\backup\2026-09-16-specs-bak-清理-前\`
 
 ### 五、验证
 
@@ -607,7 +616,7 @@ assets/icons/ 新增 **6 个自绘单色 PNG**（shield / eye / lock / server / 
 
 - spec_sync --check **0**（16 类页型 + 12 组件全通过几何校验）
 - style-test **24/0** · ppt-render-test **24/0**（新增 3 例：16 页整册 / image 占位告警与无告警 / qa 固定文本；并把「未知 layout 退化」用例改用真正未实现的页型）
-- 16 页整册真渲染出图目检通过（E:\\lina\\.dsh\\tmp\\b-line-render\\png-deck16-v2\\，源 deck16-v2.pptx）
+- 16 页整册真渲染出图目检通过（<工作区>\\.dsh\\tmp\\b-line-render\\png-deck16-v2\\，源 deck16-v2.pptx）
 - 仓库 ↔ profile 0 差异
 
 ### 六、未做
@@ -618,9 +627,9 @@ assets/icons/ 新增 **6 个自绘单色 PNG**（shield / eye / lock / server / 
 
 版本改回 **0.3.1** 或 git revert 本提交；profile 同步一次即可。
 
-## 0.3.1 — 2026-09-16（主人目检反馈三改）
+## 0.3.1 — 2026-09-16（使用者目检反馈三改）
 
-### 一、改了什么（三处都来自主人目检）
+### 一、改了什么（三处都来自使用者目检）
 
 1. **目录页码过于靠右** → components.toc_item.page 右边界回收 0.25 in（x 10.60 → 10.35），标题宽同步 9.8 → 9.5（避免与页码重叠）
 2. **标题下装饰线不跟随标题长度** → 新增 **follow_text 约定**（规格 _note_geometry ⑩）：content_page.rule 声明 follow_text = {element: title, pad_chars: 0.5, min_w_in: 1.4}，渲染器按被跟随元素的**实测文字宽度**定宽 —— 线宽 = max(min_w, 文字宽 + 2 × 0.5 字)，起点左移 0.5 字（即左右各超出半个字符），并做页内保护；声明里的 box.w 退化为最小宽度
@@ -633,7 +642,7 @@ assets/icons/ 新增 **6 个自绘单色 PNG**（shield / eye / lock / server / 
 ### 三、验证
 
 - spec_sync --check **0** · style-test **24/0** · ppt-render-test **21/0**（新增「装饰线宽跟随标题」用例）
-- 样张重出：E:\\lina\\.dsh\\tmp\\b-line-render\\png-deck11-v3\\（11 页），主人反馈三处逐页目检通过
+- 样张重出：<工作区>\\.dsh\\tmp\\b-line-render\\png-deck11-v3\\（11 页），使用者反馈三处逐页目检通过
 - 仓库 ↔ profile 0 差异
 
 ### 四、回退
@@ -678,7 +687,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 ### 七、验证
 
 - spec_sync --check **0** · style-test **24 / 0** · ppt-render-test **20 / 0** · py_compile 全量通过
-- 11 页真渲染整册（E:\\lina\\.dsh\\tmp\\b-line-render\\png-deck11-v2\\，源 samples\\deck11-v2.pptx）逐页目检通过
+- 11 页真渲染整册（<工作区>\\.dsh\\tmp\\b-line-render\\png-deck11-v2\\，源 samples\\deck11-v2.pptx）逐页目检通过
 - 仓库 ↔ profile 逐文件 SHA256 一致
 
 ### 八、未做（③b）
@@ -719,7 +728,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 
 - `spec_sync --check` **0**（11 类页型 + 7 个组件全部通过几何校验：页内不越界、引用不悬空、容量自洽、网格不超区、extends 合并后仍校验）
 - `style-test` **24 / 0**
-- 几何预览样张 8 页（`E:\lina\.dsh\tmp\b-line-render\png-geom8-v2\`，源 `samples\geom-8-v2.pptx`）逐页目检通过
+- 几何预览样张 8 页（`<工作区>\.dsh\tmp\b-line-render\png-geom8-v2\`，源 `samples\geom-8-v2.pptx`）逐页目检通过
 
 ### 四、未做（③a 继续）
 
@@ -757,7 +766,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 
 - 容量对照脚本逐元素复核：**违规 0 项**（12 个文本元素全部自洽）
 - `spec_sync --check` **0** · `style-test` **24 / 0**
-- 样张重出（`E:\lina\.dsh\tmp\b-line-render\png-v6\`）：四页字号决策与 v5 一致（cover 44/22/14/14、bullets 20、cards 22/16、超容量页 20→18pt），卡片页视觉与 v5 一致（正文仅下移 0.04 in）
+- 样张重出（`<工作区>\.dsh\tmp\b-line-render\png-v6\`）：四页字号决策与 v5 一致（cover 44/22/14/14、bullets 20、cards 22/16、超容量页 20→18pt），卡片页视觉与 v5 一致（正文仅下移 0.04 in）
 - 仓库 ↔ profile 逐文件 SHA256 一致
 
 ### 四、未做（③a 继续）
@@ -792,7 +801,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 
 **同时处置的边界**：`box.h` 是按旧口径设计的，比 WPS 实际行高小 1~3pt —— 若一律按真实行高收缩，会把 ②a 已确认的设计字号系统性压小（实测会出现来源行 14→13pt、卡标题 22→19pt）。故规定：**单段单行元素只校验宽度、不因行高收缩**（溢出量 ≤0.06 in，不会压到相邻元素）；多段或需要换行的文本严格判定。
 
-### 三、图标同心度修正（②c 主人目检提出）
+### 三、图标同心度修正（②c 使用者目检提出）
 
 字体符号字符由 WPS 自行排版，实测白色字符 ink 中心比圆盘中心偏左上 1~2px（卡 3 的方形符号偏下 4.8px），放大到大屏可见。改为**几何形状标记**（`ICON_MARKS`：shield→菱形 / eye→圆环 / lock→圆角方块 / chart·doc→方块 / gear·net→六边形 / flag·bolt→三角，未知名兜底菱形；边长 = 槽位 × 0.42），同心度由坐标保证 —— 复核 **Δx ≤ 0.16px、Δy ≤ 0.10px**。
 
@@ -801,7 +810,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 - `spec_sync --check` **0**（新增 `*.schema.json` 跳过规则：字段规范不参与样式规格校验，但仍随 `specs/` 同步到 profile）
 - `style-test.mjs` **23 / 0**（A 线零回归）
 - ②b 自测 **17/17**：缺必填（指名页号）· 未知 layout 退化 · 未知字段忽略 · JSON 带 BOM 拒绝 · 非法 JSON · `max_slides` 裁剪 · `notes` 写备注 · 自动缩字号 · 缩到下限告警 · cards 超 6 张拒收 · 文件不存在 · 样张 4 页
-- ②c 样张：`render` → WPS COM 出图 4 页（cover / bullets / cards / bullets 超容量自动缩 20→18pt），**主人目视验收通过（2026-09-16）**；行内与段间距、圆点对齐、无溢出均经像素复核
+- ②c 样张：`render` → WPS COM 出图 4 页（cover / bullets / cards / bullets 超容量自动缩 20→18pt），**使用者目视验收通过（2026-09-16）**；行内与段间距、圆点对齐、无溢出均经像素复核
 - 仓库 ↔ profile 逐文件 SHA256 一致
 
 ### 五、踩坑记录
@@ -813,7 +822,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 
 - 其余 13 类页型（toc / section / compare / data / chart / table / quote / closing / image / process / timeline / case / qa）
 - 组件 `chip` / `kpi` / `bar`（`ring` 待小样验证）；`assets/` 最小集与 `files` 白名单（⑤ 步）；生图 / 图示链路（⑥ 步）；`ppt_style.py` 存量美化（④ 步）
-- **几何容量口径统一**：`specs` 声明的 `max_lines` 与单行框高按旧口径反算，比 WPS 实际乐观约 23%。建议 ③a 第一件事按 1.228 系数重算一遍几何容量（属 ②a 已定稿内容，需主人点头后动）
+- **几何容量口径统一**：`specs` 声明的 `max_lines` 与单行框高按旧口径反算，比 WPS 实际乐观约 23%。建议 ③a 第一件事按 1.228 系数重算一遍几何容量（属 ②a 已定稿内容，需使用者点头后动）
 - `ppt-render-test.mjs` ≥15 例（③a 验收项）；对比度门禁（②a 遗留）
 
 ### 七、回退
@@ -878,7 +887,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 | 12 | 存疑：对比度无门禁 | 写入 `_note_geometry` ⑧ 并列入本节遗留（②b/③ 补自测） |
 | 13 | 小改：`specs/*.bak-*` untracked 且 `.gitignore` 无规则 | 仓库根 `.gitignore` 加 `*.bak-*`（该文件为**混合编码**，按字节追加、既有内容零改动） |
 
-**自证**：把上述复核项写成 14 组校验探针（`E:\lina\.dsh\tmp\b-line-spec\probe_validate.py`，临时不入库），**19 项全部符合预期**。探针还抓出复核未发现的一处口径不一致 —— 校验器把「未写 `line_spacing`」默认成 1.0，而渲染约定应回退 `pptx.spacing.line_spacing`（1.35），会让 `card.icon` 这类元素蒙混过关；已统一口径并在 `style-test.mjs` 中固化为门禁。
+**自证**：把上述复核项写成 14 组校验探针（`<工作区>\.dsh\tmp\b-line-spec\probe_validate.py`，临时不入库），**19 项全部符合预期**。探针还抓出复核未发现的一处口径不一致 —— 校验器把「未写 `line_spacing`」默认成 1.0，而渲染约定应回退 `pptx.spacing.line_spacing`（1.35），会让 `card.icon` 这类元素蒙混过关；已统一口径并在 `style-test.mjs` 中固化为门禁。
 
 **复核确认成立、无需改的**：几何反算逐项、`_note_geometry` 的 9 项对比度数字（独立复算全部吻合）、贴版心余量、`compact` 主题对比度（6.89 / 7.71）、A 线 21 条零回归、异常路径不偏离 exit 2、回滚备份 `standard.json.bak-20260916-143128`（②a 前版本、无 pptx 段）可用。
 
@@ -933,7 +942,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 
 **6. 新增开关 `roles.level_fix`**：`always`（默认）/ `style`（只纠正已有 Heading 样式的段落）/ `off`（完全按命名样式）
 
-### 三、新增 5 级标题能力（主人 2026-09-15：最多用到 5 级）
+### 三、新增 5 级标题能力（使用者 2026-09-15：最多用到 5 级）
 
 - `specs/standard.json` **v1.2 → v1.3**：新增 `Heading 5`（**五号 10.5pt**、加粗、左对齐、`outline_level=4`）；`compact` 经 `extends` 自动继承
 - `doc_roles.py`：`MAX_HEADING_LEVEL = 5`、`_STYLE_ALIASES` 补 heading_5；`word_style.py`：`_ROLE_TO_STYLE` 补 `heading_5 → Heading 5`；`word_tool.py`：`read_docx` 前缀映射补 `#### `/`##### `
@@ -958,7 +967,7 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
 - **修复**：
   1. 新增 `iter_all_paragraphs()`：遍历正文 + 表格（**含嵌套表格**）内全部段落；`_strip_run_fonts` 改用它，并**同时清理段落级 `pPr/rPr` 的 rFonts/sz**；
   2. 新增**样式族 `style_families`（规格可配）**：把文档里**实际存在但 `styles` 段未逐条列出**的样式按角色族统一字体 —— body 族（Normal / Body Text / List* / Table Grid / Normal Table / No Spacing …，含前缀匹配）与 heading 族（Heading 1-9 / Title / Subtitle）；**只改字体，不动字号与段落格式**；
-  3. **字体口径（主人 2026-09-15 定）**：全文**只允许「仿宋」一种** —— 英文/数字/汉字、正文与标题、表格与表头一律仿宋，`w:rFonts` **四属性(ascii/hAnsi/eastAsia/cs) 全 = 仿宋**；层级只靠**字号 + 加粗 + 对齐**区分；**不做字体优先级/回退链**；弃用「仿宋_GB2312」（多数机器未装、有回退风险）；
+  3. **字体口径（使用者 2026-09-15 定）**：全文**只允许「仿宋」一种** —— 英文/数字/汉字、正文与标题、表格与表头一律仿宋，`w:rFonts` **四属性(ascii/hAnsi/eastAsia/cs) 全 = 仿宋**；层级只靠**字号 + 加粗 + 对齐**区分；**不做字体优先级/回退链**；弃用「仿宋_GB2312」（多数机器未装、有回退风险）；
   4. 新增 `all_font_names()`（四属性统计）+ **落盘前字体统一性校验**：出现规格外字体（`allowed_fonts = ["仿宋"]`）即**拒绝产出**。
 - **实测（原件副本）**：
 
@@ -970,9 +979,9 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
   内容零改动断言均通过（逐段 + 逐单元格，差异 0）。
 - **回归 16 → 19 例**：新增「规格口径（allowed_fonts 单一）」「实现齐备（样式族 + 表格/段落清理 + 四属性断言）」「端到端：字体集合恒为 `{仿宋}`（样本含表格/英文/数字/直接格式污染）」。
 - 顺带：`word_style.py` 内 `Times New Roman` / `Arial` / `黑体` / `仿宋_GB2312` 兜底默认值全部移除，统一为仿宋。
-- **字号 / 加粗定案（主人 2026-09-15 选 A 方案）**：`Heading 2`（14pt）与 `Heading 4`（12pt）由**不加粗 → 加粗** —— 原实现下 h4 与正文完全同规格（同字号 / 同字重 / 同对齐），**层级丢失**；同时补上 `Heading 4` 的完整定义（此前只有标题键、无正文）。
-- **字号改用中文标识**（主人 2026-09-15）：规格同时保存 `size_name`（人类可读）与 `size_pt`（实现值）—— `Heading 1` = **小三 15pt**、`Heading 2` = **四号 14pt**、`Heading 3`/`Heading 4` = **小四 12pt**、正文 `Normal` = **小四 12pt**。（0.1.6 过程值 h1 = 16pt/三号，按主人口径改为**小三 15pt**。）
-- **Excel 字体与 Word 统一**（主人 2026-09-15）：`excel.font` 由 `宋体 11pt` → **仿宋 小四 12pt**（`name=仿宋` / `size=12` / `size_name=小四`）。
+- **字号 / 加粗定案（使用者 2026-09-15 选 A 方案）**：`Heading 2`（14pt）与 `Heading 4`（12pt）由**不加粗 → 加粗** —— 原实现下 h4 与正文完全同规格（同字号 / 同字重 / 同对齐），**层级丢失**；同时补上 `Heading 4` 的完整定义（此前只有标题键、无正文）。
+- **字号改用中文标识**（使用者 2026-09-15）：规格同时保存 `size_name`（人类可读）与 `size_pt`（实现值）—— `Heading 1` = **小三 15pt**、`Heading 2` = **四号 14pt**、`Heading 3`/`Heading 4` = **小四 12pt**、正文 `Normal` = **小四 12pt**。（0.1.6 过程值 h1 = 16pt/三号，按使用者口径改为**小三 15pt**。）
+- **Excel 字体与 Word 统一**（使用者 2026-09-15）：`excel.font` 由 `宋体 11pt` → **仿宋 小四 12pt**（`name=仿宋` / `size=12` / `size_name=小四`）。
 - **新增规格运维工具 `scripts/spec_sync.py`**（**零新增依赖**；**不含任何使用者私有路径** —— 展示文档输出走 `--doc-out`，缺省打印到标准输出）：一条命令完成「**校验** `specs/*.json` → **同步** profile 运行副本（逐文件 SHA256 校验）→ **生成**规格展示 Markdown」。`--check` 只校验不写盘（可进 CI）；退出码 **0 成功 / 2 规格或输入错误 / 3 同步后哈希不一致**；`extends` 继承件按**部分规格**放宽校验。
 - **技能文档口径更正**：`skills/office-word|office-excel/SKILL.md` 里的过时描述（「页边距 2.54/3.17 + 黑体标题」「宋体 11」）已改为最新规格（「上下 3.17 / 左右 2.54 + 全文仿宋 + 小三/四号/小四」「仿宋 小四 12pt」），并在**仓库 / profile / 工作区 `.dsh/skills` 三处同步一致**（逐文件 SHA256）。
 
@@ -998,14 +1007,14 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
      按 `w:tblGrid/w:gridCol` 与每格 `w:tcPr/w:tcW` 写回（按 `w:gridSpan` 正确合计跨列宽）；
   2. 剩余宽度按权重分配：权重 = max(表头显示宽度, 数据平均宽度, **数据最大宽度 × 0.8**)，
      再按 `min_col_chars`(4) / `max_col_chars`(40) 夹取 —— **全角算 2、半角算 1**。
-- **优先级（实测确定）**：① **表头必须一行**（主人明确要求）→ ② 数据短值尽量不折行 →
+- **优先级（实测确定）**：① **表头必须一行**（使用者明确要求）→ ② 数据短值尽量不折行 →
   ③ 超长数据允许折行（19 位发票号在 6 列表格中属版心物理限制，强行不折行会反过来挤压表头）。
 - **规格新增**：`word.table.width_mode` / `min_col_chars` / `max_col_chars`（`auto` 可关闭宽度自适应）。
 - **回归新增 1 例（共 14 例）**：断言 `tblW = 版心宽`、`tblLayout = fixed`、`ΣgridCol = 版心宽`、
   且**每个表头列的列宽 ≥ 其不折行所需宽度**。
 - **零新增依赖**；内容零改动红线不变（落盘前逐段 + 逐单元格断言，差异即 exit 3）。
 
-## 0.1.6 — 2026-09-15（A2.1：文档角色识别 + 表格列对齐；默认模板按主人真实投标文件校准）
+## 0.1.6 — 2026-09-15（A2.1：文档角色识别 + 表格列对齐；默认模板按使用者真实投标文件校准）
 
 - **新增文档角色识别**（`scripts/office/doc_roles.py`）—— 依据 `02_分析笔记/36_投标文件格式画像` 实测：
   - **双信号**：命名样式（heading 1-4 / 标题 / toc）**优先**；**编号模式兜底**（正文未套样式时唯一可用）：
@@ -1013,12 +1022,12 @@ specs/ppt-manifest.schema.json 补齐 8 类页型字段（toc / section / compar
     居中 + 无编号 + 文首区（默认前 30 段）+ ≤40 字 → **doc_title**（封面大标题）。
   - 命中编号模式但未套命名样式的段落，**赋对应 Heading 命名样式**（只改样式、不改文本）；doc_title 用直接格式，不新建样式以免污染样式表。
   - **可回溯**：`apply-style --dry-run` 报告含各角色计数与样本（段落序号 / 角色 / 判定依据 / 文本前 40 字）。
-- **规格 v1.1**（`specs/standard.json`，按主人真实投标文件校准）：
+- **规格 v1.1**（`specs/standard.json`，按使用者真实投标文件校准）：
   - 页边距改为 **上下 3.17 / 左右 2.54 cm**（原为上下 2.54 / 左右 3.17，与投标文件相反）；
-  - 标题字号：**主人 2026-09-15 对比两版样张后拍板为 B 方案** —— `Heading 1` = **16pt 黑体加粗居中**、`Heading 2` = **14pt 黑体**、`Heading 3` = **12pt 加粗**，新增 `Heading 4`（过程值曾按投标文件取 14/12pt，已按拍板改回）；
+  - 标题字号：**使用者 2026-09-15 对比两版样张后拍板为 B 方案** —— `Heading 1` = **16pt 黑体加粗居中**、`Heading 2` = **14pt 黑体**、`Heading 3` = **12pt 加粗**，新增 `Heading 4`（过程值曾按投标文件取 14/12pt，已按拍板改回）；
   - 新增 `word.doc_title` 段（封面大标题，居中加粗；字号阶梯 cover 36 / subtitle 22 / project 18 / party 16 / code 14pt，可配）；
   - 新增 `roles` 段（编号模式声明 + title_zone / title_max_chars）。
-- **表格列对齐**（主人 2026-09-15：「标题、序号居中，其他右对齐」）：
+- **表格列对齐**（使用者 2026-09-15：「标题、序号居中，其他右对齐」）：
   - 表头行 → 居中；**序号列**（序号 / 编号 / 项次 / No.）→ 居中；**数值列** → **右对齐**；纯文本列 → `text_align_default`（默认 **left** —— 长中文右对齐极难阅读；要「一律右对齐」改一个键即可）。
   - Word `table-style` 与 Excel `apply-style` **同步生效**；数值判定阈值 `numeric_ratio` 默认 0.6，可配。
 - **零新增依赖**：仍只用标准库 + python-docx / openpyxl。

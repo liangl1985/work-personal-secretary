@@ -928,7 +928,7 @@ ok(BASEDECK_ITEMS.map((i) => i.id).join(',') === 'agentsMd,memorySeed,skills,set
 ok(BASEDECK_ITEMS[1].id === 'memorySeed' && BASEDECK_ITEMS[6].id === 'knowledgeDeck', '既有调用方按下标取项仍成立（[1] / [6]）')
 const vaultApp = JSON.parse(readFileSync(join(deckVault, '.obsidian', 'app.json'), 'utf8'))
 ok(vaultApp.alwaysUpdateLinks === true, '.obsidian/app.json 为可解析的最小配置')
-// 主人 2026-09-16 裁定：这部分本版不做（插件里没有相应设计），但**必须写清现状**——
+// 使用者 2026-09-16 裁定：这部分本版不做（插件里没有相应设计），但**必须写清现状**——
 // 不能让库里这份总览看起来像「工具已经搬进来了」。
 const overviewText = readFileSync(join(deckVault, '工具', '00_工具总览.md'), 'utf8')
 ok(overviewText.indexOf('没有实现任何同步') > 0 && overviewText.indexOf('预留用途') > 0,
@@ -1016,7 +1016,7 @@ ok(pfLow.checks.filter((c) => c.id === 'envPython')[0].level === 'block', 'Pytho
 const pfNested = runPreflight({ report: okReport, memoryDir: deckMem, obsidianDir: join(deckMem, 'sub'), env: {} })
 ok(pfNested.ready === true && noNest(pfNested).level === 'warn', '知识库嵌在记忆库里 → 提示不阻断（ready 仍为 true）')
 ok(noNest(pfNested).detail === NESTING_DETAIL['obsidian-in-memory'], '方向写得出：知识库在记忆库目录内（文案按方向分开）')
-// 主人真机那一例：记忆库 E:/lina/memory ⊂ 知识库 E:/lina（同一夹具里复刻成 deckVault/memory ⊂ deckVault）
+// 使用者真机那一例：记忆库 E:/work/memory ⊂ 知识库 E:/work（同一夹具里复刻成 deckVault/memory ⊂ deckVault）
 const pfMemInVault = runPreflight({ report: okReport, memoryDir: join(deckVault, 'memory'), obsidianDir: deckVault, env: {} })
 ok(pfMemInVault.ready === true && pfMemInVault.summary.block === 0 && noNest(pfMemInVault).level === 'warn',
   '记忆库在知识库内（真机那一例）→ 提示不阻断，执行链可继续')
@@ -1038,15 +1038,17 @@ if (process.platform === 'win32') {
 } else {
   console.log('  · 非 win32：无盘符概念（两路径落同一 POSIX 根），跳过 2 条跨盘分级断言')
 }
-if (existsSync('E:/lina')) {
+const crossMemDir = process.cwd()
+// 跨盘是 Windows 专属语义：仅在「当前工作目录与系统临时目录不同盘」时才有真实跨盘可测
+if (process.platform === 'win32' && crossMemDir.slice(0, 2).toLowerCase() !== TMP_ROOT.slice(0, 2).toLowerCase()) {
   const crossVault = join(TMP_ROOT, 'crossvault')
   mkdirSync(crossVault, { recursive: true })
-  const pfCross = runPreflight({ report: okReport, memoryDir: 'E:/lina', obsidianDir: crossVault, env: {} })
+  const pfCross = runPreflight({ report: okReport, memoryDir: crossMemDir, obsidianDir: crossVault, env: {} })
   const sv = pfCross.checks.filter((c) => c.id === 'sameVolume')[0]
   ok(Boolean(sv) && sv.level === 'warn', '真实跨盘目录（E: 记忆库 vs C: 知识库）→ sameVolume=warn')
   ok(pfCross.ready === true && pfCross.summary.block === 0, '跨盘不再阻断：ready 仍为 true、block 计数为 0（执行链可继续）')
 } else {
-  console.log('  · 本机没有第二个可写卷，跳过「跨盘 ready=true」正向断言（上面的分级断言已覆盖）')
+  console.log('  · 非 win32 或同盘：无真实跨盘可测，跳过「跨盘 ready=true」正向断言（上面的分级断言已覆盖）')
 }
 
 section('[20] 1.1.3 新路由契约（preflight / identity / domain）+ 随包网页')
@@ -1546,7 +1548,7 @@ const rMigItem = (rMig.body.items || []).filter((i) => i.id === 'migrateMemory')
 ok(rMigItem && typeof rMigItem.status === 'string' && typeof rMigItem.migrateSourceText === 'string' && rMigItem.internal === undefined,
   'GET /basedeck 的 migrateMemory 项有状态 + 来源说明，且内部字段 internal 不对外')
 
-section('[24] 根目录模型：memory-data / obsidian-data（主人 2026-09-16 定）')
+section('[24] 根目录模型：memory-data / obsidian-data（使用者 2026-09-16 定）')
 // 模型：使用者只选**一个**存储根目录，记忆体与知识库各自在它下面新建自己的子文件夹。
 // 这样两个目录天然是兄弟、默认不可能互相嵌套——「目标冲突」不再是常态问题。
 ok(ROOT_SUBDIR_MEMORY === 'memory-data' && ROOT_SUBDIR_VAULT === 'obsidian-data',
@@ -1560,7 +1562,7 @@ ok(inferRootDir('E:/work/memory-data', 'E:/work/obsidian-data') === 'E:/work',
   '反推：两个目录正好是同一父目录下的 memory-data / obsidian-data → 根目录 = 该父目录')
 ok(inferRootDir('E:/work/MEMORY-DATA', 'E:/work/obsidian-data') === 'E:/work',
   '反推大小写不敏感（Windows 路径不区分大小写）')
-ok(inferRootDir('C:/Users/me/.dsh/memories/me', 'E:/lina') === '' && inferRootDir('E:/a/memory-data', 'E:/b/obsidian-data') === '',
+ok(inferRootDir('C:/Users/me/.dsh/memories/me', 'E:/work') === '' && inferRootDir('E:/a/memory-data', 'E:/b/obsidian-data') === '',
   '既有散落配置（不同父目录 / 恰好同名）→ 推不出根目录就留空，不猜')
 ok(inferRootDir('', 'E:/work/obsidian-data') === '', '一半为空 → 不反推')
 // 记忆库若被放进知识库（「单独指定」时可能），它不是业务模块，不该登记进主页
@@ -1570,7 +1572,7 @@ ok(memoryTopSegmentInVault('E:/vault/memory-data', 'E:/vault') === 'memory-data'
   && memoryTopSegmentInVault('E:/vault', 'E:/vault') === '',
   '取「记忆库在知识库里的第一级目录名」；不在库内 / 同一目录 → 空串')
 const mvVault = join(TMP_ROOT, 'modelvault')
-mkdirSync(join(mvVault, '知识库-天地'), { recursive: true })
+mkdirSync(join(mvVault, 'biz-module'), { recursive: true })
 mkdirSync(join(mvVault, ROOT_SUBDIR_MEMORY), { recursive: true })
 mkdirSync(join(mvVault, VAULT_MIRROR_DIR_NAME), { recursive: true })
 ok(listVaultModules(mvVault).indexOf(ROOT_SUBDIR_MEMORY) >= 0, '默认扫描会看到记忆库目录（这是待排除的现象）')

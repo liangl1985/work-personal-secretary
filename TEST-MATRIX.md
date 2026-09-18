@@ -19,10 +19,10 @@
 
 | 脚本 | 覆盖 | 读数 |
 |---|---|---|
-| `smoke-load.mjs` | 装载冒烟：mock ctx 真跑 `apply()`（注册/注入/命令/设置） | **513 / 0** |
-| `probe-test.mjs` | 环境探针（依赖项识别与降级） | **149 / 0** |
+| `smoke-load.mjs` | 装载冒烟：mock ctx 真跑 `apply()`（注册/注入/命令/设置） | **533 / 0** |
+| `probe-test.mjs` | 环境探针（依赖项识别与降级） | **151 / 0** |
 | `install-test.mjs` | 子插件安装引擎（安装/升级/卸载/残留判定） | **244 / 0** |
-| `basedeck-test.mjs` | 配置底座：目录生成、根目录派生与反推、迁移、导入引导 | **415 / 0** |
+| `basedeck-test.mjs` | 配置底座：目录生成、根目录派生与反推、迁移、导入引导、技巧正文写入 | **500 / 0** |
 | `settings-api-test.mjs` | 设置 API：契约形状、ns 白名单、写入校验与脱敏 | **112 / 0** |
 | `identity-test.mjs` | 身份写入（按正文前缀定位、逐字节校验其余内容未变） | **73 / 0** |
 | `defaults-test.mjs` | 随包说明：md ↔ HTML 逐段逐字 + 逐字节同源、敏感串过滤、`?embed=1` 片段形态 | **59 / 0** |
@@ -34,9 +34,9 @@
 | `style-test.mjs` | A 线样式回归（规格结构、apply-style 零改动断言、extends 继承/循环检测） | **24 / 0** |
 | `media-test.mjs` | 媒体链路（生图密钥来源与不泄露、图示运行时、落盘格式） | **19 / 0** |
 | `ppt-render-test.mjs` | PPT 渲染器（manifest 校验、16 类页型、容量与缩字号、随包主题齐备可加载、导出 PDF） | **26 / 0** |
-| `ppt-style-test.mjs` | PPT 存量美化（字体统一、内容零改动 exit 3 语义、`--spec report`） | **12 / 0** |
+| `ppt-style-test.mjs` | PPT 存量美化（字体统一、内容零改动 exit 3 语义、`--spec report`、跨格式拒绝） | **13 / 0** |
 | `ppt-theme-test.mjs` | 主题库（list / inspect / import、对比度门禁） | **7 / 0** |
-| `tests/test_python.py`（新增） | **Python 侧单测**：对比度计算、主题压暗达标、`deep_merge` 语义、规格校验正/负例（越界与缺 styles → `SystemExit(2)`）、全部内置规格校验通过、`report` 与 WPS 三套的 accent 与 pptx 几何 | **13 / 0** |
+| `tests/test_python.py`（新增） | **Python 侧单测**：对比度计算、主题压暗达标、`deep_merge` 语义、规格校验正/负例（越界与缺 styles → `SystemExit(2)`）、全部内置规格校验通过、`report` 与 WPS 三套的 accent 与 pptx 几何、**随包母版资产**） | **20 / 0** |
 | `spec_sync.py --check` | 规格校验 + 对比度门禁（10 套规格） | **exit 0** |
 
 ### 记忆体 / 专家库
@@ -54,7 +54,7 @@
 
 | 脚本 | 覆盖 | 读数 |
 |---|---|---|
-| `tests/lina-skins.test.mjs` | 形象套装与 manifest 校验 | **本轮未实测**（需 `npm install` 拉 `tsx`/`typescript`；命令：`cd modules/workspace-tokenpet && npm install --ignore-scripts && npm test`） |
+| `tests/lina-skins.test.mjs` | 形象套装与 manifest 校验 | **8 / 0**（2026-09-18 实测：`node --test tests/*.test.mjs`，**不需要 tsx**；已并入 CI） |
 
 ## 三、CI 覆盖（`.github/workflows/ci.yml`）
 
@@ -67,6 +67,6 @@
 
 | # | 缺口 | 处理 |
 |---|---|---|
-| 1 | 桌面形象测试未实测（需装依赖） | 本机跑一次后回填读数 |
+| 1 | ~~桌面形象测试未实测~~ | ✅ 2026-09-18 已实测 **8 / 0**，命令并入 CI 的 `node --test modules/workspace-tokenpet/tests/*.test.mjs` |
 | 2 | `dsh-doc-suite` 的 Python 测试目前覆盖**纯函数**（对比度/压暗/合并/校验）；`word_style.py` / `excel_style.py` 这类需要 python-docx / openpyxl 的路径仍靠 `.mjs` 端到端回归覆盖 | 后续按需补 |
 | 3 | 本体 `client/index.js`（前端）无独立测试，只由 `smoke-load.mjs` 间接覆盖 | 后续按需补 |
