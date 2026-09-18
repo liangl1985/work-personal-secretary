@@ -61,8 +61,8 @@
       "masters": 1,
       "layouts": 11,
       "source": "WPS 主题库模板 → 抽取风格母版并清除公司内容（公司基底母版、业务页、业务图、批注作者、元数据全部删除），2026-09-18 提取",
-      "license": "来源为 WPS 主题库素材，随包再分发请使用者自行确认授权",
-      "redistributable": false,
+      "license": "授权口径（项目所有者 2026-09-18 明确）：标准仅供参考学习使用；如用于商业化，一切后果由使用者自行承担",
+      "redistributable": true,
       "purpose": "制作 PPT 时的起手母版：用 ppt_tool.py create --template 继承其母版与 11 个版式"
     },
     {
@@ -74,8 +74,8 @@
       "masters": 1,
       "layouts": 11,
       "source": "WPS 主题库模板 → 抽取风格母版并清除公司内容（公司基底母版、业务页、业务图、批注作者、元数据全部删除），2026-09-18 提取",
-      "license": "来源为 WPS 主题库素材，随包再分发请使用者自行确认授权",
-      "redistributable": false,
+      "license": "授权口径（项目所有者 2026-09-18 明确）：标准仅供参考学习使用；如用于商业化，一切后果由使用者自行承担",
+      "redistributable": true,
       "purpose": "制作 PPT 时的起手母版：用 ppt_tool.py create --template 继承其母版与 11 个版式"
     },
     {
@@ -87,8 +87,8 @@
       "masters": 1,
       "layouts": 11,
       "source": "WPS 主题库模板 → 抽取风格母版并清除公司内容（公司基底母版、业务页、业务图、批注作者、元数据全部删除），2026-09-18 提取",
-      "license": "来源为 WPS 主题库素材，随包再分发请使用者自行确认授权",
-      "redistributable": false,
+      "license": "授权口径（项目所有者 2026-09-18 明确）：标准仅供参考学习使用；如用于商业化，一切后果由使用者自行承担",
+      "redistributable": true,
       "purpose": "制作 PPT 时的起手母版：用 ppt_tool.py create --template 继承其母版与 11 个版式"
     }
   ],
@@ -97,7 +97,7 @@
     "icon_fallback": "图标名无素材时，渲染器用内置几何标记（见 scripts/office/ppt_render.py 的 ICON_MARKS / ICON_MARK_SCALE）；assets/icons/<name>.png 存在则优先贴图（保持比例居中）。",
     "registration": "每条素材必须记录 name / file / source / license / redistributable；未登记的素材不得进内置层。",
     "license": "只收可再分发素材（MIT / Apache-2.0 / CC0 / 自绘）；不确定的进自定义层并标注不可外发。",
-    "license_exception_templates": "templates 段为**例外**：三套母版由使用者提供并同意随包分发，来源为 WPS 主题库素材、授权状态未确认，故 redistributable 一律按事实标 false；对外分发前请自行确认授权（见模块 NOTICE）。",
+    "license_exception_templates": "templates 段为**纪律例外，已获项目所有者明确授权**（2026-09-18）：三套母版来源为 WPS 主题库素材、已清除全部公司内容；授权口径为『仅供参考学习使用，如商业化一切后果由使用者承担』，故按此标记 redistributable: true（用途限定见模块 NOTICE 第五节）。",
     "size_budget_mb": 2,
     "templates_size_budget_mb": 12,
     "templates_size_note": "母版 pptx 单件体积大（三套合计约 8.9 MiB，其中红色党政 7.7 MiB 为整幅背景图），故与图标分开预算。"
