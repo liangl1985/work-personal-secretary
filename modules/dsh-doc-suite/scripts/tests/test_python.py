@@ -9,6 +9,7 @@
   [D] 规格校验  spec_sync.validate      —— 合法规格通过；缺 styles / pptx 几何越界 → SystemExit(2)；extends 派生件合并后通过
   [E] 随包模板  specs/*.json           —— 全部内置规格校验通过；report 与 WPS 三套（dusk/azure/crimson）的 accent 与 pptx 几何完整
   [F] 适用格式  style_spec.for_format  —— 顶层 for 声明与实际一致；跨格式误用被拒且错误信息给出可用清单；无 for 的自定义层规格放行
+  [G] 随包母版  assets/templates       —— 三份母版存在且可解析（1 母版 + 11 版式）；全部 XML/rels 里公司痕迹 0 命中；manifest 登记与磁盘文件一一对应（字节数 + SHA256）
 
 用法：
   py -3 modules/dsh-doc-suite/scripts/tests/test_python.py
@@ -16,10 +17,13 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import sys
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -228,6 +232,60 @@ class TestForFormat(unittest.TestCase):
                     self.assertEqual(style_spec.load_spec('nofor', for_format=fmt)['id'], 'nofor')
             finally:
                 style_spec.USER_DIR = old
+
+
+def _sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+class TestTemplateAssets(unittest.TestCase):
+    """随包母版 assets/templates/*.pptx：包结构完整、不含公司痕迹、与 manifest 登记一致。
+
+    零第三方依赖：只用标准库 zipfile + re 直接读包内 XML，不 import python-pptx。
+    """
+
+    ASSETS = SCRIPTS.parent / 'assets'
+    TEMPLATES = ASSETS / 'templates'
+    COMPANY_KEYS = ('天地和兴', 'TDHX', '4008108981', 'INDUSTRIAL NETWORK SECURITY')
+
+    @staticmethod
+    def _manifest():
+        return json.loads((TestTemplateAssets.ASSETS / 'manifest.json').read_text(encoding='utf-8'))
+
+    def test_templates_present_and_parseable(self):
+        man = self._manifest()
+        self.assertEqual({t['id'] for t in man.get('templates', [])}, {'dusk', 'azure', 'crimson'})
+        for t in man['templates']:
+            p = self.ASSETS / t['file']
+            self.assertTrue(p.is_file(), '母版缺失：%s' % t['file'])
+            with zipfile.ZipFile(p) as z:
+                names = z.namelist()
+            masters = [n for n in names if re.match(r'ppt/slideMasters/slideMaster\d+\.xml$', n)]
+            layouts = [n for n in names if re.match(r'ppt/slideLayouts/slideLayout\d+\.xml$', n)]
+            self.assertEqual(len(masters), t.get('masters', 1), '%s 母版数' % t['id'])
+            self.assertEqual(len(layouts), t.get('layouts', 11), '%s 版式数' % t['id'])
+
+    def test_templates_have_no_company_traces(self):
+        for p in sorted(self.TEMPLATES.glob('*.pptx')):
+            with zipfile.ZipFile(p) as z:
+                hits = []
+                for n in z.namelist():
+                    if n.endswith('.xml') or n.endswith('.rels'):
+                        text = z.read(n).decode('utf-8', 'ignore')
+                        for k in self.COMPANY_KEYS:
+                            if k.lower() in text.lower():
+                                hits.append((n, k))
+            self.assertEqual(hits, [], '%s 含公司痕迹：%s' % (p.name, hits[:5]))
+
+    def test_manifest_matches_disk(self):
+        man = self._manifest()
+        on_disk = {p.name for p in self.TEMPLATES.glob('*.pptx')}
+        registered = {Path(t['file']).name for t in man['templates']}
+        self.assertEqual(on_disk, registered, 'manifest 登记与磁盘文件不一致')
+        for t in man['templates']:
+            p = self.ASSETS / t['file']
+            self.assertEqual(p.stat().st_size, t['bytes'], '%s 字节数与登记不一致' % t['id'])
+            self.assertEqual(_sha256(p), t['sha256'].upper(), '%s SHA256 与登记不一致' % t['id'])
 
 
 if __name__ == '__main__':

@@ -96,6 +96,8 @@ py -3 scripts/spec_sync.py --spec standard    # 只处理指定风格
 
 **manifest 契约**：`specs/ppt-manifest.schema.json`（JSON Schema；validate 由它驱动）；**字段速查与示例见 `skills/office-ppt/SKILL.md`**。
 
+**随包母版（三套）**：`assets/templates/{dusk,azure,crimson}.pptx` —— 各 1 个母版 + 11 个版式（已清除公司内容）。制作时以母版为基底出稿：`office/ppt_tool.py create <新.pptx> --from-md 大纲.md --template assets/templates/<id>.pptx`（该参数即以母版文件为基底打开，继承其母版与全部版式 —— `scripts/office/ppt_tool.py:80`）；`create` 自动只套前两个版式（`:37-38`），其余 9 个在 WPS 里新建页时自选。用法与授权提示见 `skills/office-ppt/SKILL.md` 第八节、`assets/manifest.json` 与 `NOTICE`。
+
 ### 媒体设置（键路径；设置 → 插件 → dsh-doc-suite）
 
 | 键 | 默认 | 说明 |

@@ -1,6 +1,6 @@
 # dsh-doc-suite · 模块说明（维护者向）
 
-本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/dsh-doc-suite/`），行号对应当前检出状态（`package.json` 版本 **0.7.13**，`package.json:3`）。
+本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/dsh-doc-suite/`），行号对应当前检出状态（`package.json` 版本 **0.7.15**，`package.json:3`）。
 未实现 / 预留的部分在文中显式标注；文档与代码不一致时以代码为准，并已单独指出。
 
 ---
@@ -44,8 +44,8 @@
 | `scripts/media/setup_mermaid.ps1` + `scripts/media/runtime/` | mermaid 运行时的随包 lock 与安装脚本（**不进 dependencies**） | `scripts/media/gen_diagram.py:6-8` |
 | `skills/`（5 个技能） | `office-word` / `office-excel` / `office-ppt` / `pdf-tools` / `media-gen` | `skills/office-word/SKILL.md:2`、`skills/office-ppt/SKILL.md:2` 等 |
 | `specs/` | 10 套样式规格 + 1 份 manifest 字段规范 | 见 1.3 |
-| `assets/` | 素材清单与图标（`assets/manifest.json`） | `assets/manifest.json` |
-| `templates/` | **目录预留**：随包只含说明；母版 pptx 属使用者自定义层（渲染不依赖母版） | `templates/README.md:3` |
+| `assets/` | 素材清单；`icons/` 6 个自绘图标（MIT）+ **`templates/` 三套随包母版**（`dusk` / `azure` / `crimson`，各 1 母版 + 11 版式） | `assets/manifest.json` |
+| `templates/` | **使用者自定义层说明**；随包母版已改放 `assets/templates/`（渲染主线仍不依赖母版） | `templates/README.md:1` |
 | `scripts/tests/test_python.py` + 5 套 `.mjs` | 回归与门禁（见 1.5） | `scripts/tests/test_python.py:3-13` |
 | `requirements.txt` | Python 依赖与两条硬前置说明 | `requirements.txt:1-19` |
 
@@ -286,6 +286,6 @@ Python 侧"共享层"导出（供其它脚本 import）：
 
 ### 4.4 已知未实现 / 预留（本版）
 
-- `templates/` **目录预留，未含母版文件**；渲染主线是代码几何，`specs/*.json` 的 `pptx` 段是唯一真值 —— `templates/README.md:3-8`；
+- `templates/`（模块内）**只含使用者自定义层说明**；三套**随包母版**已改放 `assets/templates/`（`dusk` / `azure` / `crimson`，各 1 母版 + 11 版式，登记在 `assets/manifest.json`），供 `ppt_tool.py create --template` 继承；渲染主线仍是代码几何，`specs/*.json` 的 `pptx` 段是唯一真值 —— `templates/README.md:1-14`、`assets/manifest.json`；
 - 本模块**不注册 DSH 工具**，也不随包提供 `client/` 前端页面（见 3.2、1.2）；
 - `specs/ppt-manifest.schema.json` 的 `layout` 描述未随实现更新（旧文案），以 `ppt_render.py` 的 `IMPLEMENTED_LAYOUTS` 为准 —— `specs/ppt-manifest.schema.json:65`、`scripts/office/ppt_render.py:84-86`。

@@ -1,3 +1,43 @@
+## 0.7.15 — 2026-09-18（随包母版模板三套 + 两条制作路径）
+
+**背景**：主人 2026-09-18 验收通过三份母版，并要求「母版放在随包里」「制作 PPT 时能使用」。此前 `templates/` 只放说明、母版 pptx 不随包，做 PPT 仍要从零排版。
+
+### 一、随包三套母版（`assets/templates/`）
+
+- 文件与体积：`dusk.pptx` **1,184,955 B** · `azure.pptx` **46,220 B** · `crimson.pptx` **8,053,488 B**（合计 9,284,663 B ≈ 8.85 MiB）
+- 每份 = **1 个风格母版 + 11 个版式 + 11 页空白占位页**；**原样复制**，未压缩、未重导出（逐文件 SHA256 与源一致）
+- 由使用者提供的三份 pptx 抽取：删除公司基底母版（3）· 业务页（15）· 备注页（8）· 业务图（67–69 张）· 公司主题、WPS 标签、批注作者与 `docProps` 元数据；**公司痕迹穷举 0 命中**
+- 登记在 `assets/manifest.json` 的 `templates` 段（id / 文件 / 中文名 / 字节数 / SHA256 / 母版与版式数 / 来源 / 许可 / redistributable）
+- **授权（如实标注）**：来源为 WPS 主题库素材，未取得明确再分发授权 → 按事实标 `redistributable: false`，`NOTICE` 新增「五、随包素材」段；对外分发前须自行确认授权
+- 体积预算：`assets/manifest.json` 的 `policy` 新增 `templates_size_budget_mb`（母版单件大，与图标分开预算）
+
+### 二、两条制作路径（文档）
+
+`skills/office-ppt/SKILL.md` 新增第八节，`README.md` 增段，`templates/README.md` 改写，`ARCHITECTURE.md` 目录表与 §4.4 同步：
+
+- **A 美化精修**（已有 PPT）：`ppt_style.py apply-style <file.pptx> [--out X] [--dry-run]` —— 逐 run 统一字体，内容零改动断言（**exit 3 = 拒产出**）
+- **B 母版生成后再精修**（从空白起手）：`ppt_tool.py create <新.pptx> --from-md 大纲.md --template assets/templates/<id>.pptx` —— 以母版为基底打开，继承其母版与全部 11 个版式（`ppt_tool.py:80`）；`create` 自动只套前两个版式（`:37-38`），其余 9 个在 WPS 里新建页时自选
+- 章节编号顺延：原「八、注意事项」改为「九、注意事项」
+
+### 三、随包使用说明
+
+`modules/work-personal-secretary/defaults/use.zh-CN.md` 的「文档能力」节新增「做 PPT：两条路」表与三套母版说明；HTML 由 `scripts/build-defaults-html.mjs` 重新生成（md ↔ HTML 逐字同源断言 `defaults-test` **59/0**）。
+
+### 四、断言（零第三方依赖）
+
+`scripts/tests/test_python.py` 新增 `TestTemplateAssets` 三条（单测 17 → **20**）：① 三份母版存在且可解析（各 1 个 `slideMaster` + 11 个 `slideLayout`）；② 全部 XML/rels 里公司串（天地和兴 / TDHX / 4008108981 / INDUSTRIAL NETWORK SECURITY）**0 命中**；③ manifest 登记与磁盘文件一一对应（数量 + 文件名 + 字节数 + SHA256）。用标准库 `zipfile` 直读包结构，**不引入 python-pptx 依赖**。
+
+### 五、验证（2026-09-18 本机）
+
+- `py -3 scripts/spec_sync.py --check` → **exit 0**（10 套规格 · 对比度 0 项不达标）
+- `py -3 scripts/tests/test_python.py` → **20 tests OK**
+- `npm test`（五套 `.mjs`）→ 全 0 失败（读数见 `TEST-MATRIX.md`）
+- `node scripts/defaults-test.mjs` → **59 / 0**
+- **端到端实测**：`ppt_tool.py create <临时输出> --title 测试 --template assets/templates/dusk.pptx` → exit 0，产物 **masters=1 / layouts=11 / slides=12**（11 页空白版式页 + 1 页新建标题页），版式名与母版一致 —— 证明母版与版式被真实继承；临时产物不入库
+
+### 六、回退
+
+删除 `assets/templates/` 三个 pptx 与 `assets/manifest.json` 的 `templates` 段；`templates/README.md`、`SKILL.md` 第八节、`README.md` 增段、`use.zh-CN.md` 增段、`test_python.py` 的 `TestTemplateAssets` 按 diff 回退；版本改回 **0.7.14**；CHANGELOG 删本段；HTML 重新生成。
 ## 0.7.14 — 2026-09-18（规格按格式强约束：顶层 `for` + 跨格式拒绝）
 
 **背景**：主人 2026-09-18 定「PPT 用的那几套只能给 PPT」。此前 `dusk` 等 6 套只覆盖 `pptx` 段与色板，`--spec dusk` 用在 Word 上会被接受（合并 `standard` 的 word 段 + dusk 的色板）—— 属误用，本次堵死。

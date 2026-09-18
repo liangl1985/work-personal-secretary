@@ -191,7 +191,51 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_render.py render "方案.manifest.json" "�
 - 用法：Word/Excel 套样式用 `--spec <id>`，PPT 渲染用 `--theme <id>`；**跨格式会被拒绝**（如 `--spec dusk` 用在 Word 上 → exit 2 + 中文提示与「本格式可用」清单）；`ppt_theme.py list` 只列可用于 PPT 的主题（自定义层未标注 `for` 的仍列出，标注「未标注格式」）。
 - 自定义层放 `~/.dsh/data/dsh-doc-suite/templates/`（**不进发布件**）；公司母版导入件（品牌色板等）留这一层。
 
-## 八、注意事项（踩过的坑）
+## 八、母版模板库与两条制作路径
+
+**随包三套母版**（`assets/templates/<id>.pptx`，每份 1 个母版 + 11 个版式；已清除公司内容）：
+
+| id | 中文名 | 适用场合 | 体积 |
+|---|---|---|---|
+| `dusk` | 暗色商务 | 对外商务汇报、产品发布、客户宣讲 | 1.13 MiB |
+| `azure` | 蓝色简约 | 工作总结、项目汇报、阶段复盘 | 45 KiB |
+| `crimson` | 红色党政 | 党建与政务汇报、表彰大会、主题宣讲 | 7.68 MiB |
+
+取模块目录（脚本位置与母版位置同源）：
+
+```bat
+py -3 <模块目录>\doctor.py --emit-skill-paths
+```
+
+随包母版完整路径即 `<模块目录>\assets\templates\<id>.pptx`；DSH 标准布局下为 `~/.dsh/profiles/desktop/node_modules/dsh-doc-suite/assets/templates/<id>.pptx`。
+
+### A. 美化精修（给【已有 PPT】换装）
+
+```bat
+py -3 <DOC_SUITE_SCRIPTS>\office\ppt_style.py apply-style "客户来的.pptx" --dry-run
+py -3 <DOC_SUITE_SCRIPTS>\office\ppt_style.py apply-style "客户来的.pptx" --out "统一字体.pptx"
+```
+
+- 逐 run 统一字体（`a:latin / a:ea / a:cs`，覆盖正文、表格单元格与备注），**不改字号与位置**；
+- 落盘前跑内容零改动断言：**exit 3 = 已拒绝产出、原文件未动**（安全拦截，不是工具坏了）。
+
+### B. 母版生成后再精修（从空白起手）
+
+```bat
+py -3 <DOC_SUITE_SCRIPTS>\office\ppt_tool.py create "初稿.pptx" --from-md "大纲.md" --template "<模块目录>\assets\templates\dusk.pptx"
+```
+
+- 传 `--template` 即**以该母版文件为基底打开**再往里加页，新文件继承它的母版与全部 11 个版式（`ppt_tool.py:80`）；
+- `create` 自动只套前两个版式（`ppt_tool.py:37-38` 取 `slide_layouts[0]` 标题页 / `[1]` 内容页），**其余 9 个版式在 WPS 里新建页时自选**；
+- 配图与图示走 `media-gen` 技能；成册渲染（16 类页型）走 `ppt_render.py`，**它走代码几何、不使用母版**。
+
+> 两条路的差别只在**起手处**：A 是修已有文件的外观，B 一开始就长在母版上，省掉从零做版式与配色。
+
+### 授权提示（必读）
+
+三套母版来自 WPS 主题库素材，**已去除公司内容**；`assets/manifest.json` 按事实标注 `redistributable: false`，随包再分发前请自行确认授权（详见模块 `NOTICE`）。
+
+## 九、注意事项（踩过的坑）
 
 - **WPS COM 导出同名文件会返回上一次的缓存画面**：重渲染后出图**必须换输出文件名或换目录**，否则会误判「改了没生效」；出图后按**启动时间**清理残留的 `wpp`/`wps` 进程，**绝不盲杀使用者自己开着的 WPS**。
 - **JSON 禁 BOM**：manifest 与规格一律用 Python/Node 写（PowerShell 会带 BOM，工具会直接拒绝并给中文提示）。

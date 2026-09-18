@@ -1,6 +1,6 @@
 {
   "schema": "dsh-doc-suite/assets@1",
-  "note": "内置素材清单（③a ⑤ 步 + ③b 图标最小集）。内置层只放可随包分发的素材；公司 Logo / 产品图一律放使用者自定义层。",
+  "note": "内置素材清单（③a ⑤ 步 + ③b 图标最小集 + 母版模板）。内置层只放可随包分发的素材；公司 Logo / 产品图 / 公司母版一律放使用者自定义层。",
   "icons": [
     {
       "name": "shield",
@@ -51,12 +51,56 @@
       "redistributable": true
     }
   ],
+  "templates": [
+    {
+      "id": "dusk",
+      "file": "templates/dusk.pptx",
+      "name": "暗色商务",
+      "bytes": 1184955,
+      "sha256": "F02FA0AA74E1236CFD6EFA4754C231D04D964958E3FEF3AAA06FC725BA7342DB",
+      "masters": 1,
+      "layouts": 11,
+      "source": "WPS 主题库模板 → 抽取风格母版并清除公司内容（公司基底母版、业务页、业务图、批注作者、元数据全部删除），2026-09-18 提取",
+      "license": "来源为 WPS 主题库素材，随包再分发请使用者自行确认授权",
+      "redistributable": false,
+      "purpose": "制作 PPT 时的起手母版：用 ppt_tool.py create --template 继承其母版与 11 个版式"
+    },
+    {
+      "id": "azure",
+      "file": "templates/azure.pptx",
+      "name": "蓝色简约",
+      "bytes": 46220,
+      "sha256": "4046B652AC14FB932C379247384A23B89275E389708A0FFF3579B5E8F468611A",
+      "masters": 1,
+      "layouts": 11,
+      "source": "WPS 主题库模板 → 抽取风格母版并清除公司内容（公司基底母版、业务页、业务图、批注作者、元数据全部删除），2026-09-18 提取",
+      "license": "来源为 WPS 主题库素材，随包再分发请使用者自行确认授权",
+      "redistributable": false,
+      "purpose": "制作 PPT 时的起手母版：用 ppt_tool.py create --template 继承其母版与 11 个版式"
+    },
+    {
+      "id": "crimson",
+      "file": "templates/crimson.pptx",
+      "name": "红色党政",
+      "bytes": 8053488,
+      "sha256": "B55C8C20FC7D952054362075456001B7A5DC5F53E775FDF9ECE81BA6B018E4DC",
+      "masters": 1,
+      "layouts": 11,
+      "source": "WPS 主题库模板 → 抽取风格母版并清除公司内容（公司基底母版、业务页、业务图、批注作者、元数据全部删除），2026-09-18 提取",
+      "license": "来源为 WPS 主题库素材，随包再分发请使用者自行确认授权",
+      "redistributable": false,
+      "purpose": "制作 PPT 时的起手母版：用 ppt_tool.py create --template 继承其母版与 11 个版式"
+    }
+  ],
   "shapes": [],
   "policy": {
     "icon_fallback": "图标名无素材时，渲染器用内置几何标记（见 scripts/office/ppt_render.py 的 ICON_MARKS / ICON_MARK_SCALE）；assets/icons/<name>.png 存在则优先贴图（保持比例居中）。",
     "registration": "每条素材必须记录 name / file / source / license / redistributable；未登记的素材不得进内置层。",
     "license": "只收可再分发素材（MIT / Apache-2.0 / CC0 / 自绘）；不确定的进自定义层并标注不可外发。",
-    "size_budget_mb": 2
+    "license_exception_templates": "templates 段为**例外**：三套母版由使用者提供并同意随包分发，来源为 WPS 主题库素材、授权状态未确认，故 redistributable 一律按事实标 false；对外分发前请自行确认授权（见模块 NOTICE）。",
+    "size_budget_mb": 2,
+    "templates_size_budget_mb": 12,
+    "templates_size_note": "母版 pptx 单件体积大（三套合计约 8.9 MiB，其中红色党政 7.7 MiB 为整幅背景图），故与图标分开预算。"
   },
   "custom_layer": "~/.dsh/data/dsh-doc-suite/assets/"
 }

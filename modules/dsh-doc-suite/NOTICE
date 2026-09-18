@@ -44,3 +44,16 @@ modules/dsh-doc-suite/ 下的 Node 侧代码（lib/）、Python 脚本（scripts
 未配置密钥时生图直接返回「不可用」并自动回退代码矢量绘制 —— **不会发生任何网络请求**。
 调用前工具会打印显式告知；使用者须确保 prompt 不含客户信息、报价或涉密内容。
 密钥本身不打印、不落日志、不进报错文本，也不随发布件分发。
+
+五、随包素材（母版模板）
+------------------------
+assets/templates/{dusk,azure,crimson}.pptx —— 三套 PPT 母版（每套 1 个母版 + 11 个版式）：
+
+  来源     WPS 主题库模板 → 抽取风格母版后**清除公司内容**：公司基底母版、业务页、
+           业务图片、批注作者与文档元数据均已删除（逐份核查，公司痕迹 0 命中）
+  用途     制作 PPT 时的起手母版（`ppt_tool.py create --template <母版>`）
+  许可     **来源为 WPS 主题库素材，本仓库未取得明确的再分发授权**；`assets/manifest.json`
+           已按事实标注 `redistributable: false`。对外分发（含公开发布本仓库）前，
+           请自行确认 WPS 主题库素材的授权范围。
+
+  assets/icons/*.png（6 个图标）为本项目用 Pillow 自绘，MIT，可随包分发。
