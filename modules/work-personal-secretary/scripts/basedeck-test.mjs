@@ -270,8 +270,8 @@ const SEED_TEXT = [
 ].join(NL)
 
 function makeFakeRepo() {
-  writeText(join(FAKE_REPO, 'defaults', 'AGENTS.zh-CN.md'), TEMPLATE_TEXT)
-  writeText(join(FAKE_REPO, 'defaults', 'global-memory.seed.md'), SEED_TEXT)
+  writeText(join(FAKE_MODULE, 'defaults', 'AGENTS.zh-CN.md'), TEMPLATE_TEXT)
+  writeText(join(FAKE_MODULE, 'defaults', 'global-memory.seed.md'), SEED_TEXT)
   writeText(join(FAKE_MODULE, 'package.json'), JSON.stringify({ name: 'work-personal-secretary', version: GEN_VERSION }, null, 2) + NL)
   writeText(join(FAKE_DOC, 'package.json'), JSON.stringify({ name: 'dsh-doc-suite', version: '8.8.8' }, null, 2) + NL)
   writeText(join(FAKE_DOC, 'skills', 'alpha', 'SKILL.md'), '# alpha' + NL + 'alpha body' + NL)
@@ -323,7 +323,7 @@ ok(hashBlockBody(bodyA) !== hashBlockBody(bodyA + '\n- 条目三'), '内容不�
 ok(/^sha256:[0-9a-f]{64}$/.test(hashBlockBody(bodyA)), '哈希形如 sha256:<64 位小写十六进制>')
 
 section('[3] 标记块七状态（纯函数）')
-const tplFile = join(FAKE_REPO, 'defaults', 'AGENTS.zh-CN.md')
+const tplFile = join(FAKE_MODULE, 'defaults', 'AGENTS.zh-CN.md')
 const tpl = loadAgentsTemplate(tplFile, { generatorVersion: GEN_VERSION, now: FIXED_NOW })
 ok(tpl.ok === true && tpl.templateVersion === 1 && tpl.generatorVersion === GEN_VERSION, '模板编译成功（template-version=1）')
 ok(tpl.contentHash === hashBlockBody(tpl.body), '模板 content-hash 按规范化正文计算')
