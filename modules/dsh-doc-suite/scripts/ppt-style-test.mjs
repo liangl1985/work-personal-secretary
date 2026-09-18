@@ -172,6 +172,18 @@ t('端到端：表格单元格与备注的字体同时被统一', function () {
   assert(fonts['微软雅黑'] >= 12, '统一到的 run 数偏少：' + JSON.stringify(fonts));
 });
 
+t('端到端：--spec report 套样式（内容零改动 · 原文件不动）', function () {
+  if (!HAS_PPTX) return 'skip';
+  const src = makeSample('report-spec.pptx');
+  const out = path.join(TMP, 'report-spec-out.pptx');
+  const textsBefore = readBack(src).texts;
+  const r = pyRun(STYLE, ['apply-style', src, '--spec', 'report', '--out', out]);
+  assert(r.status === 0, 'exit=' + r.status + ' ' + (r.stderr || '').slice(0, 160));
+  assert(fs.existsSync(out), '未产出');
+  assert(JSON.stringify(readBack(out).texts) === JSON.stringify(textsBefore), '文本发生变化（零改动断言应已拦下）');
+  assert(JSON.stringify(readBack(src).texts) === JSON.stringify(textsBefore), '原文件文本被改动');
+});
+
 t('端到端：--text-color 只改未显式设色的 run', function () {
   if (!HAS_PPTX) return 'skip';
   const src = makeSample('color.pptx');

@@ -1,0 +1,40 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "report",
+  "name": "汇报报告",
+  "extends": "standard",
+  "mood": "数据优先、结论前置",
+  "best_for": [
+    "汇报",
+    "总结",
+    "复盘",
+    "数据分析报告"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-18",
+  "_note": "内置规格（随包）。由 standard 派生：章节标题左对齐、表头底纹加深、边框加粗、强调色用可读深橙。原为使用者自定义层样例，2026-09-18 升格为内置随包资产。",
+  "colors": {
+    "accent": "A34A00"
+  },
+  "word": {
+    "styles": {
+      "Heading 1": {
+        "align": "left"
+      }
+    },
+    "table": {
+      "header": {
+        "shading": "BDD7EE"
+      },
+      "borders": {
+        "size": 6
+      }
+    },
+    "fonts": {}
+  },
+  "excel": {
+    "header": {
+      "shading": "BDD7EE"
+    }
+  }
+}

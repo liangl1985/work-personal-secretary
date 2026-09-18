@@ -1,6 +1,6 @@
 # dsh-doc-suite · 模块说明（维护者向）
 
-本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/dsh-doc-suite/`），行号对应当前检出状态（`package.json` 版本 **0.7.11**，`package.json:3`）。
+本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/dsh-doc-suite/`），行号对应当前检出状态（`package.json` 版本 **0.7.13**，`package.json:3`）。
 未实现 / 预留的部分在文中显式标注；文档与代码不一致时以代码为准，并已单独指出。
 
 ---
@@ -43,15 +43,15 @@
 | `scripts/media/gen_diagram.py`（281 行） | mermaid 本地渲染（Node + 本机 Edge，**无云端**） | `scripts/media/gen_diagram.py:5-15` |
 | `scripts/media/setup_mermaid.ps1` + `scripts/media/runtime/` | mermaid 运行时的随包 lock 与安装脚本（**不进 dependencies**） | `scripts/media/gen_diagram.py:6-8` |
 | `skills/`（5 个技能） | `office-word` / `office-excel` / `office-ppt` / `pdf-tools` / `media-gen` | `skills/office-word/SKILL.md:2`、`skills/office-ppt/SKILL.md:2` 等 |
-| `specs/` | 6 套样式规格 + 1 份 manifest 字段规范 | 见 1.3 |
+| `specs/` | 10 套样式规格 + 1 份 manifest 字段规范 | 见 1.3 |
 | `assets/` | 素材清单与图标（`assets/manifest.json`） | `assets/manifest.json` |
-| `templates/` | **目录预留，未含母版文件** | `templates/README.md:3` |
+| `templates/` | **目录预留**：随包只含说明；母版 pptx 属使用者自定义层（渲染不依赖母版） | `templates/README.md:3` |
 | `scripts/tests/test_python.py` + 5 套 `.mjs` | 回归与门禁（见 1.5） | `scripts/tests/test_python.py:3-13` |
 | `requirements.txt` | Python 依赖与两条硬前置说明 | `requirements.txt:1-19` |
 
 **本模块没有 `client/` 目录**：设置页由 DSH 原生设置服务渲染，集成体「能力配置页」也直接读该命名空间（`lib/settings.js:9-13`）。
 
-### 1.3 规格体系（standard / govdoc / compact / 主题）
+### 1.3 规格体系（standard / govdoc / compact / report / 主题）
 
 规格是**纯 JSON、零新增依赖**，两层加载、支持 `extends` 继承：
 
@@ -66,7 +66,9 @@
 | `standard` | 标准商务 | —（完整规格） | `word` + `excel` + `pptx` 全量几何 | `specs/standard.json:1-15` |
 | `govdoc` | 党政机关公文 | `standard` | 只写差异键（页边距/字号/层次序数字体/标题） | `specs/govdoc.json:1-18` |
 | `compact` | 内部纪要 | `standard` | 只写差异键（紧页边距/1.15 行距/五号正文/灰蓝主色） | `specs/compact.json:1-21` |
+| `report` | 汇报报告 | `standard` | 只写差异键（章节标题左对齐 / 表头底纹 `BDD7EE` / 边框加粗 `size 6` / 强调色 `A34A00`） | `specs/report.json:1-40` |
 | `graphite` / `teal` / `wine` | 石墨工程 / 青蓝技术 / 酒红正式 | `standard` | **只覆盖色板与 PPT 色角色**，几何/字号/字体全部继承；文字色为固定 hex、不随主题漂移 | `specs/graphite.json:1-21`、`specs/teal.json:1-21`、`specs/wine.json:1-21` |
+| `dusk` / `azure` / `crimson` | 暗色商务 / 蓝色简约 / 红色党政 | `standard` | **由 WPS 模板库 pptx 导入**（`theme4.xml` + `slideMaster4.xml`，各 11 个版式）：只搬色板 / 字体 / 页面尺寸，文字强调色按 WCAG AA 压暗 | `specs/dusk.json:1-52`、`specs/azure.json:1-53`、`specs/crimson.json:1-54` |
 
 - **色值口径**：颜色只允许"6 位 hex"或"可用色角色（顶层 `colors` 键 / `pptx.color_roles` 键）"，这是"换主题不失效"的前提 —— `scripts/spec_sync.py:94-103`；
 - **规格校验**：完整规格必须有 `schema`/`id`/`word`/`excel`，`word.styles.Normal` 必填；`pptx` 段可选，出现则按几何契约校验；`extends` 件按**合并基座后**的几何校验 —— `scripts/spec_sync.py:367-410`；

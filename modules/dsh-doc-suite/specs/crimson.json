@@ -1,0 +1,54 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "crimson",
+  "name": "红色党政",
+  "extends": "standard",
+  "mood": "红色主调、党政语境、庄重热烈",
+  "best_for": [
+    "党建与政务汇报",
+    "表彰大会",
+    "主题宣讲"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-18",
+  "_note": "母版导入（ppt_theme.py import，2026-09-16）：从使用者提供的 pptx 提取**视觉令牌**（色板 / 字体 / 页面尺寸），**不搬内容**。来源：theme=theme4.xml（name=年会总结表彰通用主题模板）· master=slideMaster4.xml（版式 11 个）。映射：primary←dk2、secondary←accent1、accent_decor←accent1、accent(文字)←accent1 压暗至 AA（系数 1.0，白底与备用底同时达标）。几何 / 字号 / 语义色沿用 standard。**2026-09-18 修正**：母版原标题字体为商业字体「汉仪大宋简」，未随包（多数机器未装该字体，会导致渲染 exit 5）→ 为保证开箱可用，pptx.fonts.heading.ea 与 allowed_fonts 改用 微软雅黑；需要原字体者可在自定义层覆盖。",
+  "colors": {
+    "primary": "480A05",
+    "secondary": "BC0300",
+    "accent": "BC0300",
+    "accent_decor": "BC0300"
+  },
+  "pptx": {
+    "fonts": {
+      "heading": {
+        "latin": "Arial",
+        "ea": "微软雅黑"
+      },
+      "body": {
+        "latin": "Arial",
+        "ea": "微软雅黑"
+      }
+    },
+    "allowed_fonts": [
+      "Arial",
+      "微软雅黑"
+    ],
+    "color_roles": {
+      "text_heading": "primary",
+      "rule": "accent_decor",
+      "panel_dark": "primary",
+      "accent": "accent",
+      "chart_series": {
+        "s1": "BC0300",
+        "s2": "FFC000",
+        "s3": "F78B00",
+        "s4": "E77136",
+        "s5": "E78036"
+      }
+    },
+    "slide": {
+      "width_emu": 12192000,
+      "height_emu": 6858000
+    }
+  }
+}

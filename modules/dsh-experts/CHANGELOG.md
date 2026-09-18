@@ -2,6 +2,13 @@
 
 本插件的版本历史。
 
+## 0.5.12 — 2026-09-18（风格清单对齐 dsh-doc-suite 十套内置规格）
+
+- **`general-typeset` 的「风格选型」**：原文写「随包内置共三套」，并把 `report` 标为「本机自定义层，换机即无」——与 dsh-doc-suite 现状（**10 套内置**，`report` 已随包）不符。已按实现改写，并补齐 `graphite` / `teal` / `wine` / `dusk` / `azure` / `crimson` 的适用场景；数字仍指向 `specs/*.json` 的 `best_for` 与色板，本卡不重复维护。
+- **`general-designer` 的「文档 / 演示场景换算规则」**：新增第 ⑥ 条「现成风格可直接选」，列出 10 套 id 并指向 `specs/*.json`。
+- 来源：2026-09-18 dsh-doc-suite **0.7.13** 的随包主题扩充（`report` + WPS 模板库导入三套 `dusk` / `azure` / `crimson`），及同批的 `skills/office-ppt/SKILL.md` 主题一览表。
+- 范围：只改两张卡片的文字口径，不涉 `lib/**`、不改匹配与注入逻辑；⚠️ 卡片是随包资产，改动**随下次重启 DSH 生效**。
+
 ## 0.5.11 — 2026-09-17（文档-实现口径一致性修复 · T6）
 
 - **过期命令文案**：`expert_recall(list)` 输出尾注原写「用法：/expert use <id> ｜ /expert auto ｜ /expert off」——这三条命令**已于 0.3.0 移除**，仍出现在输出里会误导使用者。已改为「直接说『用 xx 专家看这个』即可临时切视角」并注明命令已移除。⚠️ 需重启 DSH。

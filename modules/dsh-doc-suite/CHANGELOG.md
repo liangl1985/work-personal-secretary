@@ -1,3 +1,58 @@
+## 0.7.13 — 2026-09-18（report 模板随包 · WPS 模板导入三套 · 断言补齐 · 口径修正）
+
+**背景**：待办 T2 —— 汇报用模板原只存在于使用者自定义层（`~/.dsh/data/dsh-doc-suite/templates/report.json`），**换机即无**；本次升格为随包内置资产。
+
+### 一、新增内置规格 4 套（`report` + WPS 导入三套）
+
+- id `report`（汇报报告）· `extends = standard` · 强调色 `A34A00`（可读深橙）· 章节标题左对齐 / 表头底纹 `BDD7EE` / 边框加粗（`size 6`）
+- 内置规格由 **6 套 → 10 套**：① `report`（汇报报告，原使用者自定义层样例升格为随包）；② **WPS 模板库导入三套** —— `dusk`（暗色商务）/ `azure`（蓝色简约）/ `crimson`（红色党政），源 `theme4.xml` + `slideMaster4.xml`（各 11 个版式），只搬视觉令牌，**源 pptx（13.7–21.3 MB）不入库**；三套的 `best_for` 由发布侧按各自场景改写（对外商务 / 工作总结 / 党建政务），非工具缺省值
+- **不随包**：公司母版导入件（如本机 `tdhx.json`，含品牌色板）仍留自定义层 —— 发布件不带业务私有口径
+- **母版 pptx 不随包**：`ppt_theme.py import` 是**一次性令牌提取**，渲染主线读 `specs/*.json` 的 `pptx` 段，不依赖母版文件（`templates/README.md` 已据实写清）
+
+### 二、断言（CI 可跑 + 本机真跑）
+
+- **可加载 / 可出稿（CI 真跑）**：`ppt-render-test.mjs` 新增「随包主题模板齐备且可加载」用例 —— 先校验 `specs/{report,dusk,azure,crimson}.json` 的基本字段与强调色（`A34A00` / `4F6C97` / `0060E0` / `BC0300`），再逐个跑 `ppt_render.py list-layouts --theme <id>` 断言 `exit 0` 且几何完整。该路径**不需要 python-pptx**（`ppt_render.py:63-74` 的 pptx 导入在 try 内），故在 Linux CI 上真执行。
+- **零依赖规格断言**：`scripts/tests/test_python.py` 的 `TestBuiltinSpecs` 两条 —— ① 遍历 `specs/*.json`（排除 `*.schema.json`）逐个 `spec_sync.validate` 通过；② `report` 与 WPS 三套合并 `standard` 后 `colors.accent` 与 `pptx` 段 16 类页型齐。
+- **套样式内容零改动**：`ppt-style-test.mjs` 新增 `--spec report` 变体（依赖 python-pptx，CI 自动 SKIP 属正常）。
+- **导出 PDF 成功**：`ppt-render-test.mjs` 新增「render → `ppt_tool.py convert` → PDF」用例；守卫 = `win32` + `win32com` + 注册表存在 `KWPP.Application`（**只读注册表、不实例化**，避免接管使用者正开着的 WPS），CI 上自动 SKIP。
+
+### 三、文档与口径修正
+
+- `README.md`：规格套数统一为 **10 套**（`:34` / `:65` / `:92`）；**修正既有漂移** —— `:92` 原写「3 套内置主题」，实测 `ppt_theme.py list` 内置 6 套（`compact` / `govdoc` / `graphite` / `standard` / `teal` / `wine`），加本次四套后为 **10 套**
+- `ARCHITECTURE.md`：规格一览表新增 `report` 行与 `dusk` / `azure` / `crimson` 行、套数改 **10 套**、`templates/` 说明据实更新、版本基线同步
+- `skills/office-ppt/SKILL.md`：内置主题清单扩为**逐套一览表**（id / 中文名 / 色感要点 / 适用场景；含 `report` 与 WPS 三套）
+- `templates/README.md`：按「母版 pptx 不随包」的实测口径改写
+- `TEST-MATRIX.md`（集成体根）：读数与规格套数同步；导出 PDF 用例登记进「刻意不进 CI」
+- `modules/work-personal-secretary/defaults/use.zh-CN.md` 与 `.html`（**随包使用说明**）：原写「三套内置规格」→ 按实际改为 **10 套**并逐套写明用在哪；HTML 由 `scripts/build-defaults-html.mjs` 重新生成（md ↔ HTML 逐字同源断言 `defaults-test` **59 / 0**）
+- `modules/dsh-experts` **0.5.12**（跨模块）：`general-typeset` 的「风格选型」与 `general-designer` 的「文档 / 演示场景换算规则」同步为 **10 套**内置口径；数字仍指向 `specs/*.json`，卡片不重复维护（该模块门禁 regression 48/0 · injection-tier 20/0 · capability 8/0 · coexist 8/0 · smoke-load 19/0 · card-preview 19/19）
+
+### 四、验证
+
+- `spec_sync --check` **exit 0**（**10 套规格**，对比度 0 项不达标）
+- 渲染实测（临时目录，产物不留仓库）：`dusk` **exit 0**（2 页）· `azure` **exit 0**（2 页）· `crimson` **exit 0**（3 页，改用 `微软雅黑` 后）
+- `ppt-render-test` **26 / 0**（原 24，新增 2；含真跑 WPS 导出 PDF）· `ppt-style-test` **12 / 0**（原 11）· `tests/test_python.py` **13 / 0**（原 11）
+- 其余三套（`style-test` / `media-test` / `ppt-theme-test`）读数见 `TEST-MATRIX.md`
+
+### 五、已知限制（本次实测）
+
+- **`crimson` 的标题字体已改用通用字体**：`theme4.xml` 的 majorFont ea 原为商业字体「汉仪大宋简」（**未随包**，多数机器没有，渲染 `exit 5`）。为保证开箱可用，`specs/crimson.json` 的 `pptx.fonts.heading.ea` 与 `allowed_fonts` 已改用 `微软雅黑`（`_note` 留有修正说明）；需要原字体者在自定义层覆盖。改后 `ppt_render.py render --theme crimson` **exit 0**。
+- **三套的 `best_for` 已按场景改写**：工具 `ppt_theme.py` 的缺省值是「沿用甲方母版的方案 / 与既有公司模板同源的汇报」，对通用风格不贴切；发布侧已分别改为对外商务 / 工作总结 / 党建政务三组场景，**工具逻辑未动**。
+- **`dusk` 与另两套的 `theme4.xml` 元数据不同**：`dusk` 的 theme4 name 为「Office 主题」、majorFont latin 为 `微软雅黑`；`azure` / `crimson` 的 name 分别为「蓝色职场办公简约风主题」「年会总结表彰通用主题模板」、majorFont latin 为 `Arial`。三套色板互不相同，符合要求的三种风格。
+
+### 六、回退
+
+版本改回 **0.7.12**，删除本次新增的 `specs/report.json` / `specs/dusk.json` / `specs/azure.json` / `specs/crimson.json` 与上述新增断言段（文档同步回退）。
+
+### 附：本文档条目顺序整理
+
+本次把 `0.7.12` 段从 `0.7.11` 之后移到之前，使**最新置顶**；仅移动整段，未改任何历史文字。
+
+## 0.7.12 — 2026-09-17（注释一致性 · Python 单测 · 模块说明）
+
+- `scripts/office/ppt_render.py` 头注释仍写「只实现 cover / bullets / cards 三类」→ 改「已实现 16 类页型（与 ALL_LAYOUTS 一致）」。
+- 新增 `scripts/tests/test_python.py`（**11 项，零依赖**：对比度 / 主题压暗 / deep_merge / 规格校验正负例）并纳入 CI；`package.json` 补 `test` 与 `spec:check`。
+- 新增 `ARCHITECTURE.md`（维护者向）。
+
 ## 0.7.11 — 2026-09-17（standard 页边距中性化 · 公文风格 govdoc · read_docx 往返保真 · 样式颜色支持）
 
 **背景**：主人 2026-09-17 定「Word 对外保留 `standard`（标准）+ 公文两套口径」，并给出 `standard` 的页边距基准（通用默认）。
@@ -35,12 +90,6 @@
 - `spec_sync --check` **0**（6 套规格，对比度 0 项不达标）· `style-test` **24/0**（断言同步为新页边距）
 - 公文档端到端：`create` → `apply-style --spec govdoc`（角色识别 heading_1=2 / heading_2=4 / body=10，**内容零改动断言通过**）→ `convert` PDF → 出图目检（标题黑色、三号仿宋、页边距 3.7/3.5/2.8/2.6）
 - **已知局限**：govdoc 只做**版式**，不生成公文版头要素（发文机关标志 / 发文字号 / 印章）与页脚页码；缺 方正小标宋 时标题用宋体加粗替代，交付前须目检字体
-## 0.7.12 — 2026-09-17（注释一致性 · Python 单测 · 模块说明）
-
-- `scripts/office/ppt_render.py` 头注释仍写「只实现 cover / bullets / cards 三类」→ 改「已实现 16 类页型（与 ALL_LAYOUTS 一致）」。
-- 新增 `scripts/tests/test_python.py`（**11 项，零依赖**：对比度 / 主题压暗 / deep_merge / 规格校验正负例）并纳入 CI；`package.json` 补 `test` 与 `spec:check`。
-- 新增 `ARCHITECTURE.md`（维护者向）。
-
 ## 0.7.10 — 2026-09-17（CI 守卫补齐 + 运行时 lock 入库）
 
 **背景**：远端 main 的 CI「集成体本体自测」连续红（09-16 多次 push，失败点全部落在 doc-suite 的测试脚本上）。本机装有 Pillow / python-pptx 因此全绿——典型的「本机绿 ≠ CI 绿」。

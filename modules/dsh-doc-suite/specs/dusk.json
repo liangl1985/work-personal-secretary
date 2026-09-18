@@ -1,0 +1,53 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "dusk",
+  "name": "暗色商务",
+  "extends": "standard",
+  "mood": "深蓝墨色、商务克制、沉稳对比",
+  "best_for": [
+    "对外商务汇报",
+    "产品发布",
+    "客户宣讲"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-18",
+  "_note": "母版导入（ppt_theme.py import，2026-09-16）：从使用者提供的 pptx 提取**视觉令牌**（色板 / 字体 / 页面尺寸），**不搬内容**。来源：theme=theme4.xml（name=Office 主题​​）· master=slideMaster4.xml（版式 11 个）。映射：primary←dk2、secondary←accent1、accent_decor←accent1、accent(文字)←accent1 压暗至 AA（系数 0.6815，白底与备用底同时达标）。几何 / 字号 / 语义色沿用 standard。",
+  "colors": {
+    "primary": "102544",
+    "secondary": "749FDE",
+    "accent": "4F6C97",
+    "accent_decor": "749FDE"
+  },
+  "pptx": {
+    "fonts": {
+      "heading": {
+        "latin": "微软雅黑",
+        "ea": "微软雅黑"
+      },
+      "body": {
+        "latin": "微软雅黑",
+        "ea": "微软雅黑"
+      }
+    },
+    "allowed_fonts": [
+      "微软雅黑"
+    ],
+    "color_roles": {
+      "text_heading": "primary",
+      "rule": "accent_decor",
+      "panel_dark": "primary",
+      "accent": "accent",
+      "chart_series": {
+        "s1": "749FDE",
+        "s2": "2E69C0",
+        "s3": "7486DE",
+        "s4": "7C74DE",
+        "s5": "9574DE"
+      }
+    },
+    "slide": {
+      "width_emu": 12192000,
+      "height_emu": 6858000
+    }
+  }
+}

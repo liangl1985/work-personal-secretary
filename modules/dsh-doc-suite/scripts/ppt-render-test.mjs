@@ -12,6 +12,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const mod = path.resolve(here, '..');
 const OFF = path.join(mod, 'scripts', 'office');
 const RENDER = path.join(OFF, 'ppt_render.py');
+const PPT_TOOL = path.join(OFF, 'ppt_tool.py');
 const SCHEMA = path.join(mod, 'specs', 'ppt-manifest.schema.json');
 const SPEC = path.join(mod, 'specs', 'standard.json');
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'dsh-ppt-render-test-'));
@@ -47,6 +48,25 @@ const HAS_PY = !!pyProbe('print(1)');
 const HAS_PPTX = HAS_PY && (function () { const r = pyProbe('import pptx; print(1)'); return !!r && r.status === 0; })();
 const FONT = path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts', 'msyh.ttc');
 const HAS_FONT = fs.existsSync(FONT);
+
+// WPS 演示（KWPP）可用性：只在注册表里查 ProgID，**不实例化**——实例化会启动或接管使用者正开着的 WPS。
+function wpsPptAvailable() {
+  const code = pyLine([
+    'import sys',
+    'try:',
+    '    import win32com.client  # noqa: F401',
+    'except Exception:',
+    '    sys.exit(1)',
+    'try:',
+    '    import winreg',
+    '    winreg.OpenKey(winreg.HKEY_CLASSES_ROOT, "KWPP.Application").Close()',
+    'except Exception:',
+    '    sys.exit(1)',
+    'print("yes")',
+  ]);
+  const r = pyProbe(code);
+  return !!r && r.status === 0;
+}
 
 const NEED = ['cover', 'bullets', 'cards', 'toc', 'section', 'compare', 'data', 'chart', 'table', 'quote', 'closing',
   'image', 'process', 'timeline', 'case', 'qa'];
@@ -240,6 +260,26 @@ t('list-layouts：11 类已实现 + 5 类未实现', function () {
   for (const k of NEED) assert(txt.includes(k), 'list-layouts 未列出 ' + k);
 });
 
+t('随包主题模板齐备且可加载（report + WPS 三套 · 不需 python-pptx · CI 真跑）', function () {
+  const themes = [['report', 'A34A00'], ['dusk', '4F6C97'], ['azure', '0060E0'], ['crimson', 'BC0300']];
+  for (const pair of themes) {
+    const id = pair[0], accent = pair[1];
+    const specFile = path.join(mod, 'specs', id + '.json');
+    assert(fs.existsSync(specFile), '内置模板缺失：specs/' + id + '.json');
+    const cfg = JSON.parse(fs.readFileSync(specFile, 'utf8'));
+    assert(cfg.id === id && cfg.extends === 'standard', id + ' 规格基本字段不符');
+    assert(cfg.colors && cfg.colors.accent === accent, id + ' 强调色应为 ' + accent + '，实得 ' + ((cfg.colors || {}).accent));
+  }
+  for (const pair of themes) {
+    const id = pair[0];
+    const r = pyRun(RENDER, ['list-layouts', '--theme', id]);
+    if (!r) return 'skip';
+    assert(r.status === 0, id + ' list-layouts exit=' + r.status + ' ' + (r.stderr || '').slice(0, 160));
+    assert(r.stdout.includes(id), '未报告主题 id：' + id);
+    assert((r.stdout.match(/✔/g) || []).length >= 20, id + ' 几何不完整（✔ 不足）');
+  }
+});
+
 t('render：11 页整册 → exit 0 且页数正确', function () {
   if (!HAS_PPTX) return 'skip';
   const out = path.join(TMP, 'deck11.pptx');
@@ -379,6 +419,20 @@ t('render：--dry-run 不写文件', function () {
   assert(r.status === 0, 'exit=' + r.status);
   assert(!fs.existsSync(out), '--dry-run 不应写文件');
   assert((r.stdout + r.stderr).includes('--dry-run'), '未声明 dry-run');
+});
+
+t('render → 导出 PDF（WPS COM；本机才跑，CI 自动 SKIP）', function () {
+  if (!HAS_PPTX || !HAS_FONT) return 'skip';
+  if (!wpsPptAvailable()) return 'skip';
+  const deck = path.join(TMP, 'pdf-src.pptx');
+  const r1 = pyRun(RENDER, ['render', writeJson('pdf.json', manifest11()), deck]);
+  assert(r1.status === 0, '渲染失败：' + (r1.stderr || r1.stdout || '').slice(0, 200));
+  const pdf = path.join(TMP, 'pdf-out.pdf');
+  const r2 = pyRun(PPT_TOOL, ['convert', deck, pdf]);
+  assert(r2.status === 0, 'convert exit=' + r2.status + ' ' + (r2.stderr || r2.stdout || '').slice(0, 200));
+  assert(fs.existsSync(pdf), '未产出 PDF');
+  const head = fs.readFileSync(pdf).subarray(0, 5).toString('latin1');
+  assert(head === '%PDF-', 'PDF 文件头不符：' + JSON.stringify(head));
 });
 
 console.log('');

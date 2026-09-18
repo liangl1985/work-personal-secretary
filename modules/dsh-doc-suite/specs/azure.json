@@ -1,0 +1,54 @@
+{
+  "schema": "dsh-doc-suite/style-spec@1",
+  "id": "azure",
+  "name": "蓝色简约",
+  "extends": "standard",
+  "mood": "蓝色极简、留白充裕、职场清爽",
+  "best_for": [
+    "工作总结",
+    "项目汇报",
+    "阶段复盘"
+  ],
+  "version": "1.0",
+  "updated": "2026-09-18",
+  "_note": "母版导入（ppt_theme.py import，2026-09-16）：从使用者提供的 pptx 提取**视觉令牌**（色板 / 字体 / 页面尺寸），**不搬内容**。来源：theme=theme4.xml（name=蓝色职场办公简约风主题）· master=slideMaster4.xml（版式 11 个）。映射：primary←dk2、secondary←accent1、accent_decor←accent1、accent(文字)←accent1 压暗至 AA（系数 0.88，白底与备用底同时达标）。几何 / 字号 / 语义色沿用 standard。",
+  "colors": {
+    "primary": "001A3A",
+    "secondary": "016EFF",
+    "accent": "0060E0",
+    "accent_decor": "016EFF"
+  },
+  "pptx": {
+    "fonts": {
+      "heading": {
+        "latin": "Arial",
+        "ea": "微软雅黑"
+      },
+      "body": {
+        "latin": "Arial",
+        "ea": "微软雅黑"
+      }
+    },
+    "allowed_fonts": [
+      "Arial",
+      "微软雅黑"
+    ],
+    "color_roles": {
+      "text_heading": "primary",
+      "rule": "accent_decor",
+      "panel_dark": "primary",
+      "accent": "accent",
+      "chart_series": {
+        "s1": "016EFF",
+        "s2": "624AF0",
+        "s3": "9618F4",
+        "s4": "F7219B",
+        "s5": "F02836"
+      }
+    },
+    "slide": {
+      "width_emu": 12192000,
+      "height_emu": 6858000
+    }
+  }
+}

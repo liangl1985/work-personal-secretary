@@ -1,4 +1,4 @@
-# 测试矩阵（2026-09-17 实测）
+# 测试矩阵（2026-09-18 实测）
 
 > 口径：每条给「模块 → 命令 → 覆盖 → 最新读数」。读数只对**当时的提交**负责；改动后须重跑同一条命令再更新本表。
 > 所有脚本**刻意不依赖宿主运行时**（不需要 DSH 在跑），CI 与本机都能执行。
@@ -13,7 +13,7 @@
 | 专家库 | `cd modules/dsh-experts && npm test`（5 套） |
 | 桌面形象 | `cd modules/workspace-tokenpet && npm test`（**需先 `npm install`**；CI 不装依赖故不进 CI） |
 
-## 二、逐套明细（读数一律为 2026-09-17 本机实测）
+## 二、逐套明细（读数一律为 2026-09-18 本机实测）
 
 ### 集成体本体 `modules/work-personal-secretary/scripts/`
 
@@ -33,11 +33,11 @@
 |---|---|---|
 | `style-test.mjs` | A 线样式回归（规格结构、apply-style 零改动断言、extends 继承/循环检测） | **24 / 0** |
 | `media-test.mjs` | 媒体链路（生图密钥来源与不泄露、图示运行时、落盘格式） | **19 / 0** |
-| `ppt-render-test.mjs` | PPT 渲染器（manifest 校验、16 类页型、容量与缩字号） | **24 / 0** |
-| `ppt-style-test.mjs` | PPT 存量美化（字体统一、内容零改动 exit 3 语义） | **11 / 0** |
+| `ppt-render-test.mjs` | PPT 渲染器（manifest 校验、16 类页型、容量与缩字号、随包主题齐备可加载、导出 PDF） | **26 / 0** |
+| `ppt-style-test.mjs` | PPT 存量美化（字体统一、内容零改动 exit 3 语义、`--spec report`） | **12 / 0** |
 | `ppt-theme-test.mjs` | 主题库（list / inspect / import、对比度门禁） | **7 / 0** |
-| `tests/test_python.py`（新增） | **Python 侧单测**：对比度计算、主题压暗达标、`deep_merge` 语义、规格校验正/负例（越界与缺 styles → `SystemExit(2)`） | **11 / 0** |
-| `spec_sync.py --check` | 规格校验 + 对比度门禁（6 套规格） | **exit 0** |
+| `tests/test_python.py`（新增） | **Python 侧单测**：对比度计算、主题压暗达标、`deep_merge` 语义、规格校验正/负例（越界与缺 styles → `SystemExit(2)`）、全部内置规格校验通过、`report` 与 WPS 三套的 accent 与 pptx 几何 | **13 / 0** |
+| `spec_sync.py --check` | 规格校验 + 对比度门禁（10 套规格） | **exit 0** |
 
 ### 记忆体 / 专家库
 
@@ -60,7 +60,7 @@
 
 按顺序：语法自检（全量 JS `node --check`）→ 子项目回归（`*/scripts/regression.mjs`）→ 装载冒烟与共存（`*/scripts/smoke-load.mjs`、`coexist.mjs`）→ **集成体本体自测**（`*/scripts/*-test.mjs`）→ Python 语法自检（`py_compile`）→ **Python 单元测试（dsh-doc-suite）**→ 子项目必需文件自检。
 
-- **刻意不进 CI**：`workspace-tokenpet` 的 `npm test`（要装依赖）· 涉及 WPS COM / 网络 / 本机运行时的用例（脚本内部已 SKIP）。
+- **刻意不进 CI**：`workspace-tokenpet` 的 `npm test`（要装依赖）· 涉及 WPS COM / 网络 / 本机运行时的用例（脚本内部已 SKIP）· `ppt-render-test.mjs` 的「render → 导出 PDF」（守卫 = win32 + win32com + 注册表 `KWPP.Application`；本机真跑、CI SKIP）。
 - CI 环境只装 Node 与 Python，不装 pip 包；因此依赖 Pillow / python-pptx 的用例在 CI 上是 **SKIP 而非 FAIL**（2026-09-17 修）。
 
 ## 四、已知缺口（如实标注，不含糊）

@@ -31,7 +31,7 @@
 
 ### 默认规范（`standard`）速览
 
-> **数值一律以 `specs/*.json` 为准**（下表只是摘要；完整展示用 `spec_sync.py` 生成，勿以本文为准）。三套内置：**`standard`（标准商务）· `govdoc`（党政机关公文）· `compact`（内部纪要，密排小字）**；后两者用 `extends` 只写差异键。
+> **数值一律以 `specs/*.json` 为准**（下表只是摘要；完整展示用 `spec_sync.py` 生成，勿以本文为准）。内置**共 10 套**（全部随包）：Word/Excel 常用 **`standard`（标准商务）· `govdoc`（党政机关公文）· `compact`（内部纪要，密排小字）· `report`（汇报报告）**；PPT 主题另有 **`graphite`（石墨工程）/ `teal`（青蓝技术）/ `wine`（酒红正式）/ `dusk`（暗色商务）/ `azure`（蓝色简约）/ `crimson`（红色党政）**；后九者用 `extends` 只写差异键。
 
 | 项 | 值 |
 |---|---|
@@ -62,7 +62,7 @@ py -3 scripts/office/word_tool.py apply-style 来文.docx --spec govdoc --out �
 
 > **已知局限**：本风格只做**版式**（页面 / 字体 / 字号 / 层次样式），不生成公文**版头要素**（发文机关标志、发文字号、印章、成文日期位置）与页脚页码；套用后请目检字体是否生效。
 
-**两层规格**：内置 `specs/*.json`（`standard` 标准商务 / `govdoc` 党政机关公文 / `compact` 内部纪要）← **使用者自定义层** `~/.dsh/data/dsh-doc-suite/templates/<id>.json`（同名键深度覆盖；单位 / 个人口径放这一层，**不进发布件**）。派生风格可用 `extends` 只写差异键。
+**两层规格**：内置 `specs/*.json` **10 套**（`standard` 标准商务 / `govdoc` 党政机关公文 / `compact` 内部纪要 / `report` 汇报报告 / `graphite` 石墨工程 / `teal` 青蓝技术 / `wine` 酒红正式 / `dusk` 暗色商务 / `azure` 蓝色简约 / `crimson` 红色党政）← **使用者自定义层** `~/.dsh/data/dsh-doc-suite/templates/<id>.json`（同名键深度覆盖；单位 / 个人口径放这一层，**不进发布件**）。派生风格可用 `extends` 只写差异键。
 
 ### 改规格的标准流程（`spec_sync.py`）
 
@@ -89,7 +89,7 @@ py -3 scripts/spec_sync.py --spec standard    # 只处理指定风格
 | **干跑校验** | `office/ppt_render.py validate <manifest.json>` · `list-layouts` | 契约 + 主题几何 + 容量预演；列页型与组件 |
 | **存量美化** | `office/ppt_style.py apply-style <file.pptx> [--out X] [--dry-run] [--text-color ROLE]` | 逐 run 统一字体（a:latin / a:ea / a:cs，含表格与备注）；**不改字号与位置** |
 | **配图生图** | `media/gen_image.py image --prompt ... --out ...` | 火山引擎 **ARK**（Seedream 5.0 Pro）；**云端服务**（调用前显式告知）；失败/无密钥 → **exit 4 可回退** |
-| **主题库 / 母版导入** | `office/ppt_theme.py list` · `inspect <母版.pptx>` · `import <母版.pptx> --id <id>` | 3 套内置主题 + 自定义层；**从公司母版导入**（只搬色板 / 字体 / 页面尺寸，**不搬内容**；文字色自动压暗至 WCAG AA；字体并入白名单）。渲染用 `--theme <id>` |
+| **主题库 / 母版导入** | `office/ppt_theme.py list` · `inspect <母版.pptx>` · `import <母版.pptx> --id <id>` | **10 套**内置主题 + 自定义层；**从公司母版导入**（只搬色板 / 字体 / 页面尺寸，**不搬内容**；文字色自动压暗至 WCAG AA；字体并入白名单）。渲染用 `--theme <id>` |
 | **图示渲染** | `media/gen_diagram.py render <in.mmd> <out.png|svg>` | mermaid **本机**渲染（Node + Edge）；运行时不在包内，用 `media/setup_mermaid.ps1` 安装/迁移 |
 
 **退出码**：`0` 成功 ｜ `2` 输入/参数/规格错 ｜ **`3` = 内容零改动断言失败（已拒绝产出、原文件未动）** ｜ `4` = 媒体链路云端不可用或运行时缺失（**可回退**） ｜ `5` 缺字体/Pillow。

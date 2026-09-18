@@ -7,6 +7,7 @@
   [B] 主题压暗  ppt_theme.darken_to_aa  —— 达标返回 True 且对白底与备用底都 >=4.5；非法输入返回 (原值,1.0,False)
   [C] 深度合并  spec_sync.deep_merge    —— 对象深度覆盖、数组整体替换、不改原对象
   [D] 规格校验  spec_sync.validate      —— 合法规格通过；缺 styles / pptx 几何越界 → SystemExit(2)；extends 派生件合并后通过
+  [E] 随包模板  specs/*.json           —— 全部内置规格校验通过；report 与 WPS 三套（dusk/azure/crimson）的 accent 与 pptx 几何完整
 
 用法：
   py -3 modules/dsh-doc-suite/scripts/tests/test_python.py
@@ -104,6 +105,41 @@ class TestValidate(unittest.TestCase):
         g = json.loads((SPECS / 'govdoc.json').read_text(encoding='utf-8'))
         std = _standard()
         self.assertTrue(spec_sync.validate('govdoc', g, {'standard': std, 'govdoc': g}))
+
+
+class TestBuiltinSpecs(unittest.TestCase):
+    """随包内置模板（specs/*.json）：全部可校验、几何完整；report 与 WPS 三套强调色固定。"""
+
+    EXTRA = {'report': 'A34A00', 'dusk': '4F6C97', 'azure': '0060E0', 'crimson': 'BC0300'}
+
+    def _files(self):
+        out = {}
+        for p in sorted(SPECS.glob('*.json')):
+            if p.name.endswith('.schema.json'):
+                continue
+            out[p.stem] = json.loads(p.read_text(encoding='utf-8'))
+        return out
+
+    def test_all_builtin_specs_pass_validation(self):
+        specs = self._files()
+        pool = {'standard': _standard()}
+        pool.update(specs)
+        for spec_id, raw in specs.items():
+            self.assertTrue(spec_sync.validate(spec_id, raw, pool), spec_id)
+
+    def test_new_templates_accent_and_pptx_geometry(self):
+        std = _standard()
+        specs = self._files()
+        for spec_id, accent in self.EXTRA.items():
+            self.assertIn(spec_id, specs, '内置模板缺失：specs/%s.json' % spec_id)
+            raw = {k: v for k, v in specs[spec_id].items() if k != 'extends'}
+            merged = spec_sync.deep_merge(std, raw)
+            self.assertEqual(merged['colors']['accent'], accent, spec_id + ' 强调色不符')
+            pptx = merged.get('pptx') or {}
+            for key in ('layouts', 'components', 'slide', 'fonts'):
+                self.assertIn(key, pptx, spec_id + ' 缺 pptx.' + key)
+            layouts = [k for k in pptx['layouts'] if not k.startswith('_')]
+            self.assertEqual(len(layouts), 16, spec_id + ' 页型应为 16 类，实得 %d' % len(layouts))
 
 
 if __name__ == '__main__':
