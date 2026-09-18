@@ -86,8 +86,12 @@ body{margin:0;padding:0;background:#f4f6f8}
 <p><strong>比对：能给你一份「红线条」</strong></p>
 <p>两份 Word 的差异不是只打印一段文字，而是生成一份<strong>能在 WPS 里直接打开的修订版</strong>，改动按字符级标出来，逐条接受或拒绝。合同、方案改稿用这个最省事。</p>
 <p><strong>套版式：给已有文件换装，内容一个字不改</strong></p>
-<p>这是它最有用的功能之一，专门解决「内容没问题、格式太乱」。随包内置 <strong>10 套规格</strong>，常用的直接说名字就行：</p>
-<table><thead><tr><th>规格</th><th>用在哪</th></tr></thead><tbody><tr><td>标准商务（standard）</td><td>方案、报告、说明、对账这类常规材料</td></tr><tr><td>党政机关公文（govdoc）</td><td>正式发文，按公文国标的版式（页边距、三号仿宋正文、层次序数字体）</td></tr><tr><td>内部纪要（compact）</td><td>内部备忘、纪要、草稿，密排小字</td></tr><tr><td>汇报报告（report）</td><td>汇报、总结、复盘、数据分析报告</td></tr><tr><td>石墨工程（graphite）</td><td>技术方案、架构说明、运维汇报</td></tr><tr><td>青蓝技术（teal）</td><td>偏清爽的技术风介绍</td></tr><tr><td>酒红正式（wine）</td><td>正式、有仪式感的场合</td></tr><tr><td>暗色商务（dusk）</td><td>对外商务汇报、产品发布、客户宣讲</td></tr><tr><td>蓝色简约（azure）</td><td>工作总结、项目汇报、阶段复盘</td></tr><tr><td>红色党政（crimson）</td><td>党建与政务汇报、表彰大会、主题宣讲</td></tr></tbody></table>
+<p>这是它最有用的功能之一，专门解决「内容没问题、格式太乱」。随包内置 <strong>10 套规格</strong>，<strong>Word / Excel 与演示（PPT）分开列</strong>，常用的直接说名字就行。</p>
+<p><strong>一、Word 与 Excel</strong>（加 <code>--spec</code>）</p>
+<table><thead><tr><th>规格</th><th>用在哪</th></tr></thead><tbody><tr><td>标准商务（standard）</td><td>方案、报告、说明、对账这类常规材料</td></tr><tr><td>党政机关公文（govdoc）</td><td>正式发文，按公文国标的版式（页边距、三号仿宋正文、层次序数字体）</td></tr><tr><td>内部纪要（compact）</td><td>内部备忘、纪要、草稿，密排小字</td></tr><tr><td>汇报报告（report）</td><td>汇报、总结、复盘、数据分析报告</td></tr></tbody></table>
+<p><strong>二、演示 PPT</strong>（加 <code>--theme</code>）</p>
+<table><thead><tr><th>主题</th><th>用在哪</th></tr></thead><tbody><tr><td>标准商务（standard）</td><td>与技术方案、商务汇报通用，PPT 侧的基准主题</td></tr><tr><td>石墨工程（graphite）</td><td>技术方案、架构说明、运维汇报</td></tr><tr><td>青蓝技术（teal）</td><td>偏清爽的技术风介绍</td></tr><tr><td>酒红正式（wine）</td><td>正式、有仪式感的场合</td></tr><tr><td>暗色商务（dusk）</td><td>对外商务汇报、产品发布、客户宣讲</td></tr><tr><td>蓝色简约（azure）</td><td>工作总结、项目汇报、阶段复盘</td></tr><tr><td>红色党政（crimson）</td><td>党建与政务汇报、表彰大会、主题宣讲</td></tr></tbody></table>
+<div class="callout"><p>两边的名字有重复（标准商务）：它是 Word / Excel / PPT 三种格式<strong>共用的基准套</strong>，其余各套只写自己那一类的差异，没写到的自动沿用基准。所以同一套可以直接用在三种格式上，按上面两列选用最省事。</p></div>
 <p>还有一条<strong>安全设计</strong>你要知道：套版式只改格式，落盘前会逐段（Word）或逐格含公式（Excel）比对内容，<strong>只要发现内容有任何变化就拒绝写文件、原文件一动不动</strong>。所以你不用担心它顺手改坏你的正文，最坏情况是它拒绝执行并告诉你原因。</p>
 <p><strong>依赖什么</strong></p>
 <ul><li>Python 3.10 以上 + 八个 Python 包；</li><li>本机装好 WPS（比对、重算、导出这三类操作靠它）。</li></ul>

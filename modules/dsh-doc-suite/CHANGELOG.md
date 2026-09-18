@@ -25,6 +25,7 @@
 - `TEST-MATRIX.md`（集成体根）：读数与规格套数同步；导出 PDF 用例登记进「刻意不进 CI」
 - `modules/work-personal-secretary/defaults/use.zh-CN.md` 与 `.html`（**随包使用说明**）：原写「三套内置规格」→ 按实际改为 **10 套**并逐套写明用在哪；HTML 由 `scripts/build-defaults-html.mjs` 重新生成（md ↔ HTML 逐字同源断言 `defaults-test` **59 / 0**）
 - `modules/dsh-experts` **0.5.12**（跨模块）：`general-typeset` 的「风格选型」与 `general-designer` 的「文档 / 演示场景换算规则」同步为 **10 套**内置口径；数字仍指向 `specs/*.json`，卡片不重复维护（该模块门禁 regression 48/0 · injection-tier 20/0 · capability 8/0 · coexist 8/0 · smoke-load 19/0 · card-preview 19/19）
+- **规格一览按格式拆分（2026-09-18 补）**：随包使用说明（`defaults/use.zh-CN.md` + `.html`）与 `skills/office-ppt/SKILL.md` 的表按「**Word / Excel**（加 `--spec`）」与「**演示 PPT**（加 `--theme`）」分列，并写明 `standard` 是三格式共用基座；`ppt_theme.py list` 仍列全部（含自定义层）。为什么：10 套里 4 套改 Word/Excel 侧、6 套只改 PPT 色板，混在一张表里选不准。
 
 ### 四、验证
 
