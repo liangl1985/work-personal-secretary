@@ -54,6 +54,23 @@ import {
   IDENTITY_PLACEHOLDER_TEXT,
   SETTINGS_TARGETS,
   STARTER_TODOS,
+  STARTER_DIR_NAME,
+  STARTER_PACK_DIR_NAME,
+  STARTER_MANIFEST_FILE,
+  STARTER_README_FILE,
+  STARTER_AGENTS_FILE,
+  STARTER_README_SOURCE_FILE,
+  STARTER_CONFIRMED_FILE,
+  STARTER_PLACEHOLDERS,
+  STARTER_MEMORY_TITLE,
+  ENTRY_SEP,
+  WORK_SECRETARY_TITLES,
+  WORK_SECRETARY_FILE,
+  planStarterPack,
+  verifyStarterPack,
+  starterPending,
+  starterPackDirOf,
+  workSecretarySpecs,
   VAULT_MIRROR_DIR_NAME,
   applyBaseDeck,
   withMemoryDirLock,
@@ -890,11 +907,12 @@ ok(readdirSync(join(deckMem, 'DAILY')).length === 0 && readdirSync(join(deckMem,
 
 const projFile = join(deckMem, 'PROJECTS', '工作秘书.md')
 const projEntries = parseMemoryEntries(readFileSync(projFile, 'utf8'))
-ok(projEntries.length === 4, 'PROJECTS/工作秘书.md 写入 4 条')
+ok(projEntries.length === 5, 'PROJECTS/工作秘书.md 写入 5 条（第五段 =【待写入·本机】开局包待办）')
 const projBodies = projEntries.map(memoryEntryBody)
 ok(projBodies[0].indexOf('【使用说明】') === 0 && projBodies[1].indexOf('【安装说明】') === 0
-  && projBodies[2].indexOf('【待办·开局】') === 0 && projBodies[3].indexOf('【技能库】') === 0,
-  '四条顺序 = 使用说明 / 安装说明 / 待办·开局 / 技能库')
+  && projBodies[2].indexOf('【待办·开局】') === 0 && projBodies[3].indexOf('【技能库】') === 0
+  && projBodies[4].indexOf(STARTER_MEMORY_TITLE) === 0,
+  '五条顺序 = 使用说明 / 安装说明 / 待办·开局 / 技能库 /【待写入·本机】')
 ok(projBodies[0].indexOf('保存配置并开始') > 0, '使用说明正文用定稿按钮文案「保存配置并开始」（与 defaults/use.zh-CN.md 同源）')
 ok(projBodies[1].indexOf('winget install -e --id Python.Python.3.12') > 0, '安装说明正文来自 defaults/install.zh-CN.md（单一真相源）')
 ok(STARTER_TODOS.every((t) => projBodies[2].indexOf(t) > 0), '待办条目含设计定稿 §6.3 的全部七项')
@@ -967,7 +985,7 @@ ok(appendDeck.ok === true && appendDeck.wroteAny === true, '缺条时补写成�
 ok(Array.isArray(appendDeck.backups) && appendDeck.backups.length === 1 && existsSync(appendDeck.backups[0].backup), '改写既有文件前已备份')
 const projAfter = parseMemoryEntries(readFileSync(projFile, 'utf8'))
 ok(memoryEntryBody(projAfter[0]) === projBodies[0], '原有那一条逐字保留')
-ok(projAfter.length === 4, '缺失的三条已补回（共 4 条）')
+ok(projAfter.length === 5, '缺失的四条已补回（共 5 条）')
 
 const deckMem2 = join(TMP_ROOT, 'deckmem2')
 const failDeck = applyBaseDeckItem('memoryDeck', Object.assign({}, deckOpts, {
@@ -1973,6 +1991,212 @@ section('[27] T5-4 配置收尾镜像同步（POST /identity/save 的 mirror 字
   const candReal = memoryMirrorCandidates({ moduleDir: MODULE_DIR })
   ok(candReal.length === 1 && candReal[0].file.split(BS).join('/').indexOf('/dsh-work-memory/lib/backup.js') > 0,
     '⑤绝对 moduleDir（真实调用形态）→ bundled 候选是完整的同级模块路径')
+}
+
+// ───────────────────── [28] 本机写入包（开局包）+ 项目记忆待办 + 核查回路 ─────────────────────
+
+section('[28] 开局包（本机写入包）：落盘 / 清单 / 幂等 / 缺源 broken / 核查三态 / 待办摘除')
+{
+  const sRoot = join(TMP_ROOT, 'starterroot')
+  const sMem = join(sRoot, ROOT_SUBDIR_MEMORY)
+  const sVault = join(sRoot, ROOT_SUBDIR_VAULT)
+  const sWs = makeWorkspace('starter')
+  const sHome = join(TMP_ROOT, 'starterhome', '.dsh')
+  const sBase = opts({
+    workspace: sWs,
+    dshHome: sHome,
+    settingsFile: join(sHome, 'settings.yaml'),
+    memoryDir: sMem,
+    obsidianDir: sVault,
+    moduleDir: MODULE_DIR,
+  })
+  const packRoot = join(sRoot, STARTER_DIR_NAME)
+  const packDir = join(packRoot, STARTER_PACK_DIR_NAME)
+  const manifestFile = join(packDir, STARTER_MANIFEST_FILE)
+
+  // ① 计划：并入现有 dirs 步，**不新增第九项**
+  const planS = planBaseDeck(sBase)
+  const sCtx = planS.ctx
+  const sItem = planS.items.filter((i) => i.id === 'dirs')[0]
+  ok(planS.items.length === 8 && BASEDECK_ID_LIST.length === 8, '开局包并入现有 dirs 步：计划仍是八项（未新增第九项 / 下标未变）')
+  ok(sItem.starter.state === 'ready', '存储根反推成功 → dirs 步里的开局包状态 ready')
+  ok(sItem.starter.packDir === join(sRoot, STARTER_DIR_NAME).replace(/\\/g, '/'), '开局包目录 = 存储根/开局：' + sItem.starter.packDir)
+  ok(starterPackDirOf(sCtx) === sItem.starter.packDir, 'starterPackDirOf 与计划器同源')
+  ok(sItem.status === 'append' && sItem.autoApplyable === true, '开局包待写 → dirs 步可执行（append）')
+  ok(sItem.detail.indexOf('开局包待写') > 0, 'dirs 步 detail 明说开局包待写项数')
+
+  // ② dry-run 零写盘
+  const treeS0 = treeSnapshot(TMP_ROOT)
+  const dryS = applyBaseDeckItem('dirs', Object.assign({}, sBase, { dryRun: true }))
+  ok(dryS.ok === true && dryS.bytesWritten === 0 && !existsSync(packRoot), '干跑：未写盘、未创建开局包目录')
+  ok(sameTree(treeS0, treeSnapshot(TMP_ROOT)), '干跑后整棵树逐项一致')
+
+  // ③ 真写：开局包落盘
+  const realS = applyBaseDeckItem('dirs', Object.assign({}, sBase, { dryRun: false }))
+  assertInsideTmp(packRoot, 'starter pack')
+  ok(realS.ok === true && realS.starterStatus === 'ready' && existsSync(manifestFile), '真写：开局包落盘（含 清单.json）')
+  ok(existsSync(join(packDir, STARTER_README_FILE)) && existsSync(join(packDir, STARTER_AGENTS_FILE)), '后置优化包 = 怎么用.md + AGENTS.md + 清单.json')
+  ok(readFileSync(join(packDir, STARTER_README_FILE), 'utf8') === readFileSync(join(MODULE_DIR, 'defaults', STARTER_README_SOURCE_FILE), 'utf8'),
+    '怎么用.md 与随包源逐字节一致（只读引用，未改内容）')
+  ok(existsSync(join(packRoot, '记忆库', 'MEMORY.md')) && existsSync(join(packRoot, '记忆库', 'USER.md'))
+    && existsSync(join(packRoot, '记忆库', 'GRAPH.json')) && existsSync(join(packRoot, '记忆库', 'PROJECTS', '工作秘书.md')),
+    '记忆库内容落盘（MEMORY / USER / GRAPH / PROJECTS/工作秘书.md）')
+  ok(existsSync(join(packRoot, '记忆库', 'DAILY')) && existsSync(join(packRoot, '记忆库', 'ARCHIVE')), '记忆库空骨架目录 DAILY / ARCHIVE 也落盘')
+  ok(existsSync(join(packRoot, '知识库', VAULT_HOME_FILE)) && existsSync(join(packRoot, '知识库', VAULT_MIRROR_DIR_NAME))
+    && existsSync(join(packRoot, '知识库', '工具', '00_工具总览.md')) && existsSync(join(packRoot, '知识库', '工具', '技能', VAULT_TOOL_TIPS_FILE))
+    && existsSync(join(packRoot, '知识库', '.obsidian', 'app.json')),
+    '知识库内容落盘（主页 / 00_全局记忆 / 工具总览 / 技巧正文 / .obsidian）')
+  ok(existsSync(join(packRoot, '知识库', '工具', '脚本')) && existsSync(join(packRoot, '知识库', '工具', 'MCP')), '工具/脚本 与 工具/MCP 空目录落盘')
+  ok(existsSync(join(packRoot, '技能', 'alpha', 'SKILL.md')) && existsSync(join(packRoot, '技能', 'gamma', 'SKILL.md')), '技能逐个落包（夹具 3 个）')
+  const packProj = parseMemoryEntries(readFileSync(join(packRoot, '记忆库', 'PROJECTS', '工作秘书.md'), 'utf8'))
+  ok(packProj.length === 5 && memoryEntryBody(packProj[4]).indexOf(STARTER_MEMORY_TITLE) === 0, '包内 工作秘书.md = 五段（第五段是开局包待办）')
+  ok(memoryEntryBody(packProj[4]).indexOf(STARTER_MANIFEST_FILE) > 0, '第五段含「怎么核查」一句（指向包内 清单.json）')
+  ok(planStarterPack(sCtx).state === 'up_to_date', 'planStarterPack 二次计划 = up_to_date（幂等）')
+
+  // ④ 清单.json（机器可读）
+  ok(detectBom(readBytes(manifestFile)) === '', '清单.json 无 BOM')
+  const manifestText = readFileSync(manifestFile, 'utf8')
+  let manifest = null
+  try { manifest = JSON.parse(manifestText) } catch (e) { manifest = null }
+  ok(manifest !== null && manifest.version === '1.0.0' && typeof manifest.generatedAt === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(manifest.generatedAt),
+    '清单.json = 合法 JSON，含 version 与 ISO 时间')
+  ok(manifest !== null && Array.isArray(manifest.items) && manifest.items.length > 0, '清单 items 非空（实测 ' + (manifest ? manifest.items.length : 0) + ' 项）')
+  ok(manifestText.indexOf('\n  "items"') > 0, '清单.json 使用 2 空格缩进')
+  ok(manifestText.indexOf(TMP_ROOT) < 0, '清单里没有夹具绝对路径')
+  const manifestFlat = manifestText.replace(/\\/g, '/')
+  ok(!/[A-Za-z]:\//.test(manifestFlat), '清单里没有任何盘符绝对路径（全是占位符）')
+  const dstList = manifest.items.map((it) => String(it.dst || ''))
+  ok(dstList.every((d) => /^\{\{[A-Za-z0-9_]+\}\}\//.test(d)), '每项 dst 都以占位符开头')
+  const usedPh = {}
+  for (const d of dstList) {
+    const re = /\{\{([A-Za-z0-9_]+)\}\}/g
+    let m
+    while ((m = re.exec(d)) !== null) usedPh[m[1]] = true
+  }
+  const phKeys = Object.keys(usedPh).sort()
+  ok(usedPh.workspace === true && usedPh.memoryDir === true && usedPh.obsidianDir === true && phKeys.every((k) => STARTER_PLACEHOLDERS.indexOf(k) >= 0),
+    '清单占位符只用允许的 4 个（实测用了 ' + phKeys.join(',') + '）')
+  ok(manifest.items.every((it) => ['file', 'block', 'entry', 'entry-set', 'dir'].indexOf(it.mode) >= 0), '清单 mode 只用允许的 5 种')
+  const worksecItem = manifest.items.filter((it) => it.id === 'mem.worksec')[0]
+  ok(worksecItem && worksecItem.mode === 'entry-set' && worksecItem.titles.length === 5, 'mem.worksec = entry-set 五标题（与五段一致）')
+  const agentsItem = manifest.items.filter((it) => it.id === 'agentsMd')[0]
+  ok(agentsItem && agentsItem.mode === 'block' && agentsItem.block === 'wps', 'agentsMd = block 模式（只比 wps 标记块区间）')
+  const skillItems = manifest.items.filter((it) => /^skill\./.test(it.id))
+  ok(skillItems.length === 3 && skillItems.every((it) => it.mode === 'file' && it.src.indexOf('技能/') === 0), '技能项逐个展开（' + skillItems.length + ' 项）')
+  const packAgents = readFileSync(join(packDir, STARTER_AGENTS_FILE), 'utf8')
+  ok(/<!--\s*wps:begin\b/.test(packAgents) && /<!--\s*wps:end\s*-->/.test(packAgents), '包内 AGENTS.md 带完整 wps 标记块')
+  ok(workSecretarySpecs(sCtx, { includeStarter: true }).length === 5 && WORK_SECRETARY_TITLES.length === 5, 'WORK_SECRETARY_TITLES 已扩到五项（[0]~[3] 顺序未变）')
+
+  // ⑤ 幂等
+  const mSnap = statSnap(manifestFile)
+  const a2 = applyBaseDeckItem('dirs', Object.assign({}, sBase, { dryRun: false }))
+  ok(a2.status === 'up_to_date' && a2.bytesWritten === 0 && a2.wroteAny === false, '幂等：二次执行 up_to_date 且零字节、不写盘')
+  ok(sameSnap(mSnap, statSnap(manifestFile)), '幂等：清单.json mtime/size 未变')
+  ok(planBaseDeck(sBase).items.filter((i) => i.id === 'dirs')[0].starter.state === 'up_to_date', '幂等：开局包判 up_to_date')
+
+  // ⑥ 缺源 → 显式 broken（绝不静默判「已是最新」）
+  const noSrcBase = Object.assign({}, sBase, { moduleDir: FAKE_MODULE })
+  const noSrcPlan = planBaseDeck(noSrcBase).items.filter((i) => i.id === 'dirs')[0]
+  ok(noSrcPlan.starter.state === 'broken' && /[一-龥]/.test(noSrcPlan.starter.broken), '缺随包源 → 开局包显式 broken + 可读中文原因')
+  const noSrcApply = applyBaseDeckItem('dirs', Object.assign({}, noSrcBase, { dryRun: false }))
+  ok(noSrcApply.starterStatus === 'broken' && noSrcApply.writtenFiles.length === 0 && /找不到随包说明/.test(noSrcApply.starterDetail),
+    '缺源时 apply 层确实不落包（starterStatus=broken、零文件写入）')
+
+  // ⑦ 核查回路：三态
+  const v0 = verifyStarterPack(sCtx)
+  ok(v0.ok === true && v0.pending === true && v0.removable === false, '核查回路只读可跑：初始 pending=true / removable=false')
+  ok(v0.summary.missing > 0 && v0.summary.match === 0, '目标全未写 → 全部 missing（missing=' + v0.summary.missing + '）')
+  ok(v0.items.every((it) => ['missing', 'match', 'differs', 'kept', 'broken'].indexOf(it.status) >= 0), '每项状态都在允许集合内')
+  ok(v0.items.filter((it) => it.id === 'vault.home')[0].status === 'missing', 'vault.home 初始 = missing')
+  ok(v0.items.filter((it) => it.id === 'mem.identity')[0].status === 'missing', 'mem.identity 初始 = missing')
+
+  writeText(join(sVault, VAULT_HOME_FILE), '# 我自己改过的主页' + NL)
+  const vDiff = verifyStarterPack(sCtx)
+  const homeDiff = vDiff.items.filter((it) => it.id === 'vault.home')[0]
+  ok(homeDiff.status === 'differs' && /不覆盖/.test(homeDiff.detail), 'mode=file：目标存在但内容不同 → differs（只报告，不覆盖）')
+  ok(readFileSync(join(sVault, VAULT_HOME_FILE), 'utf8').indexOf('我自己改过的主页') > 0, 'differs 时核查回路没有动目标文件（只读）')
+  copyFileSync(join(packRoot, '知识库', VAULT_HOME_FILE), join(sVault, VAULT_HOME_FILE))
+  ok(verifyStarterPack(sCtx).items.filter((it) => it.id === 'vault.home')[0].status === 'match', 'mode=file：逐字节一致 → match')
+
+  ok(verifyStarterPack(sCtx).items.filter((it) => it.id === 'vault.mirror')[0].status === 'missing', 'mode=dir：目标不存在 → missing')
+  mkdirSync(join(sVault, VAULT_MIRROR_DIR_NAME), { recursive: true })
+  ok(verifyStarterPack(sCtx).items.filter((it) => it.id === 'vault.mirror')[0].status === 'match', 'mode=dir：目标存在即 match（不比对内容）')
+
+  writeText(join(sWs, 'AGENTS.md'), '# 我的工作区（没有标记块）' + NL)
+  const agNoBlock = verifyStarterPack(sCtx).items.filter((it) => it.id === 'agentsMd')[0]
+  ok(agNoBlock.status === 'differs' && /标记块/.test(agNoBlock.detail), 'mode=block：目标没有 wps 标记块 → differs（不覆盖）')
+  writeText(join(sWs, 'AGENTS.md'), '# 我的工作区' + NL + NL + packAgents + NL + '块外我自己写的内容' + NL)
+  ok(verifyStarterPack(sCtx).items.filter((it) => it.id === 'agentsMd')[0].status === 'match',
+    'mode=block：块外内容不同但块区间一致 → match（**绝不拿整个文件比**）')
+
+  writeText(join(sMem, 'MEMORY.md'), '[id:aaaaaaaaaaaa] [2026-01-01] [tag:常规] 与身份无关的内容' + NL)
+  ok(verifyStarterPack(sCtx).items.filter((it) => it.id === 'mem.identity')[0].status === 'missing', 'mode=entry：目标有文件但缺「使用者身份」条目 → missing')
+  writeText(join(sMem, 'MEMORY.md'), '[id:aaaaaaaaaaaa] [2026-01-01] [tag:关键] 使用者身份：我自己写的身份' + NL)
+  ok(verifyStarterPack(sCtx).items.filter((it) => it.id === 'mem.identity')[0].status === 'differs', 'mode=entry：同标题但正文不同 → differs')
+
+  // ⑧ confirmed.json：差异被确认保留 → kept
+  writeText(join(packRoot, STARTER_CONFIRMED_FILE), JSON.stringify({ ids: ['mem.identity'] }) + NL)
+  const vKept = verifyStarterPack(sCtx)
+  ok(vKept.items.filter((it) => it.id === 'mem.identity')[0].status === 'kept' && vKept.summary.kept === 1,
+    'confirmed.json 里的差异 → kept（不再计入 pending）')
+  rmSync(join(packRoot, STARTER_CONFIRMED_FILE), { force: true })
+
+  // ⑨ 项目记忆第五段：只补缺失、不覆盖
+  const todo = applyBaseDeckItem('memoryDeck', Object.assign({}, sBase, { dryRun: false }))
+  const projFile = join(sMem, 'PROJECTS', WORK_SECRETARY_FILE)
+  const projBefore = parseMemoryEntries(readFileSync(projFile, 'utf8'))
+  ok(todo.ok === true && projBefore.length === 5 && memoryEntryBody(projBefore[4]).indexOf(STARTER_MEMORY_TITLE) === 0,
+    '项目记忆写入五段（本机写入未完成 → 挂【待写入·本机】）')
+  ok(projBefore[4].indexOf('[tag:关键]') > 0, '第五段 tag=关键（与【待办·开局】一致，保证每轮必现）')
+  writeText(projFile, projBefore.slice(0, 4).join(ENTRY_SEP) + NL)
+  const refill = applyBaseDeckItem('memoryDeck', Object.assign({}, sBase, { dryRun: false }))
+  const projAfter2 = parseMemoryEntries(readFileSync(projFile, 'utf8'))
+  ok(refill.ok === true && projAfter2.length === 5 && memoryEntryBody(projAfter2[4]).indexOf(STARTER_MEMORY_TITLE) === 0, '第五段缺失 → 只补这一条')
+  ok(projAfter2.slice(0, 4).map(memoryEntryBody).join('|') === projBefore.slice(0, 4).map(memoryEntryBody).join('|'), '前四段逐字保留（不覆盖）')
+  const refill2 = applyBaseDeckItem('memoryDeck', Object.assign({}, sBase, { dryRun: false }))
+  ok(refill2.wroteAny === false && refill2.status === 'up_to_date', '第五段已在 → 幂等不再写')
+
+  // ⑩ 按清单逐项写入 → 全部 match → 待办可摘除
+  for (const it of manifest.items) {
+    const dst = String(it.dst)
+      .split('{{workspace}}').join(sWs)
+      .split('{{memoryDir}}').join(sMem)
+      .split('{{obsidianDir}}').join(sVault)
+      .split('{{backupDir}}').join(join(TMP_ROOT, 'starterbackup'))
+    assertInsideTmp(dst, 'starter dst')
+    if (!it.src) { mkdirSync(dst, { recursive: true }); continue }
+    const src = join(packRoot, ...String(it.src).split('/'))
+    mkdirSync(dirname(dst), { recursive: true })
+    copyFileSync(src, dst)
+  }
+  const vDone = verifyStarterPack(sCtx)
+  ok(vDone.ok === true && vDone.removable === true && vDone.pending === false, '按清单逐项写入后全部通过 → removable=true（待办可摘除）')
+  ok(vDone.summary.missing === 0 && vDone.summary.differs === 0 && vDone.summary.broken === 0, '汇总清零：' + JSON.stringify(vDone.summary))
+  ok(starterPending(sCtx).pending === false, 'starterPending：全部通过 → 不再挂待办')
+  ok(workSecretarySpecs(sCtx, { includeStarter: starterPending(sCtx).pending }).length === 4, '待办可摘除时只生成四段（既有四条不变）')
+
+  // ⑪ BOM 一律拒绝
+  writeText(join(packDir, STARTER_AGENTS_FILE), '# 带 BOM 的源' + NL, { bom: true })
+  const vBom = verifyStarterPack(sCtx)
+  ok(vBom.items.filter((it) => it.id === 'agentsMd')[0].status === 'broken', '包内源带 BOM → broken（BOM 一律拒绝）')
+  ok(vBom.pending === true, '出现 broken 即 pending=true（不会假装通过）')
+
+  // ⑫ 存储根反推不出 → 不猜，显式 broken + 待办保留
+  const strayWs = makeWorkspace('stray')
+  const strayHome = join(TMP_ROOT, 'strayhome', '.dsh')
+  const strayBase = opts({
+    workspace: strayWs,
+    dshHome: strayHome,
+    settingsFile: join(strayHome, 'settings.yaml'),
+    memoryDir: join(TMP_ROOT, 'stray-mem'),
+    obsidianDir: join(TMP_ROOT, 'stray-vault'),
+    moduleDir: MODULE_DIR,
+  })
+  const strayItem = planBaseDeck(strayBase).items.filter((i) => i.id === 'dirs')[0]
+  ok(strayItem.starter.state === 'broken' && strayItem.starter.packDir === '' && /存储根目录未能反推/.test(strayItem.starter.broken),
+    '两个目录不在同一父目录下 → 反推失败即显式 broken、packDir 留空（绝不猜）')
+  ok(starterPending(planBaseDeck(strayBase).ctx).pending === true, '存储根反推失败 → 待办保留（核查跑不了也不判完成）')
+  ok(verifyStarterPack(planBaseDeck(strayBase).ctx).ok === false, '核查回路在反推失败时 ok=false + 可读原因（不抛异常）')
 }
 
 // ───────────────────── 收尾 ─────────────────────

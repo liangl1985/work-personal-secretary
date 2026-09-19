@@ -29,6 +29,23 @@
 - 两份 HTML 由 `scripts/build-defaults-html.mjs` 按 md 重生成
 - `dsh-doc-suite` 五套回归：**24 / 19 / 26 / 13 / 7**（全 0 失败）
 
+### 四、本机写入包（开局包）· 同期一并交付（**版本号不升**，并入本版）
+
+> 起因：审计发现**「该写没写」会被静默吞掉** —— `planSkills` 在 `skillsSourceDir` 为空（repoRoot 解析失败）时判成 `up_to_date`，界面显示「共 0 个技能：一致 0 / 缺失 0」，使用者与引导都看不出问题。本次改为把「该写的内容」**原样落到存储根**，并在**项目记忆**里挂待办。
+
+- **落点**：`<存储根>/开局/`（存储根由 `inferRootDir(memoryDir, obsidianDir)` 反推；**推不出不猜** —— 记 `broken` + 可读原因并保留待办）
+  - `后置优化包/`：`怎么用.md`（源 `defaults/starter-readme.zh-CN.md`，面向使用者）+ `AGENTS.md`（指令层标记块）+ `清单.json`
+  - `记忆库/`：`MEMORY.md`（身份占位 + 种子条目）、`USER.md`、`GRAPH.json`、`PROJECTS/工作秘书.md`、`PROJECTS`/`DAILY`/`ARCHIVE`
+  - `知识库/`：`🏠 主页.md`、`工具/00_工具总览.md`、`.obsidian/app.json`、`工具/技能/DSH与插件使用技巧.md`、`00_全局记忆/`、`工具/{技能,脚本,MCP}/`
+  - `技能/`：5 个 `SKILL.md`（源 `dsh-doc-suite/skills/`）
+- **机器可读核查清单 `清单.json`**（**运行时生成**，非模板文件）：逐项 `{id, src, dst, mode}`；`dst` **只用 4 个占位符**（`{{workspace}}` / `{{memoryDir}}` / `{{obsidianDir}}` / `{{backupDir}}`），**不含任何本机绝对路径** —— 同一个包在任何机器上都成立。`mode` 五种：`file` 逐字节 · `block` 只比 `wps` 标记块区间 · `entry` 单条条目 · `entry-set` 一组条目 · `dir` 存在即可。
+- **核查回路**：新增只读导出 `verifyStarterPack()`，逐项判 `missing` / `match` / `differs` / `kept` / `broken`；**`differs` 不覆盖**（可能是使用者改过），只在 `confirmed.json` 里记 `kept`。
+- **项目记忆待办**：`PROJECTS/工作秘书.md` 新增第五段 `【待写入·本机】`（`tag=关键`，每轮必现，正文指向 `清单.json`）；沿用「只补缺失、不覆盖」，**核查全部通过后摘除**。
+- **并入现有步、ABI 不变**：落包并入 `dirs` 步（`planDirs` / `applyDirs`），记忆库内容并入 `memoryDeck` 步 —— **`BASEDECK_ITEMS` 仍是八项，顺序与下标一字未动**。
+- **缺源一律显式失败**：源文件读不到 / 带 BOM / 存储根反推不出 → `state='broken'` + 中文可读原因，`apply` 层**零文件写入**，绝不判 `up_to_date`。
+- **一处设计取舍（已复核同意）**：存储根反推失败时，`dirs` 步的 `apply` 仍返回 `ok:true`（工作目录该建照建），只把 `starterStatus` 置 `broken` —— 不误报「连目录都没建成」，同时把真相显式暴露。
+- **读数**：`basedeck-test` **567 / 0**（原 500 + 新增 67）· `defaults-test` **61 / 0**（原 59）· `smoke-load` 533 · `probe-test` 151 · `install-test` 244 · `settings-api-test` 112 · `identity-test` 73（全 0 失败）· `check-undefined` TS2304/TS2552 = 0。
+
 ### 未处理（如实标注）
 
 - 退出码语义（`3` = 零改动断言失败 / `2` = 参数或输入校验不过 / `5` = 缺字体）**未写进面向非技术使用者的说明** —— 属刻意取舍，技能文档里已有完整语义。

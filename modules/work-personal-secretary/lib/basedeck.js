@@ -1519,25 +1519,51 @@ function planDirs(ctx) {
   add('obsidianSyncDir', 'Obsidian 记忆镜像目录', ctx.obsidianSyncDir, true)
   add('petSkinsDir', '桌宠素材目录', ctx.petSkinsDir, false)
 
+  // 开局包（本机写入包）**并入本步**：目录与内容一起落 <存储根>/开局/。
+  // **不新增第九项** —— BASEDECK_ITEMS 的顺序与下标一字未动；starter 只作为本项的子状态对外可见。
+  const starter = planStarterPack(ctx)
+  const starterDirs = starter.state === 'ready' ? starter.dirs.filter((d) => d.state === 'missing') : []
+  const starterWrites = starter.state === 'ready' ? starter.writes : []
+  const starterWork = starterDirs.length > 0 || starterWrites.length > 0
+
   const withDir = list.filter((x) => x.dir)
   const missing = list.filter((x) => x.state === 'missing').length
   const exists = list.filter((x) => x.state === 'exists').length
-  const status = missing > 0 ? (exists === 0 ? 'append' : 'update') : (exists > 0 ? 'up_to_date' : 'none')
+  const starterBroken = starter.state === 'broken'
+  const anyWork = missing > 0 || starterWork || starterBroken
+  const status = !anyWork ? (withDir.length > 0 ? 'up_to_date' : 'none')
+    : (exists === 0 ? 'append' : 'update')
   const action = missing > 0 ? (exists === 0 ? '将新建' : '将只创建缺失的目录')
-    : (exists > 0 ? '已是最新无需写入' : '没有可创建的目录')
+    : starterWork ? '将只补写缺失的开局包内容（工作目录已在）'
+      : starterBroken ? '开局包未写入（已显式报告原因，不做任何猜测）'
+        : (withDir.length > 0 ? '已是最新无需写入' : '没有可创建的目录')
+  let starterNote = ''
+  if (starter.state === 'broken') starterNote = '；开局包未写入：' + starter.broken
+  else if (starterWork) starterNote = '；开局包待写 ' + starterWrites.length + ' 个文件、' + starterDirs.length + ' 个目录（' + starter.packDir + '）'
+  else if (starter.state === 'up_to_date') starterNote = '；开局包已完整（' + starter.files.length + ' 个文件均在，未写盘）'
+  const starterSig = starter.state + '|' + starterWrites.map((w) => w.name).join(',') + '|' + starterDirs.map((d) => d.dir).join(',')
   return makeItem(spec, {
     status: status,
     target: withDir.map((x) => x.dir),
-    detail: '共 ' + withDir.length + ' 个目录：已存在 ' + exists + ' / 缺失 ' + missing,
-    autoApplyable: missing > 0,
+    detail: '共 ' + withDir.length + ' 个目录：已存在 ' + exists + ' / 缺失 ' + missing + starterNote,
+    autoApplyable: anyWork,
     dirs: list,
+    starter: {
+      state: starter.state,
+      broken: starter.broken,
+      root: starter.root,
+      packDir: starter.packDir,
+      itemCount: starter.items.length,
+      files: starter.files,
+      manifestFile: starter.packDir ? (starter.packDir + '/' + STARTER_PACK_DIR_NAME + '/' + STARTER_MANIFEST_FILE) : '',
+    },
     preview: {
       action: action,
       blockVersion: '',
-      contentHash: 'sha256:' + sha256Text(list.map((x) => x.key + ':' + x.state).join('\n')),
-      sampleLines: sampleBlock(list.map((x) => (x.dir || x.label) + '  [' + x.state + ']')),
+      contentHash: 'sha256:' + sha256Text(list.map((x) => x.key + ':' + x.state).join('\n') + '\n' + starterSig),
+      sampleLines: sampleBlock(list.map((x) => (x.dir || x.label) + '  [' + x.state + ']').concat(starter.files.map((f) => f.name + '  [' + f.state + ']'))),
     },
-    internal: { list: list },
+    internal: { list: list, starter: starter },
   })
 }
 
@@ -2209,9 +2235,24 @@ function applyDirs(ctx, item, internal, io, dryRun, base) {
   const list = internal.list || []
   const missing = list.filter((x) => x.state === 'missing')
   const existsCount = list.filter((x) => x.state === 'exists').length
-  base.wouldWriteBytes = 0
+  // 开局包：只有 state='ready' 才落盘；broken / nothing 一律不写（显式说明，绝不静默假装成功）。
+  const starter = internal.starter || null
+  const starterReady = Boolean(starter && starter.state === 'ready')
+  const sDirs = starterReady ? (starter.dirs || []).filter((d) => d.state === 'missing') : []
+  const sWrites = starterReady ? (starter.writes || []) : []
+  const sBytes = sWrites.reduce((acc, w) => acc + (w.bytes || 0), 0)
+  base.wouldWriteBytes = sBytes
+  base.starterStatus = starter ? starter.state : 'none'
+  base.starterDetail = starter ? (starter.broken || '') : ''
+  const plannedDirs = missing.map((x) => x.dir).concat(sDirs.map((d) => d.dir))
+  const plannedFiles = sWrites.map((w) => ({ name: w.name, path: posix(w.path), mode: w.mode }))
   if (dryRun) {
-    return Object.assign(base, { ok: true, detail: item.detail + '；干跑：未写盘（将创建 ' + missing.length + ' 个目录）', plannedDirs: missing.map((x) => x.dir) })
+    return Object.assign(base, {
+      ok: true,
+      plannedDirs: plannedDirs,
+      plannedFiles: plannedFiles,
+      detail: item.detail + '；干跑：未写盘（将创建 ' + plannedDirs.length + ' 个目录、写入 ' + plannedFiles.length + ' 个文件，共 ' + sBytes + ' 字节）',
+    })
   }
   const created = []
   for (const x of missing) {
@@ -2222,11 +2263,80 @@ function applyDirs(ctx, item, internal, io, dryRun, base) {
       return Object.assign(base, { ok: false, created: created, detail: '创建目录失败：' + x.dir + '（' + String(err && err.message ? err.message : err) + '）' })
     }
   }
+
+  const createdStarterDirs = []
+  const createdStarterFiles = []
+  const starterBackups = []
+  let starterNote = ''
+  if (!starterReady) {
+    starterNote = starter && starter.broken ? ('；开局包未写入：' + starter.broken) : ''
+  } else if (sDirs.length === 0 && sWrites.length === 0) {
+    starterNote = starter.packDir ? ('；开局包已完整（' + starter.packDir + '）') : ''
+  } else {
+    const guard = assertWritableDir(starter.root, '存储根目录', ctx.env)
+    if (!guard.ok) {
+      base.starterStatus = 'broken'
+      base.starterDetail = guard.error
+      starterNote = '；开局包未写入：' + guard.error
+    } else {
+      const rollbackStarter = () => {
+        for (const p of createdStarterFiles.slice().reverse()) {
+          const b = starterBackups.filter((x) => x.path === p)[0]
+          try {
+            if (b && b.backup) io.copyFileSync(b.backup, p)
+            else io.rmSync(p, { force: true })
+          } catch (e) { /* best-effort */ }
+        }
+        for (const d of createdStarterDirs.slice().reverse()) {
+          try { io.rmSync(d, { recursive: true, force: true }) } catch (e) { /* best-effort */ }
+        }
+      }
+      let failed = ''
+      try {
+        for (const d of sDirs) {
+          io.mkdirSync(d.dir, { recursive: true })
+          createdStarterDirs.push(d.dir)
+        }
+        for (const w of sWrites) {
+          io.mkdirSync(dirname(w.path), { recursive: true })
+          if (w.hadFile) {
+            const bk = backupFile(w.path, io, ctx.now)
+            if (bk) starterBackups.push({ path: w.path, backup: bk })
+          }
+          atomicWriteText(w.path, w.content, io)
+          createdStarterFiles.push(w.path)
+        }
+      } catch (err) {
+        rollbackStarter()
+        failed = String(err && err.message ? err.message : err)
+      }
+      if (!failed) {
+        for (const w of sWrites) {
+          const verify = readFileRaw(w.path)
+          if (!verify) { failed = '写后读取失败：' + posix(w.path); break }
+          if (verify.bom) { failed = '写后检测到 ' + verify.bom + ' BOM：' + posix(w.path); break }
+          if (sha256Text(verify.buffer) !== sha256Text(Buffer.from(w.content, 'utf8'))) { failed = '写后 SHA256 不一致：' + posix(w.path); break }
+        }
+      }
+      if (failed) {
+        rollbackStarter()
+        base.createdDirs = created
+        base.starterStatus = 'broken'
+        base.starterDetail = failed
+        return Object.assign(base, { ok: false, detail: '开局包写入失败（已回滚本轮开局包改动）：' + failed })
+      }
+      starterNote = '；开局包已写入 ' + createdStarterFiles.length + ' 个文件、' + createdStarterDirs.length + ' 个目录（' + starter.packDir + '）'
+    }
+  }
+
+  base.createdDirs = created.concat(createdStarterDirs)
+  base.writtenFiles = createdStarterFiles.map((p) => posix(p))
+  base.backups = starterBackups.map((b) => ({ path: posix(b.path), backup: b.backup ? posix(b.backup) : '' }))
+  base.wroteAny = base.createdDirs.length > 0 || base.writtenFiles.length > 0
+  base.bytesWritten = starterReady ? sBytes : 0
   return Object.assign(base, {
     ok: true,
-    createdDirs: created,
-    wroteAny: created.length > 0,
-    detail: '已创建 ' + created.length + ' 个缺失目录；已存在的 ' + existsCount + ' 个跳过',
+    detail: '已创建 ' + created.length + ' 个缺失目录；已存在的 ' + existsCount + ' 个跳过' + starterNote,
   })
 }
 
@@ -2354,6 +2464,42 @@ export const WORK_SECRETARY_FILE = '工作秘书.md'
 /** 第四条【技能库】的预留占位正文（执行后由集成体生成摘要） */
 export const SKILL_LIBRARY_STUB = '【技能库】（待生成）随包技能、工作区技能与已装插件的清单及同步状态；一键配置执行后生成摘要。'
 
+// ── 开局包（本机写入包）常量 ──
+//
+// 作用：安装器**找不到该写的位置**（存储根未配置 / 两个目录被单独指定）或**某个随包源读不到**时，
+// 不再静默判「已是最新」，而是把「该写的内容」原样落到 `<存储根>/开局/`，并在项目记忆里挂一条待办，
+// 同时生成一份机器可读的核查清单（`后置优化包/清单.json`）。
+//
+// 纪律：并入现有 dirs 步（BASEDECK_ITEMS 顺序与下标一字未动）；只补缺失、不覆盖；
+// 缺源 / 存储根反推不出 → 显式 broken + 可读原因；清单里只用占位符，绝不写本机绝对路径。
+
+/** 包根目录名（<存储根>/开局/） */
+export const STARTER_DIR_NAME = '开局'
+/** 包内子目录名（开局/后置优化包/） */
+export const STARTER_PACK_DIR_NAME = '后置优化包'
+/** 机器可读核查清单文件名 */
+export const STARTER_MANIFEST_FILE = '清单.json'
+/** 包内使用说明文件名（源：defaults/starter-readme.zh-CN.md） */
+export const STARTER_README_FILE = '怎么用.md'
+/** 包内指令层标记块文件名 */
+export const STARTER_AGENTS_FILE = 'AGENTS.md'
+/** 包内三个分区目录名 */
+export const STARTER_SRC_MEMORY = '记忆库'
+export const STARTER_SRC_VAULT = '知识库'
+export const STARTER_SRC_SKILLS = '技能'
+/** 清单 version 字段 */
+export const STARTER_MANIFEST_VERSION = '1.0.0'
+/** block 比对的目标标记块 id */
+export const STARTER_BLOCK_ID = 'wps'
+/** 清单**只允许**出现这 4 个占位符（绝不写本机绝对路径） */
+export const STARTER_PLACEHOLDERS = ['workspace', 'memoryDir', 'obsidianDir', 'backupDir']
+/** 使用者确认「差异保留」的名单文件名（放在包根：<存储根>/开局/confirmed.json） */
+export const STARTER_CONFIRMED_FILE = 'confirmed.json'
+/** 随包使用说明源文件名（模块 defaults/，只读引用、不改内容） */
+export const STARTER_README_SOURCE_FILE = 'starter-readme.zh-CN.md'
+/** 项目记忆里的「本机写入未完成」待办条目标题（与【待办·开局】同为 tag=关键，保证每轮必现） */
+export const STARTER_MEMORY_TITLE = '【待写入·本机】'
+
 /** 知识库根下的受管目录（不当作业务模块，也不重复登记） */
 export const VAULT_MANAGED_DIRS = ['00_全局记忆', '工具']
 
@@ -2457,8 +2603,12 @@ export function memoryTopSegmentInVault(memoryDir, vaultDir) {
 /** .obsidian 最小配置（只放一个中性键；使用者已有配置一律不覆盖） */
 export const VAULT_APP_JSON_TEXT = '{\n  "alwaysUpdateLinks": true\n}\n'
 
-/** 条目标题前缀（幂等判定用：已有同前缀条目即跳过，绝不重复追加） */
-export const WORK_SECRETARY_TITLES = ['【使用说明】', '【安装说明】', '【待办·开局】', '【技能库】']
+/**
+ * 条目标题前缀（幂等判定用：已有同前缀条目即跳过，绝不重复追加）。
+ * 第五项【待写入·本机】是「开局包待办」：只在检测到本机写入未完成时才追加（见 workSecretarySpecs）；
+ * **追加在末尾**，既有四处 [0]~[3] 的引用与顺序不受影响。
+ */
+export const WORK_SECRETARY_TITLES = ['【使用说明】', '【安装说明】', '【待办·开局】', '【技能库】', '【待写入·本机】']
 
 // ── 记忆条目小工具（口径与 dsh-work-memory 的 store.js 一致） ──
 
@@ -2609,14 +2759,10 @@ function planMemoryDeck(ctx) {
       const projectText = projectRaw ? projectRaw.text : ''
       const existing = projectRaw ? parseMemoryEntries(projectText) : []
       const bodies = existing.map((e) => memoryEntryBody(e))
-      const useText = readTextOf(join(ctx.moduleDir, 'defaults', 'use.zh-CN.md'))
-      const installText = readTextOf(join(ctx.moduleDir, 'defaults', 'install.zh-CN.md'))
-      const wanted = [
-        { title: WORK_SECRETARY_TITLES[0], content: '【使用说明】\n' + (useText || '（随包说明缺失：请重装集成体）'), tag: '常规' },
-        { title: WORK_SECRETARY_TITLES[1], content: '【安装说明】\n' + (installText || '（随包说明缺失：请重装集成体）'), tag: '常规' },
-        { title: WORK_SECRETARY_TITLES[2], content: '【待办·开局】\n' + STARTER_TODOS.join('\n'), tag: '关键' },
-        { title: WORK_SECRETARY_TITLES[3], content: SKILL_LIBRARY_STUB, tag: '常规' },
-      ]
+      // 第五段【待写入·本机】只在「检测到本机写入未完成」时追加（tag=关键，与【待办·开局】一致，保证每轮必现）；
+      // 只补缺失、不覆盖：已有同标题条目即跳过（见下面的 presentTitles 分支）。
+      const starterState = starterPending(ctx)
+      const wanted = workSecretarySpecs(ctx, { includeStarter: starterState.pending })
       const missingEntries = []
       const presentTitles = []
       for (const w of wanted) {
@@ -2624,7 +2770,7 @@ function planMemoryDeck(ctx) {
         missingEntries.push(makeMemoryEntry(w.content, { id: memoryEntryId('wsmd:' + w.title), now: ctx.now, tag: w.tag }))
       }
       if (missingEntries.length === 0) {
-        files.push({ name: 'PROJECTS/' + WORK_SECRETARY_FILE, path: posix(projectFile), state: 'exists', detail: '四条（使用说明 / 安装说明 / 待办·开局 / 技能库）都已存在，跳过' })
+        files.push({ name: 'PROJECTS/' + WORK_SECRETARY_FILE, path: posix(projectFile), state: 'exists', detail: '全部 ' + wanted.length + ' 条（' + wanted.map((w) => w.title).join(' / ') + '）都已存在，跳过' })
       } else {
         const content = appendEntriesText(projectText, missingEntries)
         writes.push({ name: 'PROJECTS/' + WORK_SECRETARY_FILE, path: projectFile, mode: projectRaw ? 'append' : 'create', hadFile: Boolean(projectRaw), content: content, bytes: Buffer.byteLength(content, 'utf8') })
@@ -2846,6 +2992,481 @@ function planKnowledgeDeck(ctx) {
     },
     internal: { dirs: dirs, writes: writes, missingDirs: missingDirs.map((d) => d.dir) },
   })
+}
+
+// ═════════════════ 1.1.4 新增：开局包（本机写入包）+ 核查回路 ═════════════════
+//
+// 背景：旧逻辑在「找不到该写的源 / 该写的位置」时可能**静默判成「已是最新」**。
+// 新方案：把「该写的内容」**原样落到** <存储根>/开局/，同时在项目记忆里挂一条待办，
+// 并给出一份机器可读的核查清单（后置优化包/清单.json）。
+//
+// 纪律（逐条与使用者对齐）：
+//   1. 并入现有 dirs 步 —— **不新增第九项**，BASEDECK_ITEMS 的顺序与下标一字未动；
+//   2. 只补缺失、不覆盖：包内文件已存在即跳过，不比对不重写（二次执行零字节）；
+//   3. 存储根由 inferRootDir(memoryDir, obsidianDir) 反推：**推不出就不猜**，显式 broken + 可读原因；
+//   4. 任一随包源读不到 → 整包 broken（绝不静默判「已是最新」）；
+//   5. 清单里只用 4 个占位符（{{workspace}} / {{memoryDir}} / {{obsidianDir}} / {{backupDir}}），
+//      绝不写本机绝对路径；比对口径只针对清单里那几个文件 / 那几段，**绝不拿整目录比**。
+
+/** 开局包所在目录（存储根反推不出时返回空串，绝不猜） */
+export function starterPackDirOf(ctx) {
+  const root = inferRootDir(ctx.memoryDir, ctx.obsidianDir)
+  if (!root) return ''
+  return posix(join(normalizePath(root) || root, STARTER_DIR_NAME))
+}
+
+/**
+ * 清单占位符 → 实际目录。
+ * 任一占位符对应的目录未配置（空串）→ 整条目标不可解析，返回空串（**不拼出半个路径**）。
+ */
+export function resolveStarterDst(dst, ctx) {
+  const map = {
+    workspace: ctx.workspace || '',
+    memoryDir: ctx.memoryDir || '',
+    obsidianDir: ctx.obsidianDir || '',
+    backupDir: ctx.backupDir || '',
+  }
+  let bad = false
+  const out = String(dst == null ? '' : dst).replace(/\{\{([A-Za-z0-9_]+)\}\}/g, (whole, key) => {
+    if (!Object.prototype.hasOwnProperty.call(map, key)) return whole
+    if (!map[key]) { bad = true; return whole }
+    return map[key]
+  })
+  return bad ? '' : posix(out)
+}
+
+/**
+ * PROJECTS/工作秘书.md 的条目清单（四段固定 + 可选的第五段「待写入·本机」）。
+ * **唯一真相源**：记忆体结构生成器与开局包都用它，杜绝两套写法。
+ * @param {object} ctx resolveDeckContext 的产物
+ * @param {{includeStarter?:boolean, packDir?:string}} [options] includeStarter=true 时追加开局包待办
+ */
+export function workSecretarySpecs(ctx, options = {}) {
+  const useText = readTextOf(join(ctx.moduleDir, 'defaults', 'use.zh-CN.md'))
+  const installText = readTextOf(join(ctx.moduleDir, 'defaults', 'install.zh-CN.md'))
+  const list = [
+    { title: WORK_SECRETARY_TITLES[0], content: '【使用说明】\n' + (useText || '（随包说明缺失：请重装集成体）'), tag: '常规' },
+    { title: WORK_SECRETARY_TITLES[1], content: '【安装说明】\n' + (installText || '（随包说明缺失：请重装集成体）'), tag: '常规' },
+    { title: WORK_SECRETARY_TITLES[2], content: '【待办·开局】\n' + STARTER_TODOS.join('\n'), tag: '关键' },
+    { title: WORK_SECRETARY_TITLES[3], content: SKILL_LIBRARY_STUB, tag: '常规' },
+  ]
+  if (options.includeStarter) {
+    list.push({ title: STARTER_MEMORY_TITLE, content: starterTodoContent(ctx, options.packDir), tag: '关键' })
+  }
+  return list
+}
+
+/** 生成 PROJECTS/工作秘书.md 全文（条目 id 与 memoryDeck 补写用同一套规则，保证逐字节可比） */
+export function workSecretaryText(ctx, options = {}) {
+  const specs = workSecretarySpecs(ctx, options)
+  const entries = specs.map((w) => makeMemoryEntry(w.content, { id: memoryEntryId('wsmd:' + w.title), now: ctx.now, tag: w.tag }))
+  return serializeMemoryEntries(entries)
+}
+
+/** 第五段待办的正文（说明「本机写入未完成」并含一句**怎么核查**，指向包内清单.json） */
+export function starterTodoContent(ctx, packDir) {
+  const pack = packDir || starterPackDirOf(ctx)
+  const where = pack ? posix(pack) : '<存储根目录>/开局'
+  const manifest = where + '/' + STARTER_PACK_DIR_NAME + '/' + STARTER_MANIFEST_FILE
+  return STARTER_MEMORY_TITLE
+    + '检测到本机写入未完成：安装器未能把「开局」包里的内容全部写到本机目标位置，'
+    + '内容原件已落在 ' + where + '/。请尽快执行：对助手说「按 开局/后置优化包/清单.json 逐项写入」，'
+    + '或在「设置 → 工作秘书 → 核心配置」点「保存配置并开始」重跑一次。'
+    + '怎么核查：打开 ' + manifest + '，逐项对照 src → dst 与比对方式'
+    + '（file 逐字节 / block 只比 wps 标记块区间 / entry 与 entry-set 只比对应条目 / dir 存在即可）；'
+    + '全部通过后本条可摘除。'
+}
+
+/**
+ * 生成「本机写入包（开局包）」计划（**只读**）。
+ * @returns {{state:'nothing'|'broken'|'ready'|'up_to_date', broken:string, root:string, packDir:string,
+ *            dirs:object[], writes:object[], files:object[], items:object[], manifest:object|null,
+ *            manifestText:string, skills:string[]}}
+ */
+export function planStarterPack(ctx) {
+  const plan = {
+    state: 'nothing',
+    broken: '',
+    root: '',
+    packDir: '',
+    dirs: [],
+    writes: [],
+    files: [],
+    items: [],
+    manifest: null,
+    manifestText: '',
+    skills: [],
+  }
+  const root = inferRootDir(ctx.memoryDir, ctx.obsidianDir)
+  if (!root) {
+    const bothConfigured = Boolean(ctx.memoryDir && ctx.obsidianDir)
+    plan.state = bothConfigured ? 'broken' : 'nothing'
+    plan.broken = bothConfigured
+      ? '存储根目录未能反推（记忆库与知识库不在同一父目录下的 ' + ROOT_SUBDIR_MEMORY + ' / ' + ROOT_SUBDIR_VAULT + '）：开局包未生成，请在「核心配置」里填写存储根目录后重跑'
+      : '记忆库目录或知识库目录尚未配置，存储根未解析：开局包未生成'
+    return plan
+  }
+  const rootAbs = normalizePath(root) || root
+  const packAbs = join(rootAbs, STARTER_DIR_NAME)
+  plan.root = posix(rootAbs)
+  plan.packDir = posix(packAbs)
+
+  const specs = []
+  const missingSources = []
+
+  // ① 后置优化包/怎么用.md ← 随包说明（只读引用，不改内容）
+  const readmeRaw = readFileRaw(join(ctx.moduleDir, 'defaults', STARTER_README_SOURCE_FILE))
+  if (!readmeRaw) missingSources.push('找不到随包说明 defaults/' + STARTER_README_SOURCE_FILE)
+  else if (readmeRaw.bom) missingSources.push('随包说明 defaults/' + STARTER_README_SOURCE_FILE + ' 带 ' + readmeRaw.bom + ' BOM')
+  else specs.push({ rel: STARTER_PACK_DIR_NAME + '/' + STARTER_README_FILE, content: readmeRaw.text })
+
+  // ② 后置优化包/AGENTS.md ← 指令层标记块（与写进工作区的那一段逐字节一致）
+  const template = loadAgentsTemplate(ctx.templateFile, {
+    generatorVersion: ctx.generatorVersion, now: ctx.now, moduleDir: ctx.moduleDir,
+  })
+  if (!template.ok) missingSources.push(template.error)
+  else specs.push({ rel: STARTER_PACK_DIR_NAME + '/' + STARTER_AGENTS_FILE, content: buildBlockText(template.meta, template.body, '\n') })
+
+  // ③ 记忆库/MEMORY.md ←「使用者身份」占位条目 + 随包种子条目（复用既有生成逻辑，不另写一套）
+  const seed = loadMemorySeed(ctx.seedFile)
+  if (!seed.ok) missingSources.push(seed.error)
+  else {
+    const entries = [makeMemoryEntry(IDENTITY_PREFIX + IDENTITY_PLACEHOLDER_TEXT, { id: memoryEntryId('identity-placeholder'), now: ctx.now, tag: '关键' })]
+    for (const c of seed.entries) entries.push(makeSeedEntry(c, { now: ctx.now }))
+    specs.push({ rel: STARTER_SRC_MEMORY + '/MEMORY.md', content: serializeMemoryEntries(entries) })
+  }
+
+  // ④ 记忆库/USER.md（空骨架）与 ⑤ GRAPH.json（关联图骨架）
+  specs.push({ rel: STARTER_SRC_MEMORY + '/USER.md', content: '' })
+  specs.push({ rel: STARTER_SRC_MEMORY + '/GRAPH.json', content: JSON.stringify({ entities: [], edges: [] }, null, 2) })
+
+  // ⑥ 记忆库/PROJECTS/工作秘书.md（五段：四段固定 +【待写入·本机】待办）
+  specs.push({ rel: STARTER_SRC_MEMORY + '/PROJECTS/' + WORK_SECRETARY_FILE, content: workSecretaryText(ctx, { includeStarter: true, packDir: plan.packDir }) })
+
+  // ⑦ 知识库（主页 / 工具总览 / .obsidian / 技巧正文）
+  specs.push({ rel: STARTER_SRC_VAULT + '/' + VAULT_HOME_FILE, content: buildVaultHomeText([]) })
+  specs.push({ rel: STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_OVERVIEW_FILE, content: buildToolOverviewText() })
+  specs.push({ rel: STARTER_SRC_VAULT + '/' + VAULT_OBSIDIAN_DIR_NAME + '/' + VAULT_APP_JSON_FILE, content: VAULT_APP_JSON_TEXT })
+  const tipsRaw = readFileRaw(join(ctx.moduleDir, 'defaults', VAULT_TIPS_SOURCE_FILE))
+  if (!tipsRaw) missingSources.push('找不到随包技巧正文 defaults/' + VAULT_TIPS_SOURCE_FILE)
+  else if (tipsRaw.bom) missingSources.push('随包技巧正文 defaults/' + VAULT_TIPS_SOURCE_FILE + ' 带 ' + tipsRaw.bom + ' BOM')
+  else specs.push({ rel: STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[0] + '/' + VAULT_TOOL_TIPS_FILE, content: tipsRaw.text })
+
+  // ⑧ 技能（逐个展开；源读不到即整包 broken）
+  let skills = []
+  try {
+    skills = readdirSync(ctx.skillsSourceDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort()
+  } catch (e) { skills = [] }
+  if (!ctx.skillsSourceDir || skills.length === 0) {
+    missingSources.push('找不到技能源（' + posix(ctx.skillsSourceDir || '') + '）：集成体仓库未解析或模块缺失')
+  }
+  for (const name of skills) {
+    const raw = readFileRaw(join(ctx.skillsSourceDir, name, 'SKILL.md'))
+    if (!raw) { missingSources.push('找不到技能源文件 ' + name + '/SKILL.md'); continue }
+    if (raw.bom) { missingSources.push('技能源 ' + name + '/SKILL.md 带 ' + raw.bom + ' BOM'); continue }
+    specs.push({ rel: STARTER_SRC_SKILLS + '/' + name + '/SKILL.md', content: raw.text })
+  }
+  plan.skills = skills
+
+  // 机器可读核查清单（**运行时生成**，不是模板文件；清单自身不进 items）
+  const identityTitle = IDENTITY_PREFIX.replace(/[：:]\s*$/, '')
+  const items = []
+  items.push({ id: 'agentsMd', src: STARTER_PACK_DIR_NAME + '/' + STARTER_AGENTS_FILE, dst: '{{workspace}}/AGENTS.md', mode: 'block', block: STARTER_BLOCK_ID })
+  items.push({ id: 'mem.identity', src: STARTER_SRC_MEMORY + '/MEMORY.md', dst: '{{memoryDir}}/MEMORY.md', mode: 'entry', title: identityTitle })
+  // USER.md / GRAPH.json 用 dir 口径（**存在即可**）：目标是使用者内容载体，已有内容不该判成「不一致」。
+  items.push({ id: 'mem.user', src: STARTER_SRC_MEMORY + '/USER.md', dst: '{{memoryDir}}/USER.md', mode: 'dir' })
+  items.push({ id: 'mem.graph', src: STARTER_SRC_MEMORY + '/GRAPH.json', dst: '{{memoryDir}}/GRAPH.json', mode: 'dir' })
+  items.push({ id: 'mem.projects', dst: '{{memoryDir}}/PROJECTS', mode: 'dir' })
+  items.push({ id: 'mem.daily', dst: '{{memoryDir}}/DAILY', mode: 'dir' })
+  items.push({ id: 'mem.archive', dst: '{{memoryDir}}/ARCHIVE', mode: 'dir' })
+  items.push({ id: 'mem.worksec', src: STARTER_SRC_MEMORY + '/PROJECTS/' + WORK_SECRETARY_FILE, dst: '{{memoryDir}}/PROJECTS/' + WORK_SECRETARY_FILE, mode: 'entry-set', titles: WORK_SECRETARY_TITLES.slice() })
+  items.push({ id: 'vault.home', src: STARTER_SRC_VAULT + '/' + VAULT_HOME_FILE, dst: '{{obsidianDir}}/' + VAULT_HOME_FILE, mode: 'file' })
+  items.push({ id: 'vault.tools', src: STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_OVERVIEW_FILE, dst: '{{obsidianDir}}/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_OVERVIEW_FILE, mode: 'file' })
+  items.push({ id: 'vault.appjson', src: STARTER_SRC_VAULT + '/' + VAULT_OBSIDIAN_DIR_NAME + '/' + VAULT_APP_JSON_FILE, dst: '{{obsidianDir}}/' + VAULT_OBSIDIAN_DIR_NAME + '/' + VAULT_APP_JSON_FILE, mode: 'file' })
+  items.push({ id: 'vault.tips', src: STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[0] + '/' + VAULT_TOOL_TIPS_FILE, dst: '{{obsidianDir}}/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[0] + '/' + VAULT_TOOL_TIPS_FILE, mode: 'file' })
+  items.push({ id: 'vault.mirror', dst: '{{obsidianDir}}/' + VAULT_MIRROR_DIR_NAME, mode: 'dir' })
+  items.push({ id: 'vault.tools.dir', dst: '{{obsidianDir}}/' + VAULT_TOOLS_DIR_NAME, mode: 'dir' })
+  const toolDirKeys = ['vault.tools.skill', 'vault.tools.script', 'vault.tools.mcp']
+  for (let i = 0; i < VAULT_TOOL_SUBDIRS.length; i++) {
+    items.push({ id: toolDirKeys[i] || ('vault.tools.' + i), dst: '{{obsidianDir}}/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[i], mode: 'dir' })
+  }
+  for (const name of skills) {
+    items.push({ id: 'skill.' + name, src: STARTER_SRC_SKILLS + '/' + name + '/SKILL.md', dst: '{{workspace}}/.dsh/' + SKILLS_DIR_NAME + '/' + name + '/SKILL.md', mode: 'file' })
+  }
+  const manifest = { version: STARTER_MANIFEST_VERSION, generatedAt: nowValue(ctx.now).toISOString(), items: items }
+  const manifestText = JSON.stringify(manifest, null, 2) + '\n'
+  plan.items = items
+  plan.manifest = manifest
+  plan.manifestText = manifestText
+
+  if (missingSources.length > 0) {
+    plan.state = 'broken'
+    plan.broken = missingSources.join('；')
+    return plan
+  }
+
+  specs.push({ rel: STARTER_PACK_DIR_NAME + '/' + STARTER_MANIFEST_FILE, content: manifestText })
+
+  // 骨架目录（只建缺失的；空目录也要建出来）
+  const dirRels = [
+    STARTER_PACK_DIR_NAME,
+    STARTER_SRC_MEMORY,
+    STARTER_SRC_MEMORY + '/PROJECTS',
+    STARTER_SRC_MEMORY + '/DAILY',
+    STARTER_SRC_MEMORY + '/ARCHIVE',
+    STARTER_SRC_VAULT,
+    STARTER_SRC_VAULT + '/' + VAULT_MIRROR_DIR_NAME,
+    STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME,
+    STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[0],
+    STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[1],
+    STARTER_SRC_VAULT + '/' + VAULT_TOOLS_DIR_NAME + '/' + VAULT_TOOL_SUBDIRS[2],
+    STARTER_SRC_VAULT + '/' + VAULT_OBSIDIAN_DIR_NAME,
+    STARTER_SRC_SKILLS,
+  ]
+  for (const name of skills) dirRels.push(STARTER_SRC_SKILLS + '/' + name)
+  plan.dirs = dirRels.map((rel) => {
+    const abs = join(packAbs, ...rel.split('/'))
+    let exists = false
+    try { exists = statSync(abs).isDirectory() } catch (e) { exists = false }
+    return { key: rel, dir: posix(abs), state: exists ? 'exists' : 'missing', detail: exists ? '已存在，跳过' : '缺失，将创建' }
+  })
+
+  // 包内文件：已存在即跳过（只补缺失、不覆盖）
+  for (const s of specs) {
+    const abs = join(packAbs, ...s.rel.split('/'))
+    let st = null
+    try { st = statSync(abs) } catch (e) { st = null }
+    if (st && !st.isFile()) {
+      plan.state = 'broken'
+      plan.broken = '包内位置被同名目录占用：' + posix(abs)
+      plan.dirs = []
+      plan.files = []
+      plan.writes = []
+      return plan
+    }
+    if (st) {
+      plan.files.push({ name: s.rel, path: posix(abs), state: 'exists', detail: '已存在，跳过（只补缺失，不覆盖）' })
+      continue
+    }
+    plan.writes.push({ name: s.rel, path: abs, mode: 'create', hadFile: false, content: s.content, bytes: Buffer.byteLength(s.content, 'utf8') })
+    plan.files.push({ name: s.rel, path: posix(abs), state: 'create', detail: '将写入' })
+  }
+
+  const missingDirs = plan.dirs.filter((d) => d.state === 'missing').length
+  plan.state = (plan.writes.length > 0 || missingDirs > 0) ? 'ready' : 'up_to_date'
+  return plan
+}
+
+/** 取一条记忆条目里以某标题开头的**正文**（没有则空串） */
+export function starterEntryBody(text, title) {
+  const entries = parseMemoryEntries(text)
+  for (const e of entries) {
+    const body = memoryEntryBody(e)
+    if (title && body.indexOf(title) === 0) return body
+  }
+  return ''
+}
+
+/** 读包根下的 confirmed.json（使用者已确认「差异保留」的项 id），返回 id 集合 */
+export function starterConfirmedSet(packAbs, options = {}) {
+  const set = {}
+  const injected = options && Array.isArray(options.confirmed) ? options.confirmed : []
+  for (const id of injected) if (typeof id === 'string' && id) set[id] = true
+  const raw = readFileRaw(join(packAbs, STARTER_CONFIRMED_FILE))
+  if (raw && !raw.bom) {
+    try {
+      const data = JSON.parse(raw.text)
+      const list = Array.isArray(data) ? data : (data && Array.isArray(data.ids) ? data.ids : [])
+      for (const id of list) if (typeof id === 'string' && id) set[id] = true
+    } catch (e) { /* 确认名单坏了不影响核查主流程 */ }
+  }
+  return set
+}
+
+/** 逐项核查（只读；返回 {id, mode, status, detail, ...}） */
+function verifyStarterItem(ctx, packAbs, spec, confirmed) {
+  const id = spec && typeof spec.id === 'string' ? spec.id : ''
+  const mode = spec && typeof spec.mode === 'string' ? spec.mode : ''
+  const srcRel = spec && typeof spec.src === 'string' ? spec.src : ''
+  const dstTpl = spec && typeof spec.dst === 'string' ? spec.dst : ''
+  const row = { id: id, mode: mode, src: srcRel, dst: dstTpl, dstPath: '', status: 'missing', detail: '', titles: [] }
+  const dst = resolveStarterDst(dstTpl, ctx)
+  row.dstPath = dst
+  if (!dst) {
+    row.status = 'missing'
+    row.detail = '目标位置未解析（占位符对应的目录尚未配置）：' + dstTpl
+    return row
+  }
+  const srcFile = srcRel ? join(packAbs, ...srcRel.split('/')) : ''
+  const srcStrict = srcFile ? readFileStrict(srcFile) : { exists: false, readable: false, code: '', error: '' }
+  const srcRaw = srcStrict.readable ? { text: srcStrict.text, buffer: srcStrict.buffer, bom: srcStrict.bom } : null
+
+  if (mode === 'dir') {
+    let st = null
+    try { st = statSync(dst) } catch (e) { st = null }
+    if (st) { row.status = 'match'; row.detail = '目标已存在（存在即可）' }
+    else { row.status = 'missing'; row.detail = '目标不存在，需要写入' }
+    return row
+  }
+  if (srcFile && !srcRaw) {
+    row.status = 'broken'
+    row.detail = srcStrict.exists
+      ? ('包内源文件存在但读不到（' + (srcStrict.code || 'EACCES') + '）：' + srcRel)
+      : ('包内源文件读不到（缺失）：' + srcRel)
+    return row
+  }
+  if (srcRaw && srcRaw.bom) {
+    row.status = 'broken'
+    row.detail = '包内源文件带 ' + srcRaw.bom + ' BOM，拒绝参与比对：' + srcRel
+    return row
+  }
+  const dstRaw = readFileRaw(dst)
+
+  if (mode === 'file') {
+    if (!dstRaw) { row.status = 'missing'; row.detail = '目标不存在，需要写入'; return row }
+    if (sha256Text(srcRaw.buffer) === sha256Text(dstRaw.buffer)) { row.status = 'match'; row.detail = '逐字节一致' }
+    else { row.status = 'differs'; row.detail = '目标已存在但内容不同（不覆盖，仅报告）' }
+    return row
+  }
+  if (mode === 'block') {
+    const m1 = RE_BLOCK_FULL.exec(srcRaw.text)
+    if (!m1) { row.status = 'broken'; row.detail = '包内源文件里没有完整的 wps 标记块：' + srcRel; return row }
+    if (!dstRaw) { row.status = 'missing'; row.detail = '目标不存在，需要写入'; return row }
+    const m2 = RE_BLOCK_FULL.exec(dstRaw.text)
+    if (!m2) { row.status = 'differs'; row.detail = '目标已存在但没有 wps 标记块（只比块区间，不动你的其它内容）'; return row }
+    if (hashBlockBody(m1[2]) === hashBlockBody(m2[2])) { row.status = 'match'; row.detail = '标记块区间一致' }
+    else { row.status = 'differs'; row.detail = '标记块区间内容不同（不覆盖，仅报告）' }
+    return row
+  }
+  if (mode === 'entry' || mode === 'entry-set') {
+    const titles = mode === 'entry' ? [String(spec.title == null ? '' : spec.title)] : (Array.isArray(spec.titles) ? spec.titles : [])
+    if (titles.length === 0 || (mode === 'entry' && !titles[0])) {
+      row.status = 'broken'
+      row.detail = '清单项缺少比对标题：' + id
+      return row
+    }
+    const rows = []
+    let missCount = 0
+    let diffCount = 0
+    let brokenCount = 0
+    for (const t of titles) {
+      const sb = starterEntryBody(srcRaw.text, t)
+      if (!sb) { rows.push({ title: t, state: 'broken' }); brokenCount += 1; continue }
+      if (!dstRaw) { rows.push({ title: t, state: 'missing' }); missCount += 1; continue }
+      const db = starterEntryBody(dstRaw.text, t)
+      if (!db) { rows.push({ title: t, state: 'missing' }); missCount += 1; continue }
+      if (db === sb) { rows.push({ title: t, state: 'match' }); continue }
+      rows.push({ title: t, state: 'differs' }); diffCount += 1
+    }
+    row.titles = rows
+    if (brokenCount > 0) { row.status = 'broken'; row.detail = '包内源缺少 ' + brokenCount + ' 个应比对条目：' + srcRel }
+    else if (!dstRaw) { row.status = 'missing'; row.detail = '目标记忆文件不存在，需要写入' }
+    else if (missCount > 0) { row.status = 'missing'; row.detail = '目标里缺 ' + missCount + ' 条（' + rows.filter((x) => x.state === 'missing').map((x) => x.title).join(' ') + '）' }
+    else if (diffCount > 0) { row.status = 'differs'; row.detail = '目标里 ' + diffCount + ' 条与包内不同（不覆盖，仅报告）：' + rows.filter((x) => x.state === 'differs').map((x) => x.title).join(' ') }
+    else { row.status = 'match'; row.detail = titles.length + ' 条全部一致' }
+    if (row.status === 'differs' && confirmed && confirmed[id]) {
+      row.status = 'kept'
+      row.detail = row.detail + '；差异已确认保留（' + STARTER_CONFIRMED_FILE + '）'
+    }
+    return row
+  }
+  row.status = 'broken'
+  row.detail = '清单项的 mode 不在允许范围内：' + mode
+  return row
+}
+
+/**
+ * **只读核查回路**：按 <存储根>/开局/后置优化包/清单.json 逐项判 missing / match / differs / broken。
+ * 汇总口径：全部 match（或 differs 已被 confirmed 保留）→ pending=false，即待办可摘除。
+ * @returns {{ok:boolean, error:string, root:string, packDir:string, manifestFile:string,
+ *            items:object[], summary:object, pending:boolean, removable:boolean, confirmed:string[]}}
+ */
+export function verifyStarterPack(ctx, options = {}) {
+  const out = {
+    ok: false,
+    error: '',
+    root: '',
+    packDir: '',
+    manifestFile: '',
+    items: [],
+    summary: { total: 0, match: 0, missing: 0, differs: 0, kept: 0, broken: 0 },
+    pending: true,
+    removable: false,
+    confirmed: [],
+  }
+  const root = inferRootDir(ctx.memoryDir, ctx.obsidianDir)
+  if (!root) {
+    const bothConfigured = Boolean(ctx.memoryDir && ctx.obsidianDir)
+    out.error = bothConfigured
+      ? '存储根目录未能反推（记忆库与知识库不在同一父目录下的 ' + ROOT_SUBDIR_MEMORY + ' / ' + ROOT_SUBDIR_VAULT + '）'
+      : '记忆库目录或知识库目录尚未配置，存储根未解析'
+    return out
+  }
+  const rootAbs = normalizePath(root) || root
+  const packAbs = join(rootAbs, STARTER_DIR_NAME)
+  const manifestFile = join(packAbs, STARTER_PACK_DIR_NAME, STARTER_MANIFEST_FILE)
+  out.root = posix(rootAbs)
+  out.packDir = posix(packAbs)
+  out.manifestFile = posix(manifestFile)
+
+  const strict = readFileStrict(manifestFile)
+  if (!strict.exists) {
+    out.error = '找不到核查清单：' + posix(manifestFile) + '（开局包尚未生成或已被移动）'
+    return out
+  }
+  if (!strict.readable) {
+    out.error = '核查清单存在但读不到（' + (strict.code || 'EACCES') + '）：' + posix(manifestFile)
+    return out
+  }
+  if (strict.bom) {
+    out.error = '核查清单带 ' + strict.bom + ' BOM，已拒绝解析：' + posix(manifestFile)
+    return out
+  }
+  let manifest = null
+  try { manifest = JSON.parse(strict.text) } catch (e) {
+    out.error = '核查清单不是合法 JSON：' + String(e && e.message ? e.message : e)
+    return out
+  }
+  const list = manifest && Array.isArray(manifest.items) ? manifest.items : null
+  if (!list) {
+    out.error = '核查清单缺少 items 数组：' + posix(manifestFile)
+    return out
+  }
+  const confirmedSet = starterConfirmedSet(packAbs, options)
+  out.confirmed = Object.keys(confirmedSet).sort()
+  for (const spec of list) out.items.push(verifyStarterItem(ctx, packAbs, spec || {}, confirmedSet))
+  for (const it of out.items) {
+    out.summary.total += 1
+    if (it.status === 'match') out.summary.match += 1
+    else if (it.status === 'missing') out.summary.missing += 1
+    else if (it.status === 'differs') out.summary.differs += 1
+    else if (it.status === 'kept') out.summary.kept += 1
+    else out.summary.broken += 1
+  }
+  out.ok = true
+  out.pending = (out.summary.missing + out.summary.differs + out.summary.broken) > 0
+  out.removable = !out.pending
+  return out
+}
+
+/** 项目记忆待办是否该挂（true = 本机写入尚未完成，需保留/追加【待写入·本机】） */
+export function starterPending(ctx, options = {}) {
+  const root = inferRootDir(ctx.memoryDir, ctx.obsidianDir)
+  if (!root) {
+    const bothConfigured = Boolean(ctx.memoryDir && ctx.obsidianDir)
+    return {
+      pending: true,
+      reason: bothConfigured
+        ? '存储根目录未能反推（两个目录不在同一父目录下的 ' + ROOT_SUBDIR_MEMORY + ' / ' + ROOT_SUBDIR_VAULT + '）'
+        : '记忆库目录或知识库目录尚未配置，开局包无法定位',
+    }
+  }
+  const v = verifyStarterPack(ctx, options)
+  if (!v.ok) return { pending: true, reason: v.error }
+  if (v.pending) {
+    return { pending: true, reason: '开局包核查未全部通过：缺失 ' + v.summary.missing + ' 项 / 内容不同 ' + v.summary.differs + ' 项 / 源不可用 ' + v.summary.broken + ' 项' }
+  }
+  return { pending: false, reason: '' }
 }
 
 // ── ⑥⑦ 共用写回器 ──

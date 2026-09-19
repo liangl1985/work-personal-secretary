@@ -143,7 +143,11 @@ const res = applyBaseDeck(['memoryDeck'], {
 ok(res.ok === true, 'memoryDeck 在夹具里真写成功')
 const projectText = readFileSync(join(MEM, 'PROJECTS', '工作秘书.md'), 'utf8')
 const entries = parseEntries(projectText)
-ok(entries.length === 4, '工作秘书.md 共 4 条')
+// 2026-09 起：第五段【待写入·本机】是「开局包待办」——本夹具未按「存储根 + memory-data/obsidian-data」
+// 模型配置两个目录，故待办成立，条目数为 5；前四条的顺序与正文不受影响（仍逐字校验）。
+ok(entries.length === 5, '工作秘书.md 共 5 条（第 5 条 = 开局包待办【待写入·本机】）')
+ok(entryBody(entries[4]).indexOf('【待写入·本机】') === 0, '第 5 条是开局包待办（含「怎么核查」指向包内 清单.json）')
+ok(entryBody(entries[4]).indexOf('清单.json') > 0, '第 5 条写明核查入口（清单.json）')
 const bodyUse = entryBody(entries[0]).replace('【使用说明】\n', '')
 const bodyInstall = entryBody(entries[1]).replace('【安装说明】\n', '')
 // 条目读取时 parseEntries 会对整条 trim，末尾那一个换行不在正文里；其余部分必须逐字相等
