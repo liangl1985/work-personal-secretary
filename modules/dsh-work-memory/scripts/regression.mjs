@@ -576,6 +576,25 @@ try {
   r = await exec('memory_recall', { query: '待办', scope: 'all', limit: 5 })
   check('召回：scope=all 含项目待办', r.results.some((x) => x.entry.includes('甲项目待办条目')))
 
+  // 输出契约：返回值字段必须**全部**在工具自身 output schema 里声明。
+  // 宿主按 additionalProperties:false 校验返回值，未声明字段会让整次调用失败并返回
+  // "returned invalid output"（2026-09-19 修 scope=archive 分支漏声明 promoted/message 的同类问题）。
+  {
+    const undeclared = (name, value) => {
+      const t = byName[name]
+      const schema = (t && t.output && t.output.schema) || {}
+      if (schema.additionalProperties !== false) return []
+      const declared = Object.keys(schema.properties || {})
+      return Object.keys(value).filter((k) => !declared.includes(k))
+    }
+    r = await exec('memory_recall', { query: 'x', scope: 'archive', limit: 3 })
+    check('输出契约：recall(archive) 返回字段均在 output schema 声明内', undeclared('memory_recall', r).length === 0)
+    r = await exec('memory_recall', { query: '待办', scope: 'all', limit: 5 })
+    check('输出契约：recall(all) 返回字段均在 output schema 声明内', undeclared('memory_recall', r).length === 0)
+    r = await exec('memory_remember', { content: '输出契约：主代理写daily', tag: '常规', scope: 'daily' })
+    check('输出契约：remember 返回字段均在 output schema 声明内', undeclared('memory_remember', r).length === 0)
+  }
+
   rmSync(root, { recursive: true, force: true })
 } catch {
   console.log('  ⏭ 门控测试跳过（当前环境无法解析 @deepseek-ai/dsh-tools）')

@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 1.0.9 修订 — 2026-09-19（未升版本号 · recall 输出契约修复）
+
+- **修复**：`memory_recall(scope=archive)` 此前**无论有无命中都会被宿主拒绝** —— 返回对象里的 `promoted` / `message` 未在 `output.schema` 声明，而该 schema 是 `additionalProperties: false`，宿主校验直接报 `returned invalid output: "value.promoted" is not a declared property`，**冷归档检索对模型不可用**（转热的副作用仍在返回值之前照常执行）。
+- **改动**：`lib/tools.js` 的 recall `output.schema.properties` 补 `promoted`（integer）与 `message`（string）；**返回结构与运行行为不变**，仅补齐声明。
+- **回归**：`scripts/regression.mjs` 新增「输出契约」三条断言（返回值字段必须全部在自身 output schema 声明内，覆盖 recall(archive) / recall(all) / remember）——加断言时 recall(archive) 实测失败、补 schema 后通过，证明断言能捕获该类缺陷。该段与既有门控段同一前置（需可解析 `@deepseek-ai/dsh-tools`）。
+- **影响面**：仅 `lib/tools.js` 与回归脚本；**版本号不变（仍 1.0.9）**；安装到 profile 后需重启 DSH 生效。
+
 ## 1.0.9 — 2026-09-17（供集成体调用的镜像同步导出 · T5-4）
 
 - `lib/index.js` 新增 `export { syncMemoryToObsidian } from './backup.js'`：集成体（work-personal-secretary）在「一键配置」执行链收尾后要触发一次镜像同步（T5-4），这是给它用的**包入口导出**。本模块**自身的触发点不变**（仍是 remember / link / 冷召回转热三条写路径，见 `lib/tools.js:61`）。

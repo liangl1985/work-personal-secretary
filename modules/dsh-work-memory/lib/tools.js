@@ -321,6 +321,10 @@ export function createTools(deps) {
             ok: { type: 'boolean', required: true },
             count: { type: 'integer' },
             total: { type: 'integer' },
+            // 归档范围（scope=archive）专属：命中即转热的条数与结果说明。
+            // 必须在此声明：宿主按 additionalProperties:false 校验返回值，漏声明会让整次调用失败。
+            promoted: { type: 'integer' },
+            message: { type: 'string' },
             results: {
               type: 'array',
               items: {
