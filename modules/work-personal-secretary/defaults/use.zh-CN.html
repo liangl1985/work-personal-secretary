@@ -34,7 +34,7 @@ body{margin:0;padding:0;background:#f4f6f8}
 <ul><li>刚装好、想赶快用起来 → 看<strong>第一节</strong>和<strong>第三节</strong>。</li><li>想知道每个插件分别是干嘛的 → 看<strong>第四节</strong>（最长，也最值得看）。</li><li>想找某个功能在哪调 → 看<strong>第七节</strong>的对照表。</li><li>遇到问题了 → 看<strong>第八节</strong>。</li></ul>
 <h2>一、它是什么</h2>
 <p>一句话：它把五样常用能力装进 DSH，让你的助手替你干重复的活，你只管判断和决定。</p>
-<table><thead><tr><th>插件</th><th>它是干嘛的</th><th>你什么时候会用到</th></tr></thead><tbody><tr><td><strong>记忆库</strong></td><td>替你把偏好、决定、项目进展记下来，每次对话自动带上这些背景</td><td>每次对话都在用（感觉不到，但一直在）</td></tr><tr><td><strong>文档能力</strong></td><td>读写 Word、Excel、PPT、PDF：提取内容、套版式、做比对、转格式</td><td>要处理文件的时候</td></tr><tr><td><strong>专家库</strong></td><td>按不同行业的专业视角回答你（售前、财务、法务、代码、排版……）</td><td>要写正式材料、要专业判断的时候</td></tr><tr><td><strong>图表</strong></td><td>把一段流程或结构描述直接画成图</td><td>要画流程图、架构图的时候</td></tr><tr><td><strong>桌面小宠物</strong></td><td>屏幕角落一个小形象：看用量、跟着任务做动作，还能帮你把提示词写清楚</td><td>想随时看到用了多少、想把话说得更清楚的时候</td></tr></tbody></table>
+<table><thead><tr><th>插件</th><th>它是干嘛的</th><th>你什么时候会用到</th></tr></thead><tbody><tr><td><strong>记忆库</strong></td><td>替你把偏好、决定、项目进展记下来，每次对话自动带上这些背景</td><td>每次对话都在用（感觉不到，但一直在）</td></tr><tr><td><strong>文档能力</strong></td><td>读写 Word、Excel、PPT、PDF：提取内容、套版式、做比对、转格式</td><td>要处理文件的时候</td></tr><tr><td><strong>专家库</strong></td><td>按不同行业的专业视角回答你（售前、财务、劳动法、代码、排版……）</td><td>要写正式材料、要专业判断的时候</td></tr><tr><td><strong>图表</strong></td><td>把一段流程或结构描述直接画成图</td><td>要画流程图、架构图的时候</td></tr><tr><td><strong>桌面小宠物</strong></td><td>屏幕角落一个小形象：看用量、跟着任务做动作，还能帮你把提示词写清楚</td><td>想随时看到用了多少、想把话说得更清楚的时候</td></tr></tbody></table>
 <p>这五样可以只装你要的，互不依赖。装完之后，DSH 的设置里会多出一个<strong>工作秘书</strong>分区。</p>
 <h2>二、先认几个词</h2>
 <p>下面的词在后文反复出现，先花一分钟认一下，后面读起来会顺很多。</p>
@@ -42,7 +42,7 @@ body{margin:0;padding:0;background:#f4f6f8}
 <h2>三、第一次使用：三步</h2>
 <h3>（一）先看有没有缺东西</h3>
 <p>打开<strong>设置 → 工作秘书 → 安装与检查</strong>，页面上有两个分组：</p>
-<ul><li><strong>环境依赖</strong>：Python、Python 依赖、WPS 三项。绿色就是好的；红了就点右侧的<strong>依赖安装工具</strong>，它会给出该做什么。</li><li><strong>子插件</strong>：五样能力是否装上。没装的点<strong>安装</strong>。</li></ul>
+<ul><li><strong>环境依赖</strong>：Python、Python 依赖库、WPS 三项。绿色就是好的；红了就点右侧的<strong>依赖安装工具</strong>，它会给出该做什么。</li><li><strong>子插件</strong>：五样能力是否装上。没装的点<strong>安装</strong>。</li></ul>
 <h3>（二）填三个空</h3>
 <p>切到<strong>核心配置</strong>页，填三样：</p>
 <ol><li><strong>存储根目录</strong>：只需要选这一个文件夹。记忆库与知识库会各自在它下面建自己的子目录（名字是 memory-data 和 obsidian-data，插件自动建，你别改名）。</li><li><strong>工作岗位</strong>：你是干什么的，它会按岗位调整回答角度。</li><li>页面下方会显示由根目录<strong>自动派生</strong>的两个目录；只有你想让它们放在别处时，才点「单独指定」去改。</li></ol>
@@ -73,7 +73,7 @@ body{margin:0;padding:0;background:#f4f6f8}
 <p><strong>三条自动提醒</strong></p>
 <p>摘要里会直接出现提醒：全局条目超过 20 条该整理了、超过 7 天没做周保养、有待判断的条目等你定夺。看到提醒就顺手处理一下。</p>
 <p><strong>备份与镜像</strong></p>
-<ul><li><strong>自动备份</strong>：每次写库后复制一份整库，保留最近 7 份。</li><li><strong>镜像</strong>：把记忆内容同步一份到你的知识库里（00_全局记忆 文件夹），方便你用笔记软件直接翻。<strong>配置向导跑到最后一步（写你的身份）时会同步一次</strong>，所以你配好就能看到内容；之后只在你「记住 / 建关联 / 冷记忆被召回」之后再同步。</li></ul>
+<ul><li><strong>自动备份</strong>：写库时触发，但<strong>每天至多一次</strong>（当天已备份过就跳过），保留最近 7 份。</li><li><strong>镜像</strong>：把记忆内容同步一份到你的知识库里（00_全局记忆 文件夹），方便你用笔记软件直接翻。<strong>配置向导跑到最后一步（写你的身份）时会同步一次</strong>，所以你配好就能看到内容；之后只在你「记住 / 建关联 / 冷记忆被召回」之后再同步。</li></ul>
 <p><strong>七条命令</strong>（在 DSH 里直接输入）</p>
 <table><thead><tr><th>命令</th><th>作用</th></tr></thead><tbody><tr><td>/memory_review</td><td>看待确认的关键记忆（批准要回面板点）</td></tr><tr><td>/memory_archive</td><td>立刻执行归档</td></tr><tr><td>/memory_backup</td><td>立刻手动备份</td></tr><tr><td>/memory_audit</td><td>分类巡检：各范围条数、可疑条目、关联枢纽与孤儿</td></tr><tr><td>/memory_maintain</td><td>周保养：到期转冷 + 未来 7 天到期清单 + 转热候选</td></tr><tr><td>/memory_promote</td><td>把归档里的某条按原样取回热区</td></tr><tr><td>/memory_triage</td><td>转冷预审：列队列、或逐条判保留/转冷</td></tr></tbody></table>
 <p><strong>边界（要知道的）</strong></p>
@@ -82,27 +82,29 @@ body{margin:0;padding:0;background:#f4f6f8}
 <p><strong>它是干嘛的</strong></p>
 <p>处理 Word、Excel、PPT、PDF 四种文件：读内容、改版式、做比对、转格式。你把文件交给助手，说清要做什么就行；它背后调的是本机的 WPS，<strong>文件不离开你的电脑</strong>。</p>
 <p><strong>四种格式各能做什么</strong></p>
-<table><thead><tr><th>格式</th><th>能做的事</th></tr></thead><tbody><tr><td><strong>Word</strong></td><td>读全文与表格、从文字生成文档、批量查找替换、<strong>两份文件比对</strong>、<strong>给已有文件套版式</strong>、导出 PDF</td></tr><tr><td><strong>Excel</strong></td><td>读写单元格、写公式并重算取值、做数据透视表、条件格式、生成图表、合并多个工作簿、<strong>给已有表格套样式</strong></td></tr><tr><td><strong>PPT</strong></td><td>按大纲成套出稿（16 类页型、原生图表与表格、演讲者备注）、<strong>给已有 PPT 统一字体</strong>、提取文本、导出 PDF、逐页出图</td></tr><tr><td><strong>PDF</strong></td><td>提取文字、提取表格（带位置坐标）、取图片、读书签与元信息；合并、拆分、选页、页面转图片、图片合成 PDF</td></tr></tbody></table>
+<table><thead><tr><th>格式</th><th>能做的事</th></tr></thead><tbody><tr><td><strong>Word</strong></td><td>读全文与表格、从文字生成文档、批量查找替换、<strong>两份文件比对</strong>、<strong>给已有文件套版式</strong>、导出 PDF</td></tr><tr><td><strong>Excel</strong></td><td>读写单元格、写公式并重算取值、做数据透视表、生成图表、合并多个工作簿、<strong>给已有表格套样式</strong></td></tr><tr><td><strong>PPT</strong></td><td>按大纲成套出稿（16 类页型、原生图表与表格、演讲者备注）、<strong>给已有 PPT 统一字体</strong>、提取文本、导出 PDF、逐页出图</td></tr><tr><td><strong>PDF</strong></td><td>提取文字、提取表格（带位置坐标）、读页数与文件元信息；合并、拆分、选页、页面转图片、图片合成 PDF</td></tr></tbody></table>
 <p><strong>比对：能给你一份「红线条」</strong></p>
 <p>两份 Word 的差异不是只打印一段文字，而是生成一份<strong>能在 WPS 里直接打开的修订版</strong>，改动按字符级标出来，逐条接受或拒绝。合同、方案改稿用这个最省事。</p>
 <p><strong>套版式：给已有文件换装，内容一个字不改</strong></p>
 <p>这是它最有用的功能之一，专门解决「内容没问题、格式太乱」。随包内置 <strong>10 套规格</strong>，<strong>Word / Excel 与演示（PPT）分开列</strong>，常用的直接说名字就行。</p>
 <p><strong>一、Word 与 Excel</strong>（加 <code>--spec</code>）</p>
 <table><thead><tr><th>规格</th><th>用在哪</th></tr></thead><tbody><tr><td>标准商务（standard）</td><td>方案、报告、说明、对账这类常规材料</td></tr><tr><td>党政机关公文（govdoc）</td><td>正式发文，按公文国标的版式（页边距、三号仿宋正文、层次序数字体）</td></tr><tr><td>内部纪要（compact）</td><td>内部备忘、纪要、草稿，密排小字</td></tr><tr><td>汇报报告（report）</td><td>汇报、总结、复盘、数据分析报告</td></tr></tbody></table>
-<p>这四套<strong>只用于 Word 与表格</strong>：换成演示主题去套（比如 <code>dusk</code>）会被直接拒绝，并提示本格式能用的规格。</p>
+<p>其中 <strong>govdoc / compact / report 三套只用于 Word 与表格</strong>（<code>standard</code> 是三格式共用的基准套，不在「专用」之列）：换成演示主题去套（比如 <code>dusk</code>）会被直接拒绝，并提示本格式能用的规格。</p>
 <p><strong>二、演示 PPT</strong>（加 <code>--theme</code>）</p>
 <table><thead><tr><th>主题</th><th>用在哪</th></tr></thead><tbody><tr><td>标准商务（standard）</td><td>与技术方案、商务汇报通用，PPT 侧的基准主题</td></tr><tr><td>石墨工程（graphite）</td><td>技术方案、架构说明、运维汇报</td></tr><tr><td>青蓝技术（teal）</td><td>偏清爽的技术风介绍</td></tr><tr><td>酒红正式（wine）</td><td>正式、有仪式感的场合</td></tr><tr><td>暗色商务（dusk）</td><td>对外商务汇报、产品发布、客户宣讲</td></tr><tr><td>蓝色简约（azure）</td><td>工作总结、项目汇报、阶段复盘</td></tr><tr><td>红色党政（crimson）</td><td>党建与政务汇报、表彰大会、主题宣讲</td></tr></tbody></table>
-<p>这七套<strong>只用于演示 PPT</strong>：拿去套 Word 或表格会被直接拒绝，并列出该格式能用的规格（主题清单里也不会再出现它们）。</p>
+<p>其中 <strong>graphite / teal / wine / dusk / azure / crimson 六套只用于演示 PPT</strong>（<code>standard</code> 同上，是共用基准）：拿去套 Word 或表格会被直接拒绝，并列出该格式能用的规格（主题清单里也不会再出现它们）。</p>
 <div class="callout"><p>两边的名字有重复（标准商务）：它是 Word / Excel / PPT 三种格式<strong>共用的基准套</strong>，其余各套只写自己那一类的差异，没写到的自动沿用基准。所以同一套可以直接用在三种格式上，按上面两列选用最省事。</p></div>
 <p>还有一条<strong>安全设计</strong>你要知道：套版式只改格式，落盘前会逐段（Word）或逐格含公式（Excel）比对内容，<strong>只要发现内容有任何变化就拒绝写文件、原文件一动不动</strong>。所以你不用担心它顺手改坏你的正文，最坏情况是它拒绝执行并告诉你原因。</p>
 <p><strong>做 PPT：两条路，按你手上的东西选</strong></p>
 <table><thead><tr><th>你手上有什么</th><th>走哪条</th><th>就这样说</th></tr></thead><tbody><tr><td>已有 PPT，只是格式乱、字体杂</td><td><strong>美化精修</strong></td><td>把这份 PPT 的字体统一，内容一个字都不要改</td></tr><tr><td>只有一份大纲或想法</td><td><strong>母版起手</strong></td><td>用暗色商务那套母版，按这份大纲做一版</td></tr></tbody></table>
-<p>随包带 <strong>三套现成母版</strong>：暗色商务（对外商务汇报）、蓝色简约（工作总结与项目汇报）、红色党政（党建与政务汇报）。每套含一个母版加 11 个版式，封面、目录、章节页、图表页、结束页这些骨架都做好了，你只管填内容，不用从零排版。想用哪套直接说名字；自己新建页时，版式就从这 11 个里挑。母版来源是 WPS 主题库素材，公司内容已经全部去掉；对外分发前请自行确认授权。</p>
+<p>随包带 <strong>三套现成母版</strong>：暗色商务（对外商务汇报）、蓝色简约（工作总结与项目汇报）、红色党政（党建与政务汇报）。每套含一个母版加 11 个版式，封面、目录、章节页、图表页、结束页这些骨架都做好了。想用哪套直接说名字。</p>
+<p>走母版路径要清楚它的边界：<strong>工具只会自动套用其中第 1、2 个版式（标题页与内容页）</strong>，其余 9 个版式是你在 WPS 里新建页时自选；如果你要的是「成套出稿」那种整册效果（封面／目录／章节页／图表页等十几类页型一次配齐），走的其实是<strong>另一条不套母版的渲染路径</strong>，跟这条不冲突。</p>
+<p>母版来源是 WPS 主题库素材，公司内容已经全部去掉；<code>assets/manifest.json</code> 按项目所有者的授权口径标注为可随包再分发，并保留用途限定 —— <strong>标准仅供参考学习使用，如用于商业化，一切后果由使用者自行承担</strong>（完整表述见模块 <code>NOTICE</code>）。</p>
 <p><strong>依赖什么</strong></p>
 <ul><li>Python 3.10 以上 + 八个 Python 包；</li><li>本机装好 WPS（比对、重算、导出这三类操作靠它）。</li></ul>
 <p>两者<strong>不会自动安装</strong>，缺了会在「安装与检查」页标红并给出该敲的命令。</p>
 <p><strong>边界</strong></p>
-<ul><li><strong>扫描件不做文字识别</strong>：整页是图片的 PDF，它会把那几页转成图片给你看，不会自动认字。要文字请提供电子版原件。</li><li>旧格式（.doc / .xls / .ppt / .wps / .et / .dps）与导出 PDF 走 WPS 调用，速度较慢，大文件要等一会儿。</li><li>公文规格只做<strong>版式</strong>：发文机关标志、发文字号、印章、页脚页码这些版头要素不生成。</li><li>表格套样式不支持合并单元格很复杂的表；遇到会明确告警，不会硬改。</li></ul>
+<ul><li><strong>扫描件不做文字识别</strong>：整页是图片的 PDF，它会<strong>提示你哪几页是扫描件</strong>，但不会自动认字；要看的页我可以单独转成图片给你。要文字请提供电子版原件。</li><li>旧格式（.doc / .xls / .ppt / .wps / .et / .dps）与导出 PDF 走 WPS 调用，速度较慢，大文件要等一会儿。</li><li>公文规格只做<strong>版式</strong>：发文机关标志、发文字号、印章、页脚页码这些版头要素不生成。</li><li>表格套样式不支持合并单元格很复杂的表；遇到会明确告警，不会硬改。</li></ul>
 <h3>（三）专家库</h3>
 <p><strong>它是干嘛的</strong></p>
 <p>内置 19 位「专业视角」，覆盖 6 个方向。它不改变助手是谁，只是让助手在回答时换上某一行的专业口径和方法。</p>
@@ -172,8 +174,8 @@ body{margin:0;padding:0;background:#f4f6f8}
 <p>这两个名字是插件定好的，别改名、别搬走；要换位置就在设置里改根目录。<strong>如果你以前已经填过别的路径</strong>，页面会显示为「已单独指定」并原样保留，它不会擅自改你的路径。</p>
 <p><strong>镜像区什么时候有内容</strong></p>
 <p>镜像就是把记忆同步一份到知识库的 00_全局记忆 文件夹里，方便你用笔记软件直接翻。<strong>配置向导跑到最后一步（写你的身份）时会同步一次</strong>，配好就能看到内容；之后每次记忆库<strong>发生写入</strong>（记住 / 建关联 / 冷记忆被召回）也会再同步一次。</p>
-<p><strong>工具文件夹本版只有框架</strong></p>
-<p>知识库里会看到一个工具文件夹，下面分技能、脚本、MCP 三个子目录。这个版本<strong>只建了框架、不做同步</strong>，需要什么先手工放。</p>
+<p><strong>工具文件夹里有什么</strong></p>
+<p>知识库里会看到一个工具文件夹，下面分技能、脚本、MCP 三个子目录。<strong>随包已经写好两份内容</strong>：一份工具总览（说明三个子目录各放什么），一份《DSH 与插件使用技巧》（长文，条目分「官方规定／本机实测／本项目约定」三类，放在技能子目录下）。这两份之外的<strong>持续同步仍未实现</strong>，需要什么先手工放进去。</p>
 <p><strong>已有旧知识库怎么搬</strong></p>
 <p>核心配置页有一张「已有旧知识库要带过来？」卡片，它<strong>只管知识库</strong>：你指定旧文件夹后逐项对照导入，<strong>不会自动搬你的东西</strong>。记忆不用你操心——点保存时第 2 步已经自动迁完了。</p>
 <h2>七、设置在哪改（对照表）</h2>

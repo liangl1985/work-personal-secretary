@@ -1,3 +1,9 @@
+## 0.7.17 — 2026-09-18（技能文档授权口径与 manifest 对齐）
+
+- **修一处随包件内部矛盾**：`skills/office-ppt/SKILL.md` 的授权提示仍写 `assets/manifest.json` 按事实标注 `redistributable: false`，而 `assets/manifest.json` 的 `templates` 段早已按项目所有者 2026-09-18 的裁定改为 `true` 并保留用途限定（提交 `b5aadcb`，见 0.7.15 段）。本次把技能文档对齐为同一口径：**标准仅供参考学习使用；如用于商业化，一切后果由使用者自行承担**，完整表述指向模块 `NOTICE` 第五节。
+- **本文件 0.7.15 段的历史条目已补注**：原结论（`false`）保留不改，其后追加「该口径当日即被推翻」的说明与提交出处，避免与现状冲突。
+- **验证**：`npm test` 五套 **24 / 19 / 26 / 13 / 7**（全 0 失败） · `scripts/spec_sync.py --check` exit 0 · `scripts/tests/test_python.py` 20 OK。
+
 ## 0.7.16 — 2026-09-18（发布前中立性整改 · 随包件私有信息清零）
 
 > 发布门禁项（RELEASE-CHECKLIST 第二节），**不改功能、不改任何规格数值**。
@@ -17,7 +23,7 @@
 - 每份 = **1 个风格母版 + 11 个版式 + 11 页空白占位页**；**原样复制**，未压缩、未重导出（逐文件 SHA256 与源一致）
 - 由使用者提供的三份 pptx 抽取：删除公司基底母版（3）· 业务页（15）· 备注页（8）· 业务图（67–69 张）· 公司主题、WPS 标签、批注作者与 `docProps` 元数据；**公司痕迹穷举 0 命中**
 - 登记在 `assets/manifest.json` 的 `templates` 段（id / 文件 / 中文名 / 字节数 / SHA256 / 母版与版式数 / 来源 / 许可 / redistributable）
-- **授权（如实标注）**：来源为 WPS 主题库素材，未取得明确再分发授权 → 按事实标 `redistributable: false`，`NOTICE` 新增「五、随包素材」段；对外分发前须自行确认授权
+- **授权（如实标注）**：来源为 WPS 主题库素材，未取得明确再分发授权 → 按事实标 `redistributable: false`，`NOTICE` 新增「五、随包素材」段；对外分发前须自行确认授权。**（注：该口径当日即被推翻** —— 项目所有者 2026-09-18 裁定「标准仅供参考学习使用；如用于商业化，一切后果由使用者自行承担」，`manifest.json` 的 `templates` 段已改为 `redistributable: true` 并保留用途限定，见提交 `b5aadcb` 及其后的 0.7.15 段；技能文档的口径也已同步）
 - 体积预算：`assets/manifest.json` 的 `policy` 新增 `templates_size_budget_mb`（母版单件大，与图标分开预算）
 
 ### 二、两条制作路径（文档）

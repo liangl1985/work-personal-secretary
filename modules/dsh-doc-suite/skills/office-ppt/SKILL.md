@@ -233,7 +233,7 @@ py -3 <DOC_SUITE_SCRIPTS>\office\ppt_tool.py create "初稿.pptx" --from-md "大
 
 ### 授权提示（必读）
 
-三套母版来自 WPS 主题库素材，**已去除公司内容**；`assets/manifest.json` 按事实标注 `redistributable: false`，随包再分发前请自行确认授权（详见模块 `NOTICE`）。
+三套母版来自 WPS 主题库素材，**已去除公司内容**；按项目所有者 2026-09-18 的裁定，`assets/manifest.json` 的 `templates` 段标注为 `redistributable: true` 并**保留用途限定** —— **标准仅供参考学习使用；如用于商业化，一切后果由使用者自行承担**（完整表述见模块 `NOTICE` 第五节）。
 
 ## 九、注意事项（踩过的坑）
 
