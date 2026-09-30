@@ -1,5 +1,52 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.13 — 2026-09-30（配置取值通道统一：不再直读宿主 settings.yaml）
+
+> 触发：真机 0.2.0-rc.2 实测 `/basedeck` 八项**全部非绿**（`setupNeeded=true`）—— 记忆库路径、知识库路径、岗位信息在界面上都「读不到」。
+> 根因**不在 rc.2**：计划器 `resolveDeckContext()` 自己直读 `<DSH_HOME>/settings.yaml`（1.1.4 起引入的旁路，ARCHITECTURE 2.5 有记），而 rc.2 已把该文件搬迁为 `settings.yaml.imported` → 旁路断供，全部回落默认值（记忆库被判成 `<DSH_HOME>/data/dsh-work-memory/memory`，于是 memorySeed / dirs / memoryDeck / migrateMemory 连带变红）。
+
+- **读通道统一**：新增 `options.settingsValues` 注入（`lib/basedeck.js` `resolveDeckContext`）。设置生效值一律由 api 层 `deckSettingsValues()` 经**宿主设置服务**（`ctx.settings.describe` → `buildSettingsView`）取出后注入，与 `/setup-state` 同源；未注入时（脚本 / 单测 / 0.1.x 老调用方）才退回直读文件，并在 `ctx.settingsSource` 标 `'file'`。
+- **只注入「设置里确实存在」的键**：保持「没配过」与「配了空值」（如 `obsidianSyncDir` 显式关闭镜像）的语义区分。
+- **`settings` 项的状态语义**：走设置服务时不做文件级 BOM / 结构校验与文本级改写计划；状态由「是否仍有待写键」决定（有 → `update`，无 → `up_to_date`），`target` 显示「宿主设置（profile / 设置服务）」。
+- **知识库根目录进配置**：新增集成体配置键 `obsidianDir`（`lib/settings.js` 的 `DEFAULTS` / schema、`lib/index.js` 透传 `installApi`、`lib/api.js` 注入计划器）→ `knowledgeDeck` 不再恒为 `none`；README 配置项表补 `workspace` / `obsidianDir` 两行。
+- **岗位信息落配置文件**：profile 的 `cordis.patch.yml` 新增 `experts` entry 覆盖层（**写全 20 键**以兼容「整块替换」语义，避免 `expertInjectMax` / `expertSecondThreshold` 等刻意档位被打回默认值），其中 `defaultDomain: infosec`（本人岗位）、`identityExpert: ''`（刻意不常驻）、`expertSetupDone: true`（消除「还没确认本人岗位」的重复提示）。
+- **修复（同日真机自查）**：`obsidianDir` 与 `repoRoot` 同属 **volatile 字段**，rc.2 的 `config` 里是**引用对象**；`lib/index.js` 取值时只有 `repoRoot` 走了 `unwrapValue()`，`obsidianDir` 漏解包 → 真机上该配置**看着配好却不生效**（现象：`knowledgeDeck` 恒为 `none`）。已按 `repoRoot` 同一条纪律解包并留痕。
+- **指令模板去重（同日，使用者决议）**：语言 / 协作 / 专家库三节此前在「指令模板 + 记忆种子」两处重复维护，现由**记忆种子单一承担**；`defaults/AGENTS.zh-CN.md` 删同三节（68 → 39 行）并把 `template-version` 1 → 2（模板头约定：措辞实质变更时 +1）；`README.md`「默认约定」段改写为单一载体口径（并说明想让其在指令层生效需在使用者自己的 `AGENTS.md` 块外声明）。`scripts/basedeck-test.mjs` 断言迁移：不再写死 `template-version === 1`，并新增 3 条「真实模板不得含这三节」的护栏（basedeck-test 567 → 570）。
+- **回归**：集成体七套脚本全绿（probe 151 / install 246 / settings-api 115 / identity 73 / defaults 61 / basedeck **570** / smoke-load 533，失败 0）。
+- **写入分支已同批改到设置服务**：`POST /basedeck` 落盘前先经 `ctx.settings.mutate` 写入，再重算设置现值（`lib/api.js` 的 `writeDeckSettingsViaService()`）—— **不再触碰宿主 settings.yaml**。`agentsMd` / `skills` 的 `user_modified`（本地定制过）**保持不覆盖**（信息态，不计入 `setupNeeded`）。
+
+## 1.1.12 — 2026-09-30（DSH 0.2.0-rc.2 桌面载体适配）
+
+> 触发：真机实测（官方桌面端 0.2.0-rc.2）配置页点「自动生成」报 `生成失败：缺少 Origin 头`。
+
+- **写操作同源守卫放宽**（`lib/api.js:240-263`）：原要求 POST **必须**带 `Origin` 头，而官方桌面端的 fetch 桥**不发 Origin** → 所有写操作 403（`/domain/generate`、`/identity/save`、`/preflight` POST、`/import/apply`、`/dirs/new`、`/fix`、`/install` 全线失败）。现改为「**不带 Origin 放行；带了则必须同源**」。
+  **安全性未降**：浏览器发起的跨源 POST **一定**带 `Origin`（会被拒）；`Content-Type: application/json` 仍强制（挡住 form/multipart 类简单请求）；`Origin: null`（沙箱 iframe）仍按跨站拒绝 —— 浏览器侧的 CSRF 面**未扩大**。能连本机端口的进程本就可执行本地写操作，不构成新增攻击面。
+- **`/repo-root` 纳入精确路由**（`lib/api.js:140`）：桌面壳的 fetch 桥**只认精确路由**，此前该路由仅在 prefix 下可达 → 桌面端「保存仓库目录」404。现加入 `CORE_API_EXACT_PATHS`（12 → 13 条），GET / POST 均可达。
+- **测试断言同步**：`settings-api-test` 把「缺 Origin → 403」改为「→ 200 且**恰好** 1 次 mutate」，并**新增**「`Origin: null` → 403 且零写入」守住红线；`install-test` 新增两条 `/repo-root` 可达性回归；`apply()` 路由计数 25 → 26。
+
+- **（已评估后撤回）守卫的 Host 检查顺序**：`verify` 的安全复核建议把 `if (!host)` 提到 `if (!origin)` 之前，以消除「无 Origin 且无 Host 时跳过 Host 检查」。实测采纳该改动会让**不带 Host 头的请求**一律 403，而测试夹具正是这类请求 → `basedeck-test` 直接抛 TypeError；而 HTTP/1.1 请求**必然**带 Host，原风险实际为零。**故不采纳**，保持 `if (!origin) return null` 在前的原顺序（`verify` 本人也标注该建议为「可选、非阻塞」）。
+
+## 1.1.11 — 2026-09-30（DSH 0.2.0-rc.2：设置注册迁移到 Config 派生）
+
+> 触发：0.2.0 移除了 `ctx.settings.register`，集成体设置页在 rc.2 下失效（条目不可见、不可读写）。
+
+- **具名导出 `Config`**：`lib/settings.js` 导出 `Config`（即原 `WPS_SETTINGS_SCHEMA`），由 `lib/index.js` re-export。rc.2 的设置系统从 `plugin.Config` 派生表单（`vendor/cordis/src/registry.ts:326` → `packages/settings/settings/src/index.ts:425-428`），命名空间即 profile entry id `work-personal-secretary`。
+- **`repoRoot` 加 `.volatile()`**：rc.2 只把带 volatile 的字段投影进设置表单（`settings/src/schema.ts:37-47`）；整棵 schema 无 volatile 时 `describe()` 直接返回空（`settings/src/index.ts:308-309`），条目**根本不出现**。
+- **解包 volatile 引用**：rc.2 下 `apply(ctx, config)` 里 volatile 字段是**引用对象**（官方判定见 `vendor/cosmokit/src/volatile.ts:52-54`）。新增 `unwrapValue()`，用官方同协议 `Symbol.for('cosmokit.volatile.write')` 判定后 `.get()`（**不引新依赖**，且不像结构判定那样误伤 `Map` / 普通 `{get}` 对象）；`toConfig` 与 `index.js` 的两处 repoRoot 读取都走它。
+- **双分支兼容**：`ctx.settings.register` 存在时保持 0.1.x 旧行为（`scope.get()` / `scope.watch`）；不存在（rc.2）时取值改用 `apply` 传入的 config。
+- **读取实时解包**：rc.2 的 volatile 由 loader **就地更新**（`vendor/loader/src/config/entry.ts:162-195` 的 `_commitVolatile()` → `updateVolatile(ref, source)`），**既不重跑 `apply`、也不重启 fiber**；因此分支 B 的 `read()` 必须**每次实时重算**，不能缓存 apply 时快照（否则设置页写入后，插件内部的 `settingsRepoRoot()` 会永远读到旧值，安装页继续报「未找到集成体仓库目录」）。
+- **`.volatile()` 特性探测**：`.volatile()` 是 schemastery **3.18.3** 才引入的方法，而本包 peer 下界是 `^3.18.1`；该 schema 在**模块顶层求值**，直接调用会在 3.18.1 / 3.18.2 宿主上抛 TypeError（外层 `try/catch` 只包 `await import()`，接不住），导致**整个插件加载失败**。新增 `withVolatile()` 探测后按需调用；宿主不支持时该字段退化为普通字段（不进设置页，但不崩）。
+- **`Config` 在 schemastery 不可用时为 `undefined`**（**不能是 `null`** —— rc.2 的判据含 `'toJSON' in schema`，对 null 会抛 TypeError）。
+
+## 1.1.10 — 2026-09-30（DSH 0.2.0-rc.2 兼容：peer 范围放宽）
+
+> 触发：官方 0.2.0-rc.2 引入**插件兼容性闸门**（`packages/boot/app-boot/src/plugin-compatibility.ts:61-88`）。peerDependencies 中匹配 `@deepseek-ai/dsh` 或 `@deepseek-ai/dsh-*` 的项若不满足运行时版本，该 bundle 会被跳过（bundle 级 `skippedBundles`）或被单独 disable（行级 `compatibility-preflight.ts`），patch 层不加载。
+
+- **peer 范围放宽**：4 条 `@deepseek-ai/dsh*` 由 `^0.1.5-rc.1` 改为 `>=0.1.5-rc.1 <0.3.0`（`package.json:66-69`）。旧范围按 semver 展开为 `>=0.1.5-rc.1 <0.2.0-0`，**拒绝 `0.2.0-rc.2`**；新范围同时满足 `0.1.5-rc.2`（现网运行时）与 `0.2.0-rc.2`（新版）。`@deepseek-ai/cordis`、`@deepseek-ai/schemastery` 不在闸门检查范围，不动。
+- **`BUILD` 常量同步**：`client/index.js:45` 由 `v1.1.9` 改为 `v1.1.10`（`scripts/smoke-load.mjs` 断言它与 `package.json` 同步）。
+- **验证**：本机 semver 7.8.5 复现闸门判定 —— 新范围对 `0.2.0-rc.2`、`0.1.5-rc.2` 均为 true，旧范围对 `0.2.0-rc.2` 为 false；七个自测脚本修正 BUILD 后全部通过。
+- **未做（留待第二批）**：`ctx.settings.register` 在 0.2.0 已移除 → rc.2 下设置页静默失效（插件功能本身不受影响，`inject` 与其余 API 面兼容）。完整方案见项目文档 `RC2-ADAPTATION-PLAN.md`。
+
 ## 1.1.9 — 2026-09-18（随包说明与实现对齐：14 处不一致修订）
 
 > 触发：使用者指出「PPT 母版那段描述不对」。据此对两份随包说明做了一次**实现级复核**（子代理逐条比对 + 主对话复核载重结论），共修 **14 处**；两份 HTML 已按 md 重生成。

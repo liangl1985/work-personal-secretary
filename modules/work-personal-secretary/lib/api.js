@@ -35,11 +35,11 @@
  *   - 桌面载体的 fetch 桥（合成 origin http://dsh.internal）**只认精确路由**，因此 prefix 之外另注册 exact：
  *       API_PATHS（7）            /check /fix /fix-all /plugins /install /install-all /basedeck
  *       PAGE_PATHS（2，另一前缀） /work-personal-secretary/guide、/help
- *       CORE_API_EXACT_PATHS（12）/preflight /identity /identity/save /domain/list /domain/generate
- *                                 /docs /open-doc /setup-state /dirs /dirs/new /import/scan /import/apply
+ *       CORE_API_EXACT_PATHS（13）/preflight /identity /identity/save /domain/list /domain/generate
+ *                                 /docs /open-doc /setup-state /dirs /dirs/new /repo-root /import/scan /import/apply
  *       SETTINGS_API_PATHS（3）   /settings /settings/write /experts/preview
- *     → **exact 共 24 条**；加 1 条 prefix，`apply()` 注册的**路由总数 = 25**。
- *   - 前 19 条在本函数内注册（handler 是本地闭包）；P4 三条由文件末尾的 installSettingsExactRoutes
+ *     → **exact 共 25 条**；加 1 条 prefix，`apply()` 注册的**路由总数 = 26**。
+ *   - 前 20 条在本函数内注册（handler 是本地闭包）；P4 三条由文件末尾的 installSettingsExactRoutes
  *     注册，并在 lib/index.js 的 apply 里**已接线**（1.1.3 起按产品决策方案 A）。
  *   - 既有 7 条精确路由的集合与顺序一字不动；四条测试断言（probe-test / settings-api-test /
  *     basedeck-test / install-test）已同步为上述完整集合的**相等比较**，未放宽为 includes / >=。
@@ -48,7 +48,9 @@
  * 1. id 必须命中服务端白名单表 → 映射到**固定命令 + 固定参数数组**；
  *    **绝不接受客户端传入的命令字符串或参数**，id 只用于查表。
  * 2. 命令一律 execFile + 参数数组，不用 shell；带超时与输出上限（8000 字符）。
- * 3. 写操作（POST）走同源保护：Content-Type 必须是 application/json + Origin 必须同源。
+ * 3. 写操作（POST）走同源保护：Content-Type 必须是 application/json；**带** Origin 时必须同源。
+ *    桌面载体的 fetch 桥不发 Origin（浏览器跨源 POST 必带 Origin），故「无 Origin = 本机非浏览器客户端」放行；
+ *    `Origin: null`（沙箱化 iframe）仍按跨站拒绝。
  * 4. 发布件中立：不含任何使用者信息、本机绝对路径。
  *
  * @module work-personal-secretary/api
@@ -92,6 +94,7 @@ import {
 import {
   BASEDECK_ID_LIST,
   BASEDECK_OUTPUT_LIMIT,
+  SETTINGS_TARGETS,
   applyBaseDeck,
   detectVaultLayout,
   planBaseDeck,
@@ -100,7 +103,7 @@ import {
   safeWorkspaceParam,
 } from './basedeck.js'
 
-import { SETTINGS_API_PATHS, createSettingsApi } from './settings-api.js'
+import { SETTINGS_API_PATHS, createSettingsApi, buildSettingsView } from './settings-api.js'
 // 1.1.3 新增能力的宿主侧实现（T6 可用性检查 / T7 身份写入 / T8 岗位生成 / T9 随包网页）
 import { runPreflight } from './preflight.js'
 import { readObsidianSyncDir, readSetupState, resolveMigrateSource } from './setup-state.js'
@@ -133,8 +136,9 @@ export const PAGE_PATHS = ['/guide', '/help']
  * 它们的 handler 是 installApi 的闭包（依赖探针 / settingsApi / currentMemoryDir），
  * 所以在 installApi 内与 API_PATHS、PAGE_PATHS 一起注册；不含 P4 三条
  * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
+ * 1.1.12 补入 `/repo-root`：此前它只在 prefix 下可达，桌面外壳（只认 exact）保存不了仓库目录。
  */
-export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new', '/import/scan', '/import/apply']
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new', '/repo-root', '/import/scan', '/import/apply']
 
 /**
  * 两个说明文档的**唯一映射**（单一真相源 = defaults 下的 md）：
@@ -234,13 +238,23 @@ function trimPlanPayload(payload, limit = BASEDECK_OUTPUT_LIMIT) {
   return payload
 }
 
-/** 同源保护：写操作必须由本机 Web UI 发起（沿用 work-memory 的做法） */
+/**
+ * 写操作（POST）的同源保护（沿用 work-memory 的做法）。
+ *
+ * 桌面载体（官方 Desktop 的 fetch 桥）**不带 Origin** → 放行：这类请求来自本机非浏览器客户端，
+ * CSRF 面不成立 —— 浏览器对跨源 POST 一定带 Origin，故「带 Origin 则必须同源」已足以拦跨站。
+ * `Origin: null`（沙箱化 iframe）不能当成「无 Origin」：new URL('null') 抛错 → 按跨站拒绝。
+ *
+ * @param {object} req
+ * @returns {string|null} 拒绝原因，放行返回 null
+ */
 function sameOriginGuard(req) {
   const contentType = String(req.headers['content-type'] || '').split(';')[0].trim().toLowerCase()
   if (contentType !== 'application/json') return '请求必须为 application/json'
   const host = String(req.headers.host || '')
   const origin = String(req.headers.origin || '')
-  if (origin === '') return '缺少 Origin 头'
+  if (!origin) return null
+  if (!host) return '缺少 Host 头'
   try {
     if (new URL(origin).host !== host) return '跨站请求已拒绝'
   } catch (e) {
@@ -449,6 +463,8 @@ export function installApi(ctx, deps = {}) {
   const installModuleDir = deps.moduleDir || MODULE_DIR
   // 配置底座的默认工作区（设置项 workspace，可空；空则由 basedeck 显式返回 none 或做默认探测）
   const basedeckWorkspaceConfig = typeof deps.workspace === 'string' ? deps.workspace : ''
+  // 配置底座的知识库根目录（配置项 obsidianDir，可空；空则 knowledgeDeck 显式返回 none）
+  const basedeckObsidianConfig = typeof deps.obsidianDir === 'string' ? deps.obsidianDir : ''
   // 配置底座的 DSH_HOME 只由服务端解析（deps.dshHome → 环境变量 DSH_HOME）；**绝不接受客户端传入**
   const basedeckDshHome = typeof deps.dshHome === 'string' && deps.dshHome
     ? deps.dshHome
@@ -461,6 +477,75 @@ export function installApi(ctx, deps = {}) {
   //   组合配置 / cordis.patch.yml 经宿主注入的 config）③ profile 的 cordis.patch.yml 里
   //   显式写的 repoRoot（profileRepoRoot，宿主未注入 config 时兜底）④ 自动探测（祖先 / 常见位置）。
   const settingsHandle = (deps.settings && typeof deps.settings.read === 'function') ? deps.settings : null
+
+  /**
+   * 把「设置」项待写的键经**宿主设置服务**（`ctx.settings.mutate`）落地 —— 只在 `settingsSource === 'service'`
+   * 且有实际待写键时动作。宿主 settings.yaml 不是本插件的写入目标（见 basedeck.js 的 planSettings 注释）。
+   * @param {object} plan planBaseDeck() 的原始返回（**不能用 publicPlan**，待写键在 internal 里）
+   * @returns {Promise<{attempted:boolean, ok:boolean, written:string[], error?:string}>}
+   */
+  async function writeDeckSettingsViaService(plan) {
+    const item = (plan && Array.isArray(plan.items)) ? plan.items.filter((it) => it.id === 'settings')[0] : null
+    const internal = (item && item.internal) ? item.internal : null
+    if (!internal || internal.viaService !== true) return { attempted: false, ok: true, written: [] }
+    const writes = Array.isArray(internal.writes) ? internal.writes : []
+    if (writes.length === 0) return { attempted: false, ok: true, written: [] }
+    const settings = (ctx && ctx.settings && typeof ctx.settings.mutate === 'function') ? ctx.settings : null
+    if (!settings) return { attempted: true, ok: false, written: [], error: '设置服务不可用（ctx.settings.mutate 缺失）' }
+    const byNs = {}
+    for (const w of writes) {
+      if (!byNs[w.ns]) byNs[w.ns] = []
+      byNs[w.ns].push({ op: 'set', path: [w.key], value: w.value })
+    }
+    const written = []
+    try {
+      const described = await settings.describe({ redactSecrets: true })
+      const list = Array.isArray(described) ? described : (described && Array.isArray(described.namespaces) ? described.namespaces : [])
+      for (const ns of Object.keys(byNs)) {
+        const target = list.filter((n) => n && n.ns === ns)[0]
+        const revision = (target && Number.isInteger(target.revision)) ? target.revision : 0
+        await settings.mutate(ns, byNs[ns], revision)
+        for (const op of byNs[ns]) written.push(ns + '.' + op.path[0])
+      }
+      return { attempted: true, ok: true, written: written }
+    } catch (err) {
+      const code = (err && err.code) ? String(err.code) : 'write-failed'
+      const extra = code === 'SETTINGS_CONFLICT' ? '（设置已被其它窗口改动，请重新读取后再写）' : ''
+      return { attempted: true, ok: false, written: [], error: code + extra + '：' + sanitizeErr(err) }
+    }
+  }
+
+  /**
+   * 配置底座要用的**设置生效值** —— 只走宿主设置服务（`ctx.settings.describe`），与 /setup-state 同源。
+   *
+   * 为什么要有它（2026-09-30 订正）：计划器原先自己去读宿主的 `settings.yaml`，那条旁路在 0.2.0-rc.2 上
+   * 已失效（宿主把该文件搬迁为 .imported），会把配置完好的环境判成「待配置」。现在把生效值取出来注入计划器，
+   * 宿主文件与格式彻底与本插件解耦（与 setup-state.js 文件头那条纪律同一口径）。
+   *
+   * 语义细节：**只注入「设置里确实存在」的键** —— 未配置的键不出现，计划器据此区分「没配过」（可给建议值）
+   * 与「配了空值」（如 obsidianSyncDir 显式关闭镜像）。取不到 / 服务缺失 → 返回 null，计划器退回文件兜底。
+   * @returns {Promise<object|null>} 形如 {'work-memory.memoryDir': 'E:/…', 'experts.defaultDomain': 'infosec'}
+   */
+  async function deckSettingsValues() {
+    const settings = (ctx && ctx.settings && typeof ctx.settings.describe === 'function') ? ctx.settings : null
+    if (!settings) return null
+    try {
+      const described = await settings.describe({ redactSecrets: true })
+      const view = buildSettingsView(described, { writable: false })
+      if (!view || !Array.isArray(view.namespaces)) return null
+      const wanted = SETTINGS_TARGETS.concat([{ ns: 'work-memory', key: 'backupDir' }])
+      const values = {}
+      for (const t of wanted) {
+        const entry = view.namespaces.filter((n) => n && n.ns === t.ns)[0]
+        const raw = (entry && entry.value && typeof entry.value === 'object') ? entry.value[t.key] : undefined
+        if (raw === undefined) continue
+        values[t.ns + '.' + t.key] = String(raw == null ? '' : raw).trim()
+      }
+      return values
+    } catch (e) {
+      return null
+    }
+  }
   const settingsOf = () => (ctx && ctx.settings && typeof ctx.settings.describe === 'function') ? ctx.settings : null
   const sanitizeErr = (err) => {
     const s = String(err && err.message ? err.message : err).split('\n')[0]
@@ -478,6 +563,21 @@ export function installApi(ctx, deps = {}) {
     } catch (e) {
       return ''
     }
+  }
+
+  /** 知识库根目录：设置用户层的**实时值**（rc.2 的 volatile 就地更新，故每次都重读） */
+  function settingsObsidianDir() {
+    try {
+      const v = settingsHandle.read()
+      return v && typeof v.obsidianDir === 'string' ? v.obsidianDir.trim() : ''
+    } catch (e) {
+      return ''
+    }
+  }
+
+  /** 配置底座用的知识库根：设置用户层实时值 → 部署配置（deps.obsidianDir，profile patch 覆盖层） */
+  function currentObsidianDir() {
+    return settingsObsidianDir() || basedeckObsidianConfig
   }
 
   /** profile 的 cordis.patch.yml 里的 repoRoot（只读；读不到 → 空串） */
@@ -1212,11 +1312,15 @@ export function installApi(ctx, deps = {}) {
         if (vaultParam) queryOverrides.obsidianDir = vaultParam
         const repo = currentRepoRoot()
         const mig = await migrateSource()
+        // 设置生效值经宿主设置服务取得（取不到 → null，计划器退回文件兜底）
+        const deckSettings = await deckSettingsValues()
         const plan = planBaseDeck({
           // query 里的 workspace 是**客户端显式传值** → 走 overrides（source=client）
           overrides: queryOverrides,
           dshHome: basedeckDshHome,
           configWorkspace: basedeckWorkspaceConfig,
+          obsidianDir: currentObsidianDir(),
+          settingsValues: deckSettings,
           repoRoot: repo.repoRoot,
           env: installEnv,
           now: installNow,
@@ -1269,12 +1373,15 @@ export function installApi(ctx, deps = {}) {
         }
         const repo = currentRepoRoot()
         const mig = await migrateSource()
+        const deckSettings = await deckSettingsValues()
         const opts = {
           dryRun: dryRun,
           // overrides.workspace 是**客户端表单值** → source=client；设置项走 configWorkspace
           overrides: overrides,
           dshHome: basedeckDshHome,
           configWorkspace: basedeckWorkspaceConfig,
+          obsidianDir: currentObsidianDir(),
+          settingsValues: deckSettings,
           repoRoot: repo.repoRoot,
           env: installEnv,
           now: installNow,
@@ -1282,6 +1389,18 @@ export function installApi(ctx, deps = {}) {
           commonCandidates: deps.commonCandidates,
           migrateFrom: mig.from,
           migrateFromSource: mig.source,
+        }
+        // 走宿主设置服务时：先把引导填的键经 mutate 落地，再**重算设置现值** —— 这样「设置」项
+        // 不再被判成待写，也就不会去动宿主的 settings.yaml。写入失败不阻断其余步骤（回到 payload 里说明）。
+        let settingsWriteNote = ''
+        if (!dryRun) {
+          const outcome = await writeDeckSettingsViaService(planBaseDeck(opts))
+          if (outcome.attempted) {
+            settingsWriteNote = outcome.ok
+              ? '设置已写入宿主设置服务：' + outcome.written.join(' / ')
+              : '设置未能写入宿主设置服务：' + outcome.error
+            if (outcome.ok) opts.settingsValues = await deckSettingsValues()
+          }
         }
         const applied = applyBaseDeck(ids, opts)
         const payload = {
@@ -1303,7 +1422,10 @@ export function installApi(ctx, deps = {}) {
           durationMs: applied.durationMs,
           setupNeeded: planBaseDeck(opts).setupNeeded,
         }
-        if (applied.rejected.length > 0) payload.message = '已忽略不在白名单的 id：' + applied.rejected.join(' / ')
+        const messages = []
+        if (applied.rejected.length > 0) messages.push('已忽略不在白名单的 id：' + applied.rejected.join(' / '))
+        if (settingsWriteNote) messages.push(settingsWriteNote)
+        if (messages.length > 0) payload.message = messages.join('；')
         return sendJson(res, 200, payload)
       }
 
@@ -1381,13 +1503,13 @@ export function installApi(ctx, deps = {}) {
  *   本次连同四条断言一起改掉（probe-test / settings-api-test / basedeck-test / install-test），
  *   断言仍**逐条列出完整路径集合并用相等比较**，不放宽为 includes / >=。
  *
- * 当前**精确路由集合（共 24 条）**与路由总数（2026-09-17 复核）：
+ * 当前**精确路由集合（共 25 条）**与路由总数（2026-09-30 复核，1.1.12 补入 /repo-root）：
  *   API_PATHS（7）             /check /fix /fix-all /plugins /install /install-all /basedeck
  *   PAGE_PATHS（2，另一前缀）  /work-personal-secretary/guide、/help
- *   CORE_API_EXACT_PATHS（12）/preflight /identity /identity/save /domain/list /domain/generate
- *                              /docs /open-doc /setup-state /dirs /dirs/new /import/scan /import/apply（以上以本文件 CORE_API_EXACT_PATHS 常量为准）
+ *   CORE_API_EXACT_PATHS（13）/preflight /identity /identity/save /domain/list /domain/generate
+ *                              /docs /open-doc /setup-state /dirs /dirs/new /repo-root /import/scan /import/apply（以上以本文件 CORE_API_EXACT_PATHS 常量为准）
  *   SETTINGS_API_PATHS（3）    /settings /settings/write /experts/preview（**本函数**注册）
- *   → 24 exact + 1 prefix = `apply()` 注册**总数 25 条**（数字以三个常量与各自测试断言为准）。
+ *   → 25 exact + 1 prefix = `apply()` 注册**总数 26 条**（数字以三个常量与各自测试断言为准）。
  *   本函数另由 scripts/settings-api-test.mjs 的 [11] 段单测覆盖。
  *
  * @param {object} ctx cordis context（需 webServer）

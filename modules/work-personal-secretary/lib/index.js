@@ -15,9 +15,9 @@
  * dryRun 默认 true），专家阈值预览动态加载子插件 match.js。
  * 三条路由经 installApi 的 **prefix** 路由分发（浏览器载体 / Web GUI 已覆盖）；
  * 桌面载体（合成 origin）的 fetch 桥只认精确路由，故 1.1.3 起**已接线**（按产品决策方案 A）：
- * installApi 内注册 API_PATHS + PAGE_PATHS + CORE_API_EXACT_PATHS（共 21 条 exact），
+ * installApi 内注册 API_PATHS + PAGE_PATHS + CORE_API_EXACT_PATHS（共 22 条 exact），
  * 本文件再调用 installSettingsExactRoutes 补上 P4 三条（SETTINGS_API_PATHS），
- * 合计 24 条 exact + 1 条 prefix = **25 条路由**（见 lib/api.js 的「路由注册口径」）。
+ * 合计 25 条 exact + 1 条 prefix = **26 条路由**（见 lib/api.js 的「路由注册口径」）。
  *
  * 设计约束（沿用集成体纪律）：
  * - **零运行时依赖**（只用 node 内置模块），宿主 peer 缺失时不影响加载；
@@ -32,7 +32,11 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { installApi, installSettingsExactRoutes } from './api.js'
 import { runProbes } from './probe.js'
-import { installSettings } from './settings.js'
+import { installSettings, unwrapValue } from './settings.js'
+
+// rc.2 的设置表单由 cordis 捕获**具名导出 Config**（vendor/cordis/src/registry.ts:326）后派生，
+// 故这里把它透出（本文件没有 default export，符合 packages/AGENTS.md 的 function plugin 口径）。
+export { Config } from './settings.js'
 
 export const name = 'work-personal-secretary'
 
@@ -66,13 +70,23 @@ export const SUB_PLUGINS = [
 
 export function apply(ctx, config = {}) {
   const version = readVersion()
+  // rc.2 下 volatile 字段在 config 里是包装对象（{ get() }），取用前必须解包；
+  // 0.1.x / 无 schema 环境下是普通值，unwrapValue 原样返回。
+  const repoRoot = unwrapValue(config && config.repoRoot)
+  const repoRootValue = typeof repoRoot === 'string' ? repoRoot : ''
+  // obsidianDir 也是 volatile 字段（设置页可配）→ 与 repoRoot **同一条解包纪律**。
+  // 踩坑留痕（2026-09-30）：漏解包时 rc.2 拿到的是引用对象，typeof !== 'string' → 静默取空串、
+  // 配置"看着配好了却不生效"（真机现象：knowledgeDeck 恒为 none）。
+  const obsidianDirRaw = unwrapValue(config && config.obsidianDir)
+  const obsidianDirValue = typeof obsidianDirRaw === 'string' ? obsidianDirRaw : ''
   ctx.logger?.debug?.('work-personal-secretary: 集成体本体已挂载 v' + version + '（客户端提供设置分区「工作秘书」）')
 
   // ---- 设置命名空间（本体自己）：repoRoot 可在设置页读写，免重启热生效（2026-09-14） ----
   // base 层**故意留空**：组合配置里的 repoRoot（cordis.patch.yml / bundle 配置）由 installApi 的
   // configRoot 单独承载，这样「设置值 / 部署配置 / patch / 自动探测」四种来源在响应里可区分，
   // 不会被 base 层伪装成「设置值」。设置服务缺失时本调用降级为空设置（repoRoot 走自动探测）。
-  const settings = installSettings(ctx, {})
+  // rc.2 靠这次调用拿到插件 config（volatile 字段由 installSettings 内部解包）；0.1.x 分支行为不变。
+  const settings = installSettings(ctx, config)
 
   // ---- 安装器宿主半：环境检查（只读）、自动补齐（服务端白名单）与子插件安装 ----
   // 服务缺失（无 webServer）时降级：只装设置分区，路由不可用并在日志里说明。
@@ -81,9 +95,12 @@ export function apply(ctx, config = {}) {
   // 两者都属于「部署默认层」的自定义入口，个性化可在该 profile 的 cordis.patch.yml 或设置页用户层里覆盖。
   let disposeApi = null
   try {
+    // 配置项 obsidianDir（可选）：知识库根目录（vault 根）—— 结构生成器与镜像建议值的依据。
+    // 与 workspace 一样属「部署默认层」，个性化可在 profile 的 cordis.patch.yml 覆盖。
     disposeApi = installApi(ctx, {
-      repoRoot: config && typeof config.repoRoot === 'string' ? config.repoRoot : '',
+      repoRoot: repoRootValue,
       workspace: config && typeof config.workspace === 'string' ? config.workspace : '',
+      obsidianDir: obsidianDirValue,
       // 设置句柄（repoRoot 的实时读取源；写入走 ctx.settings.mutate，见 /repo-root 路由）
       settings: settings,
     })
@@ -97,7 +114,7 @@ export function apply(ctx, config = {}) {
   let disposeExact = null
   try {
     disposeExact = installSettingsExactRoutes(ctx, {
-      repoRoot: config && typeof config.repoRoot === 'string' ? config.repoRoot : '',
+      repoRoot: repoRootValue,
     })
   } catch (err) {
     ctx.logger?.warn?.('work-personal-secretary: 能力配置页精确路由接线失败（能力配置页在桌面载体下可能不可用）：'

@@ -485,6 +485,10 @@ ok(String(rRepoBad.body.message).indexOf('未写盘') >= 0 && String(rRepoBad.bo
 ok(!existsSync(PATCH_FILE), '无效值未产生任何写盘（profile 的 cordis.patch.yml 未创建）')
 const rRepoCross = await call('POST', '/repo-root', { repoRoot: FAKE_REPO }, CROSS_HEADERS)
 ok(rRepoCross.status === 403, '跨站 POST /repo-root → 403（同源保护）')
+// 1.1.12：/repo-root 必须在 CORE_API_EXACT_PATHS 里（桌面外壳 fetch 桥只认 exact，
+// 否则真机上「保存仓库目录」直接 404 —— 与「缺少 Origin 头」是两个独立的桌面适配缺口）。
+ok(CORE_API_EXACT_PATHS.indexOf('/repo-root') >= 0, '/repo-root 已进 CORE_API_EXACT_PATHS（桌面外壳可达，1.1.12）')
+ok(ctx.routes.some((x) => x.kind === 'exact' && x.path === API_ROOT + '/repo-root'), '/repo-root 的 exact 路由确实注册')
 
 const rInstall = await call('POST', '/install', { id: 'dsh-mermaid' }, ORIGIN_HEADERS)
 ok(rInstall.status === 200 && rInstall.body.ok === true && rInstall.body.id === 'dsh-mermaid', 'POST /install → 200 ok')

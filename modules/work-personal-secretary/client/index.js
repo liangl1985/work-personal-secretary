@@ -42,7 +42,7 @@ window.__ModuleLoader__.load({
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.9'
+    const BUILD = 'v1.1.13'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -5071,7 +5071,7 @@ window.__ModuleLoader__.load({
     /** 设置命名空间白名单（与宿主侧同一口径；客户端只用来决定渲染哪张卡片） */
     const CFG_NS_MEMORY = 'work-memory'
     const CFG_NS_EXPERTS = 'experts'
-    const CFG_NS_DOCS = 'dsh-doc-suite'
+    const CFG_NS_DOCS = 'doc-suite'
     const CFG_NS_LIST = [CFG_NS_MEMORY, CFG_NS_EXPERTS, CFG_NS_DOCS]
     /**
      * 草稿哨兵：该键「待清除用户层覆盖」。NUL 前缀保证与任何真实输入都不冲突；
@@ -5190,7 +5190,7 @@ window.__ModuleLoader__.load({
             'expertCatalogEnabled', 'disciplineEnabled', 'skillInjectEnabled'],
         },
       ],
-      'dsh-doc-suite': [
+      'doc-suite': [
         {
           id: 'primary', titleKey: '', hintKey: '',
           keys: ['mediaImageEnabled', 'mediaArkApiKey', 'mediaImageModel', 'mediaVideoEnabled'],
@@ -5222,7 +5222,7 @@ window.__ModuleLoader__.load({
         options: [['auto', 'cfgDetailAuto'], ['card', 'cfgDetailCard'], ['full', 'cfgDetailFull']],
       },
     }
-    const CFG_NS_TITLE_KEY = { 'work-memory': 'cfgGroupMemory', experts: 'cfgGroupExperts', 'dsh-doc-suite': 'cfgGroupDocs' }
+    const CFG_NS_TITLE_KEY = { 'work-memory': 'cfgGroupMemory', experts: 'cfgGroupExperts', 'doc-suite': 'cfgGroupDocs' }
 
     /**
      * 能力配置页的**插件级标签**：一次只渲染当前插件的配置。
@@ -5235,7 +5235,7 @@ window.__ModuleLoader__.load({
       { id: 'docs', labelKey: 'cfgGroupDocs' },
       { id: 'pet', labelKey: 'cfgGroupPet' },
     ]
-    const CFG_NS_LEAD_KEY = { 'work-memory': 'cfgMemoryLead', experts: 'cfgExpertsLead', 'dsh-doc-suite': 'cfgDocSettingsLead' }
+    const CFG_NS_LEAD_KEY = { 'work-memory': 'cfgMemoryLead', experts: 'cfgExpertsLead', 'doc-suite': 'cfgDocSettingsLead' }
 
 
     /** 文档模块的四个技能（静态清单：落盘状态由文档模块自检给出，本页不臆断） */

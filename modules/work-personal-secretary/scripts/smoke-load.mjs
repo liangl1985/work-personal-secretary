@@ -2397,7 +2397,7 @@ const t5Fetch = async (url, opts) => {
     return jsonRes({ ok: true, namespaces: [
       { ns: 'work-memory', revision: 12, writable: true, applies: 'live', installed: true, value: cfgMemValue, user: cfgMemUser, fields: cfgFieldsOf(CFG_MEM_DEFAULTS) },
       { ns: 'experts', revision: 12, writable: true, applies: 'live', installed: true, value: CFG_EXP_DEFAULTS, user: {}, fields: cfgFieldsOf(CFG_EXP_DEFAULTS) },
-      { ns: 'dsh-doc-suite', revision: 12, writable: true, applies: 'live', installed: true, value: CFG_DOC_DEFAULTS, user: {}, fields: cfgFieldsOf(CFG_DOC_DEFAULTS) },
+      { ns: 'doc-suite', revision: 12, writable: true, applies: 'live', installed: true, value: CFG_DOC_DEFAULTS, user: {}, fields: cfgFieldsOf(CFG_DOC_DEFAULTS) },
     ] })
   }
   if (u.indexOf('/check') >= 0) return jsonRes(CHECK_PAYLOAD)

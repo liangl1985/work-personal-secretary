@@ -884,9 +884,15 @@ export function resolveDeckContext(options = {}) {
   const dshHome = options.dshHome ? normalizePath(options.dshHome) : resolveDshHome(env)
   const moduleDir = normalizePath(options.moduleDir) || MODULE_DIR
 
-  // 先读设置：工作区可能要从记忆镜像目录（work-memory.obsidianSyncDir）反推
+  // 先取设置：工作区可能要从记忆镜像目录（work-memory.obsidianSyncDir）反推。
+  // **取值纪律（2026-09-30 订正）**：优先用调用方注入的**宿主设置服务**现值（api 层经 ctx.settings.describe
+  // 取得，与 /setup-state、与子插件生效值同源）；只有未注入时（脚本 / 单测 / 老调用方）才退回直读
+  // 宿主 settings.yaml —— 那是**不该长期依赖的旁路**（宿主的文件与格式不归本插件管），仅作 0.1.x 兼容。
   const settingsFile = normalizePath(options.settingsFile) || join(dshHome, 'settings.yaml')
-  const settingsRead = readSettingsValues(settingsFile, { strictNamespaces: ['work-memory', 'experts'] })
+  const injectedValues = (options.settingsValues && typeof options.settingsValues === 'object') ? options.settingsValues : null
+  const settingsRead = injectedValues
+    ? { exists: true, values: injectedValues, problems: [], bom: '', eol: '\n', source: 'service' }
+    : Object.assign(readSettingsValues(settingsFile, { strictNamespaces: ['work-memory', 'experts'] }), { source: 'file' })
   const values = settingsRead.values || {}
 
   // 工作区解析（**绝不回退到用户主目录**）：client → config → derived → cwd → default → none
@@ -964,9 +970,12 @@ export function resolveDeckContext(options = {}) {
     agentsFile: normalizePath(options.agentsFile) || (workspace ? join(workspace, 'AGENTS.md') : ''),
     settingsFile: settingsFile,
     settingsRead: settingsRead,
+    // 'service' = 值来自宿主设置服务（正常路径）；'file' = 直读宿主 settings.yaml（0.1.x 兼容兜底）
+    settingsSource: settingsRead.source || 'file',
     memoryDir: memoryDir,
     // 迁移来源（旧记忆库目录）：由 api 层经**宿主设置服务**解析后注入。
-    // 注意：计划器**自己也会读** settings.yaml（见上方 readSettingsValues，只取 work-memory / experts 两个命名空间，用于反推工作区）；migrateFrom 仍由 api 层注入，两条口径并存。
+    // 取值口径（1.1.13 起统一）：设置类值一律经 api 层的宿主设置服务取出后注入（options.settingsValues）；
+    // 只有调用方未注入时（脚本 / 单测 / 0.1.x 老调用方）才退回直读宿主 settings.yaml（结果在 ctx.settingsSource 标 'file'）。
     migrateFrom: normalizePath(options.migrateFrom),
     migrateFromSource: typeof options.migrateFromSource === 'string' ? options.migrateFromSource : '',
     libraryName: libraryName,
@@ -1347,7 +1356,10 @@ export function diffLines(srcText, dstText) {
 
 function planSettings(ctx) {
   const spec = BASEDECK_ITEMS[3]
-  const raw = readFileRaw(ctx.settingsFile)
+  // 值来自宿主设置服务时，宿主 settings.yaml **不是本插件的写入目标**：不做文件级 BOM / 结构校验，
+  // 也不做文本级改写计划；待写的键交给写回器经 ctx.settings.mutate 落地（见 applySettings 的 viaService 分支）。
+  const viaService = ctx.settingsSource === 'service'
+  const raw = viaService ? null : readFileRaw(ctx.settingsFile)
   const text = raw ? (raw.bom ? raw.text.replace(/^\uFEFF/, '') : raw.text) : ''
   const ov = ctx.overrides || {}
 
@@ -1463,7 +1475,8 @@ function planSettings(ctx) {
     })
   }
 
-  const planned = writes.length > 0 ? planSettingsWrite(text, writes, { strictNamespaces: ['work-memory', 'experts'] }) : null
+  // 走设置服务时不做文本级改写计划（宿主文件不是写入目标）
+  const planned = (!viaService && writes.length > 0) ? planSettingsWrite(text, writes, { strictNamespaces: ['work-memory', 'experts'] }) : null
   if (planned && !planned.ok) {
     return makeItem(spec, {
       status: 'broken',
@@ -1475,28 +1488,40 @@ function planSettings(ctx) {
   }
 
   // 只有在真的会产生改动时才写盘（键已等于目标值时不算写入）
-  const willWrite = writes.length > 0 && Boolean(planned) && planned.changes.length > 0
-  const status = willWrite ? (fileExists ? 'update' : 'append') : (fileExists ? 'up_to_date' : 'none')
-  const action = willWrite ? (fileExists ? '将只增改指定键，其余内容逐字节保留' : '将新建')
-    : (fileExists ? '已是最新无需写入' : '没有可写入的值（未解析到工作区），跳过')
+  // 走设置服务时：待写键由写回器经 ctx.settings.mutate 落地，不存在「宿主文件是否存在」的概念
+  const willWrite = viaService
+    ? writes.length > 0
+    : (writes.length > 0 && Boolean(planned) && planned.changes.length > 0)
+  const target = viaService ? '宿主设置（profile / 设置服务）' : posix(ctx.settingsFile)
+  const status = willWrite
+    ? (viaService ? 'update' : (fileExists ? 'update' : 'append'))
+    : (viaService ? 'up_to_date' : (fileExists ? 'up_to_date' : 'none'))
+  const action = willWrite
+    ? (viaService ? '将只增改指定键（写入宿主设置服务）' : (fileExists ? '将只增改指定键，其余内容逐字节保留' : '将新建'))
+    : (viaService ? '已是最新无需写入' : (fileExists ? '已是最新无需写入' : '没有可写入的值（未解析到工作区），跳过'))
   const detail = (willWrite
-    ? '将写入 ' + writes.map((w) => w.ns + '.' + w.key).join(' / ') + '；其余键与注释逐字节保留（写前备份）'
-    : (fileExists ? '4 个目标键都已配置或无需预设（不写盘）' : '设置文件不存在且没有可写入的值'))
+    ? '将写入 ' + writes.map((w) => w.ns + '.' + w.key).join(' / ')
+      + (viaService ? '（经宿主设置服务，不触碰宿主文件）' : '；其余键与注释逐字节保留（写前备份）')
+    : (viaService
+      ? '4 个目标键的生效值均已从宿主设置服务读到，无需写入'
+      : (fileExists ? '4 个目标键都已配置或无需预设（不写盘）' : '设置文件不存在且没有可写入的值')))
     + '；' + obsidianHint
 
   return makeItem(spec, {
     status: status,
-    target: posix(ctx.settingsFile),
+    target: target,
     detail: detail,
     autoApplyable: willWrite,
     settingsKeys: keys,
     preview: {
       action: action,
       blockVersion: '',
-      contentHash: 'sha256:' + sha256Text(planned ? planned.text : text),
+      contentHash: 'sha256:' + sha256Text(viaService
+        ? keys.map((k) => k.ns + '.' + k.key + '=' + k.value).join('\n')
+        : (planned ? planned.text : text)),
       sampleLines: sampleBlock(keys.map((k) => k.ns + '.' + k.key + ': ' + (k.value || '（不预设）') + '  [' + k.action + ']')),
     },
-    internal: { writes: writes, planned: planned, text: text, keys: keys, exists: fileExists },
+    internal: { writes: writes, planned: planned, text: text, keys: keys, exists: fileExists, viaService: viaService },
   })
 }
 

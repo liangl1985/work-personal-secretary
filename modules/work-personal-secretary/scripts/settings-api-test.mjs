@@ -10,11 +10,13 @@
  *   [4] validateWriteRequest：非白名单 ns / 未声明 path / 嵌套 path / 复杂类型键 / 非法 op / 空 ops / 超条数 全被拒
  *   [5] POST /settings/write：**dryRun 默认 true 不写盘**；dryRun:false 才调 mutate，参数与写后重读正确
  *   [6] 冲突映射：SETTINGS_CONFLICT → HTTP 409 { expected, actual }
- *   [7] 同源守卫：跨站 / 缺 Content-Type / 缺 Origin → 403，且不产生任何写入
+ *   [7] 同源守卫：跨站 / 缺 Content-Type → 403（不产生写入）；缺 Origin（桌面载体 fetch 桥）→ 放行；
+ *       Origin: 'null'（沙箱化 iframe）→ 403
  *   [8] 降级不崩：ctx.settings 缺失 / describe 抛错 / mutate 失败 / 子插件未装 → 可读错误，绝不抛
  *   [9] GET /experts/preview：真实子插件打分（契约 §六.1 三级等保用例 + max=1↔2 因果对照）
  *  [10] 预览文本上限 2000：超长截断并标记 truncated
- *  [11] 路由注册口径：installApi 的 exact 数不变（既有测试不破），P4 精确路由独立补注册
+ *  [11] 路由注册口径：installApi 的 exact 数 = API_PATHS + PAGE_PATHS + CORE_API_EXACT_PATHS（1.1.12 起
+ *       CORE 含 /repo-root，故 13 条），P4 精确路由独立补注册
  *  [12] 真实子插件 schema 键数静态核对（work-memory 24 / experts 19）+ 默认值 1→2 与注入分级落点
  *  [13] 真实环境只读快照首尾比对（证明本次开发未写入真实设置文件 / 工作区 / 子插件源码）
  *
@@ -246,6 +248,7 @@ const REQ_HEADERS = { 'content-type': 'application/json', host: '127.0.0.1:43120
 const CROSS_HEADERS = { 'content-type': 'application/json', host: '127.0.0.1:43120', origin: 'http://evil.example' }
 const NO_CT_HEADERS = { host: '127.0.0.1:43120', origin: 'http://127.0.0.1:43120' }
 const NO_ORIGIN_HEADERS = { 'content-type': 'application/json', host: '127.0.0.1:43120' }
+const NULL_ORIGIN_HEADERS = { 'content-type': 'application/json', host: '127.0.0.1:43120', origin: 'null' }
 
 function prefixHandlerOf(ctx) {
   return (ctx.routes.filter((x) => x.kind === 'prefix')[0] || {}).handler
@@ -306,7 +309,7 @@ const REAL_BEFORE = REAL_TARGETS.map((t) => ({ t: t, v: readRealTarget(t) }))
 
 section('[1] 契约形状')
 ok(SETTINGS_API_PATHS.join(',') === '/settings,/settings/write,/experts/preview', 'P4 三条路由与契约 §4 一致')
-ok(SETTINGS_NS_WHITELIST.join(',') === 'work-memory,experts,dsh-doc-suite', 'ns 白名单硬编码为 work-memory / experts / dsh-doc-suite（契约 §5.1 + 文档能力组）')
+ok(SETTINGS_NS_WHITELIST.join(',') === 'work-memory,experts,doc-suite', 'ns 白名单硬编码为 work-memory / experts / doc-suite（rc.2 下 ns = profile entry id，非包名；契约 §5.1 + 文档能力组）')
 ok(PREVIEW_TEXT_LIMIT === 2000, '预览文本上限 2000 字符（契约 §4.3）')
 ok(API_PATHS.join(',') === '/check,/fix,/fix-all,/plugins,/install,/install-all,/basedeck', '既有 8 条 API_PATHS 一字未动')
 
@@ -343,7 +346,7 @@ section('[3] 白名单裁剪 + 未注册 ns 占位')
 const mock = makeMockSettings()
 const view = buildSettingsView(mock.settings.describe({ redactSecrets: true }), { writable: true })
 ok(view.ok === true && view.namespaces.length === 3, '只保留白名单三个 ns')
-ok(view.namespaces.map((n) => n.ns).join(',') === 'work-memory,experts,dsh-doc-suite', '顺序按白名单（页面分组稳定）')
+ok(view.namespaces.map((n) => n.ns).join(',') === 'work-memory,experts,doc-suite', '顺序按白名单（页面分组稳定）')
 ok(JSON.stringify(view).indexOf('workspace-tokenpet') < 0, 'describe 里的非白名单 ns（workspace-tokenpet）不出现在响应里')
 ok(view.namespaces[0].title === '记忆库' && view.namespaces[1].title === '专家库' && view.namespaces[2].title === '文档能力', 'ns 标题按契约 §3')
 ok(view.namespaces[0].revision === 12 && view.namespaces[1].revision === 5, 'revision 透出')
@@ -356,7 +359,7 @@ ok(view.namespaces[0].installed === true, '已注册 ns 标 installed:true')
 const partial = buildSettingsView([
   { ns: 'work-memory', schema: WM_SCHEMA, value: {}, revision: 3, applies: 'live' },
 ], { writable: true })
-ok(partial.namespaces.length === 3 && partial.namespaces[1].ns === 'experts' && partial.namespaces[2].ns === 'dsh-doc-suite', '未注册 ns 仍占位（页面不出现空分组）')
+ok(partial.namespaces.length === 3 && partial.namespaces[1].ns === 'experts' && partial.namespaces[2].ns === 'doc-suite', '未注册 ns 仍占位（页面不出现空分组）')
 ok(partial.namespaces[1].installed === false && partial.namespaces[1].writable === false && partial.namespaces[1].fields.length === 0,
   '未注册 ns → installed:false / writable:false / fields 空（可读降级，不崩）')
 
@@ -444,15 +447,23 @@ ok(wPlain.status === 400 && wPlain.body.error === 'write-failed', '普通写入�
 ok(String(wPlain.body.message).indexOf('<path>') > 0 && String(wPlain.body.message).indexOf('secret') < 0,
   '失败信息脱敏：本机路径被抹成 <path>（契约 §5.8）')
 
-section('[7] 同源守卫：跨站 / 缺 Content-Type / 缺 Origin → 403')
+section('[7] 同源守卫：跨站 / 缺 Content-Type → 403；缺 Origin（桌面载体）→ 放行')
 const beforeCross = mock.state.mutateCalls.length
 const wCross = await callPrefix(ctx1, 'POST', '/settings/write', Object.assign({}, good, { dryRun: false }), CROSS_HEADERS)
 ok(wCross.status === 403, '跨站 Origin → 403（契约 §5.5）')
 const wNoCt = await callPrefix(ctx1, 'POST', '/settings/write', Object.assign({}, good, { dryRun: false }), NO_CT_HEADERS)
 ok(wNoCt.status === 403, '缺 application/json → 403')
+ok(mock.state.mutateCalls.length === beforeCross, '跨站 / 缺 content-type 的写请求没有产生任何写入')
+// 1.1.12：桌面载体（官方 Desktop 的 fetch 桥）不发 Origin → 放行。浏览器对跨源 POST 一定带 Origin，
+// 故「带 Origin 则必须同源」仍足以拦 CSRF；若这里恢复 403，桌面外壳下 /repo-root、/domain/generate
+// 等全部写操作会整片失效（真机症状：生成失败：缺少 Origin 头）。
 const wNoOrigin = await callPrefix(ctx1, 'POST', '/settings/write', Object.assign({}, good, { dryRun: false }), NO_ORIGIN_HEADERS)
-ok(wNoOrigin.status === 403, '缺 Origin 头 → 403')
-ok(mock.state.mutateCalls.length === beforeCross, '被拦下的写请求没有产生任何写入')
+ok(wNoOrigin.status === 200 && wNoOrigin.body.ok === true, '缺 Origin 头 → 放行（桌面载体，1.1.12）')
+ok(mock.state.mutateCalls.length === beforeCross + 1, '放行的桌面载体写请求确实产生了一次写入')
+// Origin: 'null'（沙箱化 iframe）不是「无 Origin」：new URL('null') 抛错 → 仍按跨站拒绝
+const wNullOrigin = await callPrefix(ctx1, 'POST', '/settings/write', Object.assign({}, good, { dryRun: false }), NULL_ORIGIN_HEADERS)
+ok(wNullOrigin.status === 403, "Origin: 'null' → 403（不当作无 Origin 放行）")
+ok(mock.state.mutateCalls.length === beforeCross + 1, '被拒的 Origin: null 请求没有产生写入')
 
 section('[8] 降级不崩：settings 缺失 / describe 抛错 / 子插件未装')
 const ctxNo = makeMockCtx(null)
@@ -532,7 +543,9 @@ ok(prevLong.body.truncated === true, '超长文本标 truncated:true')
 ok(prevLong.body.text.length === PREVIEW_TEXT_LIMIT, '文本被截到 2000 字符（打分成本有界）')
 ok(Array.isArray(prevLong.body.ranked), '截断后仍正常打分')
 
-section('[11] 路由注册口径：installApi 的 14 条 exact + P4 精确路由（1.1.3 已接线，apply 共 18 条）')
+section('[11] 路由注册口径：installApi 的 ' + (API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length)
+  + ' 条 exact（1.1.12 起含 /repo-root）+ P4 精确路由（1.1.3 已接线，apply 共 '
+  + (API_PATHS.length + PAGE_PATHS.length + CORE_API_EXACT_PATHS.length + SETTINGS_API_PATHS.length + 1) + ' 条）')
 const ctxR = makeMockCtx(makeMockSettings().settings)
 installApi(ctxR, { platform: 'win32', repoRoot: FAKE_REPO, moduleDir: FAKE_MODULE, profileDir: FAKE_PROFILE, env: {}, commonCandidates: [] })
 ok(ctxR.routes.filter((x) => x.kind === 'prefix').length === 1, 'prefix 路由仍为 1 条（既有断言不破）')
@@ -565,7 +578,9 @@ disposeApply()
 section('[12] 真实子插件 schema 键数与默认值静态核对（只读）')
 function countSchemaKeys(file) {
   const text = readFileSync(file, 'utf8')
-  return text.split(/\r?\n/).filter((l) => /^ {2}[A-Za-z][A-Za-z0-9]*: z\./.test(l)).length
+  // 键值可能被一层函数包裹（0.2.0-rc.2 起统一为 `withVolatile(z.xxx)` 做 .volatile() 特性探测），
+  // 故正则容忍一层 `fn(` 前缀；仍要求「2 空格缩进 + 键名 + 冒号 + z.」，注释与嵌套行不会误命中。
+  return text.split(/\r?\n/).filter((l) => /^ {2}[A-Za-z][A-Za-z0-9]*: (?:[A-Za-z_$][A-Za-z0-9_$]*\()?z\./.test(l)).length
 }
 const wmSettingsFile = join(MODULES_DIR, 'dsh-work-memory', 'lib', 'settings.js')
 const expSettingsFile = join(MODULES_DIR, 'dsh-experts', 'lib', 'settings.js')
@@ -575,7 +590,7 @@ const expSrc = readFileSync(expSettingsFile, 'utf8')
 ok(/defaultDomain: 'infosec',/.test(expSrc), "DEFAULTS.defaultDomain = 'infosec'（0.3.x 域重划：presales → infosec，settings.js:46）")
 ok(/identityExpert: '',/.test(expSrc), "DEFAULTS.identityExpert = ''（身份退场：留空 = 不常驻，settings.js:47）")
 ok(/expertInjectMax: 4,/.test(expSrc), 'DEFAULTS.expertInjectMax = 4（2026-09-15 使用者定：写死 4、设置页不提供该项，settings.js:50）')
-ok(/expertInjectMax: z\.natural\(\)\.default\(4\)/.test(expSrc), 'schema 默认值 = 4（settings.js:88，写死 4 后的第二处一致点）')
+ok(/expertInjectMax: (?:[A-Za-z_$][A-Za-z0-9_$]*\()?z\.natural\(\)\.default\(4\)/.test(expSrc), 'schema 默认值 = 4（写死 4 后的第二处一致点；值可能被 withVolatile(...) 包裹）')
 // limits.js 无外部依赖：直接动态 import 做行为刻度（比正则匹配源码更稳），边界口径 = 0 不限 / 负数回落 4 / 硬上限 4
 const expLimits = await import(pathToFileURL(join(MODULES_DIR, 'dsh-experts', 'lib', 'limits.js')).href)
 ok(expLimits.clampInjectMax(0) === 0 && expLimits.clampInjectMax(-1) === 4 && expLimits.clampInjectMax(9) === 4,

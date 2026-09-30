@@ -33,10 +33,25 @@ import { pathToFileURL } from 'node:url'
 // ───────────────────────────── 契约常量（契约 §3 / §4 / §5.1） ─────────────────────────────
 
 /** ns 白名单（契约 §5.1 硬编码；**不接受客户端任意 ns**） */
-export const SETTINGS_NS_WHITELIST = ['work-memory', 'experts', 'dsh-doc-suite']
+export const SETTINGS_NS_WHITELIST = ['work-memory', 'experts', 'doc-suite']
 
 /** ns → 页面分组标题（契约 §3：记忆库 / 专家库） */
-export const SETTINGS_NS_TITLES = { 'work-memory': '记忆库', experts: '专家库', 'dsh-doc-suite': '文档能力' }
+export const SETTINGS_NS_TITLES = { 'work-memory': '记忆库', experts: '专家库', 'doc-suite': '文档能力' }
+
+/**
+ * ns 别名表（仅用于**匹配**，不改写任何 ns）：
+ * rc.2 的命名空间 = profile entry id（文档能力是 `doc-suite`），而 0.1.x 下子插件以模块常量注册
+ * （`dsh-doc-suite` 的 `SETTINGS_NS = 'dsh-doc-suite'`，= 包名）。两端都要认 —— 否则会出现
+ * 「修好 rc.2 就坏 0.1.x」的来回摆。输出仍用宿主返回的真实 ns，写回也照它走，故不影响 mutate。
+ */
+export const SETTINGS_NS_ALIASES = { 'doc-suite': ['dsh-doc-suite'] }
+
+/** 宿主返回的 ns 是否属于白名单里的某个规范名（含别名） */
+function nsMatches(hostNs, canonical) {
+  if (hostNs === canonical) return true
+  const aliases = SETTINGS_NS_ALIASES[canonical]
+  return Array.isArray(aliases) && aliases.indexOf(hostNs) !== -1
+}
 
 /** P4 的三条路由（注册方式见 lib/api.js 的 installSettingsExactRoutes） */
 export const SETTINGS_API_PATHS = ['/settings', '/settings/write', '/experts/preview']
@@ -168,7 +183,7 @@ export function buildSettingsView(described, options = {}) {
     : (described && Array.isArray(described.namespaces) ? described.namespaces : [])
   const nsWritable = !(options && options.writable === false)
   const namespaces = SETTINGS_NS_WHITELIST.map((ns) => {
-    const hit = list.filter((d) => d && d.ns === ns)[0]
+    const hit = list.filter((d) => d && nsMatches(d.ns, ns))[0]
     if (!hit) {
       return {
         ns: ns,
@@ -208,13 +223,13 @@ export function validateWriteRequest(body, view) {
   const req = (body && typeof body === 'object' && !Array.isArray(body)) ? body : {}
 
   const ns = typeof req.ns === 'string' ? req.ns : ''
-  if (SETTINGS_NS_WHITELIST.indexOf(ns) === -1) {
+  if (!SETTINGS_NS_WHITELIST.some((w) => nsMatches(ns, w))) {
     return {
       ok: false, status: 400, error: 'ns-not-allowed',
       message: '命名空间不在白名单内（只允许 ' + SETTINGS_NS_WHITELIST.join(' / ') + '）',
     }
   }
-  const target = namespaces.filter((n) => n && n.ns === ns)[0]
+  const target = namespaces.filter((n) => n && (n.ns === ns || nsMatches(ns, n.ns) || nsMatches(n.ns, ns)))[0]
   if (!target || target.installed === false) {
     return {
       ok: false, status: 400, error: 'ns-unavailable',

@@ -837,7 +837,16 @@ section('[14] 真实素材（真实 defaults）只读兼容性')
 const realTpl = join(MODULE_DIR, 'defaults', 'AGENTS.zh-CN.md')
 const realSeed = join(MODULE_DIR, 'defaults', 'global-memory.seed.md')
 const realTplLoaded = loadAgentsTemplate(realTpl, { generatorVersion: GEN_VERSION, now: FIXED_NOW })
-ok(realTplLoaded.ok === true && realTplLoaded.templateVersion === 1, '真实 AGENTS 模板可编译（template-version=1）')
+// 版本号不再写死：模板措辞实质变更时会 +1（模板头注释的约定），写死会让每次措辞变更都误报
+ok(realTplLoaded.ok === true
+  && Number.isInteger(realTplLoaded.templateVersion) && realTplLoaded.templateVersion >= 1,
+  '真实 AGENTS 模板可编译（template-version=' + realTplLoaded.templateVersion + '）')
+
+// 2026-09-30 去重决议的回归护栏：语言 / 协作 / 专家库三节改由记忆种子单一承担，
+// 指令模板**不得**再重复这三节（否则新机器首装又出现"两处维护"）
+for (const gone of ['## 语言（回答与思维）', '## 工作方式（总控兼读制）', '## 专家库使用流程']) {
+  ok(String(realTplLoaded.body || '').indexOf(gone) < 0, '真实模板已去重：不含「' + gone + '」')
+}
 const realSeedLoaded = loadMemorySeed(realSeed)
 ok(realSeedLoaded.ok === true && realSeedLoaded.entries.length === 4, '真实记忆种子解析出 4 条条目（三条指令层指针 + 一条工具技能指针）')
 ok(realSeedLoaded.entries.filter((e) => e.indexOf('AGENTS.md') > 0).length === 3, '语言 / 协作 / 专家库三条仍是指向指令层的指针（单一真源）')
