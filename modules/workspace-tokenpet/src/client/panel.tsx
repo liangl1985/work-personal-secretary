@@ -6,7 +6,8 @@ import { TokenPetSettingsPanel } from './settings-panel.tsx'
 import { localeFor, type Language } from './i18n.ts'
 import { useLanguage } from './settings-hook.ts'
 import { panelContentGrid } from './layout.ts'
-import { panelText } from './panel-messages.ts'
+import { panelText, type PanelMessageKey } from './panel-messages.ts'
+import type { BalanceView } from './account.ts'
 import type { TokenPetIndexState } from '../index-contract.ts'
 
 /** Contract for staged opening: keep the first paint lightweight. */
@@ -47,6 +48,8 @@ export interface PanelProps {
   cumulative?: CumulativeUsage | null
   lifetimeLedger?: (CumulativeUsage & { clearedAt?: string; refreshFailed?: number; refreshListed?: number }) | null
   lifetimeStatus?: PanelRequestStatus
+  /** Official account balance projection; absent until the host account Remote answers. */
+  balance?: BalanceView | null
   onClearLifetime?: () => boolean | Promise<boolean>
   width?: number
   height?: number
@@ -70,6 +73,13 @@ export interface PanelProps {
   onApplyPrompt?: (text: string) => void
   onSendPrompt?: (text: string) => void | Promise<void>
   phase?: 0 | 1 | 2
+}
+
+/** Map a non-ready balance state to its dictionary key; `ready` renders the amount instead. */
+export function balanceStateKey(state: BalanceView['state']): PanelMessageKey {
+  if (state === 'signed-out') return 'balanceSignedOut'
+  if (state === 'unavailable') return 'balanceUnavailable'
+  return 'balanceFailed'
 }
 
 /** Backward-compatible name for consumers of the panel component. */
@@ -255,6 +265,16 @@ export function ContextPanel(p: PanelProps) {
       confirmLifetimeClear ? h(LifetimeClearConfirmation, { key: 'confirm', language, busy: p.busy || clearStatus === 'clearing', onCancel: () => setConfirmLifetimeClear(false), onConfirm: confirmClearLifetime })
         : h('button', { key: 'clear', onClick: () => { setClearStatus('idle'); setConfirmLifetimeClear(true) }, disabled: p.busy || !ledger || !p.onClearLifetime, style: css(dangerLink) }, t('clear')),
     ]),
+    p.balance ? h('section', { key: 'balance', style: css(card), 'data-testid': 'account-balance' }, [
+      h('div', { key: 'heading', style: css(sectionHeading) }, [
+        h('strong', { key: 'title' }, t('balance')),
+        p.balance.state === 'ready' ? null : h('span', { key: 'state', style: css(subtle) }, t(balanceStateKey(p.balance.state))),
+      ]),
+      p.balance.state === 'ready'
+        ? h('div', { key: 'value', style: css(heroTotal) }, p.balance.recharge && p.balance.recharge !== '' ? p.balance.recharge : '—')
+        : null,
+      p.balance.bonus ? h('div', { key: 'bonus', style: css(note) }, t('bonus', { amount: p.balance.bonus })) : null,
+    ]) : null,
     h('div', { key: 'insights', style: css(panelContentGrid()) }, [
     h('section', { key: 'top', style: css(card) }, [
       h('div', { key: 'heading', style: css(sectionHeading) }, [h('strong', { key: 'title' }, t('topModels')), h('span', { key: 'scope', style: css(subtle) }, t('lifetime'))]),

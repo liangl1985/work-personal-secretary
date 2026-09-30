@@ -42,6 +42,7 @@
 ### 浏览器半要点
 
 - 客户端入口 `src/client/index.ts`：挂浮动宠物与三个插槽（:1093-1110），并注入 sprite-sheet 关键帧 CSS（:1088）。
+- `src/client/account.ts`（1.0.6）：账户余额投影 —— 经官方 `account` Remote 的 `getBalance()` 取值，按 Platform 口径格式化金额（十进制字符串、roundDown、千分位），并提供四条降级（无 Remote / 未登录 / 失败 / 异常）
 - 其他文件各司其职：`panel.tsx` / `pet.tsx` / `sprite-player.tsx`（渲染与播放）、`animation.ts` / `pet-action-player.tsx`（12 动作 × 32 帧 × 100ms，`README.md:30-33`）、`skin.ts` / `skin-store.ts` / `skin-panel.tsx`（形象选择）、`settings*.ts(x)`（偏好持久化）、`derive.ts`（投影派生）、`lifetime-ledger.ts` / `trend-maintenance*`（面板动作）。
 
 ## 2. 数据流

@@ -29,6 +29,10 @@ export const panelMessages = defineMessages({
   buildIndex: { zh: '首次建立索引', en: 'Build index' }, sync: { zh: '立即同步', en: 'Sync now' }, retry: { zh: '重试', en: 'Retry' },
   allModels: { zh: '全部服务商与模型', en: 'All providers & models' }, modelIntro: { zh: '分类来自账本的模型/日期记录；源接口未提供分类时仅显示真实总量。', en: 'Breakdowns come from ledger model/day records. Only reported totals are shown when a breakdown is unavailable.' },
   noBreakdown: { zh: '当前接口未提供该模型的 Token 分类，因此不进行推算。', en: 'The source provides no token breakdown for this model. No estimates are made.' }, noModelUsage: { zh: '暂无模型用量', en: 'No model usage yet' },
+  balance: { zh: '账户余额', en: 'Account balance' }, bonus: { zh: '赠金 {amount}', en: 'Bonus {amount}' },
+  balanceSignedOut: { zh: '未登录（登录后显示余额）', en: 'Not signed in (balance appears after sign-in)' },
+  balanceUnavailable: { zh: '当前宿主未提供账户接口', en: 'This host exposes no account interface' },
+  balanceFailed: { zh: '余额读取失败', en: 'Balance could not be read' },
   settingsLoading: { zh: '正在加载设置…', en: 'Loading settings…' }, panel: { zh: '用量小宠物统计面板', en: 'Token pet usage panel' }, tabs: { zh: '统计面板', en: 'Usage views' },
 })
 export type PanelMessageKey = keyof typeof panelMessages

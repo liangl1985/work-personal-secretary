@@ -7,6 +7,29 @@
 > 1.0.0 之前的条目**保留原文**：其中「补丁 / patches / 上游基线 / 定制层」等措辞属于当时的
 > 历史形态记录，对应的文件已在 1.0.0 中删除。
 
+## 1.0.6 — 2026-09-30（账户余额显示：改走官方 account Remote）
+
+> 触发：官方桌面端 **0.2.0-rc.2** 已内置账户能力（asar 实测含 `api-account-controller` / `deepseek-account` /
+> `client-ui-settings-account` / `getBalance`）。此前「本机内核没有 account 包 → 余额功能无法开发/验证」的阻塞
+> 已解除（见 `work-personal-secretary/OFFICIAL-SOURCE-NOTES.md` §10）。
+
+- **新增账户余额显示**（统计面板）：经官方 **`account` Remote 命名空间**的 `getBalance(AccountClientMetadata)`
+  读取，**只读复用官方数据**，不改动官方任何原始值。
+  - 调用面与官方 UI 同路：**`ctx.get('remote.account')`**（可选服务；不写进 `inject`，以免宿主未提供该服务时
+    插件 fiber 一直挂起），metadata 按官方口径构造：`version`（宿主内联 `DSH_CLIENT_VERSION`，缺失时回落本包
+    版本）/ `locale` / `timezoneOffsetSeconds = -getTimezoneOffset()*60`。
+  - 金额口径照官方 `formatBalance`：**保留十进制字符串精度**（不做 float 换算）、`roundDown` 到分、千分位分组、
+    `0` → `¥0.00`、`0<v<0.01` → `<¥0.01`、负值 `-¥…`；赠金（`bonusWallets`）有则在下一行单独显示。
+- **四条降级**（任一都不抛给宿主、不影响桌宠挂载）：宿主无 account Remote → `当前宿主未提供账户接口`；
+  `getBalance` 返回 `null` → `未登录（登录后显示余额）`；`ok:false` 或余额 `status:'failed'` → `余额读取失败`；
+  调用抛错（如账号会话缺失）→ 同上。
+- **用量侧不改接线**：桌宠早已在读官方投影（`tokenUsage` / `sessionStats` / `contextPressure` /
+  `contextBreakdown` / `contextTimeline` / `todayUsageBuckets`），本次只新增余额；**跨会话终身累计仍由本地
+  账本承担**（官方没有对等的终身投影）。
+- 新增 `tests/account.test.mjs`（4 条：格式化口径 / 投影映射 / 降级矩阵 / metadata）；`npm test` **12 pass / 0 fail**，
+  `npm run typecheck` 通过。
+- 产物：`client/client.js` 489,037 → **497,919 B**（+8,882 B：余额投影 + 文案）。
+
 ## 1.0.5 — 2026-09-30（DSH 0.2.0-rc.2 兼容：peer 范围放宽）
 
 > 触发：官方 0.2.0-rc.2 的**插件兼容性闸门**（`packages/boot/app-boot/src/plugin-compatibility.ts:61-88`）会拒绝 peerDependencies 中不满足运行时版本的 `@deepseek-ai/dsh*` 项 → 整个 bundle 被跳过 → **客户端半边不加载**，表现为「设置页里本模块的配置分区不出现」。

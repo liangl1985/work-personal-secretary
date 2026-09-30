@@ -53,6 +53,7 @@ import { TokenPetSettingsPanel } from './settings-panel.tsx'
 import { builtinSkinIndex, parseSkinPack, resolveStyleOverride, skinToActionSpecs, type SkinAnimationSpec, type SkinManifest, type SkinPackManifest } from './skin.ts'
 import { PET_ACTION_SHEET_SPECS } from './pet-action-sheets.generated.ts'
 import { hostUrl } from './host-url.ts'
+import { readBalance, type BalanceView } from './account.ts'
 import { injectSpriteSheetCss } from './sprite-player.tsx'
 import { clearLifetimeLedgerAndReload } from './lifetime-ledger.ts'
 import { canLoadTodayUsageTrend, fitPanelSizeToViewport, FLOATING_LAYER, proportionalPanelSize } from './layout.ts'
@@ -61,7 +62,7 @@ import { canReadTokenPetIndex, todayTrendRequestUrl, tokenPetIndexStatusOf } fro
 import type { TokenPetIndexStatus } from '../index-contract.ts'
 import { createCompletionTracker, conversationTimelineOf } from './completion.ts'
 import { disposeCompletionSound, playCompletionSound, prepareCompletionSound, stopCompletionSound } from './completion-sound.ts'
-import { translate } from './i18n.ts'
+import { localeFor, translate, type Language } from './i18n.ts'
 import { useLanguage, useSettings } from './settings-hook.ts'
 import { SHELL_MESSAGES } from './shell-messages.ts'
 
@@ -234,6 +235,31 @@ function useLifetimeLedger(reloadKey: number, enabled: boolean) {
     return () => { cancelled = true; request.dispose() }
   }, [enabled, readyKey, reloadKey])
   return { value, status }
+}
+
+/**
+ * Account Remote handle captured in `apply`. The host may expose no account
+ * capability at all (Web carrier, or an older kernel), which is the
+ * `unavailable` state rather than an error.
+ */
+let accountRemote: unknown
+
+/** Official account balance: read while the panel is open and on explicit refresh. */
+function useAccountBalance(language: Language, reloadKey: number, enabled: boolean): BalanceView | null {
+  const [value, setValue] = useState<BalanceView | null>(null)
+  const [readyKey, setReadyKey] = useState<number | null>(null)
+  useEffect(() => {
+    if (!enabled || readyKey === reloadKey) return
+    let cancelled = false
+    // The host bundle inlines DSH_CLIENT_VERSION; the client face has no node types, so read it defensively.
+    const hostProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    const version = hostProcess?.env?.DSH_CLIENT_VERSION
+    void readBalance(accountRemote, localeFor(language), version).then((next) => {
+      if (!cancelled) { setValue(next); setReadyKey(reloadKey) }
+    })
+    return () => { cancelled = true }
+  }, [enabled, readyKey, reloadKey, language])
+  return value
 }
 
 /** Fetch today's real usage trend only when the panel is visible. */
@@ -645,6 +671,8 @@ function TokenPetWindow() {
   // Lifetime Ledger remains independent: it observes live/closed usage and
   // advances monotonically even before the optional usage index exists.
   const lifetimeLedger = useLifetimeLedger(lifetimeReloadKey, panelOpen && panelPhase >= 1)
+  // Balance rides the same reload generation as the lifetime ledger so the refresh button updates both.
+  const accountBalance = useAccountBalance(language, lifetimeReloadKey, panelOpen && panelPhase >= 1)
   // Trend is backed by the durable index and is independent from Lifetime.
   const todayTrend = useTodayUsageTrend(trendReloadKey, canLoadTodayUsageTrend(panelOpen, panelPhase, indexUsable))
   const todayUsage = todayTrend.value
@@ -991,6 +1019,7 @@ function TokenPetWindow() {
         cumulative: view.cumulative,
         lifetimeLedger: lifetimeLedger.value,
         lifetimeStatus: lifetimeLedger.status,
+        balance: accountBalance,
         onClearLifetime: doClearLifetime,
         width: visibleWidth,
         maxHeight: panelContentHeight,
@@ -1053,7 +1082,10 @@ interface SlotsService {
   register(meta: Record<string, unknown>, component: unknown): unknown
 }
 
-export function apply(ctx: { slots: SlotsService }): void {
+export function apply(ctx: { slots: SlotsService; get?: (name: string) => unknown }): void {
+  // Optional service: the pet degrades to "no account interface" when the host
+  // does not provide the official account Remote.
+  accountRemote = typeof ctx.get === 'function' ? ctx.get('remote.account') : undefined
   // Inject the CSS once (keyframe for the floating bob). Guarded so a hot
   // reload/re-inject does not append a duplicate style tag.
   const CUSTOM_CSS = `

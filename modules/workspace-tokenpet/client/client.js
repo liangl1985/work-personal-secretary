@@ -4055,6 +4055,26 @@ window.__ModuleLoader__.load({
 				zh: "暂无模型用量",
 				en: "No model usage yet"
 			},
+			balance: {
+				zh: "账户余额",
+				en: "Account balance"
+			},
+			bonus: {
+				zh: "赠金 {amount}",
+				en: "Bonus {amount}"
+			},
+			balanceSignedOut: {
+				zh: "未登录（登录后显示余额）",
+				en: "Not signed in (balance appears after sign-in)"
+			},
+			balanceUnavailable: {
+				zh: "当前宿主未提供账户接口",
+				en: "This host exposes no account interface"
+			},
+			balanceFailed: {
+				zh: "余额读取失败",
+				en: "Balance could not be read"
+			},
 			settingsLoading: {
 				zh: "正在加载设置…",
 				en: "Loading settings…"
@@ -4100,6 +4120,12 @@ window.__ModuleLoader__.load({
 				label: "设置"
 			}
 		];
+		/** Map a non-ready balance state to its dictionary key; `ready` renders the amount instead. */
+		function balanceStateKey(state) {
+			if (state === "signed-out") return "balanceSignedOut";
+			if (state === "unavailable") return "balanceUnavailable";
+			return "balanceFailed";
+		}
 		function formatPanelDate(time, language, hourOnly = false) {
 			const date = new Date(typeof time === "number" && time < 0xe8d4a51000 ? time * 1e3 : time);
 			return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(localeFor(language), hourOnly ? {
@@ -4445,6 +4471,27 @@ window.__ModuleLoader__.load({
 						style: css(dangerLink)
 					}, t("clear"))
 				]),
+				p.balance ? (0, react.createElement)("section", {
+					key: "balance",
+					style: css(card),
+					"data-testid": "account-balance"
+				}, [
+					(0, react.createElement)("div", {
+						key: "heading",
+						style: css(sectionHeading)
+					}, [(0, react.createElement)("strong", { key: "title" }, t("balance")), p.balance.state === "ready" ? null : (0, react.createElement)("span", {
+						key: "state",
+						style: css(subtle)
+					}, t(balanceStateKey(p.balance.state)))]),
+					p.balance.state === "ready" ? (0, react.createElement)("div", {
+						key: "value",
+						style: css(heroTotal)
+					}, p.balance.recharge && p.balance.recharge !== "" ? p.balance.recharge : "—") : null,
+					p.balance.bonus ? (0, react.createElement)("div", {
+						key: "bonus",
+						style: css(note)
+					}, t("bonus", { amount: p.balance.bonus })) : null
+				]) : null,
 				(0, react.createElement)("div", {
 					key: "insights",
 					style: css(panelContentGrid())
@@ -5623,6 +5670,153 @@ window.__ModuleLoader__.load({
 			}
 		}
 		//#endregion
+		//#region src/client/account.ts
+		const CURRENCY_SYMBOL = {
+			CNY: "¥",
+			USD: "$"
+		};
+		/** Fallback bundle version so the metadata carries a non-empty version on third-party builds. */
+		const BUNDLE_VERSION = "1.0.6";
+		/**
+		* Build the request identity for one account call.
+		*
+		* The client build version is inlined by the host bundle when present; a
+		* third-party build without that define falls back to this bundle's version, so
+		* the metadata is never empty.
+		* @param locale - active UI language.
+		* @param version - client build version from the bundle environment.
+		* @returns metadata for the account Remote methods.
+		*/
+		function accountClientMetadata(locale, version) {
+			return {
+				version: version !== void 0 && version !== "" ? version : BUNDLE_VERSION,
+				locale,
+				timezoneOffsetSeconds: -(/* @__PURE__ */ new Date()).getTimezoneOffset() * 60
+			};
+		}
+		/** Split a validated decimal string into sign, integer and fraction parts. @returns null when the text is not a plain decimal. */
+		function splitDecimal(amount) {
+			const text = String(amount ?? "").trim();
+			if (!/^-?\d+(\.\d+)?$/.test(text)) return null;
+			const negative = text.startsWith("-");
+			const [integer = "0", fraction = ""] = (negative ? text.slice(1) : text).split(".");
+			return {
+				negative,
+				integer,
+				fraction
+			};
+		}
+		/** Insert thousands separators into an integer digit string. @param digits - plain digit string. @returns grouped digits. */
+		function addCommas(digits) {
+			return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+		}
+		/** Truncate a fraction to two digits, rounding half up on the third digit. @param fraction - fraction digits without the point. @returns two digits. */
+		function roundHalfUp2(fraction) {
+			const padded = (fraction + "00").slice(0, 3);
+			return {
+				digits: padded.slice(0, 2),
+				carry: Number(padded[2]) >= 5
+			};
+		}
+		/** Increment a two-digit string by one, reporting overflow past 99. @param digits - two digits. @returns incremented digits and whether the integer part must advance. */
+		function bump2(digits) {
+			const next = Number(digits) + 1;
+			return next > 99 ? {
+				digits: "00",
+				carry: true
+			} : {
+				digits: String(next).padStart(2, "0"),
+				carry: false
+			};
+		}
+		/**
+		* Format a balance using Platform Web's two-decimal and sub-cent display rules.
+		* @param amount - validated decimal balance string.
+		* @param symbol - currency symbol.
+		* @returns signed currency text with grouped digits, or an empty string when the input is not a decimal.
+		*/
+		function formatBalance(amount, symbol) {
+			const parsed = splitDecimal(amount);
+			if (!parsed) return "";
+			const { negative, integer, fraction } = parsed;
+			const zeroInteger = /^0*$/.test(integer);
+			const zeroFraction = /^0*$/.test(fraction);
+			if (zeroInteger && zeroFraction) return symbol + "0.00";
+			if (negative) {
+				if (zeroInteger && /^0*$/.test((fraction + "00").slice(0, 2))) return "-" + symbol + "0.01";
+				const rounded = roundHalfUp2(fraction);
+				let int = integer;
+				let cents = rounded.digits;
+				if (rounded.carry) {
+					const bumped = bump2(cents);
+					cents = bumped.digits;
+					if (bumped.carry) int = String(Number(int) + 1);
+				}
+				return "-" + symbol + addCommas(String(Number(int))) + "." + cents;
+			}
+			if (zeroInteger && /^0*$/.test((fraction + "00").slice(0, 2))) return "<" + symbol + "0.01";
+			const truncated = (fraction + "00").slice(0, 2);
+			return symbol + addCommas(String(Number(integer))) + "." + truncated;
+		}
+		/** Sum wallets of one currency into a single formatted string. @param wallets - wallet entries to display. @returns formatted text, or an empty string when nothing is positive. */
+		function formatWallets(wallets) {
+			const parts = [];
+			for (const wallet of wallets) {
+				if (!wallet || typeof wallet.balance !== "string") continue;
+				const symbol = CURRENCY_SYMBOL[wallet.currency];
+				if (!symbol) continue;
+				const parsed = splitDecimal(wallet.balance);
+				if (!parsed || parsed.negative && parsed.fraction === "" && /^0*$/.test(parsed.integer)) continue;
+				const text = formatBalance(wallet.balance, symbol);
+				if (text !== "") parts.push(text);
+			}
+			return parts.join(" + ");
+		}
+		/**
+		* Project one balance query result into panel state.
+		* @param value - `AccountDetails['balance']` as the Remote returned it.
+		* @returns the panel projection.
+		*/
+		function balanceView(value) {
+			const details = value;
+			if (!details || details.status !== "ready") return { state: "failed" };
+			const recharge = formatWallets(Array.isArray(details.value) ? details.value : []);
+			const bonus = formatWallets(Array.isArray(details.bonusWallets) ? details.bonusWallets : []);
+			if (recharge === "" && bonus === "") return { state: "failed" };
+			return bonus === "" ? {
+				state: "ready",
+				recharge
+			} : {
+				state: "ready",
+				recharge,
+				bonus
+			};
+		}
+		/**
+		* Read the account balance through the official Remote when the host exposes it.
+		*
+		* Every failure path degrades to a panel state instead of throwing: this runs
+		* from a render-adjacent effect, and the pet must never fail to mount because of
+		* an account query.
+		* @param remote - `ctx.get('remote.account')` value; undefined when the host has no account capability.
+		* @param locale - active UI language.
+		* @param version - client build version from the bundle environment.
+		* @returns the balance projection.
+		*/
+		async function readBalance(remote, locale, version) {
+			const account = remote ?? void 0;
+			if (!account || typeof account.getBalance !== "function") return { state: "unavailable" };
+			try {
+				const result = await account.getBalance(accountClientMetadata(locale, version));
+				if (result && result.ok === false) return { state: "failed" };
+				const value = result ? result.value : void 0;
+				if (value === null || value === void 0) return { state: "signed-out" };
+				return balanceView(value);
+			} catch (_error) {
+				return { state: "failed" };
+			}
+		}
+		//#endregion
 		//#region src/client/sprite-player.tsx
 		/**
 		* Sprite-sheet animation player for skin animations.
@@ -6069,6 +6263,37 @@ window.__ModuleLoader__.load({
 				value,
 				status
 			};
+		}
+		/**
+		* Account Remote handle captured in `apply`. The host may expose no account
+		* capability at all (Web carrier, or an older kernel), which is the
+		* `unavailable` state rather than an error.
+		*/
+		let accountRemote;
+		/** Official account balance: read while the panel is open and on explicit refresh. */
+		function useAccountBalance(language, reloadKey, enabled) {
+			const [value, setValue] = (0, react.useState)(null);
+			const [readyKey, setReadyKey] = (0, react.useState)(null);
+			(0, react.useEffect)(() => {
+				if (!enabled || readyKey === reloadKey) return;
+				let cancelled = false;
+				const version = globalThis.process?.env?.DSH_CLIENT_VERSION;
+				readBalance(accountRemote, localeFor(language), version).then((next) => {
+					if (!cancelled) {
+						setValue(next);
+						setReadyKey(reloadKey);
+					}
+				});
+				return () => {
+					cancelled = true;
+				};
+			}, [
+				enabled,
+				readyKey,
+				reloadKey,
+				language
+			]);
+			return value;
 		}
 		/** Fetch today's real usage trend only when the panel is visible. */
 		function useTodayUsageTrend(reloadKey, enabled) {
@@ -6614,6 +6839,7 @@ window.__ModuleLoader__.load({
 			}, [panelOpen]);
 			const { progress: indexProgress, usable: indexUsable, build: buildIndex, cancel: cancelIndex } = useUsageIndex(panelOpen);
 			const lifetimeLedger = useLifetimeLedger(lifetimeReloadKey, panelOpen && panelPhase >= 1);
+			const accountBalance = useAccountBalance(language, lifetimeReloadKey, panelOpen && panelPhase >= 1);
 			const todayTrend = useTodayUsageTrend(trendReloadKey, canLoadTodayUsageTrend(panelOpen, panelPhase, indexUsable));
 			const todayUsage = todayTrend.value;
 			(0, react.useEffect)(() => {
@@ -7040,6 +7266,7 @@ window.__ModuleLoader__.load({
 					cumulative: view.cumulative,
 					lifetimeLedger: lifetimeLedger.value,
 					lifetimeStatus: lifetimeLedger.status,
+					balance: accountBalance,
 					onClearLifetime: doClearLifetime,
 					width: visibleWidth,
 					maxHeight: panelContentHeight,
@@ -7102,6 +7329,7 @@ window.__ModuleLoader__.load({
 		const name = "workspace-tokenpet";
 		const inject = ["slots", "locale"];
 		function apply(ctx) {
+			accountRemote = typeof ctx.get === "function" ? ctx.get("remote.account") : void 0;
 			const CUSTOM_CSS = `
     @keyframes dsh-pet-idle { 0%,100% { transform:translateY(0) } 50% { transform:translateY(-4px) } }
      @keyframes dsh-pet-working { 0%,100% { transform:rotate(-3deg) } 50% { transform:rotate(3deg) } }
