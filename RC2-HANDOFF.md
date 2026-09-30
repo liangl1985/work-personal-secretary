@@ -20,15 +20,15 @@
 |---|---|
 | 运行时 | **DSH 官方桌面端 0.2.0-rc.2**（`E:\DSH-desktop`，asar 内版本串实测） |
 | GUI | `http://127.0.0.1:19387` |
-| DSH_HOME | `C:\Users\liangl\.dsh` |
-| profile | `desktop` → `C:\Users\liangl\.dsh\profiles\desktop\` |
+| DSH_HOME | `<DSH_HOME>` |
+| profile | `desktop` → `<DSH_HOME>\profiles\desktop\` |
 | profile 配置 | `profiles\desktop\cordis.patch.yml`（**15 条目**，含 `work-memory.memoryDir`） |
-| 插件源码仓 | `E:\lina\DSH插件\src\work-personal-secretary\`（**git 仓库根在此**；`E:\lina\DSH插件` 不是仓库） |
+| 插件源码仓 | `<工作区>\DSH插件\src\work-personal-secretary\`（**git 仓库根在此**；`<工作区>\DSH插件` 不是仓库） |
 | 模块目录 | 上面那个仓库下的 `modules\` |
-| 记忆库 | `E:\DSH-workspace\memory-data` |
-| 知识库 vault | `E:\DSH-workspace\obsidian-data` |
-| 工作区 | `E:\lina`（`AGENTS.md` + `.dsh\skills` + `DSH插件` + `0.产出物`） |
-| 备份 | `E:\lina\backup\2026-09-30-rc2修复前\`（5 个模块旧副本 + 旧 patch） |
+| 记忆库 | `<存储根>\memory-data` |
+| 知识库 vault | `<存储根>\obsidian-data` |
+| 工作区 | `<工作区>`（`AGENTS.md` + `.dsh\skills` + `DSH插件` + `0.产出物`） |
+| 备份 | `<工作区>\backup\2026-09-30-rc2修复前\`（5 个模块旧副本 + 旧 patch） |
 
 ### ⭐ 一个极其有用的新发现
 
@@ -98,7 +98,7 @@ rc.2 **只把「有具名导出 `Config` 且字段带 `.volatile()`」的插件�
 ### 2.4 其他已完成
 
 - **白名单对齐**：`SETTINGS_NS_WHITELIST` 由包名 `dsh-doc-suite` 改为 **entry id `doc-suite`**；并加 `SETTINGS_NS_ALIASES` **别名归并**，使 0.1.x（用包名注册）与 rc.2 都能命中。
-- **`discipline.js` 记忆根通道**：原走 `ctx.settings.get()`（rc.2 **没有** `get`）→ 静默落到兜底，**实测会指到 `C:\Users\liangl\.dsh\memories\lina`（错目录）**；已补 `describe()` 通道 + apply 预热（describe 异步 / 注入回调同步 → 同步读缓存 + 后台刷新）。
+- **`discipline.js` 记忆根通道**：原走 `ctx.settings.get()`（rc.2 **没有** `get`）→ 静默落到兜底，**实测会指到 `<DSH_HOME>\memories\lina`（错目录）**；已补 `describe()` 通道 + apply 预热（describe 异步 / 注入回调同步 → 同步读缓存 + 后台刷新）。
 - **`mediaArkApiKey` 加 `role('secret')`**：不然密钥会明文出现在 `/settings` 响应与能力配置页；并加 `withSecretRole()` 特性探测（mock 无 `role` 时裸调会崩）。
 - **回归**：集成体七套 + 子插件 12 脚本 = **失败总数 0**（截至 2026-09-30 21:26）。
 
@@ -108,7 +108,7 @@ rc.2 **只把「有具名导出 `Config` 且字段带 `.volatile()`」的插件�
 
 ### ✅ P0（2026-09-30 晚已修，待重启复验）—— `workspace` 未配置，导致「核心配置」误判 4 项
 
-> **当前状态**：profile patch 已写入 `workspace: 'E:/lina'` → **待重启 DSH 后复验**。
+> **当前状态**：profile patch 已写入 `workspace: '<工作区>'` → **待重启 DSH 后复验**。
 > 修复前：`workspaceSource=derived`、`setupNeeded=true`；预演显示修复后：`workspaceSource=config`、`setupNeeded=false`。
 
 **现象**：设置 →「工作秘书」顶部横幅显示「还差 4 项」。
@@ -117,7 +117,7 @@ rc.2 **只把「有具名导出 `Config` 且字段带 `.volatile()`」的插件�
 
 ```
 curl.exe -s "http://127.0.0.1:19387/work-personal-secretary/api/basedeck"
-→ workspace = "E:/DSH-workspace/obsidian-data"   workspaceSource = "derived"
+→ workspace = "<存储根>/obsidian-data"   workspaceSource = "derived"
   workspaceNote = "工作区由记忆镜像目录反推（…/00_全局记忆 的父目录），请确认"
   setupNeeded = true
   summary = { total:8, toWrite:3, upToDate:4, blocked:0, none:1 }
@@ -130,7 +130,7 @@ curl.exe -s "http://127.0.0.1:19387/work-personal-secretary/api/basedeck"
 
 `lib/basedeck.js:796-846` 的 `resolveWorkspace()` 五级优先级：
 ① query 显式 `workspace` → ② **`configWorkspace`（= 集成体 entry config 的 `workspace`）** → ③ 由记忆镜像目录**反推** → ④ cwd → ⑤ candidates。
-真机 ①② 皆空 → 走 ③，推出 `E:/DSH-workspace/obsidian-data`。
+真机 ①② 皆空 → 走 ③，推出 `<存储根>/obsidian-data`。
 而 `:833` 的判定标准是「**像工作区（有 AGENTS.md / .dsh / .git）**」—— vault 目录不符合 → `agentsMd` / `skills` 被判「要新建 / 缺失」。
 
 **修法·执行记录（2026-09-30 晚，已执行）**：
@@ -140,14 +140,14 @@ curl.exe -s "http://127.0.0.1:19387/work-personal-secretary/api/basedeck"
 ```yaml
 - id: work-personal-secretary
   config:
-    repoRoot: 'E:/lina/DSH插件/src/work-personal-secretary'
+    repoRoot: '<工作区>/DSH插件/src/work-personal-secretary'
     selfCheckOnStartup: false
     # 2026-09-30 修复：显式指定工作区，避免 /basedeck 由记忆镜像目录反推成知识库 vault
-    #（反推目标 E:/DSH-workspace/obsidian-data 会把 AGENTS.md 与技能写进真相源 vault）
-    workspace: 'E:/lina'          # ← 仅新增这一行
+    #（反推目标 <存储根>/obsidian-data 会把 AGENTS.md 与技能写进真相源 vault）
+    workspace: '<工作区>'          # ← 仅新增这一行
 ```
 
-- 备份：`E:\lina\backup\2026-09-30-patch-workspace前\cordis.patch.yml.bak`
+- 备份：`<工作区>\backup\2026-09-30-patch-workspace前\cordis.patch.yml.bak`
 - 校验：`node -e "require('js-yaml').load(...)"` → **解析通过，entries=15**（仍是 15 条，未新增条目）
 - 生效：**需重启 DSH**（`workspace` 是普通 entry config，非 volatile → 不会就地更新）
 
@@ -158,19 +158,19 @@ curl.exe -s "http://127.0.0.1:19387/work-personal-secretary/api/basedeck"
 | `agentsMd` / `skills` 应变 `up_to_date` | 实为 `user_modified`：AGENTS.md 块内被手工改过、5 个技能里 3 个本地改过 → **系统拒绝自动覆盖**（保护行为，正确） |
 | 横幅数字降到 **1**（只剩 `memorySeed`） | 不是"降到 1"，而是**横幅整个消失** —— 客户端只在 `setupNeeded===true` 时显示（`client/index.js:6396`），而 `computeSetupNeeded` 只看 `agentsMd==='append'` / settings 有 `action:'write'` / skills 有 `state:'missing'`（`lib/basedeck.js:1024-1042`），改后三者皆不成立 |
 
-**⚠️ 严重性上修（原文档只写"误判"，实为误写风险）**：修复前 `agentsMd`/`skills` 的 `autoApplyable: true`，且 target 直指 vault（`E:/DSH-workspace/obsidian-data/AGENTS.md`、`…\.dsh\skills`）—— 只要在 UI 点一次「自动生成」就会往**真相源 vault** 写文件。故本项不是显示问题，是污染风险；`workspace` 必配。
+**⚠️ 严重性上修（原文档只写"误判"，实为误写风险）**：修复前 `agentsMd`/`skills` 的 `autoApplyable: true`，且 target 直指 vault（`<存储根>/obsidian-data/AGENTS.md`、`…\.dsh\skills`）—— 只要在 UI 点一次「自动生成」就会往**真相源 vault** 写文件。故本项不是显示问题，是污染风险；`workspace` 必配。
 
-**决策留痕**：2026-09-30 晚主人批准执行。`workspace` 决定 basedeck **往哪个目录写 AGENTS.md 块与装技能**，系需用户拍板项。`E:\lina\AGENTS.md` 已有 wps 块，但块内正文与本版模板 **content-hash 不一致**（本机曾手工改过）→ 被判定 `user_modified`，**不会自动覆盖**，按既有的"只更新块内、写前备份"保护路径继续。
+**决策留痕**：2026-09-30 晚主人批准执行。`workspace` 决定 basedeck **往哪个目录写 AGENTS.md 块与装技能**，系需用户拍板项。`<工作区>\AGENTS.md` 已有 wps 块，但块内正文与本版模板 **content-hash 不一致**（本机曾手工改过）→ 被判定 `user_modified`，**不会自动覆盖**，按既有的"只更新块内、写前备份"保护路径继续。
 
 **⚠️ 注意区分两个概念**（本对话在这里连错两次）：
-- **「存储根目录」= `rootDir`**（UI 里唯一那一项，`:261`）→ 应为 `E:\DSH-workspace`（`memory-data` / `obsidian-data` 的父目录）；提交时只带 `memoryDir` / `obsidianDir` / `obsidianSyncDir`（`:3438/3476`）。
-- **「工作区」= `workspace`** → 应为 `E:\lina`；**UI 里根本没有这一项**。
+- **「存储根目录」= `rootDir`**（UI 里唯一那一项，`:261`）→ 应为 `<存储根>`（`memory-data` / `obsidian-data` 的父目录）；提交时只带 `memoryDir` / `obsidianDir` / `obsidianSyncDir`（`:3438/3476`）。
+- **「工作区」= `workspace`** → 应为 `<工作区>`；**UI 里根本没有这一项**。
 
 **真机只读预演对照（2026-09-30 取证，`?workspace=E%3A%2Flina`，零写入）**：
 
 | 指标 | 修复前（不带参 = derived） | 预演修复后 |
 |---|---|---|
-| workspace / source | `E:/DSH-workspace/obsidian-data` · **derived** | `E:/lina` · client（重启后为 config） |
+| workspace / source | `<存储根>/obsidian-data` · **derived** | `<工作区>` · client（重启后为 config） |
 | setupNeeded | **true** | **false** |
 | summary | total 8 / toWrite 3 / upToDate 4 / blocked 0 / none 1 | total 8 / **toWrite 1** / upToDate 4 / **blocked 2** / none 1 |
 | agentsMd | `append`（target 指向 vault） | `user_modified`（不自动覆盖） |
@@ -244,8 +244,8 @@ node -e "import('./lib/probe.js').then(async m => console.log(JSON.stringify((aw
 
 ## 7. 回退口子
 
-- `E:\lina\backup\2026-09-30-rc2修复前\` —— 5 个模块的旧副本 + `cordis.patch.yml.bak`
-- `E:\lina\backup\2026-09-30-DSH重装前\` —— 2.3 GB 全量（含 sessions / attachments / data）
+- `<工作区>\backup\2026-09-30-rc2修复前\` —— 5 个模块的旧副本 + `cordis.patch.yml.bak`
+- `<工作区>\backup\2026-09-30-DSH重装前\` —— 2.3 GB 全量（含 sessions / attachments / data）
 - 回退步骤：换回实体副本 → 恢复 patch → 重启（**Junction 直接删链即可，源码不受影响**）
 
 ---
@@ -254,7 +254,7 @@ node -e "import('./lib/probe.js').then(async m => console.log(JSON.stringify((aw
 
 1. 先读本文件 + `RC2-ADAPTATION-PLAN.md` 的 §0.1 / §0.2 / §0.3；
 2. **第一件事：`curl` 一次 `/basedeck`**，把真机状态拿在手上再讨论；
-3. **P0 已修**（2026-09-30 晚 `workspace: 'E:/lina'` 已进 profile patch）→ 新对话第一件事是**请主人重启 DSH，然后 `curl` 复验**：`setupNeeded` 应为 `false`、`workspaceSource` 应为 `config`、`agentsMd.target` 应指向 `E:/lina`；
+3. **P0 已修**（2026-09-30 晚 `workspace: '<工作区>'` 已进 profile patch）→ 新对话第一件事是**请主人重启 DSH，然后 `curl` 复验**：`setupNeeded` 应为 `false`、`workspaceSource` 应为 `config`、`agentsMd.target` 应指向 `<工作区>`；
 4. 其余按第 3 节的优先级推进；**动 before-code 之前先跑回归**（第 6 节命令）。
 
 ---
@@ -288,21 +288,21 @@ rc.2 把 `settings.yaml` 搬迁为 `settings.yaml.imported` 后旁路断供 → 
 ### 9.4 真机验收结论（2026-09-30 深夜，重启后实测）
 
 ```
-workspace = E:/lina (config)      memoryDir = E:/DSH-workspace/memory-data
+workspace = <工作区> (config)      memoryDir = <存储根>/memory-data
 setupNeeded = false               summary = {total:8, toWrite:0, upToDate:6, blocked:2, none:0}   ← 收尾后（种子已写、开局包已生成）
-agentsMd      user_modified  -> E:/lina/AGENTS.md          （本地定制，不覆盖）
+agentsMd      user_modified  -> <工作区>/AGENTS.md          （本地定制，不覆盖）
 memorySeed    update         -> …/MEMORY.md                （真实缺口：4 条种子未写入）
-skills        user_modified  -> E:/lina/.dsh/skills        （3 个本地改过，不覆盖）
+skills        user_modified  -> <工作区>/.dsh/skills        （3 个本地改过，不覆盖）
 settings      up_to_date     -> 宿主设置（profile / 设置服务）
 dirs          update         -> 4 个目录全部存在；开局包 ready（16 文件 / 18 目录待写）
-memoryDeck    up_to_date     -> E:/DSH-workspace/memory-data
-knowledgeDeck up_to_date     -> E:/DSH-workspace/obsidian-data   （骨架登记 6 / 缺失 0）
+memoryDeck    up_to_date     -> <存储根>/memory-data
+knowledgeDeck up_to_date     -> <存储根>/obsidian-data   （骨架登记 6 / 缺失 0）
 migrateMemory up_to_date     -> 无需迁移
 ```
 
 - `/setup-state`：`工作岗位：信息安全（预置岗位）`、`记忆库目录：来自设置`、`知识库目录：由记忆镜像目录反推`。
 - 集成体七套回归全绿（probe 151 / install 246 / settings-api 115 / identity 73 / defaults 61 / basedeck 567 / smoke-load 533，失败 0）。
-- 基线备份：`E:\lina\backup\2026-09-30-配置通道整改前\`（源码 1.1.12 + patch）。
+- 基线备份：`<工作区>\backup\2026-09-30-配置通道整改前\`（源码 1.1.12 + patch）。
 
 ### 9.5 使用者的两条后续指令（2026-09-30 深夜，均已执行并验证）
 
@@ -310,7 +310,7 @@ migrateMemory up_to_date     -> 无需迁移
 
 - **写入 4 条种子**：走本体原生通道 `POST /basedeck {ids:["memorySeed"],dryRun:false}` → `MEMORY.md` 末尾追加 4 条（语言偏好 / 协作方式 / 专家库 / 工具与技能），**既有 16 条逐字节保留**，写前备份 `MEMORY.md.bak-20260930-221158-552`；`memorySeed` 项随即转 `up_to_date`。
 - **指令层去重**：同一套措辞原先在「指令模板 + 记忆种子」两处，属重复维护。现由**记忆种子单一承担**：
-  - 工作区 `E:\lina\AGENTS.md` **块内**删掉与种子重复的三节（语言 / 工作方式 / 专家库使用流程），178 → 150 行；**块外使用者的硬性版原样保留**（安装器不动块外）。
+  - 工作区 `<工作区>\AGENTS.md` **块内**删掉与种子重复的三节（语言 / 工作方式 / 专家库使用流程），178 → 150 行；**块外使用者的硬性版原样保留**（安装器不动块外）。
   - 随包模板 `modules/work-personal-secretary/defaults/AGENTS.zh-CN.md` 同步删除同三节，68 → 39 行，`template-version` **1 → 2**（模板头约定：措辞实质变更时 +1）。
   - `README.md` 的「默认约定」段改写为单一载体口径，并说明「若想让它们在**指令层**生效（约束力强于记忆层），请在使用者自己的 `AGENTS.md` 块外声明」。
   - `scripts/basedeck-test.mjs` 断言迁移：不再写死 `template-version === 1`（改为「可编译 + 版本是正整数」），并**新增 3 条护栏**——真实模板**不得**再含「语言（回答与思维）/ 工作方式（总控兼读制）/ 专家库使用流程」。
@@ -318,12 +318,12 @@ migrateMemory up_to_date     -> 无需迁移
 
 **② 开局包：写入新机器 + 已有值不覆盖（已实测）**
 
-- 生成：`POST /basedeck {ids:["dirs"],dryRun:false}` → `E:/DSH-workspace/开局/`（16 文件 / 18 目录；既有 4 个目录跳过、0 个新建）。
-- **不含本机路径**：`后置优化包/清单.json` 的 `dst` 全用 `{{workspace}}` / `{{memoryDir}}` / `{{obsidianDir}}` / `{{backupDir}}` 占位符；实测 grep `E:/lina` 命中 **0**。
+- 生成：`POST /basedeck {ids:["dirs"],dryRun:false}` → `<存储根>/开局/`（16 文件 / 18 目录；既有 4 个目录跳过、0 个新建）。
+- **不含本机路径**：`后置优化包/清单.json` 的 `dst` 全用 `{{workspace}}` / `{{memoryDir}}` / `{{obsidianDir}}` / `{{backupDir}}` 占位符；实测 grep `<工作区>` 命中 **0**。
 - **已有值不覆盖（实测）**：手工往 `开局/记忆库/MEMORY.md` 追加一行标记 → 重跑同一条命令 → `wroteAny=false`、detail「开局包已完整（16 个文件均在，未写盘）」、标记**原样保留**；验证后已把标记还原（残留 0）。
 - **核查回路口径**（`verifyStarterPack`，`lib/basedeck.js:3404-3492`）：按清单逐项判 `missing / match / differs / broken`，`pending = missing+differs+broken > 0` → **`differs` 不会被静默覆盖，要人工确认保留**。
 
-**收尾后的真机状态**：`{total:8, toWrite:0, upToDate:6, blocked:2, none:0}`，`setupNeeded=false`；剩 2 项 `user_modified`（`E:\lina\AGENTS.md` 块、`.dsh/skills`）是**本地定制保护**，非待办。
+**收尾后的真机状态**：`{total:8, toWrite:0, upToDate:6, blocked:2, none:0}`，`setupNeeded=false`；剩 2 项 `user_modified`（`<工作区>\AGENTS.md` 块、`.dsh/skills`）是**本地定制保护**，非待办。
 
 ### 9.6 仍然待办
 

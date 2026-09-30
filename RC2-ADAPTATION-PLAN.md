@@ -53,11 +53,11 @@
 
 **修复**：
 1. `…\profiles\desktop\node_modules\dsh-work-memory` → **Junction** 指向源码 v1.0.10；
-2. `…\profiles\desktop\cordis.patch.yml` 追加 `- id: work-memory` + `memoryDir: 'E:/DSH-workspace/memory-data'`（js-yaml 校验通过，共 15 条目）。
+2. `…\profiles\desktop\cordis.patch.yml` 追加 `- id: work-memory` + `memoryDir: '<存储根>/memory-data'`（js-yaml 校验通过，共 15 条目）。
 
-**验证（全过）**：工具回归 → `memory_recall("记忆库")` 命中 **3/15 条真实条目** → `memory_remember` 写入落到 `E:\DSH-workspace\memory-data\DAILY\2026-09-30.md` → 默认根未被创建 → 集成体设置页出现「**工作秘书**」分区（主人截图确认）。
+**验证（全过）**：工具回归 → `memory_recall("记忆库")` 命中 **3/15 条真实条目** → `memory_remember` 写入落到 `<存储根>\memory-data\DAILY\2026-09-30.md` → 默认根未被创建 → 集成体设置页出现「**工作秘书**」分区（主人截图确认）。
 
-**备份（回退用）**：`E:\lina\backup\2026-09-30-rc2修复前\`（旧 v1.0.9 副本 + `cordis.patch.yml.bak`）。
+**备份（回退用）**：`<工作区>\backup\2026-09-30-rc2修复前\`（旧 v1.0.9 副本 + `cordis.patch.yml.bak`）。
 
 **遗留 —— 主人 2026-09-30 定：暂不修，等假期优惠期再继续**：
 
@@ -88,7 +88,7 @@
 2. 🔴 `injection-tier-test.mjs` 的正则从源码提取 schema 默认值，被 `withVolatile(...)` 打破 → 已改为「先拍平包裹再跑原正则」；
 3. 🟡 **白名单改动破坏了 0.1.x**（Lead 造成）→ 用别名归并修复；
 4. 🟡 `mediaArkApiKey` 缺 `role('secret')` → 密钥明文回显 → 已补，并加 `withSecretRole()` 特性探测（该 mock 无 `role` 会让模块顶层裸调抛错，与 `.volatile()` 同坑）；
-5. 🟡 `experts/lib/discipline.js` 的 `ctx.settings.get()` 在 rc.2 不存在 → 纪律块的记忆根会指到 `C:\Users\liangl\.dsh\memories\lina`（错目录，实测）→ 已补 `describe()` 通道 + apply 预热（describe 是异步、注入回调是同步，故「同步读缓存 + 后台刷新」）。
+5. 🟡 `experts/lib/discipline.js` 的 `ctx.settings.get()` 在 rc.2 不存在 → 纪律块的记忆根会指到 `<DSH_HOME>\memories\lina`（错目录，实测）→ 已补 `describe()` 通道 + apply 预热（describe 是异步、注入回调是同步，故「同步读缓存 + 后台刷新」）。
 
 **最终回归**：集成体七套 + 子插件 12 脚本 = **失败总数 0**。
 
@@ -108,8 +108,8 @@
 | npm `@deepseek-ai/dsh-desktop` | **404**（不发 npm） | 同上 |
 | 桌面端**官方分发** | `https://www.deepseek.com/harness/` → `https://download.deepseek.com/desktop/dsh-latest-windows-x64.exe`、`dsh-latest-macos-arm64.dmg` | 官网实测 2026-09-30 |
 | 本机现装桌面端 | `E:\DSH Desktop\DSH Desktop.exe`（包名 `dsh-plugin-desktop` 2.0.11，repo `anywhere-labs/deepseek-harness-desktop`，**非**官方包） | 本机 `package.json` |
-| 本机源码 | `E:\lina\ref\deepseek-harness-0.2.0-rc.2\`（31.28 MB tarball，经 `gh api tarball` 获取） | 本机 |
-| rc.1 参照 | `E:\lina\ref\deepseek-harness-0.2.0-rc.1\` | 本机 |
+| 本机源码 | `<工作区>\ref\deepseek-harness-0.2.0-rc.2\`（31.28 MB tarball，经 `gh api tarball` 获取） | 本机 |
+| rc.1 参照 | `<工作区>\ref\deepseek-harness-0.2.0-rc.1\` | 本机 |
 | 本机当前运行时 | `@deepseek-ai/dsh 0.1.5-rc.2`（`E:\DSH Desktop\resources\app\package.json`） | 本机 |
 
 rc.1 → rc.2 规模：**187 commits**；`packages/**/src + package.json` 共 7,776 → 7,831 文件（新增 57 / 删除 2 / 大小变化 354）。

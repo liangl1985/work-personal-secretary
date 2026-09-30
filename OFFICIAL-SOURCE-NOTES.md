@@ -13,7 +13,7 @@
 |---|---|
 | `git clone --depth 1 --branch dsh-v0.1.7-rc.2` | **失败**（网络慢，浅克隆长时间停在 0 字节，已终止） |
 | 官方 tag 源码包 | `https://codeload.github.com/deepseek-ai/deepseek-harness/tar.gz/refs/tags/dsh-v0.1.7-rc.2`，**实测 HTTP 200** |
-| 落盘位置 | `E:\lina\参考\deepseek-harness`（源码包 **30.88 MB**） |
+| 落盘位置 | `<工作区>\参考\deepseek-harness`（源码包 **30.88 MB**） |
 | **最终结果（2026-09-25）** | **13,837 文件 / 114.4 MB**，`package.json` version = `0.1.7-rc.2`；`packages` 54 个包、`apps`（desktop/cli/web）、`docs/subsystems` 等关键路径齐全 ✅ |
 | 解压告警（已核实·无影响） | tar 报 13 个条目 `Invalid argument` —— **均为官方仓库的符号链接**（`mode=120000`，如根 `CLAUDE.md`、`vendor/CLAUDE.md`、`snapshots/.../AGENTS.md`）；Windows 创建 symlink 需管理员或开发者模式。**真实文件内容完整**。改用英文路径重解压结果完全相同 ⇒ 与中文路径无关。 |
 
@@ -144,11 +144,11 @@
 | `dsh-doc-suite` 是否收窄定位（让出纯 OOXML 新建/结构检查给官方技能） | **待源码精读后再议** —— 源码到位后先精读官方实现，再讨论怎么修这个插件 |
 | `peerDependencies` 范围是否现在放宽（防官方 `0.2.x` 打断） | **暂不做** |
 
-> **待办**：官方源码包（`E:\lina\参考\deepseek-harness`）解压完成 → 精读官方 `skill-office`（三份 SKILL.md + `check_office.py`）、`office-to-pdf`、`boot/plugin-manager` 的实现 → 与主人讨论 `dsh-doc-suite` 的改造方向。
+> **待办**：官方源码包（`<工作区>\参考\deepseek-harness`）解压完成 → 精读官方 `skill-office`（三份 SKILL.md + `check_office.py`）、`office-to-pdf`、`boot/plugin-manager` 的实现 → 与主人讨论 `dsh-doc-suite` 的改造方向。
 
 ## 8. 三项修正任务（主人 2026-09-25 定）
 
-> 顺序即优先级。每项的具体改法**待源码精读后细化**；精读对象＝`E:\lina\参考\deepseek-harness`（官方 0.1.7-rc.2 源码包）。
+> 顺序即优先级。每项的具体改法**待源码精读后细化**；精读对象＝`<工作区>\参考\deepseek-harness`（官方 0.1.7-rc.2 源码包）。
 
 ### 任务 1：集成体安装模式修订
 
@@ -269,14 +269,14 @@ U1 本机是否具备 pnpm 可执行文件（官方事务硬依赖）；U2 现�
 
 - 【事实】我方五套技能（`media-gen`/`office-excel`/`office-ppt`/`office-word`/`pdf-tools`）：`<name>/SKILL.md` 形态，frontmatter **只有 name+description**
 - 【事实】宿主半 `lib/index.js` **不注册任何 skill provider**；上架靠集成体 basedeck **复制**到 `<workspace>/.dsh/skills/`（只补缺失、SHA256 比对、modified 不覆盖）
-- 【实测】`E:\lina\.dsh\skills\` 下 11 个技能；**模块版与工作区副本的 office-word/excel/ppt 三份 SHA256 不一致**（pdf-tools/media-gen 一致）——待查因果
+- 【实测】`<工作区>\.dsh\skills\` 下 11 个技能；**模块版与工作区副本的 office-word/excel/ppt 三份 SHA256 不一致**（pdf-tools/media-gen 一致）——待查因果
 - 【事实】差异：脚本定位用占位符 `<DOC_SUITE_SCRIPTS>`（官方用 Provider `resourceBase` 渲染的 Base directory 指引）；注册路径不同；frontmatter 未用官方全字段
 
 ### 11.4 补强三路径（均不改官方文件）
 
 | 路径 | 做法 | 代价 |
 |---|---|---|
-| A（现状） | 只往 `<workspace>/.dsh/skills/` 增目录 | 依赖 cwd；`E:\lina` 无 `.git` ⇒ 仅该 cwd 会话可见 |
+| A（现状） | 只往 `<workspace>/.dsh/skills/` 增目录 | 依赖 cwd；`<工作区>` 无 `.git` ⇒ 仅该 cwd 会话可见 |
 | **B（推荐）** | `customSkillDirs`（rank 300）指向模块自带 `skills/` | 组合配置加一行（改我方 patch，不动官方）；技能随包升级、不依赖 cwd |
 | C | 自建 Provider（仿 `skill-badge`，rank 600 或自定） | 能用 `resourceBase` 对齐官方；Node 代码量增加 |
 
@@ -301,7 +301,7 @@ U1 本机是否具备 pnpm 可执行文件（官方事务硬依赖）；U2 现�
 |---|---|
 | 官方桌面版适配核对（两次） | `OFFICIAL-DESKTOP-ADAPTATION.md`（144 行，含 3 处更正） |
 | 官方源码读码 + 三份精读 | 本文件 §1–§11 |
-| 官方源码本地挂放 | `E:\lina\参考\deepseek-harness`（13,837 文件 / 114.4 MB / `0.1.7-rc.2`） |
+| 官方源码本地挂放 | `<工作区>\参考\deepseek-harness`（13,837 文件 / 114.4 MB / `0.1.7-rc.2`） |
 | 三项改造任务施工依据 | §8（任务清单）+ §9/§10/§11（精读结论） |
 
 ### 未开始（按主人裁定，一律未动手）
@@ -343,15 +343,15 @@ U1 本机是否具备 pnpm 可执行文件（官方事务硬依赖）；U2 现�
 
 | 版本 | 路径 | 规模 | 状态 |
 |---|---|---|---|
-| ~~`0.1.7-rc.2`~~ | ~~`E:\lina\参考\deepseek-harness`~~ | — | **2026-09-29 已按主人指示删除**（不再需要） |
-| **`0.2.0-rc.1`** | `E:\lina\ref\deepseek-harness-0.2.0-rc.1` | **13,990 文件 / 113.6 MB** | 2026-09-29 下载，**完整性已校验** |
+| ~~`0.1.7-rc.2`~~ | ~~`<工作区>\参考\deepseek-harness`~~ | — | **2026-09-29 已按主人指示删除**（不再需要） |
+| **`0.2.0-rc.1`** | `<工作区>\ref\deepseek-harness-0.2.0-rc.1` | **13,990 文件 / 113.6 MB** | 2026-09-29 下载，**完整性已校验** |
 
 > 两版都缺官方仓库的 **13 个符号链接条目**（Windows 创建 symlink 需管理员/开发者模式），**真实文件内容完整**。
 > **下载经验（可复用）**：① `git clone` 在本网络下会卡死（0 字节）→ 改用 **tag tarball**；② 必须加 `curl --retry-all-errors`，**首次下载曾截断成 13.2 MB**；③ 解压前先 `tar -tzf` **校验条目数**（`0.2.0-rc.1` = **15,963** 条；与官方 `git/trees` 的 15,962 条目一致）。
 
 ## 13. 官方 0.2.0-rc.1 改造难度评估（三路复核，2026-09-29）
 
-> 方法：三路独立复核（官方 `E:\lina\ref\deepseek-harness-0.2.0-rc.1` 源码 + 我方 6 模块）＋ 主对话独立复核关键断言。**旧结论（§9–§11 为 0.1.7 基线）未采信，全部按 0.2.0 重核**。
+> 方法：三路独立复核（官方 `<工作区>\ref\deepseek-harness-0.2.0-rc.1` 源码 + 我方 6 模块）＋ 主对话独立复核关键断言。**旧结论（§9–§11 为 0.1.7 基线）未采信，全部按 0.2.0 重核**。
 
 ### 13.1 两个全插件级共性问题
 
@@ -413,5 +413,5 @@ U1 本机是否具备 pnpm 可执行文件（官方事务硬依赖）；U2 现�
 ## 附录：方法与局限
 
 - 官方取文：`gh api -H 'Accept: application/vnd.github.raw' repos/deepseek-ai/deepseek-harness/contents/<path>`，默认分支 `master`，时点 2026-09-24/25；另用 `git/trees/master?recursive=1` 做包名与能力盘点。
-- 我方取文：`E:\lina\DSH插件\src\work-personal-secretary\modules\` 下 6 模块静态审计。
+- 我方取文：`<工作区>\DSH插件\src\work-personal-secretary\modules\` 下 6 模块静态审计。
 - **局限**：① 官方源码**未固定 commit**，行号为取文时点，发版后须复核；② 本地源码包尚未解压完成，本轮全部为 `gh api` 直读取文；③ 一次 `pypdf` 检索因 GitHub API 403 速率限制未完成，标"未核查"；④ 未运行任何测试脚本。

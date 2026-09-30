@@ -18,7 +18,7 @@
 | 阶段 | 内容 | 结果 |
 |---|---|---|
 | 1 | 确认官方 0.2.0-rc.1 与官方 Desktop 是**两个不同产物** | ✅ 结论见 §2.4 |
-| 2 | 下载官方 **Desktop 0.2.0-rc.1 全量源码** | ✅ `E:\lina\ref\deepseek-harness-0.2.0-rc.1\`（13,990 文件 / 113.6 MB，含 `apps/desktop`） |
+| 2 | 下载官方 **Desktop 0.2.0-rc.1 全量源码** | ✅ `<工作区>\ref\deepseek-harness-0.2.0-rc.1\`（13,990 文件 / 113.6 MB，含 `apps/desktop`） |
 | 3 | 逐插件难度初评 | ✅ 写入 `OFFICIAL-SOURCE-NOTES.md` §13 |
 | 4 | 检查我们插件在 GitHub 的公开反馈 | ✅ 见 §2.6（0 star / 0 issue，PR #5427 已合并） |
 | 5 | **（跑偏）** 试图把官方 Desktop 从源码跑起来 | ⚠️ 偏离目标，但**踩坑经验有价值**，全部记录在 §4 |
@@ -200,23 +200,23 @@ npm dist-tags（`@deepseek-ai/dsh`）：`latest: 0.1.7-rc.2`、**`next: 0.2.0-rc
 ## 7. 文件清单
 
 ### 项目文档（本次会话产出/更新）
-- `E:\lina\DSH插件\src\work-personal-secretary\OFFICIAL-SOURCE-NOTES.md` —— 官方源码读记（§13 = 难度表）
-- `E:\lina\DSH插件\src\work-personal-secretary\OFFICIAL-DESKTOP-ADAPTATION.md` —— 适配清单
-- `E:\lina\DSH插件\src\work-personal-secretary\HANDOFF-0.2.0-RECHECK.md` —— **本文**
-- `E:\lina\DSH插件\src\work-personal-secretary\README.md` —— 含「官方桌面版适配（待触发）」段
+- `<工作区>\DSH插件\src\work-personal-secretary\OFFICIAL-SOURCE-NOTES.md` —— 官方源码读记（§13 = 难度表）
+- `<工作区>\DSH插件\src\work-personal-secretary\OFFICIAL-DESKTOP-ADAPTATION.md` —— 适配清单
+- `<工作区>\DSH插件\src\work-personal-secretary\HANDOFF-0.2.0-RECHECK.md` —— **本文**
+- `<工作区>\DSH插件\src\work-personal-secretary\README.md` —— 含「官方桌面版适配（待触发）」段
 
 ### 官方源码
-- `E:\lina\ref\deepseek-harness-0.2.0-rc.1\` —— 0.2.0-rc.1 全量源码（含 `apps/desktop`）
-- `E:\lina\ref\dsh-v0.2.0-rc.1.tar.gz` —— 原始 tarball（31.05 MB，已验证 15,963 条目）
+- `<工作区>\ref\deepseek-harness-0.2.0-rc.1\` —— 0.2.0-rc.1 全量源码（含 `apps/desktop`）
+- `<工作区>\ref\dsh-v0.2.0-rc.1.tar.gz` —— 原始 tarball（31.05 MB，已验证 15,963 条目）
 
 ### 环境脚本（本次踩坑副产品，**非主线，可留可删**）
-- `E:\lina\ref\install-dsh-0.2.0-deps.ps1` / `.cmd` —— 依赖安装脚本（**注意：其 pnpm 逻辑已过时，需按 §3.1 更新**）
-- `E:\lina\ref\bin\pnpm.cmd` —— pnpm 包装器
-- `E:\lina\ref\start-desktop.cmd` / `start-desktop.vbs` —— Desktop 启动器
-- `E:\lina\ref\*.log`、`py-test.tar.gz` —— 临时日志，可删
+- `<工作区>\ref\install-dsh-0.2.0-deps.ps1` / `.cmd` —— 依赖安装脚本（**注意：其 pnpm 逻辑已过时，需按 §3.1 更新**）
+- `<工作区>\ref\bin\pnpm.cmd` —— pnpm 包装器
+- `<工作区>\ref\start-desktop.cmd` / `start-desktop.vbs` —— Desktop 启动器
+- `<工作区>\ref\*.log`、`py-test.tar.gz` —— 临时日志，可删
 
 ### 我们的插件模块
-`E:\lina\DSH插件\src\work-personal-secretary\modules\` 下：
+`<工作区>\DSH插件\src\work-personal-secretary\modules\` 下：
 `work-personal-secretary` / `dsh-work-memory` / `dsh-experts` / `dsh-doc-suite` / `dsh-mermaid` / `workspace-tokenpet`
 
 ---
@@ -232,7 +232,7 @@ npm dist-tags（`@deepseek-ai/dsh`）：`latest: 0.1.7-rc.2`、**`next: 0.2.0-rc
 
 ## 9. 仓库工作树状态（**主人已定：不提交，本地保存**）
 
-`E:\lina\DSH插件` 下：
+`<工作区>\DSH插件` 下：
 - `M  README.md`
 - `?? OFFICIAL-DESKTOP-ADAPTATION.md`
 - `?? OFFICIAL-SOURCE-NOTES.md`
