@@ -2,6 +2,22 @@
 
 本插件的版本历史。
 
+## 0.5.17 — 2026-09-30（轻量诊断：落盘记录本轮打分文本与命中判定）
+
+> 目的：0.5.16 修了命中链路两处偏差，但**「本轮到底拿哪段文本打分」此前无从观测**
+> （`/expert` 命令已于 0.3.0 移除），这类「注入的专家与当前任务不符」只能靠外部反推。
+
+- **每次命中判定写一份小 JSON**：`<DSH_HOME>/data/dsh-experts/last-task.json`（覆盖写、只留最近一次），字段：
+  `at` / `channel`（`agent/inbox/claimed` | `agent/pre-step` | `fallback`）/ `sessionId` / `chars` /
+  `text`（截 200 字）/ `reason`（`no-evidence` / `no-experts` / …）/ `injected`（是否真的注入）/
+  `selected`（选中专家与分数）/ `top3`（证据前三，含未选中的）。
+- **零注入分支同样落盘**（`reason=no-evidence`）—— 这正是排查「注入了不该注入的专家」最需要的场景。
+- **不进模型上下文**：只落盘、不参与任何注入文本；文本与选中集合都未变时跳过写入；任何失败都吞掉，不影响注入。
+- 查看（DSH_HOME 未设时用 `~\.dsh\data\dsh-experts\last-task.json`）：
+  `Get-Content "$env:DSH_HOME\data\dsh-experts\last-task.json"`
+- 复核：五套回归全绿（regression 48 / injection-tier 20 / capability 8 / coexist 8 / smoke-load 19，失败 0）；
+  `node --check lib/index.js` 通过。
+
 ## 0.5.16 — 2026-09-30（命中链路修正：排除 runtime-context、兜底只取最近一条用户消息）
 
 > 触发：真机测试（使用者要求「测试专家模组是否正常」）发现**注入的专家与当前任务不符** ——

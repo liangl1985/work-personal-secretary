@@ -16,6 +16,10 @@
  * @module dsh-experts
  */
 
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
+
 import { installSettings, unwrapValue } from './settings.js'
 import { DOMAINS, activeExperts, allExperts, allPersonas, allSkills, findExpert, groupByDomain, splitList, identityExpertOf } from './store.js'
 import { selectExperts, pickWorkers } from './match.js'
@@ -120,6 +124,56 @@ function rememberTaskText(agent, text, source = 'unknown') {
   try {
     taskTextCache.set(taskCacheKey(agent), { text: String(text).slice(0, 4000), at: Date.now(), source })
   } catch { /* 缓存失败不影响主流程 */ }
+}
+
+/** 诊断文件：<DSH_HOME>/data/dsh-experts/last-task.json（只记最近一次命中判定，覆盖写） */
+function diagnosticsPath() {
+  const home = String(process.env.DSH_HOME || '').trim()
+  const base = home.length > 0 ? home : join(homedir(), '.dsh')
+  return join(base, 'data', 'dsh-experts', 'last-task.json')
+}
+
+let lastDiagnosticKey = ''
+
+/** 本轮实际接住的通道名（诊断用）；未接住时返回 fallback。 */
+function taskChannel(agent) {
+  try {
+    const hit = cachedTaskStateByKey(taskCacheKey(agent))
+    return hit && hit.source ? hit.source : 'fallback'
+  } catch {
+    return 'fallback'
+  }
+}
+
+/**
+ * 记录「本轮拿去打分的文本 + 判定结果」，用于排查「注入的专家与当前任务不符」这类问题。
+ *
+ * 只覆盖写一个小 JSON，**绝不进模型上下文**；文本截断 200 字；文本与选中集合都未变时跳过写入；
+ * 任何失败都吞掉 —— 诊断不得影响注入主流程。
+ * @param {object} info - { text, channel, sessionId, reason, selected, ranked, injected }
+ */
+function writeTaskDiagnostics(info) {
+  try {
+    const text = String(info.text || '')
+    const ids = (info.selected || []).map((s) => s.entry.id).join(',')
+    const key = text + '|' + ids + '|' + (info.reason || '') + '|' + (info.injected ? '1' : '0')
+    if (key === lastDiagnosticKey) return
+    lastDiagnosticKey = key
+    const file = diagnosticsPath()
+    mkdirSync(dirname(file), { recursive: true })
+    const slim = (s) => ({ id: s.entry.id, score: s.score, evidence: s.evidence })
+    writeFileSync(file, JSON.stringify({
+      at: new Date().toISOString(),
+      channel: info.channel || 'unknown',
+      sessionId: info.sessionId || '',
+      chars: text.length,
+      text: text.slice(0, 200),
+      reason: info.reason || '',
+      injected: Boolean(info.injected),
+      selected: (info.selected || []).map(slim),
+      top3: (info.ranked || []).slice(0, 3).map(slim),
+    }, null, 1) + '\n', 'utf8')
+  } catch { /* 诊断失败不影响注入 */ }
 }
 
 /** 按缓存键读完整状态（诊断用：/expert status 显示「是否接住 + 来自哪条通道」） */
@@ -267,7 +321,7 @@ export function apply(ctx, config = {}) {
         if (pool.length === 0) return ''
         // 身份专家：常驻注入的唯一一位（切合使用者身份）；其余按问题归属补充
         const identity = identityExpertOf(c)
-        const { selected, ranked } = selectExperts(
+        const { selected, ranked, reason } = selectExperts(
           pool,
           {
             text: taskText,
@@ -302,6 +356,10 @@ export function apply(ctx, config = {}) {
           : ''
         if (selected.length === 0 && capLines.length === 0) {
           injectCache.delete(sid)
+          writeTaskDiagnostics({
+            text: taskText, channel: taskChannel(context?.agent), sessionId: sid,
+            reason, selected, ranked, injected: false,
+          })
           return ''
         }
         // 安装引导提醒：未确认本人岗位时，在注入内容末尾带一行提示（确认后不再出现）
@@ -335,6 +393,10 @@ export function apply(ctx, config = {}) {
         }
         const text = selectedText + capText + setupHint
         injectCache.set(sid, { key, text })
+        writeTaskDiagnostics({
+          text: taskText, channel: taskChannel(context?.agent), sessionId: sid,
+          reason, selected: personaSelected, ranked, injected: true,
+        })
         return text
       },
     }))
