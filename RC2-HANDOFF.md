@@ -18,7 +18,7 @@
 
 | 项 | 值 |
 |---|---|
-| 运行时 | **DSH 官方桌面端 0.2.0-rc.2**（`E:\DSH-desktop`，asar 内版本串实测） |
+| 运行时 | **DSH 官方桌面端 0.2.0-rc.2**（`<DSH 安装目录>`，asar 内版本串实测） |
 | GUI | `http://127.0.0.1:19387` |
 | DSH_HOME | `<DSH_HOME>` |
 | profile | `desktop` → `<DSH_HOME>\profiles\desktop\` |

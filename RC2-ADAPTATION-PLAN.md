@@ -38,7 +38,7 @@
 
 ## 0.2 rc.2 实机抢修记录（2026-09-30，已完成）
 
-**背景**：主人删除旧桌面端、安装**官方桌面端** `E:\DSH-desktop`（运行时经 asar 版本串确认 = **0.2.0-rc.2**；GUI 端口 19387）。
+**背景**：主人删除旧桌面端、安装**官方桌面端** `<DSH 安装目录>`（运行时经 asar 版本串确认 = **0.2.0-rc.2**；GUI 端口 19387）。
 
 **症状**：记忆体不可用 —— 会话工具目录里**没有** `memory_recall` / `memory_remember`。
 
@@ -107,10 +107,10 @@
 | npm `@deepseek-ai/dsh` | `latest: 0.2.0-rc.2`、`next: 0.2.0-rc.2` | registry.npmjs.org |
 | npm `@deepseek-ai/dsh-desktop` | **404**（不发 npm） | 同上 |
 | 桌面端**官方分发** | `https://www.deepseek.com/harness/` → `https://download.deepseek.com/desktop/dsh-latest-windows-x64.exe`、`dsh-latest-macos-arm64.dmg` | 官网实测 2026-09-30 |
-| 本机现装桌面端 | `E:\DSH Desktop\DSH Desktop.exe`（包名 `dsh-plugin-desktop` 2.0.11，repo `anywhere-labs/deepseek-harness-desktop`，**非**官方包） | 本机 `package.json` |
+| 本机现装桌面端 | `<DSH 安装目录>\DSH Desktop.exe`（包名 `dsh-plugin-desktop` 2.0.11，repo `anywhere-labs/deepseek-harness-desktop`，**非**官方包） | 本机 `package.json` |
 | 本机源码 | `<工作区>\ref\deepseek-harness-0.2.0-rc.2\`（31.28 MB tarball，经 `gh api tarball` 获取） | 本机 |
 | rc.1 参照 | `<工作区>\ref\deepseek-harness-0.2.0-rc.1\` | 本机 |
-| 本机当前运行时 | `@deepseek-ai/dsh 0.1.5-rc.2`（`E:\DSH Desktop\resources\app\package.json`） | 本机 |
+| 本机当前运行时 | `@deepseek-ai/dsh 0.1.5-rc.2`（`<DSH 安装目录>\resources\app\package.json`） | 本机 |
 
 rc.1 → rc.2 规模：**187 commits**；`packages/**/src + package.json` 共 7,776 → 7,831 文件（新增 57 / 删除 2 / 大小变化 354）。
 
@@ -302,7 +302,7 @@ rc.1 → rc.2 规模：**187 commits**；`packages/**/src + package.json` 共 7,
 
 ## 7. 未验证项汇总（**动工前应先验证**）
 
-1. **本机运行时版本**：现在跑的是 `0.1.5-rc.2`（`E:\DSH Desktop\resources\app\package.json`）；rc.2 的真机行为**全部未跑**。
+1. **本机运行时版本**：现在跑的是 `0.1.5-rc.2`（`<DSH 安装目录>\resources\app\package.json`）；rc.2 的真机行为**全部未跑**。
 2. **改 peer 后是否真的脱离 `skippedBundles`**：机制已读码，**未真机验证**（这是第一批的验收点）。
 3. **`Config` + `.volatile()` 的完整链路**：注册后 `describe()` 是否返回该 ns、`apply` 收到的 config 是否为 `Volatile` 包装、设置页写入是否触发 fiber 重载（`app-boot/src/index.ts:289,300` → `vendor/loader/src/config/entry.ts:115-116` 仅写 "restart as needed"）—— 均**未实测**。
 4. **`settings.yaml.imported` 搬迁在实际 profile 上的行为**（文件是否存在、段名映射、失败 warn）—— 未实测。

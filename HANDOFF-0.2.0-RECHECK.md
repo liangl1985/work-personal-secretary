@@ -116,7 +116,7 @@ npm dist-tags（`@deepseek-ai/dsh`）：`latest: 0.1.7-rc.2`、**`next: 0.2.0-rc
    - **有效解法**：**删掉 `packageManager` 字段**
    - **无效**：`.npmrc` 写 `manage-package-manager-versions=false`、`--config.manage-package-manager-versions=false`、`COREPACK_ENABLE_STRICT=0`
 3. 本机 PATH 上的 `pnpm` 是 **DSH Desktop 的 shim**（拿 `DSH Desktop.exe` 当 Node，设 `npm_config_runtime=electron`）
-   - DSH 自带可用 pnpm：`node "E:\DSH Desktop\resources\app\node_modules\pnpm\bin\pnpm.cjs"`（**11.8.0**）
+   - DSH 自带可用 pnpm：`node "<DSH 安装目录>\resources\app\node_modules\pnpm\bin\pnpm.cjs"`（**11.8.0**）
    - 实测 **11.8.0 与官方 11.7.0 的 lockfile 完全兼容**（`Lockfile is up to date, resolution step is skipped`）
 4. `pnpm install` 需加 `--config.minimumReleaseAge=0`（官方 `pnpm-workspace.yaml` 有 `allowBuilds` / `minimumReleaseAgeExclude` 供应链策略）
 5. **`git rev-parse HEAD` 会失败**（非 git 仓库）→ 设 **`DSH_CLIENT_COMMIT_HASH=0000000`** 绕过（`DSH_CLIENT_COMMIT_HASH` 是 `client-build-environment.ts:26` 的官方逃生口，需 7–40 位 hex）
