@@ -42,7 +42,7 @@ interface AccountRemote {
 const CURRENCY_SYMBOL: Record<string, '¥' | '$'> = { CNY: '¥', USD: '$' }
 
 /** Fallback bundle version so the metadata carries a non-empty version on third-party builds. */
-const BUNDLE_VERSION = '1.0.6'
+const BUNDLE_VERSION = '1.0.7'
 
 /**
  * Build the request identity for one account call.

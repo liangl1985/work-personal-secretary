@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { copyFile, mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { foldSessionUsage, sessionFingerprint, summarizeUsageCells, type CumulativeUsage, type ModelDayTotals, type SessionQueryService } from './usage.js'
+import { foldSessionUsage, isBlankSessionLog, sessionFingerprint, summarizeUsageCells, type CumulativeUsage, type ModelDayTotals, type SessionQueryService } from './usage.js'
 import type { FileSessionUsageIndex, SessionUsageFingerprint } from './session-usage-index.js'
 
 export interface LifetimeSessionSnapshot {
@@ -171,7 +171,11 @@ export class FileLifetimeLedger {
           const monotonicObserved = mergeMaxCells(prior?.observed ?? [], observed)
           const credited = mergeMaxCells(prior?.credited ?? [], afterFloor(monotonicObserved, state.floors[id] ?? []))
           state.sessions[id] = { fingerprint: fp, live: Boolean(record.live), observed: monotonicObserved, credited, updatedAt: Date.now() }; updated++
-        } catch { failed++; retained++ }
+        } catch (error) {
+          // A blank or removed log must not block "clear history" through the refresh gate.
+          if (!isBlankSessionLog(error)) failed++
+          retained++
+        }
       }
       if (updated > 0) await this.persist(state)
       const collected = this.collect(state.sessions)

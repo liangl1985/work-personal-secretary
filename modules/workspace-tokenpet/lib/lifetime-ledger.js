@@ -2,7 +2,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { copyFile, mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { foldSessionUsage, sessionFingerprint, summarizeUsageCells } from './usage.js';
+import { foldSessionUsage, isBlankSessionLog, sessionFingerprint, summarizeUsageCells } from './usage.js';
 const MAX_LEDGER_BYTES = 64 * 1024 * 1024;
 const LOCK_STALE_MS = 5 * 60_000;
 const LOCK_HEARTBEAT_MS = 10_000;
@@ -198,8 +198,10 @@ export class FileLifetimeLedger {
                     state.sessions[id] = { fingerprint: fp, live: Boolean(record.live), observed: monotonicObserved, credited, updatedAt: Date.now() };
                     updated++;
                 }
-                catch {
-                    failed++;
+                catch (error) {
+                    // A blank or removed log must not block "clear history" through the refresh gate.
+                    if (!isBlankSessionLog(error))
+                        failed++;
                     retained++;
                 }
             }

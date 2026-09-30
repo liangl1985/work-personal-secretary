@@ -193,8 +193,11 @@ function buildPetView(projections: {
     toolShare,
     progress: stageInfo.progress,
     stageInfo,
-    model: timeline?.model,
-    provider: timeline?.provider,
+    // Fall back to this session's own aggregate when the context timeline carries no
+    // model yet (fresh session or just-restarted host): the most-used model of this
+    // session is real data and beats an empty "model unknown" label.
+    model: timeline?.model ?? cumulative?.byModel?.[0]?.model,
+    provider: timeline?.provider ?? cumulative?.byModel?.[0]?.provider,
     breakdown,
     usage,
     stats,

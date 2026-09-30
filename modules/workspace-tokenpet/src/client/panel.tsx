@@ -200,7 +200,9 @@ export function ContextPanel(p: PanelProps) {
     try {
       const ok = await p.onClearLifetime?.()
       setClearStatus(ok ? 'success' : 'error')
-      if (ok) setConfirmLifetimeClear(false)
+      // Always collapse the confirmation: leaving it open after a failure covers the
+      // ledger card with no way back except a reload (observed on 2026-09-30).
+      setConfirmLifetimeClear(false)
     } catch { setClearStatus('error') }
   }
 

@@ -7,6 +7,23 @@
 > 1.0.0 之前的条目**保留原文**：其中「补丁 / patches / 上游基线 / 定制层」等措辞属于当时的
 > 历史形态记录，对应的文件已在 1.0.0 中删除。
 
+## 1.0.7 — 2026-09-30（失败可见性修复：空白会话日志不再让索引 / 账本 / 清空变红）
+
+> 触发：真机面板出现 4 处红字（「索引读取失败」「本次有 1 个会话读取失败」「清空失败，未确认清空成功」，
+> 以及一直挡在账本卡片上的「确认永久清空?」）。取证结论：**同一个 1 字节的空会话日志**
+> （`sessions/--E-lina--/session-0b3b789c-…`，2026-08-29 创建）让 `sessionQuery.readSession()` 抛 JSON 解析错误
+> → 计成 failed session → `/index/status` 变 `error`，并经 Lifetime Ledger 的 refresh 门把
+> `clear-history` 变成 **409**（一个空日志连带三处红字）。
+
+- **空白 / 已消失的会话日志不再计 failed**（新增并导出 `isBlankSessionLog()`）：`ENOENT` / `EISDIR` /
+  解析类错误判为「空会话」按 `skipped` 处理；三处 catch 同步（`usage.ts` 构建路径 + 增量路径、
+  `lifetime-ledger.ts` 的 refresh）→ 一条空日志不再让整次索引变 error，也不再阻塞「清空历史」。
+- **确认框不再卡住**：清空**失败**后同样收起「确认永久清空?」（此前仅成功时收起）。
+- **「模型未知」兜底**：`contextTimeline` 未带 `model` 时（新会话 / 刚重启）退回**本会话聚合里用得最多的模型**。
+- 处置留痕：那一个空日志已**备份移出**到 `E:\lina\backup\2026-09-30-空会话文件\`（移出后 `/index/status`
+  立即由 `error` 转 `ready`、`failed: 0`）。
+- 复核：`npm run typecheck` 通过；`npm test` 12 pass / 0 fail；profile 已同步（SHA256 逐一致）。
+
 ## 1.0.6 — 2026-09-30（账户余额显示：改走官方 account Remote）
 
 > 触发：官方桌面端 **0.2.0-rc.2** 已内置账户能力（asar 实测含 `api-account-controller` / `deepseek-account` /

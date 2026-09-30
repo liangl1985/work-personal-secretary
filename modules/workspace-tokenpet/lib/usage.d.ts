@@ -112,6 +112,18 @@ export declare function foldSessionUsage(events: UsageEvent[], createdAt?: numbe
 /** Build the public cumulative shape from durable ledger cells. */
 export declare function summarizeUsageCells(source: readonly ModelDayTotals[], sessions?: number): CumulativeUsage;
 /**
+ * Whether a session read failure means the log is blank or already gone rather
+ * than genuinely unreadable.
+ *
+ * A zero-byte or truncated session log makes the host throw a JSON parse error
+ * ("Unexpected end of JSON input"). Counting that as a failed session flipped
+ * `/index/status` to `error` and, through the Lifetime Ledger refresh gate, made
+ * "clear history" answer 409 — one blank log must not disable the panel.
+ * @param error - error thrown by `sessionQuery.readSession`.
+ * @returns true when the log carries no readable events.
+ */
+export declare function isBlankSessionLog(error: unknown): boolean;
+/**
  * Explicit safe index construction. Reads one closed session at a time and
  * persists each item before moving on; completed entries survive cancellation.
  */

@@ -4302,7 +4302,7 @@ window.__ModuleLoader__.load({
 				try {
 					const ok = await p.onClearLifetime?.();
 					setClearStatus(ok ? "success" : "error");
-					if (ok) setConfirmLifetimeClear(false);
+					setConfirmLifetimeClear(false);
 				} catch {
 					setClearStatus("error");
 				}
@@ -5671,7 +5671,7 @@ window.__ModuleLoader__.load({
 			USD: "$"
 		};
 		/** Fallback bundle version so the metadata carries a non-empty version on third-party builds. */
-		const BUNDLE_VERSION = "1.0.6";
+		const BUNDLE_VERSION = "1.0.7";
 		/**
 		* Build the request identity for one account call.
 		*
@@ -6207,8 +6207,8 @@ window.__ModuleLoader__.load({
 				toolShare,
 				progress: stageInfo.progress,
 				stageInfo,
-				model: timeline?.model,
-				provider: timeline?.provider,
+				model: timeline?.model ?? cumulative?.byModel?.[0]?.model,
+				provider: timeline?.provider ?? cumulative?.byModel?.[0]?.provider,
 				breakdown,
 				usage,
 				stats,

@@ -204,6 +204,24 @@ export function summarizeUsageCells(source: readonly ModelDayTotals[], sessions 
   return { sessions, totals, total: sumOf(totals), byModelDay: cells, models: [...models.values()].sort((a, b) => b.total - a.total), days: [...days].sort().reverse() }
 }
 /**
+ * Whether a session read failure means the log is blank or already gone rather
+ * than genuinely unreadable.
+ *
+ * A zero-byte or truncated session log makes the host throw a JSON parse error
+ * ("Unexpected end of JSON input"). Counting that as a failed session flipped
+ * `/index/status` to `error` and, through the Lifetime Ledger refresh gate, made
+ * "clear history" answer 409 — one blank log must not disable the panel.
+ * @param error - error thrown by `sessionQuery.readSession`.
+ * @returns true when the log carries no readable events.
+ */
+export function isBlankSessionLog(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code
+  if (code === 'ENOENT' || code === 'EISDIR') return true
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /Unexpected end of (JSON|input)|Unexpected token|is empty|no events|not a session/i.test(message)
+}
+
+/**
  * Explicit safe index construction. Reads one closed session at a time and
  * persists each item before moving on; completed entries survive cancellation.
  */
@@ -236,7 +254,11 @@ export async function buildSessionUsageIndex(sessionQuery: SessionQueryService, 
         // finalize before persistence instead of leaving the fold's initial 0.
         const cells = [...local.values()].map((cell) => ({ ...cell, totals: { ...cell.totals }, total: sumOf(cell.totals) }))
         await usageIndex.put(id, fp, cells); indexed++; status = 'indexed'
-      } catch (error) { failed++; status = 'failed'; await onError?.(id, error) }
+      } catch (error) {
+        // A blank or removed log carries no usage; it must not fail the run.
+        if (isBlankSessionLog(error)) { skipped++; status = 'skipped' }
+        else { failed++; status = 'failed'; await onError?.(id, error) }
+      }
     }
     completed++
     await onProgress?.({ completed, total: closed.length, indexed, skipped, failed, sessionId: id, status })
@@ -297,7 +319,7 @@ export async function incrementSessionUsageIndex(sessionQuery: SessionQueryServi
   const pending = inspection.pendingRecords
   const removedIds = inspection.removedIds
   const writes: Array<{ sessionId: string; fingerprint: SessionUsageFingerprint; cells: ModelDayTotals[] }> = []
-  let cursor = 0; let indexed = 0; const skipped = inspection.indexed; let failed = 0; let completed = 0
+  let cursor = 0; let indexed = 0; let skipped = inspection.indexed; let failed = 0; let completed = 0
   const concurrency = Math.max(1, Math.min(4, Math.floor(options.concurrency ?? 2)))
   const process = async (): Promise<void> => {
     while (true) {
@@ -313,7 +335,10 @@ export async function incrementSessionUsageIndex(sessionQuery: SessionQueryServi
         // A missing fingerprint cannot safely be invalidated/cached.
         if (Object.keys(fp).length > 0) writes.push({ sessionId: id, fingerprint: fp, cells })
         indexed++; completed++; await onProgress?.({ completed, total: pending.length, indexed, skipped, failed, sessionId: id, status: 'indexed' })
-      } catch (error) { failed++; completed++; await onError?.(id, error); await onProgress?.({ completed, total: pending.length, indexed, skipped, failed, sessionId: id, status: 'failed' }) }
+      } catch (error) {
+        if (isBlankSessionLog(error)) { skipped++; completed++; await onProgress?.({ completed, total: pending.length, indexed, skipped, failed, sessionId: id, status: 'skipped' }) }
+        else { failed++; completed++; await onError?.(id, error); await onProgress?.({ completed, total: pending.length, indexed, skipped, failed, sessionId: id, status: 'failed' }) }
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, pending.length) }, () => process()))
