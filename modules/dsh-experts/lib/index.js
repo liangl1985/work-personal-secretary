@@ -91,6 +91,9 @@ function textOfMessage(message) {
 /** 宿主 / 其它插件注入的消息（不是使用者输入）：按 source.kind 排除 */
 const INJECTED_SOURCE_KINDS = new Set([
   'plugin', 'skill-invocation', 'skill-catalog', 'agent-instructions', 'compaction', 'dsh-experts',
+  // DSH 0.2.0 的 user/message 来源之一（每轮运行时快照）。它的 role 视场景可能是 user，
+  // 若被当成使用者输入，命中打分就会拿系统快照去匹配（目录段里全是专家名）。
+  'runtime-context',
 ])
 
 /** 判断一条 inbox 消息是否为使用者输入 */
@@ -159,8 +162,10 @@ function extractTaskText(context) {
     push(session?.lastUserMessage)
     const msgs = session?.messages || session?.header?.messages
     if (Array.isArray(msgs)) {
+      // Only the most recent user message: joining the last three made an earlier
+      // task's keywords ("页面"…) outvote the current turn when the cache missed.
       let taken = 0
-      for (let i = msgs.length - 1; i >= 0 && taken < 3; i--) {
+      for (let i = msgs.length - 1; i >= 0 && taken < 1; i--) {
         const m = msgs[i]
         if (!m || (m.role && m.role !== 'user')) continue
         push(m.content ?? m.text)

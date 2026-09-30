@@ -2,6 +2,21 @@
 
 本插件的版本历史。
 
+## 0.5.16 — 2026-09-30（命中链路修正：排除 runtime-context、兜底只取最近一条用户消息）
+
+> 触发：真机测试（使用者要求「测试专家模组是否正常」）发现**注入的专家与当前任务不符** ——
+> 本轮任务文本经服务端打分是 `no-evidence`（按设计不该注入），实际却注入了「演示与汇报设计」。
+
+- **打分文本来源修正**：`INJECTED_SOURCE_KINDS` 补入 DSH 0.2.0 的 **`runtime-context`**
+  （`user/message` 的来源之一；role 视场景可能是 `user`，一旦被当作使用者输入，就会拿系统运行时
+  快照去打分，而快照含专家库目录段）。
+- **兜底路径只取最近 1 条用户消息**（原为 3 条）：缓存未接住时拼接上几轮任务词，会让旧任务关键词
+  （例：「修复这个**页面**…」）压过本轮输入，表现为**命中滞后一轮或多轮**。
+- 复核：五套回归全绿（regression 48 / injection-tier 20 / capability 8 / coexist 8 / smoke-load 19，失败 0）；
+  `node --check lib/index.js` 通过。
+- **已知遗留**：`/expert` 命令于 0.3.0 移除后**没有「本轮接住的文本」诊断入口**，此类偏差目前只能从外部推断
+  （`/work-personal-secretary/api/experts/preview?text=` 只反映单条文本的打分）。
+
 ## 0.5.15 — 2026-09-30（DSH 0.2.0-rc.2 设置迁移：具名导出 Config + volatile）
 
 > 触发：rc.2 的 settings 服务**移除了 `ctx.settings.register`**（`packages/settings/settings/src/index.ts` 只剩 configure / prepareDocument / describe / update / replace / mutate）。本模块原调用点因此静默降级，集成体「能力配置」页读不到 `experts` 命名空间，显示「本机服务未提供该能力的设置命名空间」。
