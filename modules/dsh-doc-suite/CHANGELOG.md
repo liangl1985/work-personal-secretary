@@ -1,3 +1,30 @@
+## 0.7.19 — 2026-09-30（DSH 0.2.0-rc.2 设置迁移：具名导出 Config + volatile）
+
+> 触发：rc.2 的 settings 服务**移除了 `ctx.settings.register`**（`packages/settings/settings/src/index.ts` 只剩 configure / prepareDocument / describe / update / replace / mutate）。本模块原调用点因此静默降级，集成体「能力配置」页读不到文档能力命名空间，显示「本机服务未提供该能力的设置命名空间」。
+
+- **具名导出 `Config`**：`lib/settings.js` 新增 `export const Config = SETTINGS_SCHEMA`，`lib/index.js` 以 `export { Config } from './settings.js'` 透出 —— cordis 注册时捕获 `plugin.Config`（`vendor/cordis/src/registry.ts:326` → `packages/settings/settings/src/index.ts:425-428`）。本文件仍**没有 default export**，符合 `packages/AGENTS.md` 的 Plugin exports 口径。schemastery 不可用时 `Config` 导 **`undefined`、不是 `null`**（rc.2 判据含 `'toJSON' in schema`，对 `null` 抛 TypeError）。
+- **Config 覆盖 patch 全部键**：schema 由 11 个 `media*` 键扩到 **15 键**，补上 `cordis.patch.yml` 一直声明却不在 schema 里的 4 个：`pythonLauncher` / `docsRoot` / `wpsRequired` / `doctorOnStartup`（旧实现里 `normalizeBase()` 会把它们过滤掉，rc.2 下更无法从设置页写入）。`DEFAULTS` 同步补齐且**键序与 schema 一致**（`scripts/media-test.mjs` 的默认值一致性探针按 JSON 序比较）。
+- **`.volatile()` 特性探测**：新增 `withVolatile()`（`field && typeof field.volatile === 'function'` 才调用）。`.volatile()` 是 schemastery **3.18.3** 才有的方法，而 peer 下界是 `^3.18.1`；schema 在**模块顶层求值**，裸调会 TypeError 且外层 `try/catch` 只包 `await import()`，接不住 → 整个插件加载失败。
+- **volatile 字段口径**：15 键**全部**标 `.volatile()` —— rc.2 只把 volatile 字段投影进表单（`schema.ts:37-47`），整棵无 volatile 时 `describe()` 返回空、条目根本不出现；集成体能力配置页的写入校验同样要求字段 volatile，不标即「读不到也写不进」。
+- **volatile 解包**：新增 `unwrapValue()`（官方同协议 `Symbol.for('cosmokit.volatile.write')`，**不用** `typeof v.get === 'function'` —— 会误伤 `Map`）；`toConfig()` / `normalizeBase()` 逐键解包，`lib/index.js` 的 `config.pythonLauncher` 与 `config.doctorOnStartup` 也走 `unwrapValue`（否则 rc.2 下前者会拼成 `[object Object]`）。
+- **`installSettings` 改双分支**：`ctx.settings.register` 存在 → 保持 0.1.x 老行为（`{ base, applies: 'live' }`、`scope.get()` 取值、`scope.watch` 热更）；不存在（rc.2）→ `mode: 'config'`，**不抛不 warn**。分支 B 的 `read()` **每次实时重算**：rc.2 的 volatile 由 loader **就地更新**（`vendor/loader/src/config/entry.ts:162-195` 的 `_commitVolatile()` → `updateVolatile(ref, source)`），不重跑 apply、不重启 fiber，缓存快照会立刻过期；watch 改由 `loader/volatile-update` 事件驱动。
+- **ns 口径**：rc.2 的命名空间 = **profile entry id `doc-suite`**（不是包名）；`SETTINGS_NS` 常量仍保留 `'dsh-doc-suite'`，供 0.1.x 注册分支、`/doc-doctor` 文案与既有测试断言使用。
+- **测试对齐**：`scripts/media-test.mjs:93` 的「密钥默认值必须为空字符串」断言原写死字符串 `mediaArkApiKey: z.string().default('')`，字段包 `withVolatile(...)` 后该子串不再存在 → 断言改为同义正则（`mediaArkApiKey:s*withVolatile(s*z.string().default('')s*)`），语义不变、不再与实现写法耦合。
+- **ARK 密钥标 `role=secret`**：`mediaArkApiKey` 由 `withVolatile(...)` 改为 `withSecretRole(withVolatile(z.string().default('')))`。为什么必须补 role：集成体枚举/写入走 `settings.describe({ redactSecrets: true })`（`modules/work-personal-secretary/lib/settings-api.js:360`），而 rc.2 的脱敏依据是 schema 的 `meta.role === 'secret'` —— 没有 role，ARK 密钥会明文出现在 `/settings` 响应与能力配置页。`.role()` 与 `.volatile()` 的共存由独立审计用真品 schemastery 3.18.4 + cosmokit 1.8.5 实测：两种调用顺序都不抛、meta 同时保留 `volatile=true` 与 `role='secret'`、带 role 的 volatile 字段仍进 `volatileForm`。
+- **`.role()` 同样做特性探测**：新增 `withSecretRole()`（`field && typeof field.role === 'function'` 才调用）。理由与 `withVolatile()` 同款 —— schema 在**模块顶层求值**，旧宿主（以及 CI / 单测里的精简 schemastery mock，实测 `role` 缺失）裸调会抛 TypeError → 整个插件加载失败；探测后最坏退化为「不脱敏」（与迁移前行为一致），不崩。
+- **`/doc-doctor` 文案与启动器口径**：① `mediaLine()` 的「设置命名空间 … 已注册」改为按 `settings.mode` 分支（0.1.x `register` / rc.2 具名导出 `Config` 派生，ns = profile entry id `doc-suite` / 降级）；② `pythonLauncher` 原先在 `apply()` 顶部取快照，而 rc.2 的 volatile 是**就地更新**（不重跑 apply）→ 改为 `/doc-doctor` handler 内每次 `unwrapValue(config.pythonLauncher)` 重读，启动自检处同样直读；改设置后无需重启。
+- **验证**：`node scripts/style-test.mjs` **24 / 0 / 0** · `node scripts/media-test.mjs` **19 / 0 / 0** · 改动文件 `node --check` 全过。另做 volatile-capable schemastery mock 探针（临时目录，不入库）：`Config` 非 null、15 键全部调用 `.volatile()`、键序与 `DEFAULTS` 一致、`unwrapValue` 协议（含 Map 不误伤）、双分支与「read 实时重读」**5 / 5**。 五套全绿：`style-test` **24 / 0 / 0** · `media-test` **19 / 0 / 0**（新增断言：mock 探针实跑 `withSecretRole` → `meta.role === 'secret'`）· `ppt-render-test` **26 / 0 / 0** · `ppt-style-test` **13 / 0 / 0** · `ppt-theme-test` **7 / 0 / 0**；改动文件 `node --check` 全过。
+- **遗留（本版未做）**：Python 侧仍从 `~/.dsh/settings.yaml` 取 ARK 密钥，而 rc.2 会把它搬为 `.imported`（密钥通道硬伤，属第三批）；`mediaArkApiKey` 的 `role=secret` 已在本版补上。
+- **回退**：`lib/settings.js` / `lib/index.js` / `scripts/media-test.mjs` 改回 0.7.18；版本改回 0.7.18。
+
+## 0.7.18 — 2026-09-30（DSH 0.2.0-rc.2 兼容：peer 范围放宽）
+
+> 触发：官方 0.2.0-rc.2 的**插件兼容性闸门**（`packages/boot/app-boot/src/plugin-compatibility.ts:61-88`）会拒绝 peerDependencies 中不满足运行时版本的 `@deepseek-ai/dsh*` 项 → 整个 bundle 被跳过 → 插件本体与它的客户端半边都不加载。
+
+- **peer 范围放宽**：`@deepseek-ai/dsh-tools` 由 `^0.1.5-rc.1` 改为 `>=0.1.5-rc.1 <0.3.0`（`package.json` 的 peerDependencies）。旧范围按 semver 展开为 `>=0.1.5-rc.1 <0.2.0-0`，**拒绝 `0.2.0-rc.2`**；新范围同时满足 `0.1.5-rc.2`（旧运行时）与 `0.2.0-rc.2`。`@deepseek-ai/cordis` / `@deepseek-ai/schemastery` 不在闸门检查范围，不动。
+- **影响面**：仅 `package.json` 的 peer 声明，**无代码改动**；本模块的功能面与产物不变。
+- **同批**：profile 内该模块的安装副本已由实体目录改为指向本仓库的 Junction，避免再出现「源码已改、profile 里还是旧副本」的脱节。
+
 ## 0.7.17 — 2026-09-18（技能文档授权口径与 manifest 对齐）
 
 - **修一处随包件内部矛盾**：`skills/office-ppt/SKILL.md` 的授权提示仍写 `assets/manifest.json` 按事实标注 `redistributable: false`，而 `assets/manifest.json` 的 `templates` 段早已按项目所有者 2026-09-18 的裁定改为 `true` 并保留用途限定（提交 `b5aadcb`，见 0.7.15 段）。本次把技能文档对齐为同一口径：**标准仅供参考学习使用；如用于商业化，一切后果由使用者自行承担**，完整表述指向模块 `NOTICE` 第五节。

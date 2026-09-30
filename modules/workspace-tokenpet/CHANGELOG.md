@@ -7,6 +7,14 @@
 > 1.0.0 之前的条目**保留原文**：其中「补丁 / patches / 上游基线 / 定制层」等措辞属于当时的
 > 历史形态记录，对应的文件已在 1.0.0 中删除。
 
+## 1.0.5 — 2026-09-30（DSH 0.2.0-rc.2 兼容：peer 范围放宽）
+
+> 触发：官方 0.2.0-rc.2 的**插件兼容性闸门**（`packages/boot/app-boot/src/plugin-compatibility.ts:61-88`）会拒绝 peerDependencies 中不满足运行时版本的 `@deepseek-ai/dsh*` 项 → 整个 bundle 被跳过 → **客户端半边不加载**，表现为「设置页里本模块的配置分区不出现」。
+
+- **peer 范围放宽**：5 条 `@deepseek-ai/dsh-client-*` 由 `^0.1.5-rc.1` 改为 `>=0.1.5-rc.1 <0.3.0`（`package.json:68-72`）。旧范围按 semver 展开为 `>=0.1.5-rc.1 <0.2.0-0`，**拒绝 `0.2.0-rc.2`**；新范围同时满足 `0.1.5-rc.2`（旧运行时）与 `0.2.0-rc.2`。`@deepseek-ai/cordis` 不在闸门检查范围，不动。
+- **影响面**：仅 `package.json` 的 peer 声明，**无代码改动**；面板、皮肤与投影逻辑不变。
+- **同批**：profile 内该模块的安装副本已由实体目录改为指向本仓库的 Junction，避免再出现「源码已改、profile 里还是旧副本」的脱节。
+
 ## 1.0.4 — 2026-09-18（皮肤显示名中性化）
 
 - **随包皮肤显示名去掉私有助手名**：`skins/lina-pure/manifest.json` 与 `skins/lina-lazy/manifest.json` 的 `name` / `zh-CN` 由私有名开头改为「**小秘书**·纯欲乖巧版 / **小秘书**·慵懒性感版」；`author` 由私有名改为 `workspace-tokenpet`。

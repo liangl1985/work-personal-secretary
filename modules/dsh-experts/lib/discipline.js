@@ -78,7 +78,10 @@ export function parseDiscipline(text) {
 /**
  * 记忆库根目录解析（只读；优先级与 dsh-work-memory 对齐）：
  *   ① 本模块设置项 disciplineMemoryDir（手填最高优先）；
- *   ② ctx.settings.get('work-memory').memoryDir（宿主 settings 服务，未注册 ns 返回 undefined）；
+ *   ② ctx.settings.get('work-memory').memoryDir（0.1.x 宿主 settings 服务，未注册 ns 返回 undefined）；
+ *   ②b 0.2.0-rc.2：SettingsForms **没有 get**（`packages/settings/settings/src/index.ts:223-429` 只提供
+ *       configure / prepareDocument / describe / update / replace / mutate），改从 settings.describe()
+ *       里找 ns === 'work-memory' 的 value.memoryDir（见 workMemoryDirFromSettings）。
  *   ③ $DSH_HOME/data/dsh-work-memory/memory；
  *   ④ ~/.dsh/data/dsh-work-memory/memory。
  * @param {object} ctx - cordis context
@@ -95,12 +98,95 @@ export function resolveMemoryRoot(ctx, cfg = {}) {
   } catch {
     /* 设置服务不可用 → 继续走环境变量/默认路径 */
   }
+  // ②b rc.2 通道：0.2.0-rc.2 的 SettingsForms 没有 get（settings/src/index.ts:223-429），
+  // 改读 describe() 的缓存值。纪律块注入回调是同步的，这里只读缓存；未就绪时继续走下面的
+  // 兜底分支，下一次回调即可命中。
+  const fromSettings = workMemoryDirFromSettings(ctx)
+  if (fromSettings) return fromSettings
   const dshHome = String(process.env.DSH_HOME || '').trim()
   const base = dshHome.length > 0 ? dshHome : join(homedir(), '.dsh')
   // 兜底：真实记忆库未必叫 memory —— 使用者在 work-memory 设置里可以指向任意目录名。
   // 读不到对方设置时，扫 <base>/memories/*（1.0.6 之前的老位置）里**含 PROJECTS 子目录**的目录当候选。
   for (const dir of memoryDirs(base)) return dir
   return join(base, 'data', 'dsh-work-memory', 'memory')
+}
+
+/**
+ * rc.2 通道：从宿主 settings.describe() 取 work-memory 的 memoryDir。
+ *
+ * 为什么需要：0.2.0-rc.2 的 SettingsForms 只有 configure / prepareDocument / describe /
+ * update / replace / mutate（`packages/settings/settings/src/index.ts:223-429`），**没有 get** ——
+ * 原先的 ctx.settings.get('work-memory') 在可选链下静默变 undefined，落到 ~/.dsh 兜底，
+ * 而记忆库常在 $DSH_HOME 之外的自定义目录，会指错目录。
+ *
+ * describe() 是**异步**的（集成体 lib/settings-api.js:359-360 用 await），而纪律块注入回调是
+ * 同步的 —— 故这里做「同步读缓存 + 后台刷新」：首次调用触发一次 describe、拿到后写缓存；
+ * 未就绪时返回空串，由 resolveMemoryRoot 的后续分支兜底，下一次回调即可命中。
+ * 命中后 30 秒、未命中 60 秒内不重复发起（避免每轮一次 describe）。
+ *
+ * @param {object} ctx - cordis context（无需 settings 服务；缺失时返回空串）
+ * @returns {string} 缓存的 memoryDir（未就绪时为空串；绝不抛错）
+ */
+const WM_DIR_TTL_HIT_MS = 30_000
+const WM_DIR_TTL_MISS_MS = 60_000
+const wmDirCache = { dir: '', at: 0, pending: false }
+
+/** describe() 返回数组，每项 { ns, schema, value, revision, ... }；兼容 { namespaces: [...] } 形态 */
+function pickWorkMemoryDir(described) {
+  const list = Array.isArray(described)
+    ? described
+    : (described && Array.isArray(described.namespaces) ? described.namespaces : [])
+  for (const item of list) {
+    if (!item || item.ns !== 'work-memory') continue
+    const value = plainOf(item.value)
+    const dir = value && typeof value === 'object' ? String(plainOf(value.memoryDir) || '').trim() : ''
+    if (dir) return dir
+  }
+  return ''
+}
+
+/** 万一 describe 的 value 仍是 volatile 引用（官方口径是已由 plainConfig 解包），按同协议取原值 */
+const VOLATILE_WRITE = Symbol.for('cosmokit.volatile.write')
+function plainOf(v) {
+  return v && typeof v === 'object' && VOLATILE_WRITE in v ? v.get() : v
+}
+
+/**
+ * 同步读缓存的 work-memory.memoryDir（rc.2 通道；describe 结果由后台刷新）。
+ * @param {object} ctx - cordis context
+ * @returns {string} 缓存的 memoryDir；未就绪 / 服务缺失 / 抛错一律返回空串
+ */
+export function workMemoryDirFromSettings(ctx) {
+  const settings = ctx?.settings
+  if (!settings || typeof settings.describe !== 'function') return wmDirCache.dir
+  const age = Date.now() - wmDirCache.at
+  const fresh = wmDirCache.dir ? age < WM_DIR_TTL_HIT_MS : age < WM_DIR_TTL_MISS_MS
+  if (fresh || wmDirCache.pending) return wmDirCache.dir
+  try {
+    const out = settings.describe({ redactSecrets: true })
+    if (out && typeof out.then === 'function') {
+      wmDirCache.pending = true
+      out.then(
+        (described) => {
+          wmDirCache.dir = pickWorkMemoryDir(described) || wmDirCache.dir
+          wmDirCache.at = Date.now()
+          wmDirCache.pending = false
+        },
+        () => {
+          wmDirCache.at = Date.now()
+          wmDirCache.pending = false
+        },
+      )
+      return wmDirCache.dir
+    }
+    const dir = pickWorkMemoryDir(out)
+    if (dir) wmDirCache.dir = dir
+    wmDirCache.at = Date.now()
+    return wmDirCache.dir
+  } catch {
+    wmDirCache.at = Date.now()
+    return wmDirCache.dir
+  }
 }
 
 /** 扫描记忆根下的候选记忆库（含 PROJECTS 子目录者为真库）；结果缓存 60 秒，避免每轮 readdir */

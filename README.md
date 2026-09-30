@@ -141,6 +141,10 @@ work-personal-secretary/
 `<DOC_SUITE_SCRIPTS>`（= 该模块的 `scripts/` 目录），**不写死任何作者机器的绝对路径**。
 解析方式：`py -3 <模块目录>\doctor.py --emit-skill-paths`（输出 JSON，含 `scriptsDir`）。
 
+## 官方桌面版适配（待触发）
+
+官方（`deepseek-ai/deepseek-harness` → `apps/desktop`）桌面版**尚未发布**，目前只有 README。本仓库的适配核对结论、改造清单（P0/P1/P2）与启动清单见 [`OFFICIAL-DESKTOP-ADAPTATION.md`](OFFICIAL-DESKTOP-ADAPTATION.md)。**下一目标：官方桌面版发布后完成技术适配，并向官方仓库发包。**
+
 ## 开发与验证
 
 ```bash

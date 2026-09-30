@@ -90,7 +90,7 @@ t('插件入口声明 settings 依赖并注册命名空间', function () {
   assert(idx.includes('installSettings'), '未调用 installSettings');
   const st = fs.readFileSync(SETTINGS_JS, 'utf8');
   assert(st.includes("SETTINGS_NS = 'dsh-doc-suite'"), '命名空间名不符');
-  assert(st.includes("mediaArkApiKey: z.string().default('')"), '密钥默认值必须为空字符串');
+  assert(/mediaArkApiKey:\s*withSecretRole\(\s*withVolatile\(\s*z\.string\(\)\.default\(''\)\s*\)\s*\)/.test(st), '密钥字段须为 withSecretRole(withVolatile(z.string().default(\'\')))：role=secret 供脱敏、volatile 供 rc.2 表单');
   assert(st.includes('mediaArkApiKey'), '密钥键为扁平顶层键 mediaArkApiKey');
 });
 
@@ -176,6 +176,7 @@ t('设置默认值一致：schema 默认 == DEFAULTS（mock schemastery 实跑�
     '  const node = { __def: def }',
     '  node.default = (v) => { node.__def = v; return node }',
     '  node.description = () => node',
+    '  node.role = (r) => { node.__role = r; return node }',
     '  return node',
     '}',
     'const z = {',
@@ -203,7 +204,8 @@ t('设置默认值一致：schema 默认 == DEFAULTS（mock schemastery 实跑�
     '  return node ? node.__def : undefined',
     '}',
     'console.log(JSON.stringify({ ns: SETTINGS_NS, schema: extract(SETTINGS_SCHEMA), defaults: DEFAULTS,',
-    "  keySample: DEFAULTS.mediaImageEnabled }))",
+  "  keySample: DEFAULTS.mediaImageEnabled, secretRole: SETTINGS_SCHEMA.__shape.mediaArkApiKey.__role }))",
+  
   ].join('\n'), 'utf8');
   const r = spawnSync(process.execPath, [path.join(dir, 'probe.mjs')], { encoding: 'utf8', timeout: 60000 });
   assert(r.status === 0, '探针失败：' + (r.stderr || '').slice(0, 200));
@@ -212,6 +214,7 @@ t('设置默认值一致：schema 默认 == DEFAULTS（mock schemastery 实跑�
   const a = JSON.stringify(d.schema), b = JSON.stringify(d.defaults);
   assert(a === b, 'schema 默认值与 DEFAULTS 不一致：\n  schema=' + a + '\n  defaults=' + b);
   assert(d.keySample === true, '扁平键读取异常：' + d.keySample);
+  assert(d.secretRole === 'secret', '密钥字段未打 role=secret（脱敏依赖它）：' + d.secretRole);
 });
 
 t('doctor --json 含 media 段，且明确不对密钥做自检', function () {

@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 1.0.11 — 2026-09-30（DSH 0.2.0-rc.2 兼容：设置迁移到「具名导出 Config 派生」）
+
+> 触发：rc.2 的 settings 服务移除了 `ctx.settings.register`，且 `describe()` 只收录「有具名导出 `Config` 且字段带 `.volatile()`」的插件（`packages/settings/settings/src/index.ts:425-428`、`schema.ts:37-47`；整棵无 volatile 时 `index.ts:308-309` 直接返回空）。迁移前本插件的 24 个设置项在 rc.2 下**整卡不出现在设置页**，集成体的「能力配置」页也枚举不到 `work-memory`。
+
+- **具名导出 `Config`**：`lib/settings.js` 导出 `Config`（= `MEMORY_SETTINGS_SCHEMA`），`lib/index.js` re-export（`:32`）。cordis 注册插件时捕获 `plugin.Config`（`vendor/cordis/src/registry.ts:326`）；schemastery 不可用时导出 `undefined`（rc.2 判据含 `'toJSON' in schema`，`null` 会抛 TypeError）。
+- **24 个字段全部 `.volatile()`**：rc.2 只把 volatile 字段投影进设置表单（`schema.ts:37-47`）。迁移前这 24 项整卡可配，不标 volatile 即功能回退。`memoryDir` 与 `obsidianSyncDir` 同时是集成体 `lib/setup-state.js:33-37` 判定「核心配置还差几项」的依据。
+- **`.volatile()` 特性探测**：新增 `withVolatile()` —— volatile 是 schemastery 3.18.3 才引入的方法（peer 下界 `^3.18.1`），而 schema 在模块顶层求值，裸调会抛 TypeError 致整个插件加载失败。
+- **schemastery 改动态导入**：`await import()` + try/catch；纯 node 环境（无宿主依赖）下模块仍可加载，设置退回 `DEFAULTS`、`available: false`。
+- **每次实时解包**：新增 `unwrapValue()`（官方协议 `Symbol.for('cosmokit.volatile.write')`，`vendor/cosmokit/src/volatile.ts:52-54`）。rc.2 的 volatile 由 loader **就地提交**（`vendor/loader/src/config/entry.ts:162-195` 的 `_commitVolatile` → `updateVolatile`），不重跑 apply，所以 `read()` 在 rc.2 下每次解包 `config`，不留快照。
+- **watch 在 rc.2 下由 `loader/volatile-update` 事件驱动**：设置页改动即时生效 —— `memoryDir` 目录切换、`liveArchiveCfg` / `liveBackupCfg` 就地更新都走这条链（监听在 `lib/settings.js` 内注册）。
+- **BUILD 常量同步**：`client/index.js:31` 由 `v1.0.10` 改为 `v1.0.11`。
+- **验证**：`node --check lib/settings.js` / `lib/index.js` / `client/index.js` 均 exit 0；`scripts/regression.mjs` **87 通过 / 0 失败**；另用 rc.2 仓库的真实 schemastery 3.18.4 + cosmokit 1.8.5 做行为验证（24 字段进表单、volatile 解包、双分支、事件驱动 watch）。
+- **未做**：安装到 profile 后需重启 DSH 才生效（宿主半 `lib/**` 变更）。
+
+## 1.0.10 — 2026-09-30（DSH 0.2.0-rc.2 兼容：peer 范围放宽）
+
+> 触发：官方 0.2.0-rc.2 引入**插件兼容性闸门**（`packages/boot/app-boot/src/plugin-compatibility.ts:61-88`）。peerDependencies 中匹配 `@deepseek-ai/dsh` 或 `@deepseek-ai/dsh-*` 的项若不满足运行时版本，该 bundle 会被跳过（bundle 级 `skippedBundles`）或被单独 disable（行级 `compatibility-preflight.ts`），patch 层不加载。
+
+- **peer 范围放宽**：7 条 `@deepseek-ai/dsh*` 由 `^0.1.5-rc.1` 改为 `>=0.1.5-rc.1 <0.3.0`（`package.json:56`、`:59-64`）。旧范围按 semver 展开为 `>=0.1.5-rc.1 <0.2.0-0`，**拒绝 `0.2.0-rc.2`**；新范围同时满足 `0.1.5-rc.2`（现网运行时）与 `0.2.0-rc.2`（新版）。`@deepseek-ai/cordis`、`@deepseek-ai/schemastery`、`react` 不在闸门检查范围，不动。
+- **`BUILD` 常量同步**：`client/index.js:31` 由 `v1.0.3`（自 1.0.3 起未跟随版本更新）改为 `v1.0.10`，面板页脚显示的构建版本与实际包版本一致。
+- **验证**：`scripts/regression.mjs` **87 通过 / 0 失败**；本机 semver 7.8.5 复现闸门判定（新范围对 `0.2.0-rc.2`、`0.1.5-rc.2` 均为 true；旧范围对 `0.2.0-rc.2` 为 false）。
+- **数据层不受影响**：三级记忆模型的 store / archive / backup / graph / triage 均为纯 `node:fs`，与宿主版本无关；本次改动不触及任何记忆读写路径。
+- **同源守卫同步放宽**（`lib/api.js:47-68`）：与集成体同一处改动 —— 原 `origin === '' → '缺少 Origin 头'` 会让**桌面端下记忆体面板的 HTTP 写路由全部 403**（「立即备份 / 立即归档」这类按钮就是走它）。现改为「不带 Origin 放行；带了则必须同源」，并把 Host 检查提前。由 `verify` 的跨模块一致性复核发现 —— 界面能开、按钮点了没反应，正是这个原因。
+- **未做（留待第二批）**：`ctx.settings.register` 在 0.2.0 已移除 → rc.2 下设置页静默失效（记忆体功能本身不受影响）。完整方案见项目文档 `RC2-ADAPTATION-PLAN.md`。
+
 ## 1.0.9 修订 — 2026-09-19（未升版本号 · recall 输出契约修复）
 
 - **修复**：`memory_recall(scope=archive)` 此前**无论有无命中都会被宿主拒绝** —— 返回对象里的 `promoted` / `message` 未在 `output.schema` 声明，而该 schema 是 `additionalProperties: false`，宿主校验直接报 `returned invalid output: "value.promoted" is not a declared property`，**冷归档检索对模型不可用**（转热的副作用仍在返回值之前照常执行）。

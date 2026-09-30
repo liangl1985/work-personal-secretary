@@ -1,6 +1,6 @@
 # dsh-doc-suite · 模块说明（维护者向）
 
-本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/dsh-doc-suite/`），行号对应当前检出状态（`package.json` 版本 **0.7.17**，`package.json:3`）。
+本文件只描述**已在代码里实现**的行为，结论一律带出处。文内路径均**相对于本模块根目录**（`modules/dsh-doc-suite/`），行号对应当前检出状态（`package.json` 版本 **0.7.19**，`package.json:3`；2026-09-30 rc.2 设置迁移后：`lib/settings.js` 重写为 279 行（0.7.19 补 `withSecretRole()` 特性探测），`lib/index.js` 的 `Config` 透出块刻意放在**文件末尾**，故既有 index.js 行号不变、文件 109 行）。
 未实现 / 预留的部分在文中显式标注；文档与代码不一致时以代码为准，并已单独指出。
 
 ---
@@ -19,8 +19,8 @@
 
 | 位置 | 职责 | 出处 |
 |---|---|---|
-| `lib/index.js`（104 行） | 宿主半：注册唯一命令 `/doc-doctor`；可选启动自检；解析 Python 启动器并回退候选 | `lib/index.js:21-22`（`name`/`inject`）、`28-35`（`runDoctor`）、`54-89`（命令）、`92-97`（`doctorOnStartup`） |
-| `lib/settings.js`（122 行） | 设置命名空间 `dsh-doc-suite`（11 个扁平 `media*` 键）、`DEFAULTS`、`SETTINGS_SCHEMA`、`installSettings`、`mediaSummary` | `lib/settings.js:22`、`25-37`、`40-63`、`88-109`、`112-122` |
+| `lib/index.js`（109 行） | 宿主半：注册唯一命令 `/doc-doctor`；可选启动自检；解析 Python 启动器（`unwrapValue` 解包 volatile）并回退候选 | `lib/index.js:21-22`（`name`/`inject`）、`28-35`（`runDoctor`）、`54-90`（命令）、`93-98`（`doctorOnStartup`）、`109`（`Config` 透出） |
+| `lib/settings.js`（279 行） | 设置命名空间（**双分支**：0.1.x `ctx.settings.register`；0.2.0-rc.2 由**具名导出 `Config`** 派生，rc.2 的 ns = profile entry id `doc-suite`）；15 个扁平顶层键（4 个 patch 键 + 11 个 `media*`）、`DEFAULTS`、`SETTINGS_SCHEMA`、`Config`、`withSecretRole`（:100）、`unwrapValue`、`installSettings`、`mediaSummary` | `lib/settings.js:58`、`61-77`、`87-89`、`100-102`、`109-144`、`146`、`162-164`、`206-266`、`269-279` |
 | `cordis.patch.yml` | bundle patch：`insert` 挂载 entry `doc-suite`；config 为**中性部署默认层** | `cordis.patch.yml:10-24` |
 | `package.json` | `dsh.bundle.patch` 指向 patch；`files` 白名单决定发布件内容 | `package.json:42-46`、`24-38` |
 | `doctor.py`（325 行） | 环境自检唯一入口：解释器 / 依赖 / WPS COM / 媒体四项；`--emit-skill-paths` 解析技能占位符 | `doctor.py:3-24`、`85`、`112`、`141`、`170`、`224-235` |
@@ -122,16 +122,16 @@
 
 ```
 /doc-doctor [--fix]
-  → lib/index.js:57-88  handler
+  → lib/index.js:57-89  handler
   → runDoctor(launcher, args)（execFile 调 python，超时 60s，maxBuffer 4MB）  lib/index.js:28-35
-  → 启动器回退链：config.pythonLauncher → 'py -3' → 'python3' → 'python'    lib/index.js:62-75
-  → 输出：doctor.py 的 stdout + 一行媒体设置摘要（不含密钥明文）             lib/index.js:68、43-52
+  → 启动器回退链：config.pythonLauncher → 'py -3' → 'python3' → 'python'    lib/index.js:63-76（handler 内每轮重读 pythonLauncher）
+  → 输出：doctor.py 的 stdout + 一行媒体设置摘要（不含密钥明文）             lib/index.js:69、43-52
 ```
 
-- 解释器存在但自检未通过（缺依赖 / 缺 WPS）时**立即回报**，不再试其它启动器 —— `lib/index.js:71-73`；
-- 全部启动器都找不到时给出手工修复指引（winget / 官网）—— `lib/index.js:76-87`；
+- 解释器存在但自检未通过（缺依赖 / 缺 WPS）时**立即回报**，不再试其它启动器 —— `lib/index.js:72-74`；
+- 全部启动器都找不到时给出手工修复指引（winget / 官网）—— `lib/index.js:77-88`；
 - **默认只报告不写盘**；只有 `--fix` 才执行 `pip install`（且不装解释器）—— `doctor.py:9-13`、`README.md:130-134`；
-- 启动自检默认关闭，开启时只写日志 —— `lib/index.js:91-97`。
+- 启动自检默认关闭，开启时只写日志 —— `lib/index.js:92-98`。
 
 **入口 B：技能（随包 `skills/`）→ Python CLI**
 
@@ -139,16 +139,16 @@
 
 **入口 C：设置（命名空间 `dsh-doc-suite`）**
 
-```
 设置页 / 集成体能力配置页
-  → ctx.settings.register('dsh-doc-suite', SETTINGS_SCHEMA, { base, applies: 'live' })   lib/settings.js:95
-  → scope.get() → toConfig()（空串视为"未设置"）                                          lib/settings.js:75-80、96-97
-  → scope.watch() 刷新 current                                                            lib/settings.js:97
-  → 消费点：mediaSummary() 供 /doc-doctor 摘要                                            lib/settings.js:112-122
+  ├─ 0.1.x：ctx.settings.register('dsh-doc-suite', SETTINGS_SCHEMA, { base, applies: 'live' })  lib/settings.js:230
+  │        → scope.get() → toConfig()（逐键解包 volatile；空串视为未设置）                        lib/settings.js:179-195、231
+  │        → scope.watch() 刷新 current                                                          lib/settings.js:232-235
+  └─ 0.2.0-rc.2：无 register —— 命名空间 = profile entry id `doc-suite`，表单由具名导出 Config 派生
+           （lib/index.js:109 透出）；取值来自 apply(ctx, config)，read() 每次实时解包 volatile，
+           watch 由 loader/volatile-update 驱动                                                  lib/settings.js:238-249、258
+  → 消费点：mediaSummary() 供 /doc-doctor 摘要                                            lib/settings.js:269-279
             gen_image.py 侧由参数/环境变量 ARK_API_KEY 读取（环境变量优先）                scripts/media/gen_image.py:6-7
-```
-
-设置服务不可用时降级为"组合配置 / 默认值"，插件启动不受影响 —— `lib/settings.js:99-102`。
+设置服务不可用时降级为「组合配置 / 默认值」，插件启动不受影响 —— `lib/settings.js:250-254`；schemastery 缺失时同样降级（:224）。
 
 **入口 D：集成体「能力配置页」**
 
@@ -177,7 +177,7 @@
 
 | 名称 | 参数 | 说明 | 出处 |
 |---|---|---|---|
-| `doc-doctor` | 可选 `--fix`（作用于 `rawInput`） | 环境自检；输出末尾附媒体设置摘要 | `lib/index.js:54-57`、`61`、`68` |
+| `doc-doctor` | 可选 `--fix`（作用于 `rawInput`） | 环境自检；输出末尾附媒体设置摘要 | `lib/index.js:54-57`、`62`、`69` |
 
 ### 3.2 DSH 工具（model tools）
 
@@ -185,10 +185,14 @@
 
 ### 3.3 设置命名空间与键
 
-- 命名空间：`dsh-doc-suite` —— `lib/settings.js:22`；
-- 注册方式：`ctx.settings.register(SETTINGS_NS, SETTINGS_SCHEMA, { base, applies: 'live' })`（设置改动**免重启生效**）—— `lib/settings.js:95`；
-- 11 个**扁平顶层键**及其默认值 —— `lib/settings.js:25-37`、`40-63`：
+- 命名空间：**rc.2 = profile entry id `doc-suite`**（0.1.x 注册分支、`/doc-doctor` 文案与既有测试断言仍用常量 `SETTINGS_NS='dsh-doc-suite'`）—— `lib/settings.js:58`；
+- 注册方式：**双分支**（`installSettings()`，`lib/settings.js:206-266`）—— 0.1.x：`ctx.settings.register(SETTINGS_NS, SETTINGS_SCHEMA, { base, applies: 'live' })`（免重启生效，:230）；0.2.0-rc.2：无 register，由**具名导出 `Config`**（:146）+ `apply(ctx, config)` 派生，`read()` 每次实时解包 volatile 引用（:258）、watch 由 `loader/volatile-update` 驱动（:242）；
+- 15 个**扁平顶层键**及其默认值（**全部标 `.volatile()`** —— rc.2 只投影 volatile 字段，不标即读不到也写不进）—— `lib/settings.js:61-77`、`109-144`：
 
+| `pythonLauncher` | `py -3` | Python 启动器（Windows 建议 `py -3`）；仅 /doc-doctor 自检用；**每轮重读**（rc.2 volatile 就地更新，不重跑 apply） |
+| `docsRoot` | `''` | 文档脚本根目录；留空 = 模块自带 `scripts/` |
+| `wpsRequired` | `true` | 声明 WPS Office（COM）为硬前置（只声明，不自动安装） |
+| `doctorOnStartup` | `false` | 每次启动是否做一次环境自检（默认关，避免拖慢启动） |
 | 键 | 默认 | 说明（schema description 摘要） |
 |---|---|---|
 | `mediaProvider` | `volcengine-ark` | 生图服务商 |
@@ -200,10 +204,10 @@
 | `mediaImageFallbackToVector` | `true` | 失败自动回退矢量 |
 | `mediaVideoEnabled` | `false` | 生视频开关 |
 | `mediaVideoModel` | `''` | 生视频模型 ID |
-| `mediaArkApiKey` | `''` | 敏感：默认空，不打印不落日志不入 git |
+| `mediaArkApiKey` | `''` | 敏感：默认空，不打印不落日志不入 git；schema 标 **`.role('secret')`**（rc.2 按 `meta.role` 脱敏，设置接口与能力配置页不回明文） |
 | `mediaArkEndpoint` | `https://ark.cn-beijing.volces.com/api/v3` | 方舟端点 |
 
-另有 4 个 **bundle config 键**（`pythonLauncher` / `docsRoot` / `wpsRequired` / `doctorOnStartup`）—— `cordis.patch.yml:14-17`。注意它们**不在 `SETTINGS_SCHEMA` 里**：`normalizeBase()` 只保留 schema 认识的键 —— `lib/settings.js:66-72`。
+另有 4 个 **bundle config 键**（`pythonLauncher` / `docsRoot` / `wpsRequired` / `doctorOnStartup`）—— `cordis.patch.yml:14-17`。**0.7.19 起它们已并入 `SETTINGS_SCHEMA` 且同样标 `.volatile()`**（rc.2 的 `Config` 必须覆盖 patch 全部键，否则设置页 / 能力配置页读不到也写不进）—— `lib/settings.js:109-144`；`normalizeBase()` 仍只保留 schema 认识的键（:167-177）。
 
 ### 3.4 Python CLI（脚本 → 子命令）
 
@@ -236,8 +240,8 @@
 
 ### 3.6 模块间导出的关键符号（JS）
 
-- `lib/index.js`：`export const name = 'dsh-doc-suite'`、`export const inject = ['commands', 'settings']`、`export function apply(ctx, config)` —— `lib/index.js:21-22`、`37`；
-- `lib/settings.js`：`SETTINGS_NS`、`DEFAULTS`、`SETTINGS_SCHEMA`、`installSettings(ctx, baseConfig)`、`mediaSummary(cfg)` —— `lib/settings.js:22`、`25`、`40`、`88`、`112`。
+- `lib/index.js`：`export const name = 'dsh-doc-suite'`、`export const inject = ['commands', 'settings']`、`export function apply(ctx, config)`、`export { Config } from './settings.js'` —— `lib/index.js:21-22`、`37`、`109`；
+- `lib/settings.js`：`SETTINGS_NS`、`DEFAULTS`、`SETTINGS_SCHEMA`、`Config`、`unwrapValue`、`installSettings(ctx, baseConfig)`、`mediaSummary(cfg)` —— `lib/settings.js:58`、`61`、`109`、`146`、`162`、`206`、`269`（`withVolatile` / `withSecretRole` / `normalizeBase` / `toConfig` 为内部函数：:87、:100、:167、:179）。
 
 Python 侧"共享层"导出（供其它脚本 import）：
 

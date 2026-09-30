@@ -1,6 +1,6 @@
 {
   "name": "workspace-tokenpet",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "DSH 桌面宠物（独立模块）：多形象套装运行时化、用量与上下文面板、趋势维护、开关与默认形象设置。",
   "type": "module",
   "main": "lib/index.js",
@@ -65,11 +65,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-client-connection": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.1"
+    "@deepseek-ai/dsh-client-connection": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-ui-settings": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.5-rc.1 <0.3.0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

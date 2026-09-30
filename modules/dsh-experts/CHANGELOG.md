@@ -2,6 +2,31 @@
 
 本插件的版本历史。
 
+## 0.5.15 — 2026-09-30（DSH 0.2.0-rc.2 设置迁移：具名导出 Config + volatile）
+
+> 触发：rc.2 的 settings 服务**移除了 `ctx.settings.register`**（`packages/settings/settings/src/index.ts` 只剩 configure / prepareDocument / describe / update / replace / mutate）。本模块原调用点因此静默降级，集成体「能力配置」页读不到 `experts` 命名空间，显示「本机服务未提供该能力的设置命名空间」。
+
+- **具名导出 `Config`**：`lib/settings.js` 新增 `export const Config = EXPERTS_SETTINGS_SCHEMA`，`lib/index.js` 以 `export { Config } from './settings.js'` 透出 —— cordis 在注册插件时捕获 `plugin.Config`（`vendor/cordis/src/registry.ts:326` → `packages/settings/settings/src/index.ts:425-428`），settings 服务据此派生设置表单。本文件仍**没有 default export**，符合 `packages/AGENTS.md` 的 Plugin exports 口径。schemastery 不可用时 `Config` 导 **`undefined`、不是 `null`** —— rc.2 判据含 `'toJSON' in schema`，对 `null` 会抛 TypeError。
+- **`.volatile()` 特性探测**：新增 `withVolatile()`（`field && typeof field.volatile === 'function'` 才调用）。`.volatile()` 是 schemastery **3.18.3** 才引入的方法，而本包 peer 下界是 `^3.18.1`；schema 在**模块顶层求值**，裸调会抛 TypeError，且外层 `try/catch` 只包 `await import()`、接不住 → **整个插件加载失败**。宿主不支持时该字段原样返回（不进设置页，但不崩）。
+- **volatile 字段口径**：19 个 schema 字段中 **18 个**加 `.volatile()` —— rc.2 只把 volatile 字段投影进设置表单（`schema.ts:37-47` 的 `volatileForm()`），整棵无 volatile 时 `describe()` 直接返回空、该条目根本不出现。**例外 `expertInjectMax`**：0.5.10 起该项刻意**不在设置页提供**（注入位数写死 4，避免误调），故保持不 volatile；rc.2 下仍可从组合配置（profile patch）取值，与原口径一致。
+- **volatile 解包**：新增 `unwrapValue()`，用官方同协议 `Symbol.for('cosmokit.volatile.write')` 判定后 `.get()`（与 `vendor/cosmokit/src/volatile.ts:52-54` 一致，不引新依赖）。**不用 `typeof v.get === 'function'`** —— 那会误伤 `Map`（解包成 undefined、数据丢失）。`toConfig()` / `normalizeBase()` 逐键解包；`lib/index.js` 三处 order 读取（`injectOrder` / `catalogOrder` / `deliveryOrder`）统一走 `unwrapValue`。
+- **`installSettings` 改双分支**：`ctx.settings.register` 存在 → 保持 0.1.x 老行为（组合配置作 base 层、`scope.get()` 取值、`scope.watch` 热更）；不存在（rc.2）→ `mode: 'config'`，**不抛不 warn**。分支 B 的 `read()` **每次实时重算**（`toConfig(baseConfig)`）：rc.2 的 volatile 是 loader **就地更新**的引用（`vendor/loader/src/config/entry.ts:162-195` 的 `_commitVolatile()` → `updateVolatile(ref, source)`），既不重跑 apply 也不重启 fiber，缓存快照会立刻过期；watch 改由 `loader/volatile-update` 事件驱动。
+- **ns 口径**：rc.2 的设置命名空间 = profile entry id = **`experts`**（与本模块 `SETTINGS_NS` 常量同值，常量无需改动）。
+- **`expertInjectMax` 描述文案修正**：原文写「如需收紧，手改 settings.yaml 为 1–3 仍生效」—— 0.2.0-rc.2 首启会把 `~/.dsh/settings.yaml` 搬为 `settings.yaml.imported`，该逃生通道已失效。改为指向 **profile 的 `cordis.patch.yml`**（entry id `experts` 的 `config.expertInjectMax`，取值 1–3，改后重启）。字段仍**不加 volatile**，保持「写死 4、设置页不提供」的既有口径；非 volatile 字段不进入 `describe()`，故能力配置页也不会出现「看得到写不进」。
+- **`lib/discipline.js` 补 rc.2 设置通道**：`resolveMemoryRoot()` 原走 `ctx.settings.get('work-memory')`，而 rc.2 的 SettingsForms **没有 get**（`packages/settings/settings/src/index.ts:223-429`）→ 可选链静默 undefined → 落到 `~/.dsh` 兜底（本机记忆库在 `E:/DSH-workspace/memory-data`，会指到错目录）。新增 `workMemoryDirFromSettings()`：从 `ctx.settings.describe()` 里找 `ns === 'work-memory'` 的 `value.memoryDir`。`describe()` 是异步的、而纪律块注入回调是同步的，故实现为「同步读缓存 + 后台刷新」（命中 30 s / 未命中 60 s 内不重复发起），并在 `lib/index.js` 的 `apply()` 里预热一次，让**首轮**即可命中。`get` 通道与四级兜底顺序不变，全程 try/catch 不抛。
+- **`cordis.patch.yml` 注释同步**：`experts` entry 的 `expertInjectMax` 注释原写「手改 settings.yaml 可收紧到 1–3」，与 `lib/settings.js:130` 同步改为「改本 profile 的 cordis.patch.yml 里本 entry 的 config.expertInjectMax 后重启」（rc.2 首启会把 `~/.dsh/settings.yaml` 搬为 `settings.yaml.imported`）。
+- **`scripts/injection-tier-test.mjs` 修复**：该脚本用正则从源码文本提取 schema 默认值，字段被 `withVolatile(...)` 包裹后四条正则失效（实测 19 通过 / 1 失败）。改为先**拍平包裹**再跑原四条正则：`const flat = settingsSrc.replace(/withVolatile\(((?:[^()]|\([^()]*\))*)\)/g, '$1')` —— 正则与断言一字未改；括号模式允许一层嵌套链式调用，避免 `[^)]*` 停在链式调用的第一个右括号上、拍平结果多出一个右括号。
+- **验证**（五套全绿）：`regression.mjs` **48 / 0** · `injection-tier-test.mjs` **20 / 0** · `capability-test.mjs` **8 / 0** · `coexist.mjs` **8 / 0** · `smoke-load.mjs` **19 / 0** · 改动文件 `node --check` 全过。另做 volatile-capable schemastery mock 探针（临时目录，不入库），验证真实 rc.2 路径：`Config` 非 null、18 键全部调用 `.volatile()`、`expertInjectMax` 不 volatile、`unwrapValue` 协议（含 Map 不误伤）、双分支与「read 实时重读」**5 / 5**。补：discipline rc.2 通道探针（临时目录，不入库）**8 / 8** —— explicit 优先 / 0.1.x `get` 不变 / 异步 `describe` 首轮兜底→下一轮命中 / 同步返回 / `{namespaces}` 形态且 volatile 被解包 / `describe` 失败不抛 / 无 settings 服务不炸 / TTL 内只调一次 `describe`。
+- **回退**：`lib/settings.js` / `lib/index.js` / `lib/discipline.js` / `cordis.patch.yml` / `scripts/injection-tier-test.mjs` 回到 0.5.14 状态；版本改回 0.5.14。
+
+## 0.5.14 — 2026-09-30（DSH 0.2.0-rc.2 兼容：peer 范围放宽）
+
+> 触发：官方 0.2.0-rc.2 的**插件兼容性闸门**（`packages/boot/app-boot/src/plugin-compatibility.ts:61-88`）会拒绝 peerDependencies 中不满足运行时版本的 `@deepseek-ai/dsh*` 项 → 整个 bundle 被跳过 → 插件本体与它的客户端半边都不加载。
+
+- **peer 范围放宽**：`@deepseek-ai/dsh-tools` 由 `^0.1.5-rc.1` 改为 `>=0.1.5-rc.1 <0.3.0`（`package.json` 的 peerDependencies）。旧范围按 semver 展开为 `>=0.1.5-rc.1 <0.2.0-0`，**拒绝 `0.2.0-rc.2`**；新范围同时满足 `0.1.5-rc.2`（旧运行时）与 `0.2.0-rc.2`。`@deepseek-ai/cordis` / `@deepseek-ai/schemastery` 不在闸门检查范围，不动。
+- **影响面**：仅 `package.json` 的 peer 声明，**无代码改动**；本模块的功能面与产物不变。
+- **同批**：profile 内该模块的安装副本已由实体目录改为指向本仓库的 Junction，避免再出现「源码已改、profile 里还是旧副本」的脱节。
+
 ## 0.5.13 — 2026-09-18（发布前中立性整改 + 兜底技能索引移出版本库）
 
 - **`experts/skills.auto.json` 移出版本库**（`git rm --cached` + `.gitignore` 新增规则）：该文件由本机 `scripts/skill-index.mjs` 扫描**本机技能源**生成，**内容含作者机器的绝对路径**；设计上它只是「宿主 `ctx.skills` 注册表不可用时的**可选兜底**」（`lib/store.js:83`；缺文件按空池降级，`ARCHITECTURE.md:120` 已如此描述）。入库并随包会把作者机器路径分发出去，故改为**不入库、需要时本机重建**（`node scripts/skill-index.mjs`）。

@@ -161,7 +161,7 @@ dsh plugin --profile desktop add file:<仓库目录>/modules/dsh-doc-suite
 ```
 
 - 宿主半只注册一个命令：**`/doc-doctor`** —— 执行环境自检并回报结论与修复命令。
-- 配置项（中性默认层，可在设置页用户层覆盖）：`pythonLauncher`（默认 `py -3`）、`docsRoot`、`wpsRequired`、`doctorOnStartup`；**媒体设置**命名空间 `dsh-doc-suite` 的 `media*（扁平顶层键）`（见「一之三」节表）。
+- 配置项（中性默认层，可在设置页用户层覆盖）：`pythonLauncher`（默认 `py -3`）、`docsRoot`、`wpsRequired`、`doctorOnStartup`，以及**媒体设置** `media*`（扁平顶层键，见「一之三」节表）—— 15 键同属一个设置命名空间：0.1.x 为 `dsh-doc-suite`；0.2.0-rc.2 为 profile entry id **`doc-suite`**，且 15 键全部标 `.volatile()`（否则 rc.2 表单读不到也写不进）。
 - `/doc-doctor` 输出末尾附一行**媒体设置摘要**（不含密钥明文）；`doctor.py` 的 [4] 段报告生图配置来源与 mermaid 运行时状态。
 - **改了 `lib/**`（含设置项 schema）需重启 DSH**；`scripts/**.py` 免重启；`skills/**` 需重启（启动时扫描技能）。
 

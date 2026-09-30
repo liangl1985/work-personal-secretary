@@ -16,11 +16,11 @@
  * @module dsh-experts
  */
 
-import { installSettings } from './settings.js'
+import { installSettings, unwrapValue } from './settings.js'
 import { DOMAINS, activeExperts, allExperts, allPersonas, allSkills, findExpert, groupByDomain, splitList, identityExpertOf } from './store.js'
 import { selectExperts, pickWorkers } from './match.js'
 import { buildInjection, buildCatalog, buildManualInjection, PHASE_OPENING, PHASE_WORKING } from './inject.js'
-import { loadDiscipline, resolveMemoryRoot, formatDiscipline } from './discipline.js'
+import { loadDiscipline, resolveMemoryRoot, formatDiscipline, workMemoryDirFromSettings } from './discipline.js'
 import { createSkillSource, routeCapabilities } from './capability.js'
 
 /**
@@ -180,6 +180,10 @@ export function apply(ctx, config = {}) {
 
   const disposers = []
 
+  // rc.2 预热（2026-09-30）：settings.describe() 是异步的，而纪律块的注入回调是同步的 —— 这里先发起
+  // 一次，让**首轮**就能从缓存拿到 work-memory 的记忆根（拿不到则由 resolveMemoryRoot 兜底，下一轮命中）。
+  workMemoryDirFromSettings(ctx)
+
   // ---- 0a. 任务文本接入（2026-09-14 修复，命中链路的核心）----
   // 主通道 agent/inbox/claimed：claim 在 assemble 之前（dsh-agent-loop:889 → :107 → :890），
   //   本轮使用者输入在注入回调被调用之前就能拿到。
@@ -246,7 +250,7 @@ export function apply(ctx, config = {}) {
   {
     disposers.push(ctx.systemPrompt.context({
       name: 'dsh-experts:persona',
-      order: Number(config.injectOrder) || 480,
+      order: Number(unwrapValue(config.injectOrder)) || 480,
       text: (context) => {
         const c = cfg()
         if (!c.expertsEnabled) return ''
@@ -338,7 +342,7 @@ export function apply(ctx, config = {}) {
   if (typeof ctx.systemPrompt?.section === 'function') {
     disposers.push(ctx.systemPrompt.section({
       name: 'dsh-experts:catalog',
-      order: Number(config.catalogOrder) || 10150,
+      order: Number(unwrapValue(config.catalogOrder)) || 10150,
       text: () => {
         const c = cfg()
         if (!c.expertsEnabled || !c.expertCatalogEnabled) return ''
@@ -356,7 +360,7 @@ export function apply(ctx, config = {}) {
   if (typeof ctx.systemPrompt?.context === 'function') {
     disposers.push(ctx.systemPrompt.context({
       name: 'dsh-experts:delivery',
-      order: Number(config.deliveryOrder) || 481,
+      order: Number(unwrapValue(config.deliveryOrder)) || 481,
       text: () => {
         const c = cfg()
         if (!c.expertsEnabled || !c.disciplineEnabled) return ''
@@ -463,4 +467,9 @@ function listText(c, { compact = false } = {}) {
   lines.push('用法：直接说「用 xx 专家看这个」即可临时切视角（助手用 expert_recall 取该专家全文）；专家库开关与阈值在 设置 → 插件 → 插件配置 → experts。注：/expert 系列命令已于 0.3.0 移除')
   return lines.join('\n')
 }
+
+// 0.2.0-rc.2 的设置表单由 cordis 捕获**具名导出 Config**（vendor/cordis/src/registry.ts:326）后派生，
+// 故这里把它透出（本文件没有 default export，符合 packages/AGENTS.md 的 function plugin 口径）。
+// 放在文件末尾是刻意的：ESM 导出与位置无关，这样不扰动 ARCHITECTURE.md 里既有的行号引用。
+export { Config } from './settings.js'
 

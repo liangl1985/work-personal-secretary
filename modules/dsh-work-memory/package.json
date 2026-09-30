@@ -1,6 +1,6 @@
 {
   "name": "dsh-work-memory",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "description": "DSH 记忆插件（执行层长期记忆）：三级记忆模型（全局永不遗忘 / 热记忆按周转冷 / 冷记忆被用到即转热）+ 会话原生注入 + remember·recall·link 工具 + 右侧边栏面板 + Obsidian 镜像。Composable three-tier memory plugin for DeepSeek Harness.",
   "keywords": [
     "deepseek",
@@ -32,7 +32,7 @@
   ],
   "scripts": {
     "test": "node scripts/regression.mjs",
-    "check": "node --check lib/index.js && node --check client/index.js",
+    "check": "node --check lib/index.js && node --check lib/settings.js && node --check client/index.js",
     "prepack": "node scripts/regression.mjs"
   },
   "engines": {
@@ -53,15 +53,15 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-tools": ">=0.1.5-rc.1 <0.3.0",
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/schemastery": "^3.18.1",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-sidebar-right": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-resources": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-store": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-resources": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-store": ">=0.1.5-rc.1 <0.3.0",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.5-rc.1 <0.3.0",
     "react": "^18.2.0"
   },
   "repository": {

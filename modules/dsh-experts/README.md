@@ -154,7 +154,7 @@ dsh-experts/
 │   ├── capability.js       # 能力层（层 3）：技能条目映射、指针行、开放命中与预算守门
 │   ├── discipline.js       # 交付层（层 4）：纪律块只读解析（项目记忆 + mtime/size 指纹）
 │   ├── limits.js           # 注入上限、预算、成本常量与归一化（硬边界 / 夹取）
-│   └── settings.js         # 设置命名空间（DEFAULTS 20 键；设置页暴露 19 项；除 injectOrder 外免重启）
+│   └── settings.js         # 设置命名空间（DEFAULTS 20 键、schema 19 项；0.2.0-rc.2 设置页暴露其中 18 项 —— expertInjectMax 刻意不提供；除 injectOrder 外免重启）
 ├── scripts/                # 自测与工具：regression / injection-tier-test / smoke-load / coexist /
 │                           #   card-preview（L1 卡验收器）/ capability-test（能力层）/
 │                           #   skill-index（扫技能源→生成 experts/skills.auto.json 兜底索引）

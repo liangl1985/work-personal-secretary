@@ -43,13 +43,20 @@ async function readBody(req, maxBytes = 128 * 1024) {
   }
 }
 
-/** 同源保护：写操作必须由 Web UI 发起 */
+/**
+ * 同源保护：写操作必须由本机 Web UI / 桌面端发起。
+ *
+ * 0.2.0-rc.2 桌面载体适配（2026-09-30）：官方 Desktop 的 fetch 桥**不发 Origin** 头，
+ * 若强制要求 Origin 会让所有写路由 403（真机实测）。改为「不带 Origin 放行；带了则必须同源」。
+ * 安全性：浏览器对**所有非 GET/HEAD 请求**（含同源 POST）都会带 Origin，故缺 Origin 的 POST
+ * 不可能是浏览器发起的 CSRF；Content-Type 仍强制 application/json，Origin: null（沙箱 iframe）仍按跨站拒绝。
+ */
 function sameOriginGuard(req) {
   const contentType = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
   if (contentType !== 'application/json') return '请求必须为 application/json'
   const host = String(req.headers.host ?? '')
   const origin = String(req.headers.origin ?? '')
-  if (origin === '') return '缺少 Origin 头'
+  if (!origin) return null
   try {
     if (new URL(origin).host !== host) return '跨站请求已拒绝'
   } catch {

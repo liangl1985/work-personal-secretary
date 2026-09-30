@@ -6,7 +6,7 @@
  * 2. 记忆工具：ctx.tools.register({ name, description, parameters, output, execute })
  * 3. 确认命令：ctx.commands.register()
  * 4. Web API：ctx.webServer.register() 可视化记忆管理
- * 5. 运行时可配置：ctx.settings.register() 原生设置命名空间（设置→插件 卡片）
+ * 5. 运行时可配置：设置命名空间（0.1.x 走 ctx.settings.register；0.2.0-rc.2 走**具名导出 Config 派生**）
  *
  * 零依赖（node:fs），本地优先（默认 <DSH_HOME 或 ~/.dsh>/data/dsh-work-memory/memory，可在设置里改；
  * 1.0.6 起改 memoryDir 即时生效，无需重启 DSH）。
@@ -27,6 +27,10 @@ import { readAccess, pruneAccess } from './access.js'
 import { readTriage } from './triage.js'
 import { installSettings } from './settings.js'
 
+// 0.2.0-rc.2 的设置表单由 cordis 捕获**具名导出 Config**（vendor/cordis/src/registry.ts:326）后派生，
+// 故这里把它透出（本文件没有 default export，符合 packages/AGENTS.md 的 function plugin 口径）。
+export { Config } from './settings.js'
+
 export const name = 'work-memory'
 export const inject = ['systemPrompt', 'tools', 'commands', 'settings', 'webServer']
 
@@ -38,7 +42,10 @@ export const inject = ['systemPrompt', 'tools', 'commands', 'settings', 'webServ
 export { syncMemoryToObsidian } from './backup.js'
 
 export function apply(ctx, config = {}) {
-  // 0.3.0：配置来自原生设置命名空间（组合配置作 base 层，设置页写用户覆盖层）
+  // 配置来源双口径（见 lib/settings.js）：0.1.x = ctx.settings.register 的 scope；
+  // 0.2.0-rc.2 = apply(ctx, config) 里的 volatile 引用（表单由具名导出 Config 派生）。
+  // rc.2 的 volatile 由 loader 就地提交、不重跑 apply，故 settings.watch 由 loader/volatile-update
+  // 事件驱动（lib/settings.js 内注册）；下面的 cfg 快照与本函数内所有消费点因此保持最新。
   const settings = installSettings(ctx, config)
   let cfg = settings.read()
   // tools/archive/backup 在创建时捕获选项对象，这里保持同一引用、就地更新，使设置改动免重启生效

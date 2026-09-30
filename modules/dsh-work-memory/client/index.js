@@ -28,7 +28,7 @@ window.__ModuleLoader__.load({
     const TAB_KIND = 'work-memory'
     const POLL_MS = 5000
     /** 构建标记：面板页脚可见，用来确认渲染进程跑的到底是哪一版 bundle */
-    const BUILD = 'v1.0.3'
+    const BUILD = 'v1.0.11'
 
     /**
      * host 路由的基址。

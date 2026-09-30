@@ -16,7 +16,7 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import { installSettings, mediaSummary, SETTINGS_NS } from './settings.js'
+import { installSettings, mediaSummary, SETTINGS_NS, unwrapValue } from './settings.js'
 
 export const name = 'dsh-doc-suite'
 export const inject = ['commands', 'settings']
@@ -36,7 +36,7 @@ function runDoctor(launcher, args, timeoutMs = 60000) {
 
 export function apply(ctx, config = {}) {
   const disposers = []
-  const launcher = config.pythonLauncher || 'py -3'
+  // pythonLauncher 每轮重读（rc.2 的 volatile 就地更新、不重跑 apply）——见 /doc-doctor handler 与启动自检
   // 媒体设置（生图/生视频）：密钥默认空、不进日志；环境变量优先于设置项（脚本侧读取）
   const settings = installSettings(ctx, config)
 
@@ -47,7 +47,7 @@ export function apply(ctx, config = {}) {
       '生图 ' + (s.imageEnabled ? '开' : '关') + '（模型 ' + s.model + ' / 尺寸 ' + s.size + '）',
       'ARK 密钥 ' + (s.hasApiKey ? '已配置（不显示明文）' : '未配置 → 生图将回退代码矢量绘制'),
       '生视频 ' + (s.videoEnabled ? '开' : '关'),
-      '设置命名空间 ' + SETTINGS_NS + ' ' + (settings.available ? '已注册（设置 → 插件 → dsh-doc-suite）' : '不可用（已降级为默认值，功能仍可用）'),
+      '设置来源 ' + (settings.mode === 'register' ? '命名空间 ' + SETTINGS_NS + '（0.1.x 已注册，设置 → 插件）' : (settings.mode === 'config' ? 'rc.2 具名导出 Config 派生（ns = profile entry id doc-suite）' : '不可用（已降级为默认值，功能仍可用）')),
     ].join(' ｜ ')
   }
 
@@ -59,6 +59,7 @@ export function apply(ctx, config = {}) {
         return { kind: 'error', text: '未找到 doctor.py：' + DOCTOR }
       }
       const wantFix = /--fix/.test(String(rawInput || ''))
+      const launcher = unwrapValue(config.pythonLauncher) || 'py -3'
       const attempts = [launcher, 'py -3', 'python3', 'python'].filter((v, i, a) => v && a.indexOf(v) === i)
       let last = null
       for (const l of attempts) {
@@ -89,8 +90,8 @@ export function apply(ctx, config = {}) {
   }))
 
   // 可选：启动自检（默认关，避免拖慢启动）
-  if (config.doctorOnStartup === true) {
-    runDoctor(launcher, []).then((r) => {
+  if (unwrapValue(config.doctorOnStartup) === true) {
+    runDoctor(unwrapValue(config.pythonLauncher) || 'py -3', []).then((r) => {
       if (!r.ok) ctx.logger?.warn?.('dsh-doc-suite: 环境自检未通过，可执行 /doc-doctor 查看修复命令')
       else ctx.logger?.debug?.('dsh-doc-suite: 环境自检通过')
     })
@@ -102,3 +103,8 @@ export function apply(ctx, config = {}) {
     }
   }
 }
+
+// 0.2.0-rc.2 的设置表单由 cordis 捕获**具名导出 Config**（vendor/cordis/src/registry.ts:326）后派生，
+// 故这里把它透出（本文件没有 default export，符合 packages/AGENTS.md 的 function plugin 口径）。
+// 放在文件末尾是刻意的：ESM 导出与位置无关，这样不扰动 ARCHITECTURE.md 里既有的行号引用。
+export { Config } from './settings.js'

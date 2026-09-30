@@ -186,9 +186,15 @@ test('默认值三处一致：schema default / settings DEFAULTS / cordis.patch.
   const limitsSrc = readFileSync(join(ROOT, 'lib', 'limits.js'), 'utf8')
   const patchSrc = readFileSync(join(ROOT, 'cordis.patch.yml'), 'utf8')
 
-  const schemaDetail = /expertInjectDetail:\s*z\.string\(\)\.default\('([a-z]+)'\)/.exec(settingsSrc)
+  // 2026-09-30 rc.2 迁移：schema 字段被 withVolatile(...) 包了一层，下面四条正则先"拍平"包裹再匹配。
+  // 拍平后正则与断言一字不改；将来换别的包裹函数，也只需扩这一处。
+  // 括号模式允许一层嵌套调用（z.string().default('x')），否则 [^)]* 会停在链式调用的第一个右括号上、
+  // 拍平结果多出一个右括号（当前四条正则不锚行尾、仍能命中，但拍平文本不再是合法源码）。
+  const flat = settingsSrc.replace(/withVolatile\(((?:[^()]|\([^()]*\))*)\)/g, '$1')
+
+  const schemaDetail = /expertInjectDetail:\s*z\.string\(\)\.default\('([a-z]+)'\)/.exec(flat)
   assert.ok(schemaDetail, 'schema 未找到 expertInjectDetail 默认值')
-  assert.ok(/expertInjectBudgetChars:\s*z\.natural\(\)\.default\(INJECT_BUDGET_DEFAULT\)/.test(settingsSrc),
+  assert.ok(/expertInjectBudgetChars:\s*z\.natural\(\)\.default\(INJECT_BUDGET_DEFAULT\)/.test(flat),
     'schema 未用 INJECT_BUDGET_DEFAULT 作为预算默认值')
 
   const budgetConst = /export const INJECT_BUDGET_DEFAULT = (\d+)/.exec(limitsSrc)
@@ -200,7 +206,7 @@ test('默认值三处一致：schema default / settings DEFAULTS / cordis.patch.
   assert.ok(patchDetail && patchBudget, 'cordis.patch.yml base 未声明新键')
 
   // 能力层预算（批二新增）：同样要求 schema / DEFAULTS / patch base 三处一致
-  assert.ok(/skillBudgetChars:\s*z\.natural\(\)\.default\(SKILL_BUDGET_DEFAULT\)/.test(settingsSrc),
+  assert.ok(/skillBudgetChars:\s*z\.natural\(\)\.default\(SKILL_BUDGET_DEFAULT\)/.test(flat),
     'schema 未用 SKILL_BUDGET_DEFAULT 作为能力层预算默认值')
   const patchSkill = /skillBudgetChars:\s*(\d+)/.exec(patchSrc)
   assert.ok(patchSkill, 'cordis.patch.yml base 未声明 skillBudgetChars')
@@ -214,7 +220,7 @@ test('默认值三处一致：schema default / settings DEFAULTS / cordis.patch.
   assert.equal(INJECT_BUDGET_DEFAULT, schemaBudget, 'limits 常量与 schema 引用不一致')
 
   // 干活轮位数（2026-09-16 新增）：schema / DEFAULTS / patch base 三处一致
-  assert.ok(/expertFullHitMax:\s*z\.natural\(\)\.default\(FULL_HIT_MAX_DEFAULT\)/.test(settingsSrc),
+  assert.ok(/expertFullHitMax:\s*z\.natural\(\)\.default\(FULL_HIT_MAX_DEFAULT\)/.test(flat),
     'schema 未用 FULL_HIT_MAX_DEFAULT 作为全文位数默认值')
   const patchHitMax = /expertFullHitMax:\s*(\d+)/.exec(patchSrc)
   assert.ok(patchHitMax, 'cordis.patch.yml base 未声明 expertFullHitMax')
