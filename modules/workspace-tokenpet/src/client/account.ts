@@ -132,7 +132,9 @@ function formatWallets(wallets: readonly AccountWallet[]): string {
     const symbol = CURRENCY_SYMBOL[wallet.currency]
     if (!symbol) continue
     const parsed = splitDecimal(wallet.balance)
-    if (!parsed || (parsed.negative && parsed.fraction === '' && /^0*$/.test(parsed.integer))) continue
+    if (!parsed) continue
+    // A granted-bonus wallet can exist with a zero amount; it must not render a "¥0.00" row.
+    if (/^0*$/.test(parsed.integer) && /^0*$/.test(parsed.fraction)) continue
     const text = formatBalance(wallet.balance, symbol)
     if (text !== '') parts.push(text)
   }

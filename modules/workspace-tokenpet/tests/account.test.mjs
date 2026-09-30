@@ -30,6 +30,14 @@ test('balanceView maps the Remote balance union', () => {
   const noBonus = balanceView({ status: 'ready', value: [{ currency: 'USD', balance: '3' }] })
   assert.equal(noBonus.recharge, '$3.00')
   assert.equal(noBonus.bonus, undefined)
+  // A zero-amount bonus wallet must not render a "¥0.00" row.
+  const zeroBonus = balanceView({
+    status: 'ready',
+    value: [{ currency: 'CNY', balance: '26.15' }],
+    bonusWallets: [{ currency: 'CNY', balance: '0' }, { currency: 'CNY', balance: '0.00' }],
+  })
+  assert.equal(zeroBonus.recharge, '¥26.15')
+  assert.equal(zeroBonus.bonus, undefined)
 })
 
 test('readBalance degrades to panel states instead of throwing', async () => {
