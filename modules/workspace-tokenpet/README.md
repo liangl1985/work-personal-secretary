@@ -36,7 +36,7 @@ tool-success / tool-failure / prompt-enhancing / prompt-ready`），32 帧 / 100
 - `GET /workspace-tokenpet/usage` 用量聚合；`POST /usage/reset`（清空）与 `POST /usage/restore`（恢复）；
 - 终身账本 `GET /usage/lifetime`、`POST /usage/lifetime/clear-history`；
 - 小时趋势：`GET /usage/trend`、`/usage/trend/status`、`/usage/trend/repair`、`/usage/trend/repair/cancel`
-- **账户余额**（1.0.6）：面板上的余额**不来自本模块**，而是经官方 `account` Remote 命名空间的 `getBalance()` 读取（`ctx.get('remote.account')`，可选服务）；金额按官方 `formatBalance` 口径显示（roundDown、千分位、`<¥0.01`）。宿主无该能力/未登录/读取失败时按状态降级，**不抛给宿主、不影响桌宠挂载**
+- **账户余额**（1.0.6）：面板上的余额**不来自本模块**，而是经官方 `account` Remote 命名空间的 `getBalance()` 读取（`ctx.get('remote.account')`，可选服务）；金额按官方 `formatBalance` 口径显示（roundDown、千分位、`<¥0.01`）。**桌宠不做账号界面**：拿到余额才显示，未登录/宿主无该能力时**静默不显示**，读取失败给一行提示；都不抛给宿主、不影响桌宠挂载
   （宿主缺 `listSnapshots()` 时由 `supportsSnapshots()` 守卫优雅降级，不刷错误日志）；
 - 索引维护：`GET /index/status`、`POST /index/build`、`/index/sync`、`/index/cancel`。
 

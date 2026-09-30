@@ -20,9 +20,9 @@
     版本）/ `locale` / `timezoneOffsetSeconds = -getTimezoneOffset()*60`。
   - 金额口径照官方 `formatBalance`：**保留十进制字符串精度**（不做 float 换算）、`roundDown` 到分、千分位分组、
     `0` → `¥0.00`、`0<v<0.01` → `<¥0.01`、负值 `-¥…`；赠金（`bonusWallets`）有则在下一行单独显示。
-- **四条降级**（任一都不抛给宿主、不影响桌宠挂载）：宿主无 account Remote → `当前宿主未提供账户接口`；
-  `getBalance` 返回 `null` → `未登录（登录后显示余额）`；`ok:false` 或余额 `status:'failed'` → `余额读取失败`；
-  调用抛错（如账号会话缺失）→ 同上。
+- **显示口径与降级**（都不抛给宿主、不影响桌宠挂载）：拿到余额 → **直接显示金额**（与官方「账号与余额」页同源；
+  桌宠**不做账号界面**）；`getBalance` 返回 `null`（官方口径＝未登录）或宿主无 account Remote → **区块静默不显示**；
+  `ok:false` / 余额 `status:'failed'` / 调用抛错 → 一行「余额读取失败」（保留可观测性）。
 - **用量侧不改接线**：桌宠早已在读官方投影（`tokenUsage` / `sessionStats` / `contextPressure` /
   `contextBreakdown` / `contextTimeline` / `todayUsageBuckets`），本次只新增余额；**跨会话终身累计仍由本地
   账本承担**（官方没有对等的终身投影）。

@@ -4120,12 +4120,6 @@ window.__ModuleLoader__.load({
 				label: "设置"
 			}
 		];
-		/** Map a non-ready balance state to its dictionary key; `ready` renders the amount instead. */
-		function balanceStateKey(state) {
-			if (state === "signed-out") return "balanceSignedOut";
-			if (state === "unavailable") return "balanceUnavailable";
-			return "balanceFailed";
-		}
 		function formatPanelDate(time, language, hourOnly = false) {
 			const date = new Date(typeof time === "number" && time < 0xe8d4a51000 ? time * 1e3 : time);
 			return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat(localeFor(language), hourOnly ? {
@@ -4471,7 +4465,7 @@ window.__ModuleLoader__.load({
 						style: css(dangerLink)
 					}, t("clear"))
 				]),
-				p.balance ? (0, react.createElement)("section", {
+				p.balance && p.balance.state === "ready" ? (0, react.createElement)("section", {
 					key: "balance",
 					style: css(card),
 					"data-testid": "account-balance"
@@ -4479,19 +4473,20 @@ window.__ModuleLoader__.load({
 					(0, react.createElement)("div", {
 						key: "heading",
 						style: css(sectionHeading)
-					}, [(0, react.createElement)("strong", { key: "title" }, t("balance")), p.balance.state === "ready" ? null : (0, react.createElement)("span", {
-						key: "state",
-						style: css(subtle)
-					}, t(balanceStateKey(p.balance.state)))]),
-					p.balance.state === "ready" ? (0, react.createElement)("div", {
+					}, [(0, react.createElement)("strong", { key: "title" }, t("balance"))]),
+					(0, react.createElement)("div", {
 						key: "value",
 						style: css(heroTotal)
-					}, p.balance.recharge && p.balance.recharge !== "" ? p.balance.recharge : "—") : null,
+					}, p.balance.recharge && p.balance.recharge !== "" ? p.balance.recharge : "—"),
 					p.balance.bonus ? (0, react.createElement)("div", {
 						key: "bonus",
 						style: css(note)
 					}, t("bonus", { amount: p.balance.bonus })) : null
-				]) : null,
+				]) : p.balance && p.balance.state === "failed" ? (0, react.createElement)("div", {
+					key: "balanceFailed",
+					style: css(note),
+					"data-testid": "account-balance-failed"
+				}, t("balanceFailed")) : null,
 				(0, react.createElement)("div", {
 					key: "insights",
 					style: css(panelContentGrid())
