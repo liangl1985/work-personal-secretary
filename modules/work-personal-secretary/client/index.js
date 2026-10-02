@@ -39,13 +39,12 @@ window.__ModuleLoader__.load({
      * 没有 useEffect 时退化为空实现：页面照样渲染骨架，只是不自动发起检测。
      */
     const useEffect = typeof React.useEffect === 'function' ? React.useEffect : function noopEffect() {}
-// 与 useEffect 同一降级口径：渲染替身没有 useRef 时给一个不跨渲染保持的等价物（只影响水合标记，
-// 不会丢数据——写回只在 jobsHydrated.current 为真时发生）。
+// 与 useEffect 同一降级口径：渲染替身没有 useRef 时给一个不跨渲染保持的等价物。
 const useRef = typeof React.useRef === 'function' ? React.useRef : function noopRef(init) { return { current: init } }
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.25'
+    const BUILD = 'v1.1.26'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -2940,7 +2939,6 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
       // ── 自定义岗位的持久化（GET/POST /jobs ↔ 设置的 customJobs 键，落 profile 覆盖层）──
       /** 首次水合标记：未完成前不写回，避免拿空列表覆盖持久化里的既有岗位。 */
-      const jobsHydrated = useRef(false)
 
       /**
        * 拉取配置里的自定义岗位与**当前选中岗位**（GET /jobs）。
@@ -2960,9 +2958,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
             // 这里**绝不回落**到别的来源 —— 否则"默认岗位"会被冒充成"配置里的值"（真机踩过：被写回成 infosec）。
             domainId: configured,
           }))
-          // 护栏：只有**确实读到配置值**才允许写回；没读到就不写（避免把回落值/空值写进配置）。
-          // 使用者若手动选择岗位，会由 onDomainChange / saveModal 显式开启写回。
-          jobsHydrated.current = configured.length > 0
+
         } catch {
           /* 读不到就保持空列表，**并且不开启写回** —— 宁可不写，也不能用空列表覆盖已有配置。
              代价：读取失败时"新建岗位"这一次写不进去；刷新后读到了就正常。 */
@@ -3368,13 +3364,13 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       const canSave = filledCount === 3 && !runRunning
 
       function onDomainChange(value) {
-        // 使用者**显式**选过岗位 → 这就是要落盘的值，开启写回（即便起初没读到配置）
-        jobsHydrated.current = true
         if (value === NEW_DOMAIN_VALUE) {
           setSt((prev) => Object.assign({}, prev, { modal: { name: '', content: '', phase: 'idle', message: '', error: '' } }))
           return
         }
         setField('domainId', value)
+        // 使用者显式选中 → 立即落盘（只写 selected，不碰卡片）
+        persistCustomJobs([], value)
       }
 
       // ── 新建岗位对话框 ────────────────────────────────────────────
@@ -3436,18 +3432,15 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           setModal({ phase: 'idle', message: '', error: t('modalSaveFailed') + '：' + String(body.error || ('HTTP ' + res.status)) })
           return
         }
-        jobsHydrated.current = true   // 新建/覆盖卡片后，选中项是使用者显式意图，允许落盘
         setSt((prev) => Object.assign({}, prev, { modal: null, domainId: id }))
         await loadDomains()   // 卡片已落盘 → 重新拉清单，新岗位随即出现在下拉里
-        if (jobsHydrated.current) persistCustomJobs([], id)   // 只写选中项；卡片已由 /domain/card 落盘，不带 jobs 就不会重复写
+        persistCustomJobs([], id)   // 使用者显式新建/覆盖卡片 → 选中项立即落盘 就不会重复写
       }
 
-      // 自定义岗位变化 → 自动写回持久化层。用「监听 state」而不是在每个变更点手写，
-      // 是为了不把副作用塞进 React updater（那里可能被重复执行），也少改业务分支。
-      useEffect(() => {
-        if (!jobsHydrated.current) return
-        persistCustomJobs(st.custom, st.domainId)
-      }, [st.custom, st.domainId])
+      // 【已删除自动写回】原本这里有一条「state 一变就写回配置」的 effect。
+      // 它会把界面上的**临时值**（加载途中的空值、回落值）也写进配置，
+      // 把使用者的真值反复覆盖（真机 2026-10-02 反复踩到：配置里的 selectedDomain 被改成 infosec、又被改成空）。
+      // 现在改为：**只在使用者显式动作时写**（onDomainChange 选中 / saveModal 新建）。
 
       // ── 保存即执行链 ──────────────────────────────────────────────
       function chainInit() {
