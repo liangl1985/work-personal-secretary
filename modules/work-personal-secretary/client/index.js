@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.23'
+    const BUILD = 'v1.1.24'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -3364,6 +3364,13 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       const domainOptions = (Array.isArray(st.domains.items) ? st.domains.items : [])
         .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
         .filter((d) => d.id)
+      // 「未配置」是**空态显示**，不是一个可选项：**只在"当前选中的岗位不存在于清单里"（含压根没选）时才插入**。
+      // 于是：配置读到值 → 下拉里只有真实岗位，不会多出一条"未配置"；真的没值 → 才由它承载"当前值"显示。
+      // （它必须是 <select> 的 option 才能当"当前值"显示，故用 disabled 保证不可选、不可点。）
+      const domainPicked = domainOptions.some((d) => d.id === st.domainId)
+      const domainPlaceholder = domainPicked
+        ? null
+        : h('option', { key: '__ph', value: '', disabled: true }, t('coreDomainUnset'))
       const selectedDomain = domainOptions.filter((d) => d.id === st.domainId)[0] || null
       const domainContent = selectedDomain ? String(selectedDomain.content || '') : ''
       const memoryDir = String(st.memoryDir || '').trim()
@@ -3723,9 +3730,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           h('select', {
             key: 's', style: S.input, value: st.domainId, disabled: runRunning,
             onChange: (e) => onDomainChange((e && e.target && e.target.value) || ''),
-          // 空态**不是一个可选项**：placeholder 项 disabled（点不开、选不了），只承担
-          // "配置里没读到选中岗位"的显示职责。读到值就由 st.domainId 选中真实岗位。
-          }, [h('option', { key: '__ph', value: '', disabled: true }, t('coreDomainUnset'))]
+          }, []
+            .concat(domainPlaceholder ? [domainPlaceholder] : [])
             .concat(domainOptions.map((d) => h('option', { key: d.id, value: d.id }, d.label)))
             .concat([h('option', { key: '__new', value: NEW_DOMAIN_VALUE }, t('coreDomainNew'))])),
         ]),
