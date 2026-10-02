@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.22'
+    const BUILD = 'v1.1.23'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
