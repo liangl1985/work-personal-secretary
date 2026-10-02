@@ -2208,6 +2208,9 @@ hookCursor = 0
 effectQueue = []
 t4Tree = expand(reg.render({ initialTab: 'core' }))
 ok(findSave().props.disabled !== true, '三项齐备 → 保存按钮可点')
+// 有效选中项（infosec 在清单里）→ 下拉里**不应**出现「未配置」：它是空态显示，不是选项（使用者 2026-10-02 定）
+const t4OptsPicked = collect(findAll(t4Tree, (x) => x.type === 'option', []), []).join(' | ')
+ok(t4OptsPicked.indexOf('未配置') < 0, '有选中岗位 → 下拉里不出现「未配置」（实测：' + t4OptsPicked + '）')
 
 calls.length = 0
 findSave().props.onClick()
@@ -2743,9 +2746,6 @@ ok(Boolean(s17Select2) && String(s17Select2.props.value).indexOf('card:') === 0,
   '非预置岗位 → 派生出一张卡片项并选中（实测 ' + String(s17Select2 && s17Select2.props.value) + '）')
 ok(s17Text.indexOf('工控安全售前（自定义）') < 0, '岗位名不再带"（自定义）"后缀（建出来的就是普通岗位）')
 ok(s17Save().props.disabled === true, '非预置且正文为空 → 保存仍置灰（语义不变）')
-// 有选中岗位时，下拉里**不应**出现「未配置」——它是空态显示，不是选项（使用者 2026-10-02 定）
-const s17OptsPicked = findAll(s17Tree, (x) => x.type === 'option', []).map((o) => String(o.props && o.props.children || ''))
-ok(s17OptsPicked.every((txt) => txt.indexOf('未配置') < 0), '有选中岗位 → 下拉里不出现「未配置」（实测选项：' + s17OptsPicked.join('/') + '）')
 // 补：两级来源都空 → 停在「未配置」空态（题干域必须显式给空，才验证空态本身）
 const s17PayloadBackup = s17Payload
 s17Payload = Object.assign({}, s17Payload, { domain: {} })
