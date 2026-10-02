@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.20'
+    const BUILD = 'v1.1.21'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -3011,6 +3011,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           const mem = (body.memoryDir && typeof body.memoryDir === 'object') ? body.memoryDir : {}
           const obs = (body.obsidianDir && typeof body.obsidianDir === 'object') ? body.obsidianDir : {}
           const rootState = (body.root && typeof body.root === 'object') ? body.root : {}
+          const dom = (body.domain && typeof body.domain === 'object') ? body.domain : {}
           setSt((prev) => {
             // 只在**首次**取到生效值时预填：之后（重新检测 / 使用者清空后）不再回填，
             // 否则「清空字段」会被下一次取数悄悄撤销。用独立标记 setupFilled，
@@ -3042,8 +3043,22 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
               // T5-7：目录布局识别（new / legacy / mixed / empty / unknown），用于提示旧布局
               next.vaultLayout = (body.vaultLayout && typeof body.vaultLayout === 'object') ? body.vaultLayout : null
             }
-            // 岗位**不再回填**：选中的岗位只认配置文件（selectedDomain）。配置里没有值就保持空，
-            // 由 UI 显示「未配置」—— 这样"配置到底读没读到"一眼可见（使用者 2026-10-02 定的口径）。
+            // 岗位：**配置优先，逐级回落**（使用者 2026-10-02 两次澄清后的定稿）
+            //   ① 配置文件里的 selectedDomain（loadCustomJobs 已填 → prev.domainId 非空则不再动）
+            //   ② 宿主设置里的 experts.defaultDomain（就是这个 body.domain，source=settings，同属 profile 配置）
+            //   ③ 两级都空 → 保持空，UI 显示「未配置」（一眼可辨"配置空"与"读到了值"）
+            if (!alreadyFilled && !String(prev.domainId || '').trim() && typeof dom.id === 'string' && dom.id) {
+              const label = (typeof dom.label === 'string' && dom.label.trim()) ? dom.label.trim() : dom.id
+              if (dom.isPreset === true) {
+                next.domainId = dom.id
+              } else {
+                const id = 'custom:' + label
+                next.custom = (Array.isArray(prev.custom) ? prev.custom : [])
+                  .filter((d) => d && d.id !== id)
+                  .concat([{ id: id, label: label + t('modalCustomSuffix'), content: '' }])
+                next.domainId = id
+              }
+            }
             return Object.assign({}, prev, next)
           })
         } catch (err) {

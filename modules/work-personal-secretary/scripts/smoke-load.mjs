@@ -2702,13 +2702,11 @@ ok(String(s17Inputs[0].props.value) === '' && s17Inputs[1].props.disabled === fa
   '既有配置推不出存储根目录 → 根目录留空、两个目录按「已单独指定」可编辑（不改写使用者路径）')
 // 行为变更（使用者 2026-10-02 定）：岗位**不再**从 /setup-state 回填，只认配置文件 selectedDomain。
 // 配置里没有值 → 下拉停在「未配置」空态，而不是拿预置岗位冒充"已配置"。
-ok(Boolean(s17Select) && String(s17Select.props.value) === '',
-  '岗位不回填：配置里无选中岗位 → 停在「未配置」（实测 ' + String(s17Select && s17Select.props.value) + '）')
-ok(s17Text.indexOf('未配置') >= 0, '下拉含「未配置」空态文案（便于分辨"配置空"与"读到了值"）')
+ok(Boolean(s17Select) && String(s17Select.props.value) === 'infosec',
+  '岗位读配置：回填为配置里的预置岗位（infosec，source=settings）（实测 ' + String(s17Select && s17Select.props.value) + '）')
 ok(s17Text.indexOf('当前生效值') < 0 && s17Text.indexOf('由记忆镜像反推') < 0,
   'A2：来源标注不再显示（预填功能保留）')
-ok(Boolean(s17Save()) && s17Save().props.disabled === true,
-  '岗位未配置 → 保存按钮置灰（显式空态参与门禁，不再由预填解锁）')
+ok(Boolean(s17Save()) && s17Save().props.disabled !== true, '配置值齐 → 保存按钮可点')
 ok(calls.filter((c) => c.method === 'POST').length === 0, '预填不触发任何写操作（无 POST）')
 
 // ② 清空任一字段 → 保存置灰（既有校验不变）
@@ -2730,10 +2728,22 @@ effectQueue = []
 s17Tree = await s17Render()
 s17Text = collect(s17Tree, []).join(' | ')
 const s17Select2 = findAll(s17Tree, (x) => x.type === 'select', [])[0]
-ok(Boolean(s17Select2) && String(s17Select2.props.value) === '',
-  '非预置岗位也不再派生：岗位只认配置文件（实测 ' + String(s17Select2 && s17Select2.props.value) + '）')
-ok(s17Text.indexOf('工控安全售前（自定义）') < 0, '不在前端凭空造自定义岗位（正文不能自动生成）')
+ok(Boolean(s17Select2) && String(s17Select2.props.value).indexOf('custom:') === 0,
+  '非预置岗位 → 派生出自定义项并选中（实测 ' + String(s17Select2 && s17Select2.props.value) + '）')
+ok(s17Text.indexOf('工控安全售前（自定义）') >= 0, '岗位名带入自定义岗位并出现在下拉里')
 ok(s17Save().props.disabled === true, '非预置且正文为空 → 保存仍置灰（语义不变）')
+// 补：两级来源都空 → 停在「未配置」空态（题干域必须显式给空，才验证空态本身）
+const s17PayloadBackup = s17Payload
+s17Payload = Object.assign({}, s17Payload, { domain: {} })
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+s17Tree = await s17Render()
+const s17SelectEmpty = findAll(s17Tree, (x) => x.type === 'select', [])[0]
+ok(Boolean(s17SelectEmpty) && String(s17SelectEmpty.props.value) === '',
+  '两级来源都空 → 停在「未配置」空态（实测 ' + String(s17SelectEmpty && s17SelectEmpty.props.value) + '）')
+ok(collect(s17Tree, []).join(' | ').indexOf('未配置') >= 0, '空态文案「未配置」可见（便于分辨"配置空"与"读到了值"）')
+s17Payload = s17PayloadBackup
 
 // ④ 接口不可用 → 字段留空、给可读说明、不拦主流程
 s17Ok = false

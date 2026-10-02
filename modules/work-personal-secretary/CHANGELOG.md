@@ -1,5 +1,23 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.21 — 2026-10-02（岗位来源修正：读回配置里本来就有的岗位值）
+
+> 使用者 2026-10-02 反馈：界面显示「未配置」，但**配置文件里应该有值**。实测确认他说得对。
+
+- **实测数据**：profile 覆盖层 `work-personal-secretary` 的 config 里 `selectedDomain: ""` + `customJobs: "[]"`
+  （1.1.17/1.1.18 新加的两个键，确实空）；但 `GET /setup-state` 返回
+  `domain: {id:"infosec", label:"信息安全", isPreset:true, source:"settings"}` ——
+  **`experts.defaultDomain` 同样是 profile 配置里的岗位值**（source 明确标 settings）。
+- **1.1.18 的错误**：把来源收窄成"只认 selectedDomain"，于是把配置里**本来就有的**岗位值排除在外，
+  界面反而显示「未配置」。
+- **修正**：岗位改为**配置优先、逐级回落**：
+  ① 配置文件里的 `selectedDomain`（有则用，`loadCustomJobs` 已填）；
+  ② 宿主设置里的 `experts.defaultDomain`（`/setup-state` 的 `domain`，同属 profile 配置）；
+  ③ 两级都空 → 保持空，UI 显示「未配置」（一眼可辨"配置空"与"读到了值"）。
+- **测试同步**：1.1.18 改窄的三处断言恢复；另**新增**一条"两级来源都空 → 停在「未配置」"用例 ——
+  空态由独立用例守住，不再靠牺牲正常路径。534 通过 / 0 失败。
+- 真机预期：重启后「工作岗位」显示 **信息安全**（配置里的值）；两级都为空时才显示「未配置」。
+
 ## 1.1.20 — 2026-10-02（防数据丢失：读取失败不再开启写回）
 
 > 真机 2026-10-02：配置里已保存的自定义岗位**莫名变空**。定位到前端一条**数据丢失路径**。
