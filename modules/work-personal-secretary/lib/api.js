@@ -116,6 +116,7 @@ import { createChildDirectory, listDirectories } from './dirs.js'
 import { applyImport, scanImport } from './import.js'
 // 记忆镜像同步（T5-4）：执行链收尾后尽力同步一次，失败不阻断配置
 import { syncMirrorBestEffort } from './mirror-sync.js'
+import { DEFAULT_DOMAINS_SUBDIR, listCards, writeCard, deleteCard, cardToItem, cardIdFor } from './domainCards.js'
 
 /** 路由前缀（接口契约定死） */
 export const API_ROOT = '/work-personal-secretary/api'
@@ -138,7 +139,7 @@ export const PAGE_PATHS = ['/guide', '/help']
  * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
  * 1.1.12 补入 `/repo-root`：此前它只在 prefix 下可达，桌面外壳（只认 exact）保存不了仓库目录。
  */
-export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/jobs', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new', '/repo-root', '/import/scan', '/import/apply']
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/card', '/domain/card/delete', '/domain/generate', '/jobs', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new', '/repo-root', '/import/scan', '/import/apply']
 
 /**
  * 两个说明文档的**唯一映射**（单一真相源 = defaults 下的 md）：
@@ -626,10 +627,49 @@ export function installApi(ctx, deps = {}) {
    * 设置服务不可用 / ns 未注册 / 写入失败 → 返回可读错误（调用方决定是否退回写 patch）。
    * @returns {Promise<{ok:boolean, revision?:(number|null), code?:string, error?:string}>}
    */
+  /**
+   * 岗位卡片目录：**配置优先**（插件配置 domainsDir），留空用默认 <DSH_HOME>/data/work-personal-secretary/domains。
+   * 这是"配置文件指向卡片"的那一条指向 —— 目录里有几张卡片就显示几个岗位。
+   */
+  function domainsDirOf() {
+    const configured = typeof deps.domainsDir === 'string' ? deps.domainsDir.trim() : ''
+    if (configured) return configured
+    const home = (typeof deps.dshHome === 'string' && deps.dshHome.trim())
+      ? deps.dshHome.trim()
+      : String(process.env.DSH_HOME || '').trim()
+    return home ? join(home, DEFAULT_DOMAINS_SUBDIR) : ''
+  }
+
   /** 自定义岗位列表内存态：启动时取配置，POST /jobs 成功后就地更新（该键非 volatile，写入需重启才回落到 config）。 */
   let customJobs = parseCustomJobs(deps.customJobs)
   /** 当前选中岗位 id（含自定义）；与 customJobs 同一持久化通道，配置优先、空则回落默认。 */
   let selectedDomain = typeof deps.selectedDomain === 'string' ? deps.selectedDomain.slice(0, 200) : ''
+
+  /**
+   * 只写「当前选中岗位」（settings.selectedDomain，volatile）。选中项属于**配置**，不属于卡片。
+   * 与下方写列表同一套 describe→mutate 的 revision 栅栏。
+   */
+  async function writeSettingsSelected(selected) {
+    const settings = settingsOf()
+    if (!settings || typeof settings.mutate !== 'function') {
+      return { ok: false, code: 'settings-unavailable', error: '设置服务不可用（ctx.settings 缺失或只读）' }
+    }
+    let revision = 0
+    try {
+      const described = await settings.describe({ redactSecrets: true })
+      const list = Array.isArray(described) ? described : (described && Array.isArray(described.namespaces) ? described.namespaces : [])
+      const target = list.filter((n) => n && n.ns === SETTINGS_NS)[0]
+      revision = (target && Number.isInteger(target.revision)) ? target.revision : 0
+    } catch (err) {
+      return { ok: false, code: 'describe-failed', error: '读取设置版本失败：' + String((err && err.message) || err) }
+    }
+    try {
+      await settings.mutate(SETTINGS_NS, [{ op: 'set', path: ['selectedDomain'], value: String(selected == null ? '' : selected).slice(0, 200) }], revision)
+      return { ok: true, revision: revision }
+    } catch (err) {
+      return { ok: false, code: 'write-failed', error: '写入选中岗位失败：' + String((err && err.message) || err) }
+    }
+  }
 
   /**
    * 把自定义岗位列表写进**设置用户层**（本 profile 覆盖层的 `customJobs` 键）。写入前先 describe 取 revision。
@@ -898,28 +938,47 @@ export function installApi(ctx, deps = {}) {
         })
       }
 
-      // GET /jobs —— 自定义岗位列表（只读）。持久化位 = 设置的 customJobs 键（profile 覆盖层）。
+      // GET /jobs —— 岗位卡片列表（只读）。持久化位 = **卡片目录**（配置文件里的 domainsDir 指向它）。
       if (req.method === 'GET' && (sub === '/jobs' || sub === '/jobs/')) {
         const guard = sameOriginLooseGuard(req)
         if (guard) return sendError(res, 403, guard)
-        return sendJson(res, 200, { ok: true, jobs: customJobs, selected: selectedDomain })
+        const dir = domainsDirOf()
+        const scanned = listCards(dir)
+        return sendJson(res, 200, {
+          ok: true, jobs: scanned.cards.map(cardToItem), selected: selectedDomain,
+          cardsDir: dir, invalidCards: scanned.invalid,
+        })
       }
 
-      // POST /jobs { jobs, dryRun } —— 整表写入自定义岗位（同源保护；dryRun 默认 true）。
-      // 写入落设置用户层；该键非 volatile，重启后由 config 生效，故此处同步内存态。
+      // POST /jobs { jobs, selected, dryRun } —— 把传入的每张卡**逐张写进卡片目录**（upsert）。
+      // **刻意不删除**：整表覆盖语义在"读到空"时会删光使用者的岗位（1.1.20 的教训）；
+      // 删除走 POST /domain/card/delete。selected 仍写配置（选中项属于配置，不属于卡片）。
       if (req.method === 'POST' && (sub === '/jobs' || sub === '/jobs/')) {
         const guard = sameOriginGuard(req)
         if (guard) return sendError(res, 403, guard)
         let body
         try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
-        const next = parseCustomJobs(Array.isArray(body.jobs) ? JSON.stringify(body.jobs) : '[]')
+        const dir = domainsDirOf()
+        if (!dir) return sendError(res, 400, '卡片目录未配置（settings.domainsDir 为空且 DSH_HOME 未知）')
+        const list = Array.isArray(body.jobs) ? body.jobs : []
         const nextSelected = typeof body.selected === 'string' ? body.selected.slice(0, 200) : selectedDomain
-        if (body.dryRun === true) return sendJson(res, 200, { ok: true, dryRun: true, jobs: next, selected: nextSelected })
-        const outcome = await writeSettingsCustomJobs(next, nextSelected)
-        if (!outcome.ok) return sendError(res, 400, outcome.error || '写入自定义岗位失败')
-        customJobs = next
+        if (body.dryRun === true) return sendJson(res, 200, { ok: true, dryRun: true, jobs: list, selected: nextSelected, cardsDir: dir })
+        const written = []
+        for (const raw of list) {
+          const name = String((raw && raw.name) || '').trim()
+          const id = String((raw && raw.id) || '').trim() || cardIdFor(name)
+          if (!id) continue
+          const w = writeCard(dir, { id: id, name: name || id.replace(/^card:/, ''), label: (raw && raw.label) || name, content: (raw && raw.content) || '' }, null, new Date().toISOString())
+          if (!w.ok) return sendError(res, 400, w.error || '写入岗位卡片失败')
+          written.push(id)
+        }
+        if (nextSelected) {
+          const outcome = await writeSettingsSelected(nextSelected)
+          if (!outcome.ok) return sendError(res, 400, outcome.error || '写入选中岗位失败')
+        }
         selectedDomain = nextSelected
-        return sendJson(res, 200, { ok: true, jobs: customJobs, selected: selectedDomain, revision: outcome.revision == null ? null : outcome.revision })
+        const scanned = listCards(dir)
+        return sendJson(res, 200, { ok: true, jobs: scanned.cards.map(cardToItem), selected: selectedDomain, written: written, cardsDir: dir })
       }
 
       // GET /identity[?memoryDir=] —— 当前「使用者身份」条目状态与正文（只读）
@@ -979,13 +1038,57 @@ export function installApi(ctx, deps = {}) {
 
       // GET /domain/list —— 五个预置岗位的正文（只读；客户端下拉直接取用）
       if (req.method === 'GET' && (sub === '/domain/list' || sub === '/domain/list/')) {
+        // 岗位清单 = **预置 5 张（源码常量）+ 卡片目录里的卡片**（一张卡一个岗位）。
+        // 视图名不再区分"预置/自定义"：建出来的就是普通岗位（使用者 2026-10-02 定）。
+        const cardDir = domainsDirOf()
+        const scanned = listCards(cardDir)
+        const presetIds = {}
+        for (const p of DOMAIN_PRESETS) presetIds[p.id] = true
+        const cards = scanned.cards.filter((c) => !presetIds[c.id])
         return sendJson(res, 200, {
           ok: true,
           prefix: IDENTITY_PREFIX,
           maxChars: DOMAIN_MAX_CHARS,
-          items: DOMAIN_PRESETS.map((p) => ({ id: p.id, label: p.label, content: p.content })),
-          note: '预置正文不含「' + IDENTITY_PREFIX + '」前缀，由 POST /identity/save 统一加上；都不是（新建岗位）时可自填或调 POST /domain/generate 生成',
+          items: DOMAIN_PRESETS.map((p) => ({ id: p.id, label: p.label, content: p.content })).concat(cards.map(cardToItem)),
+          cardsDir: cardDir,
+          cards: cards.length,
+          invalidCards: scanned.invalid,
+          note: '预置正文不含「' + IDENTITY_PREFIX + '」前缀，由 POST /identity/save 统一加上；新建岗位请用 POST /domain/card（在卡片目录里生成一张卡片）',
         })
+      }
+
+      // POST /domain/card { id?, name, content, dryRun? } —— **新建/覆盖一张岗位卡片**（同源保护）。
+      // 新建岗位就是这个动作：在卡片目录里生成一个卡片文件；目录里有几张卡就显示几个岗位。
+      // 建出来的就是**普通岗位**：label = name，不再加"（自定义）"后缀（使用者 2026-10-02 定）。
+      if (req.method === 'POST' && (sub === '/domain/card' || sub === '/domain/card/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const dir = domainsDirOf()
+        if (!dir) return sendError(res, 400, '卡片目录未配置（settings.domainsDir 为空且 DSH_HOME 未知）')
+        const name = String(body.name == null ? '' : body.name).trim()
+        if (!name) return sendError(res, 400, '岗位名称必填')
+        const id = String(body.id == null ? '' : body.id).trim() || cardIdFor(name)
+        if (body.dryRun === true) return sendJson(res, 200, { ok: true, dryRun: true, id: id, cardsDir: dir })
+        const w = writeCard(dir, { id: id, name: name, label: name, content: body.content }, null, new Date().toISOString())
+        if (!w.ok) return sendError(res, 400, w.error || '写入岗位卡片失败')
+        const scanned = listCards(dir)
+        return sendJson(res, 200, { ok: true, id: id, path: w.path, jobs: scanned.cards.map(cardToItem), cardsDir: dir })
+      }
+
+      // POST /domain/card/delete { id } —— 删除一张岗位卡片（同源保护；卡片是文件，删除即删文件）
+      if (req.method === 'POST' && (sub === '/domain/card/delete' || sub === '/domain/card/delete/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const id = String(body.id == null ? '' : body.id).trim()
+        if (!id) return sendError(res, 400, 'id 必填')
+        const del = deleteCard(domainsDirOf(), id)
+        if (!del.ok) return sendError(res, 400, del.error || '删除岗位卡片失败')
+        const scanned = listCards(domainsDirOf())
+        return sendJson(res, 200, { ok: true, removed: del.removed === true, jobs: scanned.cards.map(cardToItem) })
       }
 
       // POST /domain/generate { name, content } —— 生成岗位身份正文（同源保护）

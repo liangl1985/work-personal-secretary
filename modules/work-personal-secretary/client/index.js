@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.21'
+    const BUILD = 'v1.1.22'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -274,7 +274,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       coreFieldDomainHint: '五个预置岗位对应信息安全 / 财务 / 人力资源 / 代码编程 / 金融五个行业域，均为可直接写入身份的预置正文；都不是时可自填，新建后自动出现在这里并选中。显示「未配置」= 配置文件里没有选中的岗位',
       setupStateFailed: '未能取到当前生效值（可手动填写）',
       coreDomainNeedsContent: '已带入当前岗位名称，请补充岗位内容（或点「自动生成」）后再保存',
-      coreDomainNew: '都不是（新建岗位…）',
+      coreDomainNew: '＋ 新建岗位…',
       coreDomainPlaceholder: '请选择…',
       // 配置文件里没有选中岗位时的**显式空态**：不拿预置岗位冒充"已配置"，便于查错
       coreDomainUnset: '未配置',
@@ -350,6 +350,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       modalNote: '只写使用者身份本身，不写助手人设；结果只作预览，可替换或重试。保存后整条写入记忆体「使用者身份」条目（全局记忆 · tag=关键）。',
       modalCancel: '取消',
       modalSave: '保存岗位',
+      modalSaving: '正在写入岗位卡片…',
+      modalSaveFailed: '写入岗位卡片失败',
       modalNameRequired: '请先填写岗位名称',
       modalOver: '内容超过 {n} 字，请精简后再保存',
       modalNameOver: '岗位名称不超过 {n} 字，请精简后再保存',
@@ -864,7 +866,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       coreFieldDomainHint: 'Five presets cover information security / accounting / HR / coding / finance, each a ready-to-write identity text; choose "None of these" to fill your own — it then appears in this list and is selected',
       setupStateFailed: 'Could not read the current values (fill them in manually)',
       coreDomainNeedsContent: 'The current job name was filled in; add the job description (or press Generate) before saving',
-      coreDomainNew: 'None of these (new job…)',
+      coreDomainNew: '＋ New job…',
       coreDomainUnset: 'Not configured',
       coreDomainPlaceholder: 'Select…',
       modalCustomSuffix: ' (custom)',
@@ -939,6 +941,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       modalNote: 'Only the user identity itself is written, never the assistant persona; the result is a preview you can replace or retry. On save it rewrites the "使用者身份" entry (global memory, tag=关键).',
       modalCancel: 'Cancel',
       modalSave: 'Save job',
+      modalSaving: 'Writing the job card…',
+      modalSaveFailed: 'Could not write the job card',
       modalNameRequired: 'Enter a job name first',
       modalOver: 'Longer than {n} characters — please shorten it before saving',
       modalNameOver: 'The job name must be at most {n} characters — please shorten it',
@@ -3052,7 +3056,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
               if (dom.isPreset === true) {
                 next.domainId = dom.id
               } else {
-                const id = 'custom:' + label
+                const id = 'card:' + label   // 与卡片 id 前缀统一（建出来的就是普通岗位）
                 next.custom = (Array.isArray(prev.custom) ? prev.custom : [])
                   .filter((d) => d && d.id !== id)
                   .concat([{ id: id, label: label + t('modalCustomSuffix'), content: '' }])
@@ -3355,10 +3359,11 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       // 岗位选项：预置取自 GET /domain/list（不在前端写死第二份正文）+ 本页新建的自定义岗位。
       // **首项固定是「未配置」**：配置文件（selectedDomain）没有值时就选中它 —— 显式空态便于查错，
       // 而不是拿某个预置岗位冒充"已配置"（使用者 2026-10-02 定的口径：配置有值显示值，无值显示未配置）。
+      // 岗位清单**只来自 GET /domain/list**：它已包含「预置 5 张 + 卡片目录里的全部卡片」。
+      // 不再在前端拼 st.custom —— 那会造成同一岗位出现两次（卡片化后 /jobs 也是同一批卡片）。
       const domainOptions = (Array.isArray(st.domains.items) ? st.domains.items : [])
         .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
         .filter((d) => d.id)
-        .concat(st.custom)
       const selectedDomain = domainOptions.filter((d) => d.id === st.domainId)[0] || null
       const domainContent = selectedDomain ? String(selectedDomain.content || '') : ''
       const memoryDir = String(st.memoryDir || '').trim()
@@ -3409,19 +3414,35 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           setModal({ phase: 'idle', message: '', error: t('modalGenFailed') + '：' + String((err && err.message) || err) })
         }
       }
-      function saveModal() {
-        if (!st.modal) return
+      /**
+       * 保存岗位 = **让服务端在卡片目录里写一张卡片文件**（新建或覆盖同名），然后刷新岗位清单并选中它。
+       * 这就是使用者 2026-10-02 定的口径：新建岗位 = 程序创建一张岗位信息卡；有几张卡就显示几个岗位。
+       * 卡片 id 前缀固定 card:（与预置 id 区分）；建出来的就是普通岗位，label 不加"（自定义）"。
+       */
+      async function saveModal() {
+        if (!st.modal || st.modal.phase === 'run') return
         const name = String(st.modal.name || '').trim()
         const content = String(st.modal.content || '').trim()
         if (!name) { setModal({ error: t('modalNameRequired') }); return }
         if (name.length > DOMAIN_NAME_MAX) { setModal({ error: fill(t('modalNameOver'), DOMAIN_NAME_MAX) }); return }
         if (content.length > DOMAIN_CONTENT_MAX) { setModal({ error: fill(t('modalOver'), DOMAIN_CONTENT_MAX) }); return }
-        const id = 'custom:' + name
-        setSt((prev) => Object.assign({}, prev, {
-          custom: prev.custom.filter((d) => d.id !== id).concat([{ id: id, label: name + t('modalCustomSuffix'), content: content }]),
-          domainId: id,
-          modal: null,
-        }))
+        const id = 'card:' + name
+        setModal({ phase: 'run', message: t('modalSaving'), error: '' })
+        let res
+        try {
+          res = await postFull('/domain/card', { id: id, name: name, content: content }, 30000)
+        } catch (err) {
+          setModal({ phase: 'idle', message: '', error: t('modalSaveFailed') + '：' + String((err && err.message) || err) })
+          return
+        }
+        const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+        if (!res.ok || body.ok === false) {
+          setModal({ phase: 'idle', message: '', error: t('modalSaveFailed') + '：' + String(body.error || ('HTTP ' + res.status)) })
+          return
+        }
+        setSt((prev) => Object.assign({}, prev, { modal: null, domainId: id }))
+        await loadDomains()   // 卡片已落盘 → 重新拉清单，新岗位随即出现在下拉里
+        if (jobsHydrated.current) persistCustomJobs([], id)   // 只写选中项；卡片已由 /domain/card 落盘，不带 jobs 就不会重复写
       }
 
       // 自定义岗位变化 → 自动写回持久化层。用「监听 state」而不是在每个变更点手写，

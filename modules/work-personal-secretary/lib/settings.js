@@ -55,6 +55,9 @@ export const DEFAULTS = {
   // 当前选中的工作岗位 id（含自定义岗位，形如 custom:<名称>）。与 customJobs 同为宿主设置、落 profile 覆盖层：
   // **配置里有值就直接读出来显示，没有才回落到默认岗位**（使用者 2026-10-02 定的读取语义）。
   selectedDomain: '',
+  // **岗位卡片目录**（使用者 2026-10-02 定的存储方式）：新建岗位 = 在该目录里生成一张卡片文件，
+  // 目录里有几张卡片就显示几个岗位。留空 = 用默认位置 <DSH_HOME>/data/work-personal-secretary/domains。
+  domainsDir: '',
 }
 
 /**
@@ -85,6 +88,9 @@ export const WPS_SETTINGS_SCHEMA = z ? z.object({
     .description('知识库根目录（Obsidian vault 根，应包含 .obsidian/ 与各模块知识库）。**留空 = 未指定**：'
       + '知识库结构生成器（knowledgeDeck）显式返回 none，不猜路径。填了之后：镜像建议值改为 <知识库根>/00_全局记忆，'
       + '并据此生成/校验知识库骨架。个性化可在该 profile 的 cordis.patch.yml 覆盖本键。'),
+  domainsDir: withVolatile(z.string().default(''))
+    .description('岗位卡片目录（新建岗位在这里生成卡片文件，一张卡一个文件；留空用默认位置 '
+      + '<DSH_HOME>/data/work-personal-secretary/domains）。**由「核心配置 → 目录与岗位」页维护**。'),
   selectedDomain: withVolatile(z.string().default(''))
     .description('当前选中的工作岗位 id（含自定义岗位，形如 custom:<名称>）。**由「核心配置 → 目录与岗位」页维护**；'
       + '配置里有值就直接读出来显示，没有才回落到默认岗位。'),
@@ -131,6 +137,7 @@ function toConfig(resolved) {
   cfg.obsidianDir = String(cfg.obsidianDir == null ? '' : cfg.obsidianDir).trim()
   cfg.customJobs = String(cfg.customJobs == null ? '' : cfg.customJobs)
   cfg.selectedDomain = String(cfg.selectedDomain == null ? '' : cfg.selectedDomain).slice(0, 200)
+  cfg.domainsDir = String(cfg.domainsDir == null ? '' : cfg.domainsDir).slice(0, 500)
   return cfg
 }
 

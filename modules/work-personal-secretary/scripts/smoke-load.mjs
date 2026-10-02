@@ -2132,6 +2132,7 @@ globalThis.fetch = async (url, opts) => {
   calls.push({ url: u, method: (opts && opts.method) || 'GET', body: opts && opts.body })
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
   if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/domain/card') >= 0) return jsonRes({ ok: true, id: 'card:工控安全售前', jobs: [], path: 'X:/cards/工控安全售前.json' })
   if (u.indexOf('/preflight') >= 0) {
     preflightPayload = JSON.parse(String((opts && opts.body) || '{}'))
     return jsonRes({
@@ -2200,7 +2201,7 @@ const t4Sel = findAll(t4Tree, (x) => x.type === 'select', [])[0]
 ok(Boolean(t4Sel), '岗位下拉存在')
 const optTexts = collect(findAll(t4Tree, (x) => x.type === 'option', []), []).join(' | ')
 ok(DOMAIN_ITEMS.every((d) => optTexts.indexOf(d.label) >= 0), '五个预置岗位来自 GET /domain/list（不在前端写死）')
-ok(optTexts.indexOf('都不是（新建岗位…）') >= 0, '岗位下拉含「都不是（新建岗位…）」')
+ok(optTexts.indexOf('＋ 新建岗位…') >= 0, '岗位下拉含「＋ 新建岗位…」（不再是"都不是"，就是直接新建）')
 ok(optTexts.indexOf('通用职能') < 0, '岗位下拉无「通用职能」')
 t4Sel.props.onChange({ target: { value: 'infosec' } })
 hookCursor = 0
@@ -2334,14 +2335,23 @@ t4Tree = expand(reg.render({ initialTab: 'core' }))
 const t4After200 = findAll(t4Tree, (x) => x.type === 'textarea', [])[0]
 ok(Boolean(t4After200) && t4After200.props.value === 'me-generated-job', '有模型服务时生成结果只作预览（填入内容框，可替换或重试）')
 ok(collect(t4Tree, []).join(' | ').indexOf('已生成，可直接编辑或重试') >= 0, '生成后给「已生成…」提示')
+calls.length = 0
 findButtons(t4Tree).filter((b) => label(b) === '保存岗位')[0].props.onClick()
+await tick(60)
 hookCursor = 0
 effectQueue = []
 t4Tree = expand(reg.render({ initialTab: 'core' }))
 t4Text = collect(t4Tree, []).join(' | ')
 ok(t4Text.indexOf('保存岗位') < 0, '保存后对话框关闭')
-ok(t4Text.indexOf('工控安全售前（自定义）') >= 0, '新建岗位进入下拉并选中')
-ok(findSave().props.disabled !== true, '自定义岗位选定后保存按钮仍可点')
+const cardCall = calls.filter((c) => c.url.indexOf('/domain/card') >= 0 && c.method === 'POST')[0]
+ok(Boolean(cardCall), '保存 = 调 POST /domain/card（由服务端在卡片目录里生成卡片文件）')
+let cardBody = {}
+try { cardBody = JSON.parse(String((cardCall && cardCall.body) || '{}')) } catch (e) { cardBody = {} }
+ok(String(cardBody.name) === '工控安全售前', '卡片请求带上岗位名称（实测 ' + String(cardBody.name) + '）')
+ok(String(cardBody.id) === 'card:工控安全售前', '卡片 id 前缀为 card:（不再叫"自定义"）')
+const t4SelAfter = findAll(t4Tree, (x) => x.type === 'select', [])[0]
+ok(Boolean(t4SelAfter) && String(t4SelAfter.props.value) === 'card:工控安全售前',
+  '保存后选中项指向新卡片（实测 ' + String(t4SelAfter && t4SelAfter.props.value) + '）')
 // 字数上限（使用者 2026-09-16 裁定：名称 ≤ 10 字、内容 ≤ 200 字）
 hookCursor = 0
 effectQueue = []
@@ -2666,6 +2676,7 @@ globalThis.fetch = async (url, opts) => {
     return jsonRes(s17Payload)
   }
   if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/domain/card') >= 0) return jsonRes({ ok: true, id: 'card:工控安全售前', jobs: [], path: 'X:/cards/工控安全售前.json' })
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
 }
@@ -2728,9 +2739,9 @@ effectQueue = []
 s17Tree = await s17Render()
 s17Text = collect(s17Tree, []).join(' | ')
 const s17Select2 = findAll(s17Tree, (x) => x.type === 'select', [])[0]
-ok(Boolean(s17Select2) && String(s17Select2.props.value).indexOf('custom:') === 0,
-  '非预置岗位 → 派生出自定义项并选中（实测 ' + String(s17Select2 && s17Select2.props.value) + '）')
-ok(s17Text.indexOf('工控安全售前（自定义）') >= 0, '岗位名带入自定义岗位并出现在下拉里')
+ok(Boolean(s17Select2) && String(s17Select2.props.value).indexOf('card:') === 0,
+  '非预置岗位 → 派生出一张卡片项并选中（实测 ' + String(s17Select2 && s17Select2.props.value) + '）')
+ok(s17Text.indexOf('工控安全售前（自定义）') < 0, '岗位名不再带"（自定义）"后缀（建出来的就是普通岗位）')
 ok(s17Save().props.disabled === true, '非预置且正文为空 → 保存仍置灰（语义不变）')
 // 补：两级来源都空 → 停在「未配置」空态（题干域必须显式给空，才验证空态本身）
 const s17PayloadBackup = s17Payload
@@ -2847,6 +2858,7 @@ const t18FetchOf = (delayCheck) => async (url, opts) => {
   }
   if (u.indexOf('/plugins') >= 0) return jsonRes(PLUGINS_PAYLOAD)
   if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/domain/card') >= 0) return jsonRes({ ok: true, id: 'card:工控安全售前', jobs: [], path: 'X:/cards/工控安全售前.json' })
   if (u.indexOf('/setup-state') >= 0) return jsonRes({ ok: true, memoryDir: { value: '', source: 'none' }, obsidianDir: { value: '', source: 'none' }, domain: { id: '', label: '', isPreset: false, source: 'none' } })
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
 }
@@ -2938,6 +2950,7 @@ globalThis.fetch = async (url, opts) => {
       domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' } })
   }
   if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/domain/card') >= 0) return jsonRes({ ok: true, id: 'card:工控安全售前', jobs: [], path: 'X:/cards/工控安全售前.json' })
   if (u.indexOf('/preflight') >= 0) return jsonRes({ ok: true, ready: true, checks: [], summary: { total: 0, ok: 0, warn: 0, block: 0 } })
   if (u.indexOf('/identity/save') >= 0) return jsonRes({ ok: true, status: 'rewrite', entryId: 'id-1', detail: '已整条改写「使用者身份」条目' })
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
@@ -3053,6 +3066,7 @@ globalThis.fetch = async (url, opts) => {
       domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' } })
   }
   if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/domain/card') >= 0) return jsonRes({ ok: true, id: 'card:工控安全售前', jobs: [], path: 'X:/cards/工控安全售前.json' })
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
 }
@@ -3289,6 +3303,7 @@ globalThis.fetch = async (url, opts) => {
     domain: { id: 'infosec', label: '信息安全（infosec）', isPreset: true, source: 'settings' },
   })
   if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/domain/card') >= 0) return jsonRes({ ok: true, id: 'card:工控安全售前', jobs: [], path: 'X:/cards/工控安全售前.json' })
   if (u.indexOf('/dirs') >= 0) return jsonRes(u.indexOf('vault') >= 0 ? D21_SUB : D21_ROOT)
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
