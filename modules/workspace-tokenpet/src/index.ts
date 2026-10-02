@@ -874,7 +874,10 @@ export function apply(ctx: Context): void {
             // before their sequence is durable on disk.
             const value = await hourlyTrend.trend(timeZone, Date.now())
             const refreshing = Boolean(trendFlushFlight || trendRebuildFlight || trendReconcileFlight || trendRepairFlights.size > 0)
-            json(res, 200, { ...value, refreshing, ...(refreshing ? { retryAfterMs: 500 } : {}) })
+            // Tell the panel when this host has no session snapshots at all: without it the
+            // client would render an empty chart with no explanation (0.2.0-rc.2 carriers).
+            const snapshotOnly = !supportsSnapshots(trendPersistence)
+            json(res, 200, { ...value, refreshing, snapshotOnly, ...(refreshing ? { retryAfterMs: 500 } : {}) })
           } catch (e) {
             const detail = e instanceof Error ? e.message : String(e)
             json(res, 400, { error: detail })

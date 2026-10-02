@@ -266,11 +266,13 @@ function useAccountBalance(language: Language, reloadKey: number, enabled: boole
 }
 
 /** Fetch today's real usage trend only when the panel is visible. */
-function useTodayUsageTrend(reloadKey: number, enabled: boolean): { value: TrendBucket[] | null; status: RequestStatus; readyKey: number | null; refreshing: boolean } {
+function useTodayUsageTrend(reloadKey: number, enabled: boolean): { value: TrendBucket[] | null; status: RequestStatus; readyKey: number | null; unsupported: boolean; refreshing: boolean } {
   const [value, setValue] = useState<TrendBucket[] | null>(null)
   const valueRef = useRef(value); valueRef.current = value
   const [status, setStatus] = useState<RequestStatus>('idle')
   const [refreshing, setRefreshing] = useState(false)
+  // Host-level capability, not a per-load state: stays true once the host reports it.
+  const [unsupported, setUnsupported] = useState(false)
   const [readyKey, setReadyKey] = useState<number | null>(null)
   useEffect(() => {
     if (!enabled) return
@@ -284,7 +286,7 @@ function useTodayUsageTrend(reloadKey: number, enabled: boolean): { value: Trend
       .then((next: unknown) => {
         if (cancelled) return
         if (!next || typeof next !== 'object') throw new Error('trend:invalid-response')
-        const data = next as { buckets?: unknown; date?: string; byHour?: Array<{ hour?: string; total?: number; count?: number }>; refreshing?: unknown; retryAfterMs?: unknown }
+        const data = next as { buckets?: unknown; date?: string; byHour?: Array<{ hour?: string; total?: number; count?: number }>; refreshing?: unknown; snapshotOnly?: unknown; retryAfterMs?: unknown }
         let parsed: TrendBucket[]
         if (Array.isArray(data.buckets)) parsed = todayUsageBucketsOf(next)
         else {
@@ -298,6 +300,7 @@ function useTodayUsageTrend(reloadKey: number, enabled: boolean): { value: Trend
         // A valid persisted snapshot is immediately usable. Host maintenance is
         // represented separately and never blocks the chart behind loading UI.
         setValue(parsed); setStatus('ready'); setReadyKey(reloadKey)
+        if (data.snapshotOnly === true) setUnsupported(true)
         const isRefreshing = data.refreshing === true
         setRefreshing(isRefreshing)
         if (isRefreshing && attempts < 30) {
@@ -316,7 +319,7 @@ function useTodayUsageTrend(reloadKey: number, enabled: boolean): { value: Trend
     void load()
     return () => { cancelled = true; request.dispose() }
   }, [reloadKey, enabled])
-  return { value, status, readyKey, refreshing }
+  return { value, status, readyKey, unsupported, refreshing }
 }
 
 /** Read the persisted host snapshot. Opening never starts sync/build work. */
@@ -1034,6 +1037,7 @@ function TokenPetWindow() {
         onApplyPrompt: snap?.applyPrompt,
         onSendPrompt: snap?.sendPrompt,
          trendStatus: todayTrend.status,
+         trendUnsupported: todayTrend.unsupported,
          refreshing: todayTrend.refreshing,
          indexProgress,
          onBuildIndex: buildIndex,

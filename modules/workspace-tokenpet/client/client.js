@@ -3999,6 +3999,10 @@ window.__ModuleLoader__.load({
 				zh: "首次建立历史索引后显示趋势",
 				en: "Build the history index to see trends"
 			},
+			trendUnsupported: {
+				zh: "当前宿主不支持小时趋势（未提供会话快照）",
+				en: "This host does not expose hourly trend snapshots"
+			},
 			trendError: {
 				zh: "本日趋势读取失败",
 				en: "Could not load today’s trend"
@@ -4534,7 +4538,10 @@ window.__ModuleLoader__.load({
 				}, p.refreshing ? t("refreshingHourly") : t("hourly"))]), !sections.trend ? (0, react.createElement)("div", {
 					key: "state",
 					style: css(emptyState)
-				}, t("opening")) : !indexReadable ? (0, react.createElement)("div", {
+				}, t("opening")) : p.trendUnsupported ? (0, react.createElement)("div", {
+					key: "state",
+					style: css(emptyState)
+				}, t("trendUnsupported")) : !indexReadable ? (0, react.createElement)("div", {
 					key: "state",
 					style: css(emptyState)
 				}, t("trendNeedsIndex")) : p.trendStatus === "error" ? (0, react.createElement)("div", {
@@ -5671,7 +5678,7 @@ window.__ModuleLoader__.load({
 			USD: "$"
 		};
 		/** Fallback bundle version so the metadata carries a non-empty version on third-party builds. */
-		const BUNDLE_VERSION = "1.0.7";
+		const BUNDLE_VERSION = "1.0.8";
 		/**
 		* Build the request identity for one account call.
 		*
@@ -6298,6 +6305,7 @@ window.__ModuleLoader__.load({
 			valueRef.current = value;
 			const [status, setStatus] = (0, react.useState)("idle");
 			const [refreshing, setRefreshing] = (0, react.useState)(false);
+			const [unsupported, setUnsupported] = (0, react.useState)(false);
 			const [readyKey, setReadyKey] = (0, react.useState)(null);
 			(0, react.useEffect)(() => {
 				if (!enabled) return;
@@ -6327,6 +6335,7 @@ window.__ModuleLoader__.load({
 					setValue(parsed);
 					setStatus("ready");
 					setReadyKey(reloadKey);
+					if (data.snapshotOnly === true) setUnsupported(true);
 					const isRefreshing = data.refreshing === true;
 					setRefreshing(isRefreshing);
 					if (isRefreshing && attempts < 30) {
@@ -6351,6 +6360,7 @@ window.__ModuleLoader__.load({
 				value,
 				status,
 				readyKey,
+				unsupported,
 				refreshing
 			};
 		}
@@ -7274,6 +7284,7 @@ window.__ModuleLoader__.load({
 					onApplyPrompt: snap?.applyPrompt,
 					onSendPrompt: snap?.sendPrompt,
 					trendStatus: todayTrend.status,
+					trendUnsupported: todayTrend.unsupported,
 					refreshing: todayTrend.refreshing,
 					indexProgress,
 					onBuildIndex: buildIndex,

@@ -64,6 +64,8 @@ export interface PanelProps {
   refreshing?: boolean
   cumulativeStatus?: PanelRequestStatus
   trendStatus?: PanelRequestStatus
+  /** True when the host exposes no session snapshots, so no hourly trend can ever exist. */
+  trendUnsupported?: boolean
   indexProgress?: IndexProgress
   onBuildIndex?: () => void
   onCancelIndex?: () => void
@@ -286,6 +288,7 @@ export function ContextPanel(p: PanelProps) {
         h('span', { key: 'interval', style: css(subtle) }, p.refreshing ? t('refreshingHourly') : t('hourly')),
       ]),
       !sections.trend ? h('div', { key: 'state', style: css(emptyState) }, t('opening'))
+        : p.trendUnsupported ? h('div', { key: 'state', style: css(emptyState) }, t('trendUnsupported'))
         : !indexReadable ? h('div', { key: 'state', style: css(emptyState) }, t('trendNeedsIndex'))
           : p.trendStatus === 'error' ? h('div', { key: 'state', style: css(errorText) }, t('trendError'))
             : p.trendStatus === 'ready' ? h(Sparkline, { key: 'chart', data: p.trend, language }) : h('div', { key: 'state', style: css(emptyState) }, t('trendLoading')),

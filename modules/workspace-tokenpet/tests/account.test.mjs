@@ -54,8 +54,8 @@ test('readBalance degrades to panel states instead of throwing', async () => {
 })
 
 test('accountClientMetadata always carries a version and the east-positive offset', () => {
-  assert.equal(accountClientMetadata('zh-CN', undefined).version, '1.0.7')
-  assert.equal(accountClientMetadata('zh-CN', '').version, '1.0.7')
+  assert.equal(accountClientMetadata('zh-CN', undefined).version, '1.0.8')
+  assert.equal(accountClientMetadata('zh-CN', '').version, '1.0.8')
   assert.equal(accountClientMetadata('en', 'v9').version, 'v9')
   assert.equal(typeof accountClientMetadata('en', 'v9').timezoneOffsetSeconds, 'number')
   assert.equal(accountClientMetadata('en', 'v9').locale, 'en')
