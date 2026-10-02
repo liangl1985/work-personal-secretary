@@ -2670,6 +2670,7 @@ let s17Payload = {
   note: 'note-17',
 }
 let s17Ok = true
+let s17JobsSelected = ''
 globalThis.fetch = async (url, opts) => {
   const u = String(url)
   const method = (opts && opts.method) || 'GET'
@@ -2679,7 +2680,9 @@ globalThis.fetch = async (url, opts) => {
     return jsonRes(s17Payload)
   }
   if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  if (u.indexOf('/domain/card/delete') >= 0) return jsonRes({ ok: true, removed: true, jobs: [] })
   if (u.indexOf('/domain/card') >= 0) return jsonRes({ ok: true, id: 'card:工控安全售前', jobs: [], path: 'X:/cards/工控安全售前.json' })
+  if (u.indexOf('/jobs') >= 0) return jsonRes({ ok: true, jobs: [], selected: s17JobsSelected })
   if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
   return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
 }
@@ -2760,6 +2763,21 @@ const s17SelectEmpty = findAll(s17Tree, (x) => x.type === 'select', [])[0]
 ok(Boolean(s17SelectEmpty) && String(s17SelectEmpty.props.value) === '',
   '两级来源都空 → 停在「未配置」空态（实测 ' + String(s17SelectEmpty && s17SelectEmpty.props.value) + '）')
 ok(collect(s17Tree, []).join(' | ').indexOf('未配置') >= 0, '空态文案「未配置」可见（便于分辨"配置空"与"读到了值"）')
+// 删除岗位入口：**只有卡片岗位可删**（预置 5 张是源码常量）
+s17JobsSelected = 'card:工控安全售前'
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+s17Tree = await s17Render()
+const s17DelBtn = findButtons(s17Tree).filter((b) => label(b) === '删除岗位')[0]
+ok(Boolean(s17DelBtn), '选中卡片岗位 → 出现「删除岗位」按钮（实测按钮：' + findButtons(s17Tree).map(label).join('/') + '）')
+s17JobsSelected = 'infosec'
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+s17Tree = await s17Render()
+ok(findButtons(s17Tree).filter((b) => label(b) === '删除岗位').length === 0, '选中预置岗位 → 不出现删除按钮（预置不可删）')
+s17JobsSelected = ''
 s17Payload = s17PayloadBackup
 
 // ④ 接口不可用 → 字段留空、给可读说明、不拦主流程

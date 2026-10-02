@@ -649,6 +649,25 @@ export function installApi(ctx, deps = {}) {
   let selectedDomain = typeof deps.selectedDomain === 'string' ? deps.selectedDomain.slice(0, 200) : ''
 
   /**
+   * 读「当前选中岗位」的**现值**（实时 describe，不依赖启动快照）。
+   * 形状依 settings-api.js 契约：describe() 返回**数组**，每项 { ns, schema, value, revision, ... }，**value 就是现值**。
+   * describe 不可用或失败 → 回退内存态（不抛）。
+   */
+  async function readSettingsSelected() {
+    const settings = settingsOf()
+    if (!settings || typeof settings.describe !== 'function') return selectedDomain
+    try {
+      const described = await settings.describe({ redactSecrets: true })
+      const list = Array.isArray(described) ? described : (described && Array.isArray(described.namespaces) ? described.namespaces : [])
+      const target = list.filter((n) => n && n.ns === SETTINGS_NS)[0]
+      const value = (target && target.value && typeof target.value === 'object') ? target.value : null
+      const raw = value ? value.selectedDomain : undefined
+      if (typeof raw === 'string') selectedDomain = raw.slice(0, 200)
+    } catch (err) { /* 读不到就用内存态，不阻断列表 */ }
+    return selectedDomain
+  }
+
+  /**
    * 只写「当前选中岗位」（settings.selectedDomain，volatile）。选中项属于**配置**，不属于卡片。
    * 与下方写列表同一套 describe→mutate 的 revision 栅栏。
    */
@@ -941,14 +960,15 @@ export function installApi(ctx, deps = {}) {
         })
       }
 
-      // GET /jobs —— 岗位卡片列表（只读）。持久化位 = **卡片目录**（配置文件里的 domainsDir 指向它）。
+      // GET /jobs —— 岗位卡片列表 + **实时读出的选中值**（只读）。
+      // selected 不用启动快照：直接改配置文件后刷新页面即可生效，不必重启。
       if (req.method === 'GET' && (sub === '/jobs' || sub === '/jobs/')) {
         const guard = sameOriginLooseGuard(req)
         if (guard) return sendError(res, 403, guard)
         const dir = domainsDirOf()
         const scanned = listCards(dir)
         return sendJson(res, 200, {
-          ok: true, jobs: scanned.cards.map(cardToItem), selected: selectedDomain,
+          ok: true, jobs: scanned.cards.map(cardToItem), selected: await readSettingsSelected(),
           cardsDir: dir, invalidCards: scanned.invalid,
         })
       }

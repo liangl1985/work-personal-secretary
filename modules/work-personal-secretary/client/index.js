@@ -44,7 +44,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.26'
+    const BUILD = 'v1.1.27'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -274,6 +274,9 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       setupStateFailed: '未能取到当前生效值（可手动填写）',
       coreDomainNeedsContent: '已带入当前岗位名称，请补充岗位内容（或点「自动生成」）后再保存',
       coreDomainNew: '＋ 新建岗位…',
+      coreDomainDelete: '删除岗位',
+      coreDomainDeleteConfirm: '确认删除',
+      coreDomainDeleteFailed: '删除岗位失败',
       coreDomainPlaceholder: '请选择…',
       // 配置文件里没有选中岗位时的**显式空态**：不拿预置岗位冒充"已配置"，便于查错
       coreDomainUnset: '未配置',
@@ -866,6 +869,9 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       setupStateFailed: 'Could not read the current values (fill them in manually)',
       coreDomainNeedsContent: 'The current job name was filled in; add the job description (or press Generate) before saving',
       coreDomainNew: '＋ New job…',
+      coreDomainDelete: 'Delete job',
+      coreDomainDeleteConfirm: 'Confirm delete',
+      coreDomainDeleteFailed: 'Could not delete the job',
       coreDomainUnset: 'Not configured',
       coreDomainPlaceholder: 'Select…',
       modalCustomSuffix: ' (custom)',
@@ -3373,6 +3379,32 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
         persistCustomJobs([], value)
       }
 
+      // ── 删除岗位卡片 ──────────────────────────────────────────────
+      // 只有**卡片岗位**能删：预置 5 张是源码常量（domain.js），删不掉也不该删。
+      // 渲染替身没有 confirm()，所以二次确认用**按钮状态**实现：第一次点变「确认删除」，第二次真删。
+      const [delConfirm, setDelConfirm] = useState(false)
+      const [delError, setDelError] = useState('')
+      const domainDeletable = String(st.domainId || '').indexOf('card:') === 0
+
+      async function deleteDomainCard() {
+        const id = String(st.domainId || '')
+        if (!domainDeletable || !id) return
+        setDelError('')
+        setDelConfirm(false)
+        let res = null
+        try { res = await postFull('/domain/card/delete', { id: id }, 30000) } catch (err) {
+          setDelError(t('coreDomainDeleteFailed') + '：' + String((err && err.message) || err)); return
+        }
+        const body = (res && res.body && typeof res.body === 'object') ? res.body : {}
+        if (!res.ok || body.ok === false) {
+          setDelError(t('coreDomainDeleteFailed') + '：' + String(body.error || ('HTTP ' + res.status))); return
+        }
+        // 卡片没了 → 选中项也必须清空，并把空选中写回配置（这是使用者显式动作，允许写）
+        setSt((prev) => Object.assign({}, prev, { domainId: '' }))
+        persistCustomJobs([], '')
+        await loadDomains()
+      }
+
       // ── 新建岗位对话框 ────────────────────────────────────────────
       function setModal(patch) {
         setSt((prev) => (prev.modal ? Object.assign({}, prev, { modal: Object.assign({}, prev.modal, patch) }) : prev))
@@ -3717,7 +3749,19 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
             .concat(domainPlaceholder ? [domainPlaceholder] : [])
             .concat(domainOptions.map((d) => h('option', { key: d.id, value: d.id }, d.label)))
             .concat([h('option', { key: '__new', value: NEW_DOMAIN_VALUE }, t('coreDomainNew'))])),
+          domainDeletable
+            ? h('button', {
+              key: 'del', type: 'button', disabled: runRunning,
+              style: Object.assign({}, S.btn, runRunning ? S.btnDisabled : null),
+              'data-domain-delete': delConfirm ? 'confirm' : 'idle',
+              onClick: () => {
+                if (delConfirm) { deleteDomainCard(); return }
+                setDelError(''); setDelConfirm(true)
+              },
+            }, delConfirm ? t('coreDomainDeleteConfirm') : t('coreDomainDelete'))
+            : null,
         ]),
+        delError ? h('div', { key: 'derr', style: S.warnLine }, delError) : null,
         hintLine(t('coreFieldDomainHint')),
       ])
 
