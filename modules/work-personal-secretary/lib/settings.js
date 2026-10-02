@@ -48,8 +48,9 @@ export const DEFAULTS = {
   // 留空 = knowledgeDeck 显式返回 none（不猜路径）；个性化在该 profile 的 cordis.patch.yml 覆盖。
   obsidianDir: '',
   // 自定义岗位列表：JSON 字符串（形如 [{"id","label","content"}]）。数组语义用字符串是本库既有约定
-  // （见 dsh-experts 的 enabledDomains）；**刻意不加 volatile**——它不进设置表单，只作为该 profile
-  // 覆盖层里的持久化位，读写走 GET/POST /jobs（见 lib/api.js）。
+  // （见 dsh-experts 的 enabledDomains）。**必须标 volatile**：宿主设置服务拒绝写非 volatile 字段
+  // （真机 2026-10-02 实测 'Config field "customJobs" is not volatile'），写不进去则岗位无法持久化。
+  // 代价是它会出现在设置表单里——由 description 说明"通常无需手工编辑"。读写走 GET/POST /jobs（见 lib/api.js）。
   customJobs: '',
 }
 
@@ -81,7 +82,10 @@ export const WPS_SETTINGS_SCHEMA = z ? z.object({
     .description('知识库根目录（Obsidian vault 根，应包含 .obsidian/ 与各模块知识库）。**留空 = 未指定**：'
       + '知识库结构生成器（knowledgeDeck）显式返回 none，不猜路径。填了之后：镜像建议值改为 <知识库根>/00_全局记忆，'
       + '并据此生成/校验知识库骨架。个性化可在该 profile 的 cordis.patch.yml 覆盖本键。'),
-  customJobs: z.string().default(''),
+  customJobs: withVolatile(z.string().default(''))
+    .description('自定义岗位列表（JSON）。**由「核心配置 → 目录与岗位」页维护，通常无需手工编辑**；'
+      + '新增/删除岗位时这里会同步。该字段必须是 volatile —— 宿主设置服务只允许写 volatile 字段（实测报错：'
+      + 'Config field "customJobs" is not volatile），因此它会出现在本表单里，属预期。'),
 }) : undefined
 
 /**

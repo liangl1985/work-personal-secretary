@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.13'
+    const BUILD = 'v1.1.16'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -2949,9 +2949,14 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
         }
       }
 
-      /** 整表写回自定义岗位（POST /jobs，恒 dryRun:false）。失败只留痕，不打断使用者操作。 */
+      /**
+       * 整表写回自定义岗位（POST /jobs，恒 dryRun:false）。失败不打断使用者操作，但**必须留痕**：
+       * 2026-10-02 真机曾因宿主拒绝写非 volatile 字段而静默失败，界面只表现为"没生效"。
+       */
       function persistCustomJobs(jobs) {
-        postFull('/jobs', { jobs: jobs, dryRun: false }, 15000).catch(() => {})
+        postFull('/jobs', { jobs: jobs, dryRun: false }, 15000).catch((err) => {
+          try { console.warn('[workspace-tokenpet] 自定义岗位写回失败：' + String((err && err.message) || err)) } catch (e) { /* 控制台不可用 */ }
+        })
       }
 
       async function loadDomains() {

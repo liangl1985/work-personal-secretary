@@ -1,5 +1,21 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.16 — 2026-10-02（修自定义岗位写不进去：customJobs 必须 volatile）
+
+> 真机（2026-10-02）：1.1.14 加的自定义岗位持久化**完全没生效** —— 新建岗位不落盘，重启后列表依旧为空。
+> 取证：`GET /jobs` → `{ok:true,jobs:[]}`；profile 覆盖层里 `customJobs` 行数 = 0。
+
+- **根因**：1.1.14 为了让该键**不出现在设置表单**，刻意**没加 `.volatile()`**；而宿主设置服务
+  **只允许写 volatile 字段**，于是 `POST /jobs` 被拒 —— 端到端实测复现：
+  `写入设置失败：Config field "customJobs" is not volatile`。前端 `.catch(() => {})` 又**静默吞掉**了它，
+  界面上只表现为"没生效"。
+- **修**：`customJobs` 改为 `withVolatile(...)`，并补 description 说明"由配置页维护、通常无需手工编辑"；
+  代价是它会出现在设置表单里（属预期，已在 description 里写明）。
+- **顺带**：`persistCustomJobs` 的失败不再静默 —— 改 `console.warn` 留痕，避免同类问题只能表现为"没生效"。
+- **教训（已写进注释）**：「数组语义用字符串」的库内约定可以照搬（`enabledDomains`），
+  但 **volatile 是宿主写入的硬前提**，不能为了表单整洁而省。
+- 回归：defaults 61 / settings-api 115 / probe 151 / install 246 / identity 73 / basedeck 570 / smoke-load 533，失败 0。
+
 ## 1.1.15 — 2026-10-02（修「一键配置」第 4 步永久失败：applySettings 补 service 分支）
 
 > 真机（2026-10-02）：「一键配置」走到第 4 步「建立两者关联」就红，第 5 步「写入岗位身份」卡在等待。
