@@ -2,6 +2,18 @@
 
 本插件的版本历史。
 
+## 0.5.19 — 2026-10-02（补触发关键词：桌宠 / 面板 / account / Remote / 余额 等）
+
+> 触发：真机句式「桌宠面板要改余额显示，走官方 account Remote」此前 **no-evidence**（0 命中），
+> 应按岗位归属命中 \`coding-dsh-plugin\`（DSH 插件工程师）。
+
+- \`coding-dsh-plugin\` 的 \`trigger_keywords\` 补 7 个：\`桌宠\` / \`面板\` / \`account\` / \`Remote\` / \`余额\` /
+  \`workspace-tokenpet\` / \`客户端插件\`。
+- 实测（\`lib/match.js\` 的 \`scoreEntry\`）：该句式**唯一命中** \`coding-dsh-plugin\`，
+  \`evidence=0.6\`（关键词封顶）、\`score=0.600\`，命中理由 \`关键词·桌宠/面板/account/Remote/余额\`
+  —— 不再误命中其它专家。
+- 回归：48 通过 / 0 失败。
+
 ## 0.5.18 — 2026-10-02（回归隔离：诊断落盘不再写真实数据目录）
 
 > 触发：0.5.17 的诊断会写 `<DSH_HOME>/data/dsh-experts/last-task.json`，而五套回归**都会真正调用

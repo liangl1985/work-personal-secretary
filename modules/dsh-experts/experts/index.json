@@ -504,7 +504,14 @@
         "注入",
         "回归测试",
         "发布",
-        "profile"
+        "profile",
+        "桌宠",
+        "面板",
+        "account",
+        "Remote",
+        "余额",
+        "workspace-tokenpet",
+        "客户端插件"
       ],
       "source": {
         "origin": "self-authored",
