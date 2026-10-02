@@ -20,6 +20,9 @@
  * 运行：node scripts/coexist.mjs
  */
 
+// 回归不得写真实数据目录：诊断落盘改到系统临时目录（CHANGELOG 0.5.18）。
+process.env.DSH_EXPERTS_DIAG_DIR ??= `${process.env.TEMP || process.env.TMP || '/tmp'}/dsh-experts-test-diag`
+
 import assert from 'node:assert/strict'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'

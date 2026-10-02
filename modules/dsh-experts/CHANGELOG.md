@@ -2,6 +2,18 @@
 
 本插件的版本历史。
 
+## 0.5.18 — 2026-10-02（回归隔离：诊断落盘不再写真实数据目录）
+
+> 触发：0.5.17 的诊断会写 `<DSH_HOME>/data/dsh-experts/last-task.json`，而五套回归**都会真正调用
+> `apply()`** —— 跑一次 `npm test` 就在真实数据目录留下测试夹具的判定
+> （真机实测：`sessionId=prestep-session`、`text="这个月的发票和税务怎么处理"`）。
+
+- 新增覆盖变量 **`DSH_EXPERTS_DIAG_DIR`**：设置时诊断落该目录；未设置时仍走 `<DSH_HOME>/data/dsh-experts`
+  （生产行为不变）。
+- 五个回归脚本开头统一把该变量指向系统临时目录 `<TEMP>/dsh-experts-test-diag`。
+- 复核：五套回归全绿（regression 48 / injection-tier 20 / capability 8 / coexist 8 / smoke-load 19，失败 0）；
+  跑测前后**真实目录 `last-task.json` 的 mtime 不变**（20:42:38.206 未被覆盖），临时目录出现夹具判定（537 B）。
+
 ## 0.5.17 — 2026-09-30（轻量诊断：落盘记录本轮打分文本与命中判定）
 
 > 目的：0.5.16 修了命中链路两处偏差，但**「本轮到底拿哪段文本打分」此前无从观测**

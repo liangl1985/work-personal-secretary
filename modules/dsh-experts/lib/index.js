@@ -128,6 +128,10 @@ function rememberTaskText(agent, text, source = 'unknown') {
 
 /** 诊断文件：<DSH_HOME>/data/dsh-experts/last-task.json（只记最近一次命中判定，覆盖写） */
 function diagnosticsPath() {
+  // A regression run must never write into the real data dir: the test scripts point
+  // this at a temp dir (see CHANGELOG 0.5.18). Unset in production, so the default stands.
+  const override = String(process.env.DSH_EXPERTS_DIAG_DIR || '').trim()
+  if (override.length > 0) return join(override, 'last-task.json')
   const home = String(process.env.DSH_HOME || '').trim()
   const base = home.length > 0 ? home : join(homedir(), '.dsh')
   return join(base, 'data', 'dsh-experts', 'last-task.json')
