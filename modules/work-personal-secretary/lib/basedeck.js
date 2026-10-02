@@ -2149,6 +2149,13 @@ function applySkills(ctx, item, internal, io, dryRun, base) {
 function applySettings(ctx, item, internal, io, dryRun, base) {
   if (item.status === 'up_to_date') return Object.assign(base, { ok: true, detail: item.detail + '（未写盘）' })
   if (item.status === 'broken' || item.status === 'none') return Object.assign(base, { ok: false, detail: item.detail + '（未写盘）' })
+  // 走宿主设置服务（rc.2）：待写键由 api 层的 writeDeckSettingsViaService 经 ctx.settings.mutate 落地，
+  // 本函数既没有文件级改写计划（viaService 下 planned 恒为 null），也不得触碰宿主 settings.yaml。
+  // 缺这一分支时必然落到下面的 planned 检查并返回 ok:false（「没有可写入的键，未写盘」），
+  // 使核心配置「一键配置」第 4 步永久显示失败（真机 2026-10-02 定位：一个已写入的键被判成没写）。
+  if (internal.viaService === true) {
+    return Object.assign(base, { ok: true, detail: item.detail + '；由宿主设置服务落地（不经 settings.yaml）' })
+  }
   if (!internal.planned || !internal.planned.ok) return Object.assign(base, { ok: false, detail: '没有可写入的键，未写盘' })
   if (internal.planned.changes.length === 0) return Object.assign(base, { ok: true, detail: '目标键已经是该值，无需写入（未写盘）' })
 

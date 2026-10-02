@@ -1473,6 +1473,7 @@ export function installApi(ctx, deps = {}) {
         // 走宿主设置服务时：先把引导填的键经 mutate 落地，再**重算设置现值** —— 这样「设置」项
         // 不再被判成待写，也就不会去动宿主的 settings.yaml。写入失败不阻断其余步骤（回到 payload 里说明）。
         let settingsWriteNote = ''
+        let serviceWriteFailed = false
         if (!dryRun) {
           const outcome = await writeDeckSettingsViaService(planBaseDeck(opts))
           if (outcome.attempted) {
@@ -1480,11 +1481,14 @@ export function installApi(ctx, deps = {}) {
               ? '设置已写入宿主设置服务：' + outcome.written.join(' / ')
               : '设置未能写入宿主设置服务：' + outcome.error
             if (outcome.ok) opts.settingsValues = await deckSettingsValues()
+            // applySettings 的 service 分支恒返回 ok:true（它不负责写设置），因此写入失败必须在
+            // 这里体现到最终 ok 上，免得把「没写成」报成成功。
+            serviceWriteFailed = !outcome.ok
           }
         }
         const applied = applyBaseDeck(ids, opts)
         const payload = {
-          ok: applied.ok,
+          ok: applied.ok && !serviceWriteFailed,
           dryRun: applied.dryRun,
           workspace: applied.workspace,
           workspaceSource: applied.workspaceSource,

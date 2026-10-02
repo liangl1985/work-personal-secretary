@@ -550,6 +550,34 @@ const rBad = applyBaseDeckItem('settings', opts({ workspace: wsSet, settingsFile
 ok(rBad.ok === false && rBad.status === 'broken', 'YAML 结构坏（TAB 缩进）→ 报错不写')
 ok(readBytes(setBad).equals(badBad), '坏结构文件未被改写')
 ok(!existsSync(setBad + BACKUP_SUFFIX + '20260102-030405-678'), '拒写时没有产生备份（确实没写）')
+// [9b] service 通道（rc.2）：待写键由 api 层经宿主设置服务落地，本函数不得碰 settings.yaml
+// 防回归：2026-10-02 真机「一键配置」第 4 步永久失败 —— applySettings 缺 viaService 分支，
+// 走 service 时 planned 恒为 null，于是「有键要写」被报成「没有可写入的键」。测试此前只覆盖文件通道。
+const svcMemory = join(TMP_ROOT, 'mem', 'svc-target').replace(/\\/g, '/')
+const svcMirror = join(TMP_ROOT, 'mirror', 'svc-target').replace(/\\/g, '/')
+const svcBox = {
+  source: 'service',
+  values: {
+    'work-memory.memoryDir': join(TMP_ROOT, 'mem', 'existing').replace(/\\/g, '/'),
+    'experts.defaultDomain': 'presales',
+    'experts.identityExpert': 'presales-ics-security',
+  },
+}
+const svcOpts = opts({
+  workspace: wsSet,
+  settingsValues: svcBox,
+  overrides: { memoryDir: svcMemory, obsidianSyncDir: svcMirror },
+})
+const svcItem = planBaseDeck(svcOpts).items.filter((i) => i.id === 'settings')[0]
+ok(svcItem.status === 'update', 'service 通道：填了新值 → status=update')
+ok(svcItem.internal && svcItem.internal.viaService === true, 'service 通道：internal.viaService = true')
+const rSvc = applyBaseDeckItem('settings', Object.assign({}, svcOpts, { dryRun: false }))
+ok(rSvc.ok === true, 'service 通道：applySettings 必须 ok:true（曾误报「没有可写入的键，未写盘」）')
+ok(String(rSvc.detail || '').indexOf('宿主设置服务') >= 0, 'service 通道：detail 说明由宿主设置服务落地')
+// 注意（2026-10-02 实测记录）：service 通道下只要传了 overrides 就计入待写键，**不比较是否与现值相同**
+// → 每次「一键配置」都会做一次幂等的 settings.mutate（无副作用，但可优化）。文件通道有
+// planned.changes.length === 0 的判定，service 通道没有 —— 这是本次未修的次要项，不当测试断言。
+
 const setBom = join(TMP_ROOT, 'home4', '.dsh', 'settings.yaml')
 writeText(setBom, 'work-memory:' + NL, { bom: true })
 const rSetBom = applyBaseDeckItem('settings', opts({ workspace: wsSet, settingsFile: setBom, dryRun: false }))

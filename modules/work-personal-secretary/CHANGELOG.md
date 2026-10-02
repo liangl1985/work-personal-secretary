@@ -1,5 +1,24 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.15 — 2026-10-02（修「一键配置」第 4 步永久失败：applySettings 补 service 分支）
+
+> 真机（2026-10-02）：「一键配置」走到第 4 步「建立两者关联」就红，第 5 步「写入岗位身份」卡在等待。
+> 取证：`POST /basedeck { ids:['settings'], dryRun:false, overrides:{当前值} }` 返回
+> `results[0] = { status:'update', ok:false, detail:'没有可写入的键，未写盘' }`。
+
+- **根因**：rc.2 迁移只改了 `planSettings`（写计划）与 `api.js` 的 `writeDeckSettingsViaService`（写回器），
+  **漏改执行层 `applySettings`** —— 它的注释写着「待写的键交给写回器经 ctx.settings.mutate 落地
+  （见 applySettings 的 viaService 分支）」，而那个分支**根本不存在**。走设置服务时 `internal.planned`
+  恒为 `null`（文件级计划只在文件通道生成），于是必然落到 `if (!internal.planned || !internal.planned.ok)`
+  并返回 `ok:false`（「没有可写入的键，未写盘」）—— 一个**已经写入成功**的键被判成没写。
+- **修**：`applySettings` 补 `internal.viaService === true` 分支 → `ok:true` + detail 说明
+  「由宿主设置服务落地（不经 settings.yaml）」；同时 `api.js` 把 `writeDeckSettingsViaService` 的失败
+  **传播到最终 ok**（`ok: applied.ok && !serviceWriteFailed`），避免上面的恒 `ok:true` 掩盖真实写入失败。
+- **测试**：`basedeck-test.mjs` 新增 `[9b] service 通道` 用例 —— 此前该文件**只覆盖文件通道**
+  （`settingsSource` / `viaService` 零命中），这正是这个 bug 能长期漏网的原因。回归：574 通过 / 0 失败。
+- **已知次要项**（本次未改，记录在案）：service 通道下只要传了 `overrides` 就计入待写键（不与现值比较），
+  因此每次「一键配置」都会做一次幂等的 `settings.mutate`；无副作用，但可优化。
+
 ## 1.1.14 — 2026-10-02（自定义岗位走插件配置文件：新增 GET/POST /jobs）
 
 > 触发：遗留核查（2026-10-02）。「核心配置」页新建的自定义岗位此前只活在**前端 React state**
