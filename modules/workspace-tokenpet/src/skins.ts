@@ -16,6 +16,7 @@
  */
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { join, normalize, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /** Only these action names may appear in a pack (the plugin's fixed 12). */
 export const SKIN_ACTIONS = [
@@ -80,6 +81,26 @@ const FILE_RE = /^[a-z0-9][a-z0-9._-]*\.(?:webp|png|json)$/i
 /** The directory packs live in. */
 export function skinsDir(home: string): string {
   return join(home, 'data', 'workspace-tokenpet', 'skins')
+}
+
+/**
+ * **随源码发布的形象目录**（`<package>/skins/`）。
+ *
+ * 口径（使用者 2026-10-02 定）：内置形象**随源码一起下载**，并且**直接出现在选择列表里** ——
+ * 既不依赖运行时把文件复制到 `<dsh home>/data/.../skins`，也不走"按需下载/按需取"。
+ * 于是首装即有 3 套可选；使用者自己放进 `<dsh home>` 的同名包优先级更高（可覆盖内置）。
+ */
+export function builtinSkinsDir(): string {
+  return fileURLToPath(new URL('../skins/', import.meta.url))
+}
+
+/** Resolve a pack-relative file under `root`, or null when it escapes / is unsafe. */
+function resolveUnder(root: string, id: string, file: string): string | null {
+  if (!isSafeSkinId(id) || !isSafeSkinFile(file)) return null
+  const packRoot = resolve(root, id)
+  const target = resolve(packRoot, normalize(file).split('/').join(sep))
+  if (target !== packRoot && !target.startsWith(packRoot + sep)) return null
+  return target
 }
 
 /** A pack id is safe when it cannot escape its own directory. */
@@ -212,9 +233,9 @@ export function resolveSkinPath(home: string, id: string, file: string): string 
   return target
 }
 
-/** Read one pack file, or null when it is missing / unsafe / too large. */
-export async function readSkinFile(home: string, id: string, file: string, maxBytes = 32 * 1024 * 1024): Promise<{ data: Buffer; contentType: string } | null> {
-  const target = resolveSkinPath(home, id, file)
+/** Read one pack file from a specific pack root (null when missing / unsafe / too large). */
+async function readFileUnder(root: string, id: string, file: string, maxBytes: number): Promise<{ data: Buffer; contentType: string } | null> {
+  const target = resolveUnder(root, id, file)
   if (target === null) return null
   try {
     const info = await stat(target)
@@ -226,11 +247,21 @@ export async function readSkinFile(home: string, id: string, file: string, maxBy
 }
 
 /**
+ * Read one pack file: **<dsh home> 优先（使用者可覆盖），再回退到随源码发布的内置目录**。
+ * 内置的 3 套因此无需先复制到 home 就能被选中并逐帧取图。
+ */
+export async function readSkinFile(home: string, id: string, file: string, maxBytes = 32 * 1024 * 1024): Promise<{ data: Buffer; contentType: string } | null> {
+  const fromUser = await readFileUnder(skinsDir(home), id, file, maxBytes)
+  if (fromUser !== null) return fromUser
+  return await readFileUnder(builtinSkinsDir(), id, file, maxBytes)
+}
+
+/**
  * Scan the skins directory. A missing directory is not an error: it just means
  * the user has not added a pack yet, and the built-in character stays in use.
  */
-export async function listSkinManifests(home: string): Promise<SkinManifest[]> {
-  const root = skinsDir(home)
+/** Scan one pack root for valid manifests (a missing directory is not an error). */
+async function scanPackRoot(root: string): Promise<SkinManifest[]> {
   let entries: string[] = []
   try {
     entries = await readdir(root)
@@ -252,6 +283,20 @@ export async function listSkinManifests(home: string): Promise<SkinManifest[]> {
     }
   }
   return manifests
+}
+
+/**
+ * List packs for the picker.
+ *
+ * **随源码发布的内置形象先入列**（首装即有 3 套可选，与 `<dsh home>` 是否存在无关），
+ * 之后用 `<dsh home>` 里的同名包覆盖 —— 使用者自己放的包优先级更高。
+ * 使用者 2026-10-02 定的口径：内置形象随源码下载、列表直接显示，不走"按需下载"。
+ */
+export async function listSkinManifests(home: string): Promise<SkinManifest[]> {
+  const byId = new Map<string, SkinManifest>()
+  for (const manifest of await scanPackRoot(builtinSkinsDir())) byId.set(manifest.id, manifest)
+  for (const manifest of await scanPackRoot(skinsDir(home))) byId.set(manifest.id, manifest)
+  return [...byId.values()].sort((a, b) => String(a.id).localeCompare(String(b.id)))
 }
 
 /** Summary rows for a picker, without the full per-action detail. */
