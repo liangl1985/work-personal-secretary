@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.19'
+    const BUILD = 'v1.1.20'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -2952,13 +2952,15 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           const configured = (typeof body.selected === 'string' && body.selected.trim()) ? body.selected.trim() : ''
           setSt((prev) => Object.assign({}, prev, {
             custom: body.jobs,
-            // 配置里有选中的岗位 → 直接用它（含自定义）；配置里没有 → 保持现状，由 /setup-state 回落默认。
+            // 配置里有选中的岗位 → 直接用它（含自定义）；配置里没有 → 保持空。
             domainId: configured || prev.domainId,
           }))
-        } catch {
-          /* 读不到就保持空列表；下次变更仍会尝试写回 */
-        } finally {
+          // **只有确实读到配置才开启写回**：读失败时保持 false，否则空列表会在下一次 effect 里
+          // 把配置里的岗位覆盖成空（真机 2026-10-02：配置莫名变空，疑即此路径）。
           jobsHydrated.current = true
+        } catch {
+          /* 读不到就保持空列表，**并且不开启写回** —— 宁可不写，也不能用空列表覆盖已有配置。
+             代价：读取失败时"新建岗位"这一次写不进去；刷新后读到了就正常。 */
         }
       }
 
