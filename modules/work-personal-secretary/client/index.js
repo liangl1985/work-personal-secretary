@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.17'
+    const BUILD = 'v1.1.18'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -276,6 +276,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       coreDomainNeedsContent: '已带入当前岗位名称，请补充岗位内容（或点「自动生成」）后再保存',
       coreDomainNew: '都不是（新建岗位…）',
       coreDomainPlaceholder: '请选择…',
+      // 配置文件里没有选中岗位时的**显式空态**：不拿预置岗位冒充"已配置"，便于查错
+      coreDomainUnset: '未配置（配置文件里没有选中的岗位）',
       modalCustomSuffix: '（自定义）',
       chainMarkCheck: '检',
       coreSave: '保存配置并开始',
@@ -863,6 +865,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       setupStateFailed: 'Could not read the current values (fill them in manually)',
       coreDomainNeedsContent: 'The current job name was filled in; add the job description (or press Generate) before saving',
       coreDomainNew: 'None of these (new job…)',
+      coreDomainUnset: 'Not configured (no job selected in the config file)',
       coreDomainPlaceholder: 'Select…',
       modalCustomSuffix: ' (custom)',
       chainMarkCheck: 'C',
@@ -3005,7 +3008,6 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           if (body.ok === false) throw new Error(String(body.error || 'setup-state 返回 ok:false'))
           const mem = (body.memoryDir && typeof body.memoryDir === 'object') ? body.memoryDir : {}
           const obs = (body.obsidianDir && typeof body.obsidianDir === 'object') ? body.obsidianDir : {}
-          const dom = (body.domain && typeof body.domain === 'object') ? body.domain : {}
           const rootState = (body.root && typeof body.root === 'object') ? body.root : {}
           setSt((prev) => {
             // 只在**首次**取到生效值时预填：之后（重新检测 / 使用者清空后）不再回填，
@@ -3038,21 +3040,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
               // T5-7：目录布局识别（new / legacy / mixed / empty / unknown），用于提示旧布局
               next.vaultLayout = (body.vaultLayout && typeof body.vaultLayout === 'object') ? body.vaultLayout : null
             }
-            if (!alreadyFilled && !String(prev.domainId || '').trim() && typeof dom.id === 'string' && dom.id) {
-              if (dom.isPreset === true) {
-                // 预置岗位：直接选中对应项（正文来自 /domain/list）
-                next.domainId = dom.id
-              } else {
-                // 非预置岗位：走「都不是（新建岗位…）」——把当前岗位名带进自定义岗位，
-                // 正文留空（身份正文不能凭空造），保存前需使用者补写或点「自动生成」。
-                const label = (typeof dom.label === 'string' && dom.label.trim()) ? dom.label.trim() : dom.id
-                const id = 'custom:' + label
-                next.custom = (Array.isArray(prev.custom) ? prev.custom : [])
-                  .filter((d) => d && d.id !== id)
-                  .concat([{ id: id, label: label + t('modalCustomSuffix'), content: '' }])
-                next.domainId = id
-              }
-            }
+            // 岗位**不再回填**：选中的岗位只认配置文件（selectedDomain）。配置里没有值就保持空，
+            // 由 UI 显示「未配置」—— 这样"配置到底读没读到"一眼可见（使用者 2026-10-02 定的口径）。
             return Object.assign({}, prev, next)
           })
         } catch (err) {
@@ -3346,10 +3335,13 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
         })
       }
 
-      // 岗位选项：预置取自 GET /domain/list（不在前端写死第二份正文）+ 本页新建的自定义岗位
-      const domainOptions = (Array.isArray(st.domains.items) ? st.domains.items : [])
-        .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
-        .filter((d) => d.id)
+      // 岗位选项：预置取自 GET /domain/list（不在前端写死第二份正文）+ 本页新建的自定义岗位。
+      // **首项固定是「未配置」**：配置文件（selectedDomain）没有值时就选中它 —— 显式空态便于查错，
+      // 而不是拿某个预置岗位冒充"已配置"（使用者 2026-10-02 定的口径：配置有值显示值，无值显示未配置）。
+      const domainOptions = [{ id: '', label: t('coreDomainUnset'), content: '' }]
+        .concat((Array.isArray(st.domains.items) ? st.domains.items : [])
+          .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
+          .filter((d) => d.id))
         .concat(st.custom)
       const selectedDomain = domainOptions.filter((d) => d.id === st.domainId)[0] || null
       const domainContent = selectedDomain ? String(selectedDomain.content || '') : ''
