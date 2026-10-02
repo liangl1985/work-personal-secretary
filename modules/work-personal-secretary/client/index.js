@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.18'
+    const BUILD = 'v1.1.19'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -271,13 +271,13 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       coreDirFollowRoot: '跟随根目录',
       coreDirAuto: '自动：存储根目录/',
       coreFieldDomain: '工作岗位',
-      coreFieldDomainHint: '五个预置岗位对应信息安全 / 财务 / 人力资源 / 代码编程 / 金融五个行业域，均为可直接写入身份的预置正文；都不是时可自填，新建后自动出现在这里并选中',
+      coreFieldDomainHint: '五个预置岗位对应信息安全 / 财务 / 人力资源 / 代码编程 / 金融五个行业域，均为可直接写入身份的预置正文；都不是时可自填，新建后自动出现在这里并选中。显示「未配置」= 配置文件里没有选中的岗位',
       setupStateFailed: '未能取到当前生效值（可手动填写）',
       coreDomainNeedsContent: '已带入当前岗位名称，请补充岗位内容（或点「自动生成」）后再保存',
       coreDomainNew: '都不是（新建岗位…）',
       coreDomainPlaceholder: '请选择…',
       // 配置文件里没有选中岗位时的**显式空态**：不拿预置岗位冒充"已配置"，便于查错
-      coreDomainUnset: '未配置（配置文件里没有选中的岗位）',
+      coreDomainUnset: '未配置',
       modalCustomSuffix: '（自定义）',
       chainMarkCheck: '检',
       coreSave: '保存配置并开始',
@@ -865,7 +865,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       setupStateFailed: 'Could not read the current values (fill them in manually)',
       coreDomainNeedsContent: 'The current job name was filled in; add the job description (or press Generate) before saving',
       coreDomainNew: 'None of these (new job…)',
-      coreDomainUnset: 'Not configured (no job selected in the config file)',
+      coreDomainUnset: 'Not configured',
       coreDomainPlaceholder: 'Select…',
       modalCustomSuffix: ' (custom)',
       chainMarkCheck: 'C',
@@ -3338,10 +3338,9 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       // 岗位选项：预置取自 GET /domain/list（不在前端写死第二份正文）+ 本页新建的自定义岗位。
       // **首项固定是「未配置」**：配置文件（selectedDomain）没有值时就选中它 —— 显式空态便于查错，
       // 而不是拿某个预置岗位冒充"已配置"（使用者 2026-10-02 定的口径：配置有值显示值，无值显示未配置）。
-      const domainOptions = [{ id: '', label: t('coreDomainUnset'), content: '' }]
-        .concat((Array.isArray(st.domains.items) ? st.domains.items : [])
-          .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
-          .filter((d) => d.id))
+      const domainOptions = (Array.isArray(st.domains.items) ? st.domains.items : [])
+        .map((d) => ({ id: String(d && d.id || ''), label: String(d && d.label || ''), content: String(d && d.content || '') }))
+        .filter((d) => d.id)
         .concat(st.custom)
       const selectedDomain = domainOptions.filter((d) => d.id === st.domainId)[0] || null
       const domainContent = selectedDomain ? String(selectedDomain.content || '') : ''
@@ -3686,7 +3685,9 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           h('select', {
             key: 's', style: S.input, value: st.domainId, disabled: runRunning,
             onChange: (e) => onDomainChange((e && e.target && e.target.value) || ''),
-          }, [h('option', { key: '__ph', value: '' }, t('coreDomainPlaceholder'))]
+          // 空态**不是一个可选项**：placeholder 项 disabled（点不开、选不了），只承担
+          // "配置里没读到选中岗位"的显示职责。读到值就由 st.domainId 选中真实岗位。
+          }, [h('option', { key: '__ph', value: '', disabled: true }, t('coreDomainUnset'))]
             .concat(domainOptions.map((d) => h('option', { key: d.id, value: d.id }, d.label)))
             .concat([h('option', { key: '__new', value: NEW_DOMAIN_VALUE }, t('coreDomainNew'))])),
         ]),
