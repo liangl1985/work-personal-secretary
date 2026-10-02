@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.24'
+    const BUILD = 'v1.1.25'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -2956,12 +2956,13 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           const configured = (typeof body.selected === 'string' && body.selected.trim()) ? body.selected.trim() : ''
           setSt((prev) => Object.assign({}, prev, {
             custom: body.jobs,
-            // 配置里有选中的岗位 → 直接用它（含自定义）；配置里没有 → 保持空。
-            domainId: configured || prev.domainId,
+            // 判断链（使用者 2026-10-02 定稿）：**配置有值就用它；配置无值就是"未配置"（domainId = ''）**。
+            // 这里**绝不回落**到别的来源 —— 否则"默认岗位"会被冒充成"配置里的值"（真机踩过：被写回成 infosec）。
+            domainId: configured,
           }))
-          // **只有确实读到配置才开启写回**：读失败时保持 false，否则空列表会在下一次 effect 里
-          // 把配置里的岗位覆盖成空（真机 2026-10-02：配置莫名变空，疑即此路径）。
-          jobsHydrated.current = true
+          // 护栏：只有**确实读到配置值**才允许写回；没读到就不写（避免把回落值/空值写进配置）。
+          // 使用者若手动选择岗位，会由 onDomainChange / saveModal 显式开启写回。
+          jobsHydrated.current = configured.length > 0
         } catch {
           /* 读不到就保持空列表，**并且不开启写回** —— 宁可不写，也不能用空列表覆盖已有配置。
              代价：读取失败时"新建岗位"这一次写不进去；刷新后读到了就正常。 */
@@ -3015,7 +3016,6 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           const mem = (body.memoryDir && typeof body.memoryDir === 'object') ? body.memoryDir : {}
           const obs = (body.obsidianDir && typeof body.obsidianDir === 'object') ? body.obsidianDir : {}
           const rootState = (body.root && typeof body.root === 'object') ? body.root : {}
-          const dom = (body.domain && typeof body.domain === 'object') ? body.domain : {}
           setSt((prev) => {
             // 只在**首次**取到生效值时预填：之后（重新检测 / 使用者清空后）不再回填，
             // 否则「清空字段」会被下一次取数悄悄撤销。用独立标记 setupFilled，
@@ -3047,22 +3047,9 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
               // T5-7：目录布局识别（new / legacy / mixed / empty / unknown），用于提示旧布局
               next.vaultLayout = (body.vaultLayout && typeof body.vaultLayout === 'object') ? body.vaultLayout : null
             }
-            // 岗位：**配置优先，逐级回落**（使用者 2026-10-02 两次澄清后的定稿）
-            //   ① 配置文件里的 selectedDomain（loadCustomJobs 已填 → prev.domainId 非空则不再动）
-            //   ② 宿主设置里的 experts.defaultDomain（就是这个 body.domain，source=settings，同属 profile 配置）
-            //   ③ 两级都空 → 保持空，UI 显示「未配置」（一眼可辨"配置空"与"读到了值"）
-            if (!alreadyFilled && !String(prev.domainId || '').trim() && typeof dom.id === 'string' && dom.id) {
-              const label = (typeof dom.label === 'string' && dom.label.trim()) ? dom.label.trim() : dom.id
-              if (dom.isPreset === true) {
-                next.domainId = dom.id
-              } else {
-                const id = 'card:' + label   // 与卡片 id 前缀统一（建出来的就是普通岗位）
-                next.custom = (Array.isArray(prev.custom) ? prev.custom : [])
-                  .filter((d) => d && d.id !== id)
-                  .concat([{ id: id, label: label + t('modalCustomSuffix'), content: '' }])
-                next.domainId = id
-              }
-            }
+            // 岗位**不在这里回填**：下拉的选中项只认配置里的 selectedDomain（见 loadCustomJobs）。
+            // 使用者 2026-10-02 定稿：**配置有值显示值，无值显示「未配置」**；
+            // 旧版这里用 experts.defaultDomain 兑底，结果把"默认岗位"冒充成"配置里的值"，还被写回配置污染真值。
             return Object.assign({}, prev, next)
           })
         } catch (err) {
@@ -3381,6 +3368,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       const canSave = filledCount === 3 && !runRunning
 
       function onDomainChange(value) {
+        // 使用者**显式**选过岗位 → 这就是要落盘的值，开启写回（即便起初没读到配置）
+        jobsHydrated.current = true
         if (value === NEW_DOMAIN_VALUE) {
           setSt((prev) => Object.assign({}, prev, { modal: { name: '', content: '', phase: 'idle', message: '', error: '' } }))
           return
@@ -3447,6 +3436,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
           setModal({ phase: 'idle', message: '', error: t('modalSaveFailed') + '：' + String(body.error || ('HTTP ' + res.status)) })
           return
         }
+        jobsHydrated.current = true   // 新建/覆盖卡片后，选中项是使用者显式意图，允许落盘
         setSt((prev) => Object.assign({}, prev, { modal: null, domainId: id }))
         await loadDomains()   // 卡片已落盘 → 重新拉清单，新岗位随即出现在下拉里
         if (jobsHydrated.current) persistCustomJobs([], id)   // 只写选中项；卡片已由 /domain/card 落盘，不带 jobs 就不会重复写
