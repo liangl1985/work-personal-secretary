@@ -100,6 +100,7 @@ import {
   planBaseDeck,
   publicPlan,
   resolveDeckContext,
+  resolveDshHome,
   safeWorkspaceParam,
 } from './basedeck.js'
 
@@ -634,9 +635,11 @@ export function installApi(ctx, deps = {}) {
   function domainsDirOf() {
     const configured = typeof deps.domainsDir === 'string' ? deps.domainsDir.trim() : ''
     if (configured) return configured
+    // 用与配置底座**同源**的解析（deps.dshHome 测试注入 → 环境变量 → ~/.dsh 兜底）。
+    // 真机 2026-10-02：早先只读 process.env.DSH_HOME，宿主主进程没有该变量 → 目录算不出来、卡片读不到。
     const home = (typeof deps.dshHome === 'string' && deps.dshHome.trim())
       ? deps.dshHome.trim()
-      : String(process.env.DSH_HOME || '').trim()
+      : resolveDshHome(installEnv)
     return home ? join(home, DEFAULT_DOMAINS_SUBDIR) : ''
   }
 

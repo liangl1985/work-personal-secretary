@@ -1,5 +1,19 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.23 — 2026-10-02（修卡片目录算不出来：DSH_HOME 解析漏了兜底）
+
+> 真机 2026-10-02：卡片已生成在 \`<DSH_HOME>/data/work-personal-secretary/domains\`，但接口返回
+> \`cardsDir: ""\`、\`jobs: []\` —— **目录压根没算出来**，卡片自然读不到，下拉里也就没有那个岗位。
+
+- **根因**：1.1.22 的 \`domainsDirOf()\` 只读 \`deps.dshHome\` 与 \`process.env.DSH_HOME\` 两处，
+  而 \`index.js\` 传给 \`installApi\` 的 deps 里**并没有 dshHome**，DSH 主进程也**没有** \`DSH_HOME\` 环境变量
+  → 两处都空 → 返回空目录 → 卡片读不到。
+- **修**：改用 \`lib/\` 里**与配置底座同源**的 \`resolveDshHome()\`（\`deps.dshHome\` 测试注入 →
+  环境变量 → **\`~/.dsh\` 兜底**）。实测（清掉 DSH_HOME 后）返回 \`C:\\Users\\liangl\\.dsh\`，兜底生效。
+- **顺带**：profile 覆盖层里 \`selectedDomain\` 的旧前缀 \`custom:\` 改为 \`card:\`（卡片 id 前缀统一），
+  否则下拉按 id 找不到该项、会回退显示第一个预置岗位。改前已再备份。
+- 回归：smoke-load 536 / 0；其余见提交说明。
+
 ## 1.1.22 — 2026-10-02（岗位卡片化：新建岗位 = 生成一张岗位卡片文件）
 
 > 使用者 2026-10-02 定的存储方式：**下拉读的岗位统一来自"岗位信息卡"**；预置 5 张来自源码常量，
