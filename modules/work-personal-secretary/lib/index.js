@@ -103,6 +103,7 @@ export function apply(ctx, config = {}) {
       obsidianDir: obsidianDirValue,
       // 自定义岗位列表：持久化在设置用户层（非 volatile），读写走 GET/POST /jobs
       customJobs: config && typeof config.customJobs === 'string' ? config.customJobs : '',
+      selectedDomain: config && typeof config.selectedDomain === 'string' ? config.selectedDomain : '',
       // 设置句柄（repoRoot 的实时读取源；写入走 ctx.settings.mutate，见 /repo-root 路由）
       settings: settings,
     })

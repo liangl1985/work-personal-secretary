@@ -52,6 +52,9 @@ export const DEFAULTS = {
   // （真机 2026-10-02 实测 'Config field "customJobs" is not volatile'），写不进去则岗位无法持久化。
   // 代价是它会出现在设置表单里——由 description 说明"通常无需手工编辑"。读写走 GET/POST /jobs（见 lib/api.js）。
   customJobs: '',
+  // 当前选中的工作岗位 id（含自定义岗位，形如 custom:<名称>）。与 customJobs 同为宿主设置、落 profile 覆盖层：
+  // **配置里有值就直接读出来显示，没有才回落到默认岗位**（使用者 2026-10-02 定的读取语义）。
+  selectedDomain: '',
 }
 
 /**
@@ -82,6 +85,9 @@ export const WPS_SETTINGS_SCHEMA = z ? z.object({
     .description('知识库根目录（Obsidian vault 根，应包含 .obsidian/ 与各模块知识库）。**留空 = 未指定**：'
       + '知识库结构生成器（knowledgeDeck）显式返回 none，不猜路径。填了之后：镜像建议值改为 <知识库根>/00_全局记忆，'
       + '并据此生成/校验知识库骨架。个性化可在该 profile 的 cordis.patch.yml 覆盖本键。'),
+  selectedDomain: withVolatile(z.string().default(''))
+    .description('当前选中的工作岗位 id（含自定义岗位，形如 custom:<名称>）。**由「核心配置 → 目录与岗位」页维护**；'
+      + '配置里有值就直接读出来显示，没有才回落到默认岗位。'),
   customJobs: withVolatile(z.string().default(''))
     .description('自定义岗位列表（JSON）。**由「核心配置 → 目录与岗位」页维护，通常无需手工编辑**；'
       + '新增/删除岗位时这里会同步。该字段必须是 volatile —— 宿主设置服务只允许写 volatile 字段（实测报错：'
@@ -124,6 +130,7 @@ function toConfig(resolved) {
   cfg.repoRoot = String(cfg.repoRoot == null ? '' : cfg.repoRoot).trim()
   cfg.obsidianDir = String(cfg.obsidianDir == null ? '' : cfg.obsidianDir).trim()
   cfg.customJobs = String(cfg.customJobs == null ? '' : cfg.customJobs)
+  cfg.selectedDomain = String(cfg.selectedDomain == null ? '' : cfg.selectedDomain).slice(0, 200)
   return cfg
 }
 

@@ -45,7 +45,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.16'
+    const BUILD = 'v1.1.17'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -2935,13 +2935,23 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       /** 首次水合标记：未完成前不写回，避免拿空列表覆盖持久化里的既有岗位。 */
       const jobsHydrated = useRef(false)
 
-      /** 拉取已持久化的自定义岗位（GET /jobs）。失败当作没有，不阻塞配置页。 */
+      /**
+       * 拉取配置里的自定义岗位与**当前选中岗位**（GET /jobs）。
+       * 读取语义（使用者 2026-10-02 定）：**配置有值就直接读出来显示，没有才回落到默认**。
+       * 因此这里同时水合 custom 与 domainId —— 后者正是「选了自定义岗位，重启后又变回默认」的缺口。
+       * 失败当作没有，不阻塞配置页。
+       */
       async function loadCustomJobs() {
         try {
           if (typeof fetch !== 'function') return
           const body = await getJson('/jobs', 15000)
           if (!body || body.ok === false || !Array.isArray(body.jobs)) return
-          setSt((prev) => Object.assign({}, prev, { custom: body.jobs }))
+          const configured = (typeof body.selected === 'string' && body.selected.trim()) ? body.selected.trim() : ''
+          setSt((prev) => Object.assign({}, prev, {
+            custom: body.jobs,
+            // 配置里有选中的岗位 → 直接用它（含自定义）；配置里没有 → 保持现状，由 /setup-state 回落默认。
+            domainId: configured || prev.domainId,
+          }))
         } catch {
           /* 读不到就保持空列表；下次变更仍会尝试写回 */
         } finally {
@@ -2953,8 +2963,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
        * 整表写回自定义岗位（POST /jobs，恒 dryRun:false）。失败不打断使用者操作，但**必须留痕**：
        * 2026-10-02 真机曾因宿主拒绝写非 volatile 字段而静默失败，界面只表现为"没生效"。
        */
-      function persistCustomJobs(jobs) {
-        postFull('/jobs', { jobs: jobs, dryRun: false }, 15000).catch((err) => {
+      function persistCustomJobs(jobs, selected) {
+        postFull('/jobs', { jobs: jobs, selected: String(selected == null ? '' : selected), dryRun: false }, 15000).catch((err) => {
           try { console.warn('[workspace-tokenpet] 自定义岗位写回失败：' + String((err && err.message) || err)) } catch (e) { /* 控制台不可用 */ }
         })
       }
@@ -3410,8 +3420,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       // 是为了不把副作用塞进 React updater（那里可能被重复执行），也少改业务分支。
       useEffect(() => {
         if (!jobsHydrated.current) return
-        persistCustomJobs(st.custom)
-      }, [st.custom])
+        persistCustomJobs(st.custom, st.domainId)
+      }, [st.custom, st.domainId])
 
       // ── 保存即执行链 ──────────────────────────────────────────────
       function chainInit() {

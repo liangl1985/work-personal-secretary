@@ -1,5 +1,21 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.17 — 2026-10-02（岗位读取语义改为「配置优先」：选中岗位也持久化）
+
+> 使用者 2026-10-02 定的口径：**配置表里有值就直接读出来显示，没有值才显示默认**。
+> 现状缺口：自定义岗位列表已落配置（1.1.16），但**「当前选中哪个岗位」从未持久化** ——
+> `CORE_STATE_DEFAULT.domainId` 默认空、靠 `GET /setup-state` 的 `domain` 回填，而它**只认预置岗位**
+> （真机实测 `{id:"infosec",isPreset:true,source:"settings"}`）。于是选了自定义岗位，重启/刷新后又变回"信息安全"。
+
+- **新增配置键 `selectedDomain`**（`lib/settings.js`，**volatile** —— 宿主设置服务只允许写 volatile 字段）：
+  当前选中岗位 id（含 `custom:<名称>`），与 `customJobs` 同一持久化通道，落 profile 覆盖层。
+- **`GET /jobs` 同时返回 `selected`**；`POST /jobs` 接受 `{ jobs, selected }`，并在**同一次 mutate** 里写两键。
+- **前端读取语义**（`client/index.js`）：`loadCustomJobs()` 水合 `custom` **与** `domainId` ——
+  **配置里有 selected 就直接用它（含自定义）；没有才保持现状，让 `/setup-state` 回落默认**；
+  变化监听改为 `[st.custom, st.domainId]`，任一变化都整表写回，选中的岗位随之持久化。
+- 回归：defaults 61 / settings-api 115 / smoke-load 533 / probe 151 / install 246 / identity 73 / basedeck 574，失败 0。
+- 真机预期：选中自定义岗位 → 重启 DSH → 下拉里仍是它（不再回落到"信息安全"）。
+
 ## 1.1.16 — 2026-10-02（修自定义岗位写不进去：customJobs 必须 volatile）
 
 > 真机（2026-10-02）：1.1.14 加的自定义岗位持久化**完全没生效** —— 新建岗位不落盘，重启后列表依旧为空。

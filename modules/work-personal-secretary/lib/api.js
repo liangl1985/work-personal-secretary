@@ -628,6 +628,8 @@ export function installApi(ctx, deps = {}) {
    */
   /** 自定义岗位列表内存态：启动时取配置，POST /jobs 成功后就地更新（该键非 volatile，写入需重启才回落到 config）。 */
   let customJobs = parseCustomJobs(deps.customJobs)
+  /** 当前选中岗位 id（含自定义）；与 customJobs 同一持久化通道，配置优先、空则回落默认。 */
+  let selectedDomain = typeof deps.selectedDomain === 'string' ? deps.selectedDomain.slice(0, 200) : ''
 
   /**
    * 把自定义岗位列表写进**设置用户层**（本 profile 覆盖层的 `customJobs` 键）。写入前先 describe 取 revision。
@@ -635,7 +637,7 @@ export function installApi(ctx, deps = {}) {
    * @param {Array<{id:string,label:string,content:string}>} jobs - 已归一化的岗位列表
    * @returns {Promise<{ok:boolean, revision?:(number|null), code?:string, error?:string}>}
    */
-  async function writeSettingsCustomJobs(jobs) {
+  async function writeSettingsCustomJobs(jobs, selected) {
     const settings = settingsOf()
     if (!settings || typeof settings.mutate !== 'function') {
       return { ok: false, code: 'settings-unavailable', error: '设置服务不可用（ctx.settings 缺失或只读）' }
@@ -653,7 +655,10 @@ export function installApi(ctx, deps = {}) {
     }
     const revision = Number.isInteger(target.revision) ? target.revision : 0
     try {
-      await settings.mutate(SETTINGS_NS, [{ op: 'set', path: ['customJobs'], value: JSON.stringify(jobs) }], revision)
+      await settings.mutate(SETTINGS_NS, [
+        { op: 'set', path: ['customJobs'], value: JSON.stringify(jobs) },
+        { op: 'set', path: ['selectedDomain'], value: String(selected == null ? '' : selected).slice(0, 200) },
+      ], revision)
     } catch (err) {
       const code = (err && err.code) ? String(err.code) : 'write-failed'
       const extra = code === 'SETTINGS_CONFLICT' ? '（设置已被其它窗口改动，请重新读取后再写）' : ''
@@ -897,7 +902,7 @@ export function installApi(ctx, deps = {}) {
       if (req.method === 'GET' && (sub === '/jobs' || sub === '/jobs/')) {
         const guard = sameOriginLooseGuard(req)
         if (guard) return sendError(res, 403, guard)
-        return sendJson(res, 200, { ok: true, jobs: customJobs })
+        return sendJson(res, 200, { ok: true, jobs: customJobs, selected: selectedDomain })
       }
 
       // POST /jobs { jobs, dryRun } —— 整表写入自定义岗位（同源保护；dryRun 默认 true）。
@@ -908,11 +913,13 @@ export function installApi(ctx, deps = {}) {
         let body
         try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
         const next = parseCustomJobs(Array.isArray(body.jobs) ? JSON.stringify(body.jobs) : '[]')
-        if (body.dryRun === true) return sendJson(res, 200, { ok: true, dryRun: true, jobs: next })
-        const outcome = await writeSettingsCustomJobs(next)
+        const nextSelected = typeof body.selected === 'string' ? body.selected.slice(0, 200) : selectedDomain
+        if (body.dryRun === true) return sendJson(res, 200, { ok: true, dryRun: true, jobs: next, selected: nextSelected })
+        const outcome = await writeSettingsCustomJobs(next, nextSelected)
         if (!outcome.ok) return sendError(res, 400, outcome.error || '写入自定义岗位失败')
         customJobs = next
-        return sendJson(res, 200, { ok: true, jobs: customJobs, revision: outcome.revision == null ? null : outcome.revision })
+        selectedDomain = nextSelected
+        return sendJson(res, 200, { ok: true, jobs: customJobs, selected: selectedDomain, revision: outcome.revision == null ? null : outcome.revision })
       }
 
       // GET /identity[?memoryDir=] —— 当前「使用者身份」条目状态与正文（只读）
