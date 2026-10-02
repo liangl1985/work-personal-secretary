@@ -1,3 +1,21 @@
+## 0.7.20 — 2026-10-02（ARK 密钥来源对齐 rc.2：新增读 profile 覆盖层）
+
+> 触发：rc.2 起设置页写入的值**不再落** `~/.dsh/settings.yaml`，而是被搬进 **profile 的 `cordis.patch.yml`**
+> （官方 `packages/settings/settings/src/index.ts:238-243`：把 `settings.yaml` 的各段搬进当前 profile）。
+> 而 `gen_image.py` 只认老路径 → 真机上「文档能力」页填的 `mediaArkApiKey` 读不到，ARK 生图**恒报「未配置」**。
+
+- **新增来源**：`_profile_patch_value(key, ns)` 读 profile 覆盖层里 `- id: <ns>` 条目的 `config.<key>`。
+  候选文件：`DSH_PROFILE_DIR`（显式指定，目录或文件）→ 否则扫 `<DSH_HOME>/profiles/*/cordis.patch.yml`。
+  零依赖逐行解析：只认目标条目的 `config:` 段，**不串读其它条目的同名键**。
+- **优先级**：`--api-key` > 环境变量 `ARK_API_KEY` > **profile 覆盖层**（rc.2 官方存法）>
+  老 `~/.dsh/settings.yaml`（**兼容保留**，rc.1 部署仍可用）。
+- `check` 现在报出**实际命中的来源文件**；未配置提示同步为「四条来源都为空」。
+- **回归**：`media-test.mjs` **20 通过 / 0 失败**（含新增用例：profile 覆盖层命中 + 命名空间隔离 + 缺失回空）。
+  夹具默认隔离 `DSH_PROFILE_DIR` —— 修复前夹具只隔离老设置文件，会读到**真实 profile 的密钥**，
+  使「无密钥 → exit 4」用例失效并**意外调用了一次云端**（exit 0）；隔离后不再触网。
+- **真机实测**：`check` → `密钥状态 : 已配置（长度 46，不回显）`，来源
+  `C:\Users\liangl\.dsh\profiles\desktop\cordis.patch.yml`（密钥值全程不回显、不入库）。
+
 ## 0.7.19 — 2026-09-30（DSH 0.2.0-rc.2 设置迁移：具名导出 Config + volatile）
 
 > 触发：rc.2 的 settings 服务**移除了 `ctx.settings.register`**（`packages/settings/settings/src/index.ts` 只剩 configure / prepareDocument / describe / update / replace / mutate）。本模块原调用点因此静默降级，集成体「能力配置」页读不到文档能力命名空间，显示「本机服务未提供该能力的设置命名空间」。

@@ -3,7 +3,9 @@
 """ARK（火山方舟）生图 —— B 线施工 ⑥（图形元素优先生图，失败可回退代码矢量）。
 
 设计依据：55 号第七章。要点：
-  - **默认接入火山引擎（ARK）**；密钥走 **环境变量 ARK_API_KEY**（--api-key 优先），或由宿主把设置项注入环境变量；
+  - **默认接入火山引擎（ARK）**；密钥来源（优先级）：`--api-key` > 环境变量 `ARK_API_KEY`
+    > **profile 覆盖层**（DSH 0.2.0-rc.2 起设置页写入 `cordis.patch.yml` 的 `doc-suite.mediaArkApiKey`）
+    > 老 `~/.dsh/settings.yaml`（rc.2 起该文件已不再承载设置）；
   - 密钥**不打印、不落日志、不进报错文本**（只报告「已配置 / 未配置」）；
   - 任何失败（无密钥 / 模型未开通 / 限流 / 超时 / 网络）→ 退出码 **4**（**可回退**：调用方改用代码矢量绘制）；
   - 生图是**云端服务**：调用前打印一行显式告知（prompt 会发送到该服务）。
@@ -83,10 +85,79 @@ def _settings_value(key, ns="dsh-doc-suite"):
     return ""
 
 
+def _dsh_home():
+    """DSH 主目录：`DSH_HOME` 优先，否则 `~/.dsh`。"""
+    env = (os.environ.get("DSH_HOME") or "").strip()
+    return Path(env) if env else Path.home() / ".dsh"
+
+
+def _profile_patch_files():
+    """候选 profile 覆盖层文件列表。
+
+    `DSH_PROFILE_DIR`（目录或文件）优先；否则扫 `<DSH_HOME>/profiles/*/cordis.patch.yml`。
+    """
+    explicit = (os.environ.get("DSH_PROFILE_DIR") or "").strip()
+    if explicit:
+        p = Path(explicit)
+        return [p / "cordis.patch.yml"] if p.is_dir() else [p]
+    try:
+        return sorted((_dsh_home() / "profiles").glob("*/cordis.patch.yml"))
+    except OSError:
+        return []
+
+
+def _profile_patch_value(key, ns):
+    """读 profile 覆盖层里 `- id: <ns>` 条目的 `config.<key>`，返回 `(value, path)`。
+
+    **为什么需要这条来源**（2026-10-02）：DSH 0.2.0-rc.2 起，设置页写入的值不再落
+    `~/.dsh/settings.yaml`，而是被搬进 **profile 的 `cordis.patch.yml`**
+    （官方 `packages/settings/settings/src/index.ts:238-243`：把 `settings.yaml` 的各段搬进当前 profile）
+    → 老路径在 rc.2 上必然读不到，本函数按新位置读。未命中返回 `("", "")`。
+
+    极简逐行解析（零依赖）：只认顶层 `- id: <ns>` 列表项，及其后缩进的 `config:` 段下的 `key: value`。
+    """
+    for path in _profile_patch_files():
+        try:
+            lines = path.read_bytes().decode("utf-8").splitlines()
+        except Exception:                          # noqa: BLE001（缺失/不可读 → 试下一个）
+            continue
+        in_entry = in_config = False
+        for raw in lines:
+            stripped = raw.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if not raw[0].isspace():               # 顶层：新条目开始
+                in_entry = stripped.startswith("- ") and stripped[2:].strip() == "id: %s" % ns
+                in_config = False
+                continue
+            if not in_entry:
+                continue
+            if stripped.startswith("config:"):
+                in_config = True
+                continue
+            if not in_config:
+                continue
+            k, _, v = stripped.partition(":")
+            if k.strip() != key:
+                continue
+            v = v.strip()
+            if "#" in v and not v.startswith(("\"", "'")):
+                v = v.split("#", 1)[0].strip()
+            v = v.strip().strip('"').strip("'")
+            if v:
+                return v, str(path)
+    return "", ""
+
+
 def _api_key(args):
-    """密钥来源（优先级）：--api-key > 环境变量 ARK_API_KEY > DSH 设置（设置页 / 集成体「文档能力」页填的 mediaArkApiKey）。"""
-    return (getattr(args, "api_key", None) or os.environ.get("ARK_API_KEY")
-            or _settings_value("mediaArkApiKey") or "").strip()
+    """密钥来源（优先级）：--api-key > 环境变量 ARK_API_KEY > profile 覆盖层（rc.2 官方存法）> 老 settings.yaml。"""
+    explicit = getattr(args, "api_key", None) or os.environ.get("ARK_API_KEY")
+    if explicit:
+        return explicit.strip()
+    profile_key, _ = _profile_patch_value("mediaArkApiKey", "doc-suite")
+    if profile_key:
+        return profile_key
+    return (_settings_value("mediaArkApiKey") or "").strip()
 
 
 def _endpoint(args):
@@ -215,11 +286,21 @@ def cmd_check(args):
     print("endpoint : %s（%s）" % (endpoint, _host(endpoint)))
     print("model    : %s" % (getattr(args, "model", None) or DEFAULT_MODEL))
     print("密钥状态 : %s" % ("已配置（长度 %d，不回显）" % len(key) if key else "未配置 → 生图不可用，将回退代码矢量绘制"))
+    profile_key, profile_path = _profile_patch_value("mediaArkApiKey", "doc-suite")
     cfg_key = _settings_value("mediaArkApiKey")
-    print("设置项   : %s" % ("mediaArkApiKey 已填写（长度 %d，不回显）" % len(cfg_key) if cfg_key else "mediaArkApiKey 未填写"))
-    print("说明     : 密钥来源优先级 = --api-key > 环境变量 ARK_API_KEY > DSH 设置项 mediaArkApiKey；"
-          "本命令**不调用云端**。")
-    print("          设置文件：%s" % DSH_SETTINGS_FILE)
+    if profile_key:
+        print("设置项   : mediaArkApiKey 已填写于 profile 覆盖层（长度 %d，不回显）" % len(profile_key))
+        print("          来源：%s" % profile_path)
+    elif cfg_key:
+        print("设置项   : mediaArkApiKey 已填写于老设置文件（长度 %d，不回显）" % len(cfg_key))
+        print("          来源：%s" % DSH_SETTINGS_FILE)
+    else:
+        print("设置项   : mediaArkApiKey 未填写（profile 覆盖层与老设置文件都没有）")
+    print("说明     : 密钥来源优先级 = --api-key > 环境变量 ARK_API_KEY > profile 设置"
+          "（doc-suite.mediaArkApiKey）> 老设置文件；本命令**不调用云端**。")
+    print("          老设置文件：%s" % DSH_SETTINGS_FILE)
+    for _p in _profile_patch_files():
+        print("          profile 覆盖层：%s" % _p)
     return 0
 
 
@@ -234,9 +315,10 @@ def cmd_image(args):
     print("提示: 生图为云端服务（%s），prompt 将发送到该服务；请勿包含客户信息、报价或涉密内容。"
           % _host(endpoint))
     if not key:
-        print("错误: 未配置密钥（--api-key / ARK_API_KEY / 设置项 mediaArkApiKey 三者都为空）→ 生图不可用。", file=sys.stderr)
+        print("错误: 未配置密钥（--api-key / ARK_API_KEY / profile 设置 / 老设置文件 四条来源都为空）→ 生图不可用。", file=sys.stderr)
         print("提示: 这是**可回退**情形（exit %d）——调用方应改用代码矢量绘制；"
-              "如需生图，请在「设置 → 插件 → dsh-doc-suite」或集成体「文档能力」页填写密钥。" % EXIT_FALLBACK, file=sys.stderr)
+              "如需生图，请在集成体「文档能力」页填写密钥（rc.2 会把值写入 profile 的 cordis.patch.yml）。"
+              % EXIT_FALLBACK, file=sys.stderr)
         return EXIT_FALLBACK
 
     body = {"model": model, "prompt": prompt, "size": str(args.size or "1K"), "response_format": "url"}

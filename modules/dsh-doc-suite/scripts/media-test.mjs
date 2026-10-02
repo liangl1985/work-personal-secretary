@@ -25,11 +25,16 @@ const t = function (n, fn) { try { const r = fn(); if (r === 'skip') { console.l
 const assert = function (c, m) { if (!c) throw new Error(m); };
 const pyLine = function (lines) { return lines.join('\n'); };
 
+// 夹具默认把 profile 覆盖层指向不存在的路径：rc.2 起密钥也可能来自
+// <DSH_HOME>/profiles/*/cordis.patch.yml，不隔离就会读到真实 profile 的密钥。
+const EMPTY_PROFILE = path.join(TMP, 'no-profile-fixture', 'cordis.patch.yml');
+
 function pyRun(script, args, env) {
   const cands = [['py', ['-3']], ['python3', []], ['python', []]];
   for (const pair of cands) {
     const r = spawnSync(pair[0], pair[1].concat([script]).concat(args || []),
-      { encoding: 'utf8', cwd: MEDIA, timeout: 300000, env: Object.assign({}, process.env, env || {}) });
+      { encoding: 'utf8', cwd: MEDIA, timeout: 300000,
+        env: Object.assign({}, process.env, { DSH_PROFILE_DIR: EMPTY_PROFILE }, env || {}) });
     if (r.error && r.error.code === 'ENOENT') continue;
     return r;
   }
@@ -299,6 +304,46 @@ t('密钥来源：设置项兜底 + 命名空间隔离（DSH_SETTINGS_FILE 可�
   assert(r.stdout.includes('v: ark-test-123'), '未从设置项取到密钥：' + r.stdout.trim());
   assert(r.stdout.includes('iso: /x'), '命名空间隔离异常：' + r.stdout.trim());
   assert(r.stdout.includes("miss: ''"), '缺失键应回空串：' + r.stdout.trim());
+});
+
+t('密钥来源：rc.2 profile 覆盖层（cordis.patch.yml 的 doc-suite.mediaArkApiKey）', function () {
+  if (!HAS_PY) return 'skip';
+  const dir = path.join(TMP, 'profile-fixture');
+  fs.mkdirSync(dir, { recursive: true });
+  const patch = path.join(dir, 'cordis.patch.yml');
+  fs.writeFileSync(patch, [
+    '- id: work-personal-secretary',
+    '  config:',
+    '    workspace: E:/x',
+    '- id: doc-suite',
+    '  config:',
+    '    mediaArkApiKey: \'ark-from-profile-1234567890\'',
+    '- id: other-plugin',
+    '  config:',
+    '    mediaArkApiKey: \'must-not-be-read\'',
+    '',
+  ].join('\n'), 'utf8');
+  const r = pyRun(GEN_IMAGE, ['check'], { ARK_API_KEY: '', DSH_SETTINGS_FILE: path.join(TMP, 'absent.yaml'), DSH_PROFILE_DIR: patch });
+  assert(r && r.status === 0, 'check 失败：' + ((r && r.stderr) || '').slice(0, 200));
+  assert(r.stdout.includes('已配置（长度 27'), '未从 profile 覆盖层取到密钥：' + r.stdout.trim());
+  assert(r.stdout.includes('profile 覆盖层'), '未报告来源：' + r.stdout.trim());
+  assert(!r.stdout.includes('must-not-be-read'), '串读了其它条目的密钥');
+  const probe = [
+    'import sys',
+    'sys.path.insert(0, r"' + MEDIA + '")',
+    'import gen_image',
+    'p, _ = gen_image._profile_patch_value("mediaArkApiKey", "doc-suite")',
+    'print("len:", len(p), p[:4], p[-4:])',
+    'q, _ = gen_image._profile_patch_value("mediaArkApiKey", "other-plugin")',
+    'print("other:", q)',
+    'm, _ = gen_image._profile_patch_value("nope", "doc-suite")',
+    'print("miss:", repr(m))',
+  ].join('\n');
+  const r2 = pyRun('-c', [probe], { DSH_PROFILE_DIR: patch });
+  assert(r2 && r2.status === 0, '探针失败：' + ((r2 && r2.stderr) || '').slice(0, 200));
+  assert(r2.stdout.includes('len: 27 ark- 7890'), 'profile 读取异常：' + r2.stdout.trim());
+  assert(r2.stdout.includes('other: must-not-be-read'), '命名空间隔离异常：' + r2.stdout.trim());
+  assert(r2.stdout.includes("miss: ''"), '缺失键应回空串：' + r2.stdout.trim());
 });
 
 console.log('');
