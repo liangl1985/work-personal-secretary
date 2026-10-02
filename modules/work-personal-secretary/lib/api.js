@@ -138,7 +138,7 @@ export const PAGE_PATHS = ['/guide', '/help']
  * （SETTINGS_API_PATHS 由 installSettingsExactRoutes 单独注册、由 lib/index.js 接线）。
  * 1.1.12 补入 `/repo-root`：此前它只在 prefix 下可达，桌面外壳（只认 exact）保存不了仓库目录。
  */
-export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new', '/repo-root', '/import/scan', '/import/apply']
+export const CORE_API_EXACT_PATHS = ['/preflight', '/identity', '/identity/save', '/domain/list', '/domain/generate', '/jobs', '/docs', '/open-doc', '/setup-state', '/dirs', '/dirs/new', '/repo-root', '/import/scan', '/import/apply']
 
 /**
  * 两个说明文档的**唯一映射**（单一真相源 = defaults 下的 md）：
@@ -446,6 +446,28 @@ export function runFixCommand(cmd, args, options = {}) {
  * @param {string} [deps.dshHome] DSH_HOME（测试注入；默认取环境变量 DSH_HOME，再退到 ~/.dsh）
  * @returns {Function} disposer
  */
+/**
+ * 解析自定义岗位列表（JSON 字符串 → 归一化数组）。
+ *
+ * 容错优先：解析失败、形状不符、超限项一律丢弃，**绝不抛**（该值来自设置文件，可能被手工改坏）。
+ * 归一化后的元素形如 `{ id, label, content }`，各字段截断到固定上限。
+ * @param {unknown} raw - 设置里的 `customJobs`（JSON 字符串）或已是数组
+ * @returns {Array<{id:string,label:string,content:string}>} 至多 50 条
+ */
+export function parseCustomJobs(raw) {
+  try {
+    const arr = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw
+    if (!Array.isArray(arr)) return []
+    return arr.slice(0, 50).map((j) => ({
+      id: String((j && j.id) || '').slice(0, 200),
+      label: String((j && j.label) || '').slice(0, 200),
+      content: String((j && j.content) || '').slice(0, 4000),
+    })).filter((j) => j.id)
+  } catch {
+    return []
+  }
+}
+
 export function installApi(ctx, deps = {}) {
   const exec = typeof deps.exec === 'function' ? deps.exec : runFixCommand
   const doProbePython = typeof deps.probePython === 'function' ? deps.probePython : probePython
@@ -604,6 +626,42 @@ export function installApi(ctx, deps = {}) {
    * 设置服务不可用 / ns 未注册 / 写入失败 → 返回可读错误（调用方决定是否退回写 patch）。
    * @returns {Promise<{ok:boolean, revision?:(number|null), code?:string, error?:string}>}
    */
+  /** 自定义岗位列表内存态：启动时取配置，POST /jobs 成功后就地更新（该键非 volatile，写入需重启才回落到 config）。 */
+  let customJobs = parseCustomJobs(deps.customJobs)
+
+  /**
+   * 把自定义岗位列表写进**设置用户层**（本 profile 覆盖层的 `customJobs` 键）。写入前先 describe 取 revision。
+   * 该键刻意不是 volatile：写入后需**重启**才由 config 生效，因此调用方负责同步内存态。
+   * @param {Array<{id:string,label:string,content:string}>} jobs - 已归一化的岗位列表
+   * @returns {Promise<{ok:boolean, revision?:(number|null), code?:string, error?:string}>}
+   */
+  async function writeSettingsCustomJobs(jobs) {
+    const settings = settingsOf()
+    if (!settings || typeof settings.mutate !== 'function') {
+      return { ok: false, code: 'settings-unavailable', error: '设置服务不可用（ctx.settings 缺失或只读）' }
+    }
+    let list = []
+    try {
+      const described = await settings.describe({ redactSecrets: true })
+      list = Array.isArray(described) ? described : (described && Array.isArray(described.namespaces) ? described.namespaces : [])
+    } catch (err) {
+      return { ok: false, code: 'describe-failed', error: '读取设置失败：' + sanitizeErr(err) }
+    }
+    const target = list.filter((n) => n && n.ns === SETTINGS_NS)[0]
+    if (!target || target.installed === false) {
+      return { ok: false, code: 'ns-unavailable', error: '设置命名空间 ' + SETTINGS_NS + ' 未注册（本体设置服务未就绪）' }
+    }
+    const revision = Number.isInteger(target.revision) ? target.revision : 0
+    try {
+      await settings.mutate(SETTINGS_NS, [{ op: 'set', path: ['customJobs'], value: JSON.stringify(jobs) }], revision)
+    } catch (err) {
+      const code = (err && err.code) ? String(err.code) : 'write-failed'
+      const extra = code === 'SETTINGS_CONFLICT' ? '（设置已被其它窗口改动，请重新读取后再写）' : ''
+      return { ok: false, code: code, error: '写入设置失败' + extra + '：' + sanitizeErr(err) }
+    }
+    return { ok: true, revision }
+  }
+
   async function writeSettingsRepoRoot(value) {
     const settings = settingsOf()
     if (!settings || typeof settings.mutate !== 'function') {
@@ -833,6 +891,28 @@ export function installApi(ctx, deps = {}) {
         return sendJson(res, 200, {
           ok: true, ready: result.ready, checks: result.checks, summary: result.summary, checkedAt: report.checkedAt,
         })
+      }
+
+      // GET /jobs —— 自定义岗位列表（只读）。持久化位 = 设置的 customJobs 键（profile 覆盖层）。
+      if (req.method === 'GET' && (sub === '/jobs' || sub === '/jobs/')) {
+        const guard = sameOriginLooseGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        return sendJson(res, 200, { ok: true, jobs: customJobs })
+      }
+
+      // POST /jobs { jobs, dryRun } —— 整表写入自定义岗位（同源保护；dryRun 默认 true）。
+      // 写入落设置用户层；该键非 volatile，重启后由 config 生效，故此处同步内存态。
+      if (req.method === 'POST' && (sub === '/jobs' || sub === '/jobs/')) {
+        const guard = sameOriginGuard(req)
+        if (guard) return sendError(res, 403, guard)
+        let body
+        try { body = await readBody(req) } catch (err) { return sendError(res, 400, String(err && err.message ? err.message : err)) }
+        const next = parseCustomJobs(Array.isArray(body.jobs) ? JSON.stringify(body.jobs) : '[]')
+        if (body.dryRun === true) return sendJson(res, 200, { ok: true, dryRun: true, jobs: next })
+        const outcome = await writeSettingsCustomJobs(next)
+        if (!outcome.ok) return sendError(res, 400, outcome.error || '写入自定义岗位失败')
+        customJobs = next
+        return sendJson(res, 200, { ok: true, jobs: customJobs, revision: outcome.revision == null ? null : outcome.revision })
       }
 
       // GET /identity[?memoryDir=] —— 当前「使用者身份」条目状态与正文（只读）

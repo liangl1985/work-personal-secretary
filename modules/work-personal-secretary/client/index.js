@@ -39,6 +39,9 @@ window.__ModuleLoader__.load({
      * 没有 useEffect 时退化为空实现：页面照样渲染骨架，只是不自动发起检测。
      */
     const useEffect = typeof React.useEffect === 'function' ? React.useEffect : function noopEffect() {}
+// 与 useEffect 同一降级口径：渲染替身没有 useRef 时给一个不跨渲染保持的等价物（只影响水合标记，
+// 不会丢数据——写回只在 jobsHydrated.current 为真时发生）。
+const useRef = typeof React.useRef === 'function' ? React.useRef : function noopRef(init) { return { current: init } }
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
@@ -2928,6 +2931,29 @@ window.__ModuleLoader__.load({
         return coreStateSafe(next)
       })
 
+      // ── 自定义岗位的持久化（GET/POST /jobs ↔ 设置的 customJobs 键，落 profile 覆盖层）──
+      /** 首次水合标记：未完成前不写回，避免拿空列表覆盖持久化里的既有岗位。 */
+      const jobsHydrated = useRef(false)
+
+      /** 拉取已持久化的自定义岗位（GET /jobs）。失败当作没有，不阻塞配置页。 */
+      async function loadCustomJobs() {
+        try {
+          if (typeof fetch !== 'function') return
+          const body = await getJson('/jobs', 15000)
+          if (!body || body.ok === false || !Array.isArray(body.jobs)) return
+          setSt((prev) => Object.assign({}, prev, { custom: body.jobs }))
+        } catch {
+          /* 读不到就保持空列表；下次变更仍会尝试写回 */
+        } finally {
+          jobsHydrated.current = true
+        }
+      }
+
+      /** 整表写回自定义岗位（POST /jobs，恒 dryRun:false）。失败只留痕，不打断使用者操作。 */
+      function persistCustomJobs(jobs) {
+        postFull('/jobs', { jobs: jobs, dryRun: false }, 15000).catch(() => {})
+      }
+
       async function loadDomains() {
         setSt((prev) => Object.assign({}, prev, { domains: Object.assign({}, prev.domains, { phase: 'loading', error: '' }) }))
         try {
@@ -3021,7 +3047,7 @@ window.__ModuleLoader__.load({
         }
       }
 
-      useEffect(() => { loadDomains(); loadSetupState() }, [])
+      useEffect(() => { loadDomains(); loadSetupState(); loadCustomJobs() }, [])
 
       // ── 表单（记忆库目录 → Obsidian 目录 → 工作岗位） ──────────────
       function setField(key, value) {
@@ -3374,6 +3400,13 @@ window.__ModuleLoader__.load({
           modal: null,
         }))
       }
+
+      // 自定义岗位变化 → 自动写回持久化层。用「监听 state」而不是在每个变更点手写，
+      // 是为了不把副作用塞进 React updater（那里可能被重复执行），也少改业务分支。
+      useEffect(() => {
+        if (!jobsHydrated.current) return
+        persistCustomJobs(st.custom)
+      }, [st.custom])
 
       // ── 保存即执行链 ──────────────────────────────────────────────
       function chainInit() {

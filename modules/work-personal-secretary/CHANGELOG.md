@@ -1,5 +1,26 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.14 — 2026-10-02（自定义岗位走插件配置文件：新增 GET/POST /jobs）
+
+> 触发：遗留核查（2026-10-02）。「核心配置」页新建的自定义岗位此前只活在**前端 React state**
+> （`client/index.js` 的 `prev.custom.concat(...)`），关掉设置页或重启 DSH 后列表即消失；
+> 而岗位**正文**一直是存住的（`POST /identity/save` → `MEMORY.md` 使用者身份条目）。
+> 使用者指出：插件有**自带配置文件**机制，这类数据应落那里，而不是另建一套存储。
+
+- **配置键 `customJobs`**（`lib/settings.js`）：JSON 字符串（数组语义用字符串是本库既有约定，
+  见 `dsh-experts` 的 `enabledDomains`）。**刻意不加 `.volatile()`** —— 它不进设置表单，
+  只作为该 profile 覆盖层里的持久化位。
+- **两个端点**（`lib/api.js`，均为 exact 路由，已加入 `CORE_API_EXACT_PATHS`）：
+  - `GET  /jobs` —— 返回自定义岗位列表（内存态：启动时由 config 解析，写入成功后同步）；
+  - `POST /jobs { jobs, dryRun }` —— 整表写入设置用户层（`ctx.settings.mutate` + revision 栅栏），
+    `dryRun` 默认 `true`；成功后更新内存态。**该键非 volatile → 重启后由 config 回落生效**。
+- **解析容错**（`parseCustomJobs`）：非法 JSON / 形状不符 / 超限项一律丢弃，绝不抛（该值来自设置文件，可能被手工改坏）。
+- **前端**（`client/index.js`）：初始化时 `GET /jobs` 水合 `custom`；此后**监听 state 变化自动写回**
+  （而不在每个变更点手写，避免把副作用塞进 React updater）。首次水合完成前不写，防止空列表覆盖既有数据。
+  另补 `useRef` 的降级定义（与既有 `useEffect` 同一口径，渲染替身环境不崩）。
+- **回归**：集成体七套全绿（probe 151 / install 246 / settings-api 115 / identity 73 / defaults 61 /
+  basedeck 570 / smoke-load 533，失败 0）。
+
 ## 1.1.13 — 2026-09-30（配置取值通道统一：不再直读宿主 settings.yaml）
 
 > 触发：真机 0.2.0-rc.2 实测 `/basedeck` 八项**全部非绿**（`setupNeeded=true`）—— 记忆库路径、知识库路径、岗位信息在界面上都「读不到」。
