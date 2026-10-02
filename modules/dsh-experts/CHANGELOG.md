@@ -42,7 +42,8 @@
   （例：「修复这个**页面**…」）压过本轮输入，表现为**命中滞后一轮或多轮**。
 - 复核：五套回归全绿（regression 48 / injection-tier 20 / capability 8 / coexist 8 / smoke-load 19，失败 0）；
   `node --check lib/index.js` 通过。
-- **已知遗留**：`/expert` 命令于 0.3.0 移除后**没有「本轮接住的文本」诊断入口**，此类偏差目前只能从外部推断
+- ~~**已知遗留**：`/expert` 命令于 0.3.0 移除后**没有「本轮接住的文本」诊断入口**~~ → **已于 0.5.17 补齐**
+  （`<DSH_HOME>/data/dsh-experts/last-task.json` 落盘 channel / text / reason / selected），此类偏差可直接查阅
   （`/work-personal-secretary/api/experts/preview?text=` 只反映单条文本的打分）。
 
 ## 0.5.15 — 2026-09-30（DSH 0.2.0-rc.2 设置迁移：具名导出 Config + volatile）
