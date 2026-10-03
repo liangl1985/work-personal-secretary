@@ -2077,6 +2077,8 @@ let cText = collect(cTree, []).join(' | ')
 ok(cText.includes('先满足最低使用需求') && cText.includes('去安装与检查'), '门禁未就绪：门禁卡可见（标题 + 去安装与检查）')
 ok(cText.includes('记忆库插件') && cText.includes('Python 解释器') && cText.includes('Python 工具'), '门禁卡逐项列出三项')
 ok(cText.includes('记忆库工作目录在本页填写，不作为解锁条件'), '门禁卡说明：记忆库工作目录不参与判定（设计定稿 §3.1）')
+ok(cText.includes('配置底座状态') && cText.includes('工作区目录') && cText.includes('重新检测'),
+  '核心配置页新增「配置底座状态」卡（工作区来源 + 8 项明细 + 重新检测；2026-10-03）')
 const gatedBox = findAll(cTree, (x) => Boolean(x.props && x.props.style && x.props.style.pointerEvents === 'none'), [])[0]
 ok(Boolean(gatedBox), '门禁未就绪：正文容器 pointer-events:none（整页灰化）')
 

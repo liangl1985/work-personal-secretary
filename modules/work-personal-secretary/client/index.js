@@ -44,7 +44,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.28'
+    const BUILD = 'v1.1.29'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -258,6 +258,18 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       gateLoadFailed: '未能取到环境检测结果',
       coreDirsTitle: '目录与岗位',
       coreDirsSub: '选一个存储根目录，记忆体与知识库各自在它下面新建自己的文件夹；岗位与三项齐备后才能保存。',
+      coreBdTitle: '配置底座状态',
+      coreBdSub: '与「安装与检查」同一份只读计划（GET /basedeck，绝不写盘）：这里显示工作区是怎么来的，以及 8 项各自的状态与落点。',
+      coreBdWorkspace: '工作区目录',
+      coreBdWsFromConfig: '来自配置',
+      coreBdWsFromClient: '本次填入',
+      coreBdWsFromDerived: '反推得出',
+      coreBdWsFromCwd: '取当前目录',
+      coreBdWsFromNone: '未解析',
+      coreBdWorkspaceNone: '（未解析到工作区）',
+      coreBdSummary: '共 {total} 项 · 待写 {toWrite} · 已是最新 {upToDate} · 被阻塞 {blocked} · 无需处理 {none}',
+      coreBdRefresh: '重新检测',
+      coreBdFailed: '状态读取失败',
       coreVaultLegacy: '检测到旧版知识库布局：这个目录根上直接有 🏠 主页.md 或 00_全局记忆，而新版布局是「根目录 + memory-data / obsidian-data 两个子目录」。要搬迁旧知识库用下面的导入卡；也可以直接把它当作存储根目录——插件只在它下面新建自己的子目录，不动你原有内容。',
       coreVaultMixed: '这个目录里同时有新布局（memory-data / obsidian-data）与旧布局（🏠 主页.md / 00_全局记忆）的痕迹，像是搬迁途中，请确认以哪一份为准。',
       coreFieldRoot: '存储根目录',
@@ -855,6 +867,18 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       gateLoadFailed: 'Could not read the environment check',
       coreDirsTitle: 'Directories & job',
       coreDirsSub: 'Pick one storage root; the memory store and the vault each create their own subfolder under it. A job and all three fields are required to save.',
+      coreBdTitle: 'Setup deck status',
+      coreBdSub: 'Same read-only plan as Install & Check (GET /basedeck, never writes): shows where the workspace comes from and the status of all 8 items.',
+      coreBdWorkspace: 'Workspace directory',
+      coreBdWsFromConfig: 'from config',
+      coreBdWsFromClient: 'entered now',
+      coreBdWsFromDerived: 'derived',
+      coreBdWsFromCwd: 'process cwd',
+      coreBdWsFromNone: 'unresolved',
+      coreBdWorkspaceNone: '(workspace not resolved)',
+      coreBdSummary: '{total} items · {toWrite} to write · {upToDate} up to date · {blocked} blocked · {none} skipped',
+      coreBdRefresh: 'Re-check',
+      coreBdFailed: 'Could not read status',
       coreFieldRoot: 'Storage root',
       coreFieldRootHint: 'Pick a folder. The memory store and the vault each create their own subfolder inside it (the two directories below), and everything each one builds stays inside its own folder.',
       coreFieldMemoryDir: 'Memory directory',
@@ -2873,6 +2897,8 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       // 两个派生目录默认只读跟随；memCustom / obsCustom = 该目录已被「单独指定」改写，不再跟随。
       rootDir: '', memCustom: false, obsCustom: false, rootSubdirs: null, vaultLayout: null,
       modal: null, run: null, imported: '', pickError: '', openHint: null,
+      // 配置底座状态（GET /basedeck，只读 dry-run）：工作区来源 + 8 项状态明细
+      baseDeck: { phase: 'idle', data: null, error: '' },
       // 旧知识库导入（T5-5）：null = 还没选目录；形状见 IMPORT_RUN_DEFAULT
       importRun: null,
       // 当前生效值（GET /setup-state）：用于预填三个字段并标注来源；setupFilled = 已预填过
@@ -3008,6 +3034,28 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
        * 用途：进入页面时**预填**三个字段并标注来源；**绝不**因此触发任何写操作。
        * 预填只在字段仍为空时进行（不覆盖使用者已输入的内容）；接口不可用时不拦主流程。
        */
+      /**
+       * 配置底座状态（只读）：GET /basedeck 是 **dry-run**，绝不写盘。
+       * 用途：核心配置页展示「工作区是怎么来的」与「8 项各自什么状态」—— 让使用者看得见还差哪几项，
+       * 而不是只看一个「还差 N 项」的数字（2026-10-03 使用者定）。
+       */
+      async function loadBaseDeck() {
+        setSt((prev) => Object.assign({}, prev, {
+          baseDeck: { phase: 'loading', data: prev.baseDeck ? prev.baseDeck.data : null, error: '' },
+        }))
+        try {
+          if (typeof fetch !== 'function') throw new Error('fetch 不可用（当前载体没有 HTTP 通道）')
+          const body = await getJson('/basedeck', 15000)
+          if (!body || typeof body !== 'object') throw new Error('响应不是 JSON 对象')
+          if (body.ok === false) throw new Error(String(body.error || 'basedeck 返回 ok:false'))
+          setSt((prev) => Object.assign({}, prev, { baseDeck: { phase: 'ready', data: body, error: '' } }))
+        } catch (err) {
+          setSt((prev) => Object.assign({}, prev, {
+            baseDeck: { phase: 'error', data: prev.baseDeck ? prev.baseDeck.data : null, error: String((err && err.message) || err) },
+          }))
+        }
+      }
+
       async function loadSetupState() {
         setSt((prev) => Object.assign({}, prev, { setup: Object.assign({}, prev.setup, { phase: 'loading', error: '' }) }))
         try {
@@ -3061,7 +3109,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
         }
       }
 
-      useEffect(() => { loadDomains(); loadSetupState(); loadCustomJobs() }, [])
+      useEffect(() => { loadDomains(); loadSetupState(); loadCustomJobs(); loadBaseDeck() }, [])
 
       // ── 表单（记忆库目录 → Obsidian 目录 → 工作岗位） ──────────────
       function setField(key, value) {
@@ -3794,6 +3842,57 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
         ]),
       ])
 
+      // ── 渲染：配置底座状态（只读；/basedeck 是 dry-run，绝不写盘）──
+      const bd = st.baseDeck || {}
+      const bdData = (bd.data && typeof bd.data === 'object') ? bd.data : null
+      const bdItems = (bdData && Array.isArray(bdData.items)) ? bdData.items : []
+      const bdSummary = (bdData && bdData.summary && typeof bdData.summary === 'object') ? bdData.summary : null
+      const bdWsSource = bdData ? String(bdData.workspaceSource || '') : ''
+      const bdWsLabel = bdWsSource === 'config' ? t('coreBdWsFromConfig')
+        : bdWsSource === 'client' ? t('coreBdWsFromClient')
+          : bdWsSource === 'derived' ? t('coreBdWsFromDerived')
+            : bdWsSource === 'cwd' ? t('coreBdWsFromCwd') : t('coreBdWsFromNone')
+      const BD_STATUS_KEYS = {
+        append: 'initStatusAppend', update: 'initStatusUpdate', up_to_date: 'initStatusUpToDate',
+        user_modified: 'initStatusUserModified', ahead: 'initStatusAhead', broken: 'initStatusBroken',
+        multiple: 'initStatusMultiple', none: 'initStatusNone',
+      }
+      const bdStatusStyle = (s) => (s === 'up_to_date' ? S.badgeOk
+        : (s === 'update' || s === 'append' ? S.badgeWarn
+          : (s === 'none' || s === 'user_modified' || s === 'ahead' ? S.badgeSkip : S.badgeMissing)))
+      const baseDeckCard = h('div', { key: 'basedeck', style: S.card }, [
+        h('div', { key: 'head', style: S.cardHead }, [
+          h('h3', { key: 'title', style: S.cardTitle }, t('coreBdTitle')),
+          h('div', { key: 'sub', style: S.cardSub }, t('coreBdSub')),
+        ]),
+        h('div', { key: 'body', style: S.cardBody }, [
+          h('div', { key: 'ws', style: S.row }, [
+            h('div', { key: 'head', style: S.rowHead }, [
+              h('span', { key: 'nm', style: S.itemName }, t('coreBdWorkspace')),
+              h('span', { key: 'st', style: Object.assign({}, S.badge, S.badgeSkip) }, bdWsLabel),
+            ]),
+            h('div', { key: 'v', style: S.itemDetail }, (bdData && bdData.workspace) ? String(bdData.workspace) : t('coreBdWorkspaceNone')),
+            (bdData && bdData.workspaceNote) ? h('div', { key: 'n', style: S.labelHint }, String(bdData.workspaceNote)) : null,
+          ]),
+          bdSummary ? h('div', { key: 'sum', style: S.labelHint }, fill(t('coreBdSummary'), {
+            total: bdSummary.total, toWrite: bdSummary.toWrite, upToDate: bdSummary.upToDate,
+            blocked: bdSummary.blocked, none: bdSummary.none,
+          })) : null,
+          (bd.phase === 'error' && bd.error) ? h('div', { key: 'err', style: S.warnLine }, t('coreBdFailed') + '：' + bd.error) : null,
+          h('div', { key: 'list' }, bdItems.map((it) => h('div', { key: String(it && it.id), style: S.row }, [
+            h('div', { key: 'head', style: S.rowHead }, [
+              h('span', { key: 'nm', style: S.itemName }, String((it && it.label) || (it && it.id) || '')),
+              h('span', { key: 'st', style: Object.assign({}, S.badge, bdStatusStyle(it && it.status)) }, t(BD_STATUS_KEYS[it && it.status] || 'initStatusNone')),
+            ]),
+            (it && it.target) ? h('div', { key: 't', style: S.itemDetail }, String(it.target)) : null,
+            (it && it.detail) ? h('div', { key: 'd', style: S.labelHint }, String(it.detail)) : null,
+          ]))),
+          h('div', { key: 'act', style: S.saveBar }, [
+            h('button', { key: 're', type: 'button', style: Object.assign({}, S.btn), onClick: () => loadBaseDeck() }, t('coreBdRefresh')),
+          ]),
+        ]),
+      ])
+
       // ── 渲染：执行链（保存后出现；失败停在该步，可重试）──
       const runBadgeText = runPhase === 'run' ? t('chainBadgeRun')
         : (runPhase === 'done' ? t('chainBadgeDone') : (runPhase === 'fail' ? t('chainBadgeFail') : t('chainBadgeWait')))
@@ -3839,7 +3938,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
         onApply: () => runImport(),
       }) : null
 
-      const coreBody = h('div', { key: 'core', style: gated ? S.gatedBody : null }, [dirsCard, chainCard, importCard])
+      const coreBody = h('div', { key: 'core', style: gated ? S.gatedBody : null }, [dirsCard, baseDeckCard, chainCard, importCard])
 
       const modalNode = st.modal ? h(NewDomainModal, {
         key: 'modal', t: t, modal: st.modal,

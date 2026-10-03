@@ -62,6 +62,10 @@ export const DEFAULTS = {
   //   false → 集成体**不写** <workspace>/AGENTS.md，只把「待注入引导」写进项目记忆，由助手征得使用者同意后注入；
   //   true  → 恢复旧路径直接写（只动标记块区间、写前备份、块内被手改则另存候选文件）。
   agentsMdDirectWrite: false,
+  // 工作区目录（设置用户层入口）：优先于部署配置层（profile patch 的 config.workspace）。
+  // 下游影响面大（AGENTS.md 的检测与引导、技能安装落点、目录反推基准），
+  // 使用者 2026-10-03 定：允许在设置页改、改后即时生效（volatile）；留空 = 回落部署配置 / 反推。
+  workspace: '',
 }
 
 /**
@@ -102,6 +106,10 @@ export const WPS_SETTINGS_SCHEMA = z ? z.object({
     .description('自定义岗位列表（JSON）。**由「核心配置 → 目录与岗位」页维护，通常无需手工编辑**；'
       + '新增/删除岗位时这里会同步。该字段必须是 volatile —— 宿主设置服务只允许写 volatile 字段（实测报错：'
       + 'Config field "customJobs" is not volatile），因此它会出现在本表单里，属预期。'),
+  workspace: withVolatile(z.string().default(''))
+    .description('工作区目录（会话工作区）：**AGENTS.md 的检测与引导、技能安装**都落在这里，目录反推也以它为基准。'
+      + '留空 = 优先用 profile 配置里的 workspace，再按记忆镜像目录反推，最后取进程目录 —— 反推结果可能是知识库 vault（不推荐）。'
+      + '填绝对路径；改这里即时生效（volatile），无需重启。'),
   agentsMdDirectWrite: withVolatile(z.boolean().default(false))
     .description('指令层「直接写」开关。**默认关闭 = 授权式**：集成体不写你的 <workspace>/AGENTS.md，'
       + '只把「待注入引导」写进记忆库 PROJECTS/工作秘书.md，助手每轮读到后征得你同意再注入。'

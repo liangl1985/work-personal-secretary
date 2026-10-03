@@ -1419,6 +1419,19 @@ function installSetupCtx(namespaces, extraDeps) {
   return (ctx.routes.filter((r) => r.kind === 'prefix')[0] || {}).handler
 }
 
+// 工作区取值优先级（2026-10-03 新增）：设置用户层（volatile）> 部署配置层（profile patch 覆盖层）
+const wsSettingsDir = makeWorkspace('ws-settings')
+const wsConfigDir = makeWorkspace('ws-config')
+const wsHandle = { read: () => ({ workspace: wsSettingsDir }), watch: () => {}, available: true, mode: 'config' }
+const hWs = installSetupCtx(null, { settings: wsHandle, workspace: wsConfigDir })
+const bdWs = await callRoute(hWs, 'GET', '/basedeck')
+ok(bdWs.status === 200 && bdWs.body.workspace.replace(/\\/g, '/') === wsSettingsDir.replace(/\\/g, '/') && bdWs.body.workspaceSource === 'config',
+  '工作区：设置用户层优先于部署配置（实测 ' + bdWs.body.workspace + ' / ' + bdWs.body.workspaceSource + '）')
+const hWsDeploy = installSetupCtx(null, { workspace: wsConfigDir })
+const bdWsDeploy = await callRoute(hWsDeploy, 'GET', '/basedeck')
+ok(bdWsDeploy.body.workspace.replace(/\\/g, '/') === wsConfigDir.replace(/\\/g, '/') && bdWsDeploy.body.workspaceSource === 'config',
+  '工作区：没有设置值时回落部署配置（实测 ' + bdWsDeploy.body.workspace + '）')
+
 // 反推「镜像目录 → vault 根」的逻辑本身跨平台；但反推前会判绝对路径，故用平台自适应绝对路径（两平台都真跑）
 const VAULT_BASE = process.platform === 'win32' ? 'E:/vault' : join(TMP_ROOT, 'vaultbase')
 const hSetup1 = installSetupCtx([

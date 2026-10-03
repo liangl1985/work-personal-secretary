@@ -1,5 +1,22 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.29 — 2026-10-03（核心配置页：底座状态可见 + 工作区可在设置页配置）
+
+> 动机：RC2-HANDOFF §3 的两条 P2 —— ①「workspace 无 UI 入口」（核心配置页无处可改，只能靠反推，反推错了界面也看不出来）；②「底座状态明细不显示」（只看得到「还差 N 项」的数字，看不到是哪几项、写到哪里）。使用者 2026-10-03 授权处理。
+
+### ① 工作区（workspace）进入设置页（volatile）
+- 新增设置项 `workspace`。取值优先级：**设置用户层 > 部署配置层（profile patch 的 `config.workspace`）> 按记忆镜像目录反推 > 进程目录**。
+- `lib/api.js` 新增 `settingsWorkspace()` / `currentWorkspace()`（与既有 `settingsObsidianDir()` / `currentObsidianDir()` 同构：实时读、volatile 改后即时生效），三处计划器注入点由静态 `basedeckWorkspaceConfig` 改为 `currentWorkspace()`。
+- `lib/settings.js` 的 DEFAULTS / schema 同步；改后**无需重启**。
+
+### ② 核心配置页新增「配置底座状态」卡
+- 只读拉 `GET /basedeck`（**dry-run，绝不写盘**），展示：**工作区当前值 + 来源**（配置 / 本次填入 / 反推 / 当前目录 / 未解析）与来源说明；**8 项**各自的名称 / 状态徽章 / 落点 / 说明；汇总（共 N 项 · 待写 · 已是最新 · 被阻塞 · 无需处理）；「重新检测」按钮。
+- 状态徽章复用初始化向导的同一套文案与配色（`initStatus*`），不新造一套说法。
+
+### 测试
+- `basedeck-test` 新增「工作区取值优先级」两条（设置层优先于部署配置；无设置值时回落部署配置）→ **600 / 0**；
+- `smoke-load` 新增核心页底座状态卡渲染断言 → **541 / 0**。
+
 ## 1.1.28 — 2026-10-03（指令层：默认授权式引导 + 可选「直接写」开关）
 
 > 使用者 2026-10-02 定：**使用者的工作区文件不直接改**。记忆体 / 知识库 / 技能 / 设置是集成体自己的文件，属安装行为；`<workspace>/AGENTS.md` 是**使用者的私人指令文件**，注入须经使用者授权。

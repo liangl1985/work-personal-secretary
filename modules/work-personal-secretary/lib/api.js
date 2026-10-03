@@ -614,6 +614,21 @@ export function installApi(ctx, deps = {}) {
     return settingsObsidianDir() || basedeckObsidianConfig
   }
 
+  /** 工作区目录：设置用户层的**实时值**（volatile，改后即时生效） */
+  function settingsWorkspace() {
+    try {
+      const v = settingsHandle.read()
+      return v && typeof v.workspace === 'string' ? v.workspace.trim() : ''
+    } catch (e) {
+      return ''
+    }
+  }
+
+  /** 配置底座用的工作区：设置用户层实时值 → 部署配置（deps.workspace，profile patch 覆盖层） */
+  function currentWorkspace() {
+    return settingsWorkspace() || basedeckWorkspaceConfig
+  }
+
   /** profile 的 cordis.patch.yml 里的 repoRoot（只读；读不到 → 空串） */
   function profileRepoRoot() {
     try {
@@ -902,7 +917,7 @@ export function installApi(ctx, deps = {}) {
     try {
       const deck = resolveDeckContext({
         dshHome: basedeckDshHome,
-        configWorkspace: basedeckWorkspaceConfig,
+        configWorkspace: currentWorkspace(),
         env: installEnv,
         now: installNow,
         moduleDir: installModuleDir,
@@ -1541,7 +1556,7 @@ export function installApi(ctx, deps = {}) {
           // query 里的 workspace 是**客户端显式传值** → 走 overrides（source=client）
           overrides: queryOverrides,
           dshHome: basedeckDshHome,
-          configWorkspace: basedeckWorkspaceConfig,
+          configWorkspace: currentWorkspace(),
           obsidianDir: currentObsidianDir(),
           settingsValues: deckSettings,
           agentsMdDirectWrite: settingsAgentsMdDirectWrite(),
@@ -1603,7 +1618,7 @@ export function installApi(ctx, deps = {}) {
           // overrides.workspace 是**客户端表单值** → source=client；设置项走 configWorkspace
           overrides: overrides,
           dshHome: basedeckDshHome,
-          configWorkspace: basedeckWorkspaceConfig,
+          configWorkspace: currentWorkspace(),
           obsidianDir: currentObsidianDir(),
           settingsValues: deckSettings,
           agentsMdDirectWrite: settingsAgentsMdDirectWrite(),
