@@ -1,5 +1,35 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.28 — 2026-10-03（指令层：默认授权式引导 + 可选「直接写」开关）
+
+> 使用者 2026-10-02 定：**使用者的工作区文件不直接改**。记忆体 / 知识库 / 技能 / 设置是集成体自己的文件，属安装行为；`<workspace>/AGENTS.md` 是**使用者的私人指令文件**，注入须经使用者授权。
+
+### 计划层（`planAgentsMd`）
+- 不再产出「写 AGENTS.md」的计划，只回答两件事：
+  - 目标**已有**「工作秘书」标记块（命中 `<!-- wps:begin -->`）→ `up_to_date`（无需处理，`autoApplyable: false`）；
+  - **还没有** → `update`，`target` 指向 `<memoryDir>/PROJECTS/工作秘书.md`，动作 = 把「待注入引导」写进项目记忆。
+- **BOM 不再阻塞**：本插件既然不写该文件，`AGENTS.md` 带 BOM 只在预览里提示一句，不再判 `broken`（只在预览 `action` 里说明）。
+
+### 写入层（`applyAgentsMd` + 新增 `buildAgentsPendingEntry`）
+- 引导条目**自描述**：`[id:12 位] [日期] [tag:关键] 【待注入·工作区指令层】` + 目标文件 / 工作区 / 模板来源 / 注入方法 / 完成标记，助手每轮随项目记忆读到即可执行。
+- 写入走 `atomicWriteText`（无 BOM + 写后校验）；项目记忆里**已有未完成的引导 → 不重复写**；`dryRun` 不落盘。
+- **AGENTS.md 一字未动**：旧「追加 / 只替换块区间 / 手改另存候选」三条路径保留备查但不再执行。
+- 完成判据**两种标记都认**（`agentsGuideDone`）：① 标题改成 `【已注入·工作区指令层】`；② 该条目的 `[tag:关键]` 改成 `[tag:已完成]`。判定**按 `§` 分段后的单条**比对，不整文件搜 —— 免得被别的条目或正文里的字样误判；正文里只写裸的 `tag:已完成`（不带方括号），因此不会自我命中。
+
+### 直接写开关（`agentsMdDirectWrite`，默认 `false`；使用者 2026-10-03 定）
+- 使用者要保留「一把写死」的能力，但默认必须是授权式。设置项（volatile，进设置页）+ `lib/api.js` 实时读取 + `resolveDeckContext` 的 `ctx.agentsMdDirectWrite` 三处对齐。
+- 开启时 `planAgentsMd` / `applyAgentsMd` 走**旧路径**：按七状态判定追加 / 只替换块区间 / 手改另存候选文件；BOM 在该模式下仍然阻塞（DSH 侧解析会失败）。
+- 默认关闭时同一目录**一字未动**（测试用字节 + mtime 双重断言）。
+
+### 引导信号（`computeSetupNeeded`）
+- `agentsMd` 的 `append`（旧）与 `update`（授权式）**都算**引导信号 —— 只认 `append` 会让「其余项已就绪、只差指令层」的机器不出现首用引导，闭环断掉。
+
+### 文案与文档
+- `client/index.js` 的 `initSafety`（中英）改为「不直接改你的 AGENTS.md」；`defaults/AGENTS.zh-CN.md` 头部补「授权式注入」；`README.md` 的 `workspace` / P3 口径与配置表（新增开关行）同步；`ARCHITECTURE.md` 版本基线与授权式说明、仓库根 `TEST-MATRIX.md` 读数同步。
+
+### 测试
+- `basedeck-test` [4] / [6] 两节按新语义改写：**AGENTS.md 一字未动**用「字节 + mtime + 无备份」三重断言证明；[14] 新增 `setupNeeded` 三态断言（`update` / `up_to_date` / `append`）。新增 [4b] 直接写开关（含 BOM 拒绝）、[4c] 完成判据双认两组断言。**598 通过 / 0 失败**；七套合计 **1784 通过 / 0 失败**（basedeck 598 · smoke 540 · install 246 · probe 151 · settings-api 115 · identity 73 · defaults 61）。
+
 ## 1.1.27 — 2026-10-02（遗留收尾：删除岗位入口 + /jobs 实时读选中值）
 
 ### ① 删除岗位入口（前端）

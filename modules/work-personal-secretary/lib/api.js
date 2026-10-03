@@ -589,6 +589,16 @@ export function installApi(ctx, deps = {}) {
     }
   }
 
+  /** 指令层「直接写」开关：设置用户层的**实时值**（默认 false = 授权式引导） */
+  function settingsAgentsMdDirectWrite() {
+    try {
+      const v = settingsHandle.read()
+      return v && v.agentsMdDirectWrite === true
+    } catch (e) {
+      return false
+    }
+  }
+
   /** 知识库根目录：设置用户层的**实时值**（rc.2 的 volatile 就地更新，故每次都重读） */
   function settingsObsidianDir() {
     try {
@@ -1534,6 +1544,7 @@ export function installApi(ctx, deps = {}) {
           configWorkspace: basedeckWorkspaceConfig,
           obsidianDir: currentObsidianDir(),
           settingsValues: deckSettings,
+          agentsMdDirectWrite: settingsAgentsMdDirectWrite(),
           repoRoot: repo.repoRoot,
           env: installEnv,
           now: installNow,
@@ -1595,6 +1606,7 @@ export function installApi(ctx, deps = {}) {
           configWorkspace: basedeckWorkspaceConfig,
           obsidianDir: currentObsidianDir(),
           settingsValues: deckSettings,
+          agentsMdDirectWrite: settingsAgentsMdDirectWrite(),
           repoRoot: repo.repoRoot,
           env: installEnv,
           now: installNow,

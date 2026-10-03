@@ -827,7 +827,7 @@ const bdFields = ['工作区目录', '工作岗位域', '身份专家', '记忆�
 ok(bdFields.every((x) => itext.includes(x)), '首用必配五项字段齐全（' + bdFields.join(' / ') + '）')
 ok(itext.includes('首用必配项') && itext.includes('必填'), '表单标题与必填提示')
 ok(itext.includes('可选'), '可选项标注「可选」')
-ok(itext.includes('写入前会自动备份') && itext.includes('只更新「工作秘书」标记块内的内容') && itext.includes('不会被改动'), '安全文案：自动备份 + 只改标记块 + 不动你自己的段落')
+ok(itext.includes('写入前会自动备份') && itext.includes('不直接改') && itext.includes('征得你同意后再注入'), '安全文案：自动备份 + 不直接改 AGENTS.md + 授权后注入')
 ok(itext.includes('检查并预览'), '段 1 主按钮为「检查并预览」')
 ok(mod.inject.includes('uiWorkspace'), "模块 inject 已声明 'uiWorkspace'（原生目录选择）")
 const bdBrowse = findButtons(iTree).filter((b) => label(b) === '浏览…')

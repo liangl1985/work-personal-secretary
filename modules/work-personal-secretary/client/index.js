@@ -44,7 +44,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.27'
+    const BUILD = 'v1.1.28'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -595,7 +595,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       initBlockVersion: '标记块版本',
       initContentHash: '内容指纹',
       initSummary: '共 {total} 项 · 计划写入 {toWrite} 项 · 已是最新 {upToDate} 项 · 被阻塞 {blocked} 项',
-      initSafety: '写入前会自动备份；AGENTS.md 只更新「工作秘书」标记块内的内容，你自己的段落不会被改动。',
+      initSafety: '写入前会自动备份；你的 AGENTS.md 本插件不直接改 —— 未注入时只把「待注入引导」写进项目记忆，由助手征得你同意后再注入。',
       initListSep: '、',
 
       // ── 能力配置（P4：读写子插件设置） ─────────────────────────────
@@ -1188,7 +1188,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
       initBlockVersion: 'Block version',
       initContentHash: 'Content hash',
       initSummary: '{total} items · {toWrite} to write · {upToDate} up to date · {blocked} blocked',
-      initSafety: 'Files are backed up before writing; AGENTS.md only updates the content inside the "Work Secretary" marker block — your own sections are left untouched.',
+      initSafety: 'Files are backed up before writing; your AGENTS.md is never written directly — when the marker block is missing, only a "pending injection" guide goes into project memory, and the assistant injects it after you agree.',
       initListSep: ', ',
 
       // ── Capabilities (P4: read/write sub-plugin settings) ─────────

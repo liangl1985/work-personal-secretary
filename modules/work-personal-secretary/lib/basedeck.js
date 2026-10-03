@@ -3,7 +3,8 @@
  *
  * 职责：把集成体自带的**配置底座**落地到使用者环境。
  * 八项（前五项是 1.1.2 既有能力，后三项 1.1.3 新增，追加在 BASEDECK_ITEMS 末尾）：
- *   agentsMd     把 defaults/AGENTS.zh-CN.md 的**标记块区间**合并进 <workspace>/AGENTS.md
+ *   agentsMd     指令层「待注入引导」：**不直接写** <workspace>/AGENTS.md（使用者的文件），
+ *                只在 <memoryDir>/PROJECTS/工作秘书.md 写一条自描述引导，由助手经使用者授权后完成注入
  *   memorySeed   把 defaults/global-memory.seed.md 的种子条目追加进记忆库 MEMORY.md（全局记忆）
  *   skills       把 <repoRoot>/modules/dsh-doc-suite/skills/<name>/SKILL.md 装到 <workspace>/.dsh/skills/<name>/
  *   settings     写 <DSH_HOME>/settings.yaml 的 work-memory / experts 段（只增改指定键）
@@ -25,8 +26,9 @@
  *
  * 红线（本文件）：
  * 1. **dry-run 是默认**：GET /basedeck 与不带 dryRun:false 的 POST /basedeck 都**绝不写盘**。
- * 2. **AGENTS.md 是使用者的私人指令文件**：只动标记块区间；块外**逐字节保留**，写回后必须能证明块外未变。
- * 3. **块内被手改**（content-hash 不匹配）默认**不覆盖**，把新版块另存候选文件并在结果里说明。
+ * 2. **使用者的文件不直接写**（授权式，2026-10-02 定）：<workspace>/AGENTS.md 属使用者私有，本插件只**检测**是否已有标记块；
+ *    未注入时写「待注入引导」进项目记忆，由助手征得使用者同意后再注入。
+ * 3. **AGENTS.md 一字未动**：旧「直接追加 / 只替换块区间 / 手改另存候选」三条路径保留备查但不再执行（见 planAgentsMd / applyAgentsMd 尾部）。
  * 4. 所有文本写入一律 Node fs（UTF-8 **无 BOM**）、**写前备份**、**写后校验**（可解析 / 无 BOM / 块外哈希一致）。
  * 5. 发布件中立：不写死任何使用者信息、本机绝对路径、称呼、私有目录名。
  * 6. **不触碰真实环境**：本文件只按调用方给的 workspace / settingsFile / memoryDir 操作；
@@ -991,6 +993,8 @@ export function resolveDeckContext(options = {}) {
     templateFile: templateFile,
     seedFile: seedFile,
     settingsTargets: options.settingsTargets || SETTINGS_TARGETS,
+    // 指令层「直接写」开关（默认 false = 授权式引导）：true 时 planAgentsMd / applyAgentsMd 走旧「直接改 AGENTS.md」路径。
+    agentsMdDirectWrite: options.agentsMdDirectWrite === true,
     overrides: {
       workspace: ovWorkspace,
       memoryDir: ovMemoryDir,
@@ -1034,7 +1038,11 @@ export function computeSetupNeeded(items) {
   const byId = {}
   for (const it of items) byId[it.id] = it
   const agents = byId.agentsMd
-  if (agents && agents.status === 'append') return true
+  // agentsMd 的两种「待处理」都算引导信号：
+  //   append = 旧语义（直接往 AGENTS.md 追加标记块）；
+  //   update = 授权式语义（把「待注入引导」写进项目记忆，等使用者授权后再注入）。
+  // 只认 append 会让「其余项都就绪、只差指令层」的机器永远不出现首用引导 —— 闭环断掉。
+  if (agents && (agents.status === 'append' || agents.status === 'update')) return true
   const settings = byId.settings
   if (settings && Array.isArray(settings.settingsKeys)) {
     for (const k of settings.settingsKeys) {
@@ -1138,41 +1146,89 @@ function planAgentsMd(ctx) {
   internal.eol = eol
   internal.exists = Boolean(raw)
 
-  if (raw && raw.bom) {
+  // BOM：**直接写**模式下必须阻塞（DSH 侧解析会失败）；授权式下本插件不写该文件，只在 detail 里提示一句。
+  const bomNotice = raw && raw.bom ? '（提示）AGENTS.md 带 ' + raw.bom + ' BOM，DSH 侧解析会失败，建议另存为 UTF-8 无 BOM；授权式下本插件不写该文件，不阻塞。' : ''
+
+  // ── 直接写路径（显式开启 agentsMdDirectWrite 时；1.1.28 起由设置开关启用）──
+  // 使用者 2026-10-03 定：保留「一把写死」的能力，但默认必须是授权式。
+  if (ctx.agentsMdDirectWrite) {
+    if (raw && raw.bom) {
+      return makeItem(spec, {
+        status: 'broken',
+        target: posix(ctx.agentsFile),
+        detail: 'AGENTS.md 带 ' + raw.bom + ' BOM（DSH 侧会解析失败），已拒绝写入；请先另存为 UTF-8 无 BOM',
+        preview: { action: '文件带 BOM，已拒绝写入（请先转为 UTF-8 无 BOM）', blockVersion: String(template.templateVersion), contentHash: template.contentHash, sampleLines: sampleLines(template.body) },
+        internal: internal,
+      })
+    }
+    const decided = decideAgentsStatus(raw ? raw.text : '', template)
+    const actionText = decided.status === 'append' ? (raw ? '将在文件末尾追加标记块' : '将新建')
+      : decided.status === 'update' ? '将只更新标记块区间'
+        : decided.status === 'up_to_date' ? '已是最新无需写入'
+          : decided.status === 'user_modified' ? '块内被手工改过不自动覆盖'
+            : decided.status === 'ahead' ? '工作区块比安装器新，保持不动'
+              : decided.status === 'broken' ? '标记块不完整，已停止写入'
+                : '检测到多个标记块，已停止写入'
+
+    const shownBody = decided.status === 'append' ? template.body : (decided.body || template.body)
+    internal.decided = decided
+
     return makeItem(spec, {
-      status: 'broken',
+      status: decided.status,
       target: posix(ctx.agentsFile),
-      detail: 'AGENTS.md 带 ' + raw.bom + ' BOM（DSH 侧会解析失败），已拒绝写入；请先另存为 UTF-8 无 BOM',
-      preview: { action: '文件带 BOM，已拒绝写入（请先转为 UTF-8 无 BOM）', blockVersion: String(template.templateVersion), contentHash: template.contentHash, sampleLines: sampleLines(template.body) },
+      detail: decided.detail,
+      autoApplyable: decided.status === 'append' || decided.status === 'update',
+      preview: {
+        action: actionText,
+        blockVersion: String(decided.head ? (decided.head['template-version'] || template.templateVersion) : template.templateVersion),
+        contentHash: template.contentHash,
+        sampleLines: sampleLines(normalizeBlockBody(shownBody)),
+      },
       internal: internal,
     })
   }
 
-  const decided = decideAgentsStatus(raw ? raw.text : '', template)
-  const actionText = decided.status === 'append' ? (raw ? '将在文件末尾追加标记块' : '将新建')
-    : decided.status === 'update' ? '将只更新标记块区间'
-      : decided.status === 'up_to_date' ? '已是最新无需写入'
-        : decided.status === 'user_modified' ? '块内被手工改过不自动覆盖'
-          : decided.status === 'ahead' ? '工作区块比安装器新，保持不动'
-            : decided.status === 'broken' ? '标记块不完整，已停止写入'
-              : '检测到多个标记块，已停止写入'
-
-  const shownBody = decided.status === 'append' ? template.body : (decided.body || template.body)
-  internal.decided = decided
-
+  // ── 授权式写入（默认；使用者 2026-10-02 定）────────────────────────
+  // 区分两类写入对象：
+  //   · **本插件自己的文件**（记忆体 / 知识库 / 技能 / 设置 / 插件数据）→ 安装行为，可直接写；
+  //   · **使用者的工作区文件**（<workspace>/AGENTS.md）→ **不直接写**，须经使用者授权。
+  // 因此这里不再准备"写入 AGENTS.md"，只回答两件事：
+  //   · 它**已经有**「工作秘书」标记块 → up_to_date（无需处理）；
+  //   · 它**还没有** → update（若已有待办则原地更新，实际动作是把「待注入引导」写进项目记忆）。
+  const alreadyInjected = Boolean(raw && RE_BLOCK_BEGIN.test(raw.text))
+  if (alreadyInjected) {
+    return makeItem(spec, {
+      status: 'up_to_date',
+      target: posix(ctx.agentsFile),
+      detail: '工作区 AGENTS.md 已含「工作秘书」标记块（已注入，无需处理）',
+      autoApplyable: false,
+      preview: {
+        action: '已注入标记块，无需处理',
+        blockVersion: String(template.templateVersion),
+        contentHash: template.contentHash,
+        sampleLines: sampleLines(normalizeBlockBody(template.body)),
+      },
+      internal: internal,
+    })
+  }
+  const memoryTarget = ctx.memoryDir ? posix(join(ctx.memoryDir, 'PROJECTS', '工作秘书.md')) : ''
   return makeItem(spec, {
-    status: decided.status,
-    target: posix(ctx.agentsFile),
-    detail: decided.detail,
-    autoApplyable: decided.status === 'append' || decided.status === 'update',
+    status: 'update',
+    target: memoryTarget,
+    detail: '工作区 AGENTS.md 尚无「工作秘书」标记块。它属于**使用者的文件**，本插件不直接改 —— '
+      + '将把「待注入引导」写入项目记忆：' + (memoryTarget || '（记忆库目录未解析）')
+      + '；由助手征得使用者同意后再完成注入，并在记忆里标记为已完成。'
+      + (bomNotice ? ' ' + bomNotice : ''),
+    autoApplyable: Boolean(memoryTarget),
     preview: {
-      action: actionText,
-      blockVersion: String(decided.head ? (decided.head['template-version'] || template.templateVersion) : template.templateVersion),
+      action: '把「待注入引导」写入项目记忆（不直接改 AGENTS.md）',
+      blockVersion: String(template.templateVersion),
       contentHash: template.contentHash,
-      sampleLines: sampleLines(normalizeBlockBody(shownBody)),
+      sampleLines: sampleLines(normalizeBlockBody(template.body)),
     },
     internal: internal,
   })
+
 }
 
 // ── ② 记忆种子 ──
@@ -1893,7 +1949,106 @@ export function applyBaseDeckItem(id, options = {}) {
   return applyDirs(ctx, item, item.internal || {}, io, dryRun, base)
 }
 
+/** 条目 id：12 位短 hash（与记忆体既有条目同形：[id:xxxxxxxxxxxx]） */
+function shortEntryId(seed) {
+  return sha256Text(String(seed == null ? '' : seed)).replace(/^sha256:/, '').slice(0, 12)
+}
+
+/**
+ * 引导条目是否已完成。**两种标记都认**（使用者 2026-10-03 定）：
+ *   ① 标题：【待注入·工作区指令层】 → 【已注入·工作区指令层】；
+ *   ② 标签：该条目的 [tag:关键] → [tag:已完成]。
+ * 按**条目**（§ 分段）比对，不整文件搜 —— 免得被别的条目或正文里的字样误判。
+ * 正文里只写「tag:已完成」不带方括号，所以不会与 [tag:已完成] 判定自我命中。
+ */
+export function agentsGuideDone(text) {
+  const s = String(text || '')
+  const parts = s.split(/\n§\n/)
+  for (const p of parts) {
+    if (p.indexOf('【待注入·工作区指令层】') < 0) continue
+    if (p.indexOf('【已注入·工作区指令层】') >= 0) return true
+    if (/\[tag:已完成\]/.test(p)) return true
+  }
+  return s.indexOf('【已注入·工作区指令层】') >= 0
+}
+
+/**
+ * 「待注入·工作区指令层」引导条目。
+ *
+ * 为什么是引导而不是直接写：<workspace>/AGENTS.md 属于**使用者的文件**，改它需使用者授权；
+ * 而记忆体是本插件自己的文件，可以直接写。于是未注入时先把引导落到项目记忆 ——
+ * 助手每轮会读到它，征得同意后再完成注入，并把条目标记为已完成。
+ */
+function buildAgentsPendingEntry(ctx, item) {
+  const date = formatDate(ctx.now)
+  const workspace = posix(ctx.workspace || '')
+  const agents = posix(ctx.agentsFile || '')
+  const id = shortEntryId('wps-agents-pending|' + agents + '|' + date)
+  return '[id:' + id + '] [' + date + '] [tag:关键] 【待注入·工作区指令层】' + '\n'
+    + '工作区 ' + (agents || 'AGENTS.md') + ' 还没有「工作秘书」的指令块（<!-- wps:begin --> … <!-- wps:end -->）。' + '\n'
+    + '**这是使用者的文件，本插件不直接改**：请先征得使用者同意，再完成注入。' + '\n'
+    + '\n'
+    + '- 目标文件：' + (agents || '<工作区>/AGENTS.md') + '\n'
+    + '- 工作区：' + (workspace || '（未解析）') + '\n'
+    + '- 模板来源：随包 defaults/AGENTS.zh-CN.md 的标记块区间（由集成体 planAgentsMd 渲染，含 generator/template 版本与 content-hash）' + '\n'
+    + '- 注入方法：读模板的标记块区间 → 目标文件已有内容则**只替换或追加标记块区间**，块外一字不动；无文件则新建' + '\n'
+    + '- 完成后：把本条标题里的「待注入」改为「已注入」，或把行首的 tag:关键 改成 tag:已完成 —— 两种标记都算完成，此后不再提示' + '\n'
+}
+
+/**
+ * 授权式写入（默认路径）：不碰 AGENTS.md，只把「待注入引导」写进项目记忆。
+ * 使用者 2026-10-02 定；1.1.28 起「直接写」改由设置开关 agentsMdDirectWrite 显式启用。
+ */
+function applyAgentsGuide(ctx, item, io, dryRun, base) {
+  if (item.status === 'up_to_date') {
+    return Object.assign(base, { ok: true, detail: '工作区 AGENTS.md 已含标记块（无需处理）' })
+  }
+  if (item.status !== 'update' && item.status !== 'append') {
+    return Object.assign(base, { ok: false, detail: item.detail + '（未写盘）' })
+  }
+  if (!ctx.memoryDir) {
+    return Object.assign(base, { ok: false, detail: '记忆库目录未解析，无法写「待注入引导」' })
+  }
+  const projectsDir = join(ctx.memoryDir, 'PROJECTS')
+  const target = join(projectsDir, '工作秘书.md')
+  const existing = readFileRaw(target)
+  const current = existing ? existing.text : ''
+  const MARK = '【待注入·工作区指令层】'
+  const entry = buildAgentsPendingEntry(ctx, item)
+  base.action = '把「待注入引导」写入项目记忆（不直接改 AGENTS.md）'
+  base.wouldWriteBytes = Buffer.byteLength(entry, 'utf8')
+  if (current.indexOf(MARK) >= 0 && !agentsGuideDone(current)) {
+    return Object.assign(base, {
+      ok: true, target: posix(target),
+      detail: '项目记忆里已有未完成的「待注入引导」，不重复写入（' + posix(target) + '）',
+    })
+  }
+  if (dryRun) {
+    return Object.assign(base, {
+      ok: true, target: posix(target),
+      detail: '干跑：会把「待注入引导」写入 ' + posix(target) + '（不触碰 AGENTS.md）',
+    })
+  }
+  try { io.mkdirSync(projectsDir, { recursive: true }) } catch (err) { /* 已存在即可 */ }
+  const next = current ? (current.replace(/[\s\uFEFF]+$/, '') + '\n\n' + entry + '\n') : entry + '\n'
+  try { atomicWriteText(target, next, io) } catch (err) {
+    return Object.assign(base, { ok: false, detail: '写「待注入引导」失败：' + String((err && err.message) || err) })
+  }
+  const verifyGuide = verifyNoBom(target)
+  if (!verifyGuide.ok) return Object.assign(base, { ok: false, detail: '写后校验失败：' + verifyGuide.error })
+  if (verifyGuide.text.indexOf(MARK) < 0) return Object.assign(base, { ok: false, detail: '写后校验失败：文件里找不到引导标记' })
+  return Object.assign(base, {
+    ok: true, wroteAny: true, target: posix(target),
+    bytesWritten: Buffer.byteLength(entry, 'utf8'),
+    detail: '已把「待注入引导」写入项目记忆：' + posix(target) + '（工作区 AGENTS.md 一字未动；等使用者授权后再注入）',
+  })
+}
+
 function applyAgentsMd(ctx, item, internal, io, dryRun, base) {
+  // ── 授权式（默认）：不写 AGENTS.md，只写项目记忆里的引导 ──
+  if (!ctx.agentsMdDirectWrite) return applyAgentsGuide(ctx, item, io, dryRun, base)
+
+  // ── 直接写路径（agentsMdDirectWrite: true；1.1.28 起由设置开关启用）──
   if (item.status === 'up_to_date') {
     return Object.assign(base, { ok: true, detail: item.detail + '（未写盘）' })
   }

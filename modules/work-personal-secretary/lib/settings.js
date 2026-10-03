@@ -58,6 +58,10 @@ export const DEFAULTS = {
   // **岗位卡片目录**（使用者 2026-10-02 定的存储方式）：新建岗位 = 在该目录里生成一张卡片文件，
   // 目录里有几张卡片就显示几个岗位。留空 = 用默认位置 <DSH_HOME>/data/work-personal-secretary/domains。
   domainsDir: '',
+  // 指令层「直接写」开关（默认 false = 授权式引导；使用者 2026-10-03 定）：
+  //   false → 集成体**不写** <workspace>/AGENTS.md，只把「待注入引导」写进项目记忆，由助手征得使用者同意后注入；
+  //   true  → 恢复旧路径直接写（只动标记块区间、写前备份、块内被手改则另存候选文件）。
+  agentsMdDirectWrite: false,
 }
 
 /**
@@ -98,6 +102,11 @@ export const WPS_SETTINGS_SCHEMA = z ? z.object({
     .description('自定义岗位列表（JSON）。**由「核心配置 → 目录与岗位」页维护，通常无需手工编辑**；'
       + '新增/删除岗位时这里会同步。该字段必须是 volatile —— 宿主设置服务只允许写 volatile 字段（实测报错：'
       + 'Config field "customJobs" is not volatile），因此它会出现在本表单里，属预期。'),
+  agentsMdDirectWrite: withVolatile(z.boolean().default(false))
+    .description('指令层「直接写」开关。**默认关闭 = 授权式**：集成体不写你的 <workspace>/AGENTS.md，'
+      + '只把「待注入引导」写进记忆库 PROJECTS/工作秘书.md，助手每轮读到后征得你同意再注入。'
+      + '开启后恢复旧行为：直接写入/更新 AGENTS.md 的「工作秘书」标记块（只动块内、写前备份、'
+      + '块内被手改则另存 AGENTS.md.wps-new.md 候选文件，不覆盖你的内容）。'),
 }) : undefined
 
 /**

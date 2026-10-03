@@ -77,6 +77,7 @@ import {
   applyBaseDeckItem,
   currentBlockBody,
   decideAgentsStatus,
+  agentsGuideDone,
   hashBlockBody,
   inspectSimpleYaml,
   listVaultModules,
@@ -86,6 +87,7 @@ import {
   normalizeBlockBody,
   parseMemoryEntries,
   planBaseDeck,
+  computeSetupNeeded,
   readSettingsValues,
   resolveWorkspace,
   safeWorkspaceParam,
@@ -362,64 +364,118 @@ ok(decideAgentsStatus('<!-- wps:begin foo="1" -->' + NL + '正文', tpl).status 
 ok(decideAgentsStatus('<!-- wps:end -->' + NL, tpl).status === 'broken', 'broken：有 end 无 begin')
 ok(decideAgentsStatus(blockText + NL + blockText, tpl).status === 'multiple', 'multiple：出现两个完整块')
 
-section('[4] AGENTS.md 端到端：追加 + 只替换块区间 + 块外逐字节未变')
+section('[4] 指令层：授权式 —— 不直接写 AGENTS.md，只把「待注入引导」写进项目记忆')
 const agents = join(WS_MAIN, 'AGENTS.md')
 const original = '# 我自己的指令' + NL + NL + '- 保留我这一行（含特殊字符：§ <!-- x --> \u00a0）' + NL + NL + '## 我的小节' + NL + '手写内容' + NL
 writeText(agents, original)
 const beforeBytes = readBytes(agents)
-const rAppend = applyBaseDeckItem('agentsMd', opts({ dryRun: false }))
-assertInsideTmp(agents, 'agentsMd')
-ok(rAppend.ok === true && rAppend.status === 'append', 'append 写入成功')
-ok(rAppend.outsideUnchanged === true, '返回里标明块外内容未变')
-ok(rAppend.outsideHashBefore === rAppend.outsideHashAfter, '块外 SHA256 写前=写后')
-const afterBytes = readBytes(agents)
-ok(afterBytes.slice(0, beforeBytes.length).equals(beforeBytes), '原有内容作为**逐字节前缀**完整保留')
-const afterText = afterBytes.toString('utf8')
-ok(afterText.trimEnd().endsWith('<!-- wps:end -->'), '标记块已追加到文件末尾')
-const writtenHash = (/content-hash="([^"]+)"/.exec(afterText) || [])[1]
-ok(writtenHash === hashBlockBody(currentBlockBody(afterText)), '块首 content-hash = 块内正文的规范化哈希')
-ok(detectBom(afterBytes) === '', '写入后无 BOM')
-ok(rAppend.backup && existsSync(rAppend.backup), '写前备份存在')
-assertInsideTmp(rAppend.backup, 'agentsMd backup')
-ok(readBytes(rAppend.backup).equals(beforeBytes), '备份内容 = 写前原文（逐字节）')
-const reRead = applyBaseDeckItem('agentsMd', opts({ dryRun: true }))
-ok(reRead.status === 'up_to_date', '重新计划为 up_to_date')
+const beforeSnap = statSnap(agents)
+const guideHome = join(TMP_ROOT, 'mem-agents')
+const rAppend = applyBaseDeckItem('agentsMd', opts({ dryRun: false, memoryDir: guideHome }))
+// ① 使用者的文件：**一字未动**（字节 + mtime 都不变）—— 这是本次改动的核心承诺
+ok(readBytes(agents).equals(beforeBytes) && sameSnap(beforeSnap, statSnap(agents)), 'AGENTS.md 一字未动（字节 + mtime 都不变）')
+ok(!existsSync(agents + BACKUP_SUFFIX + '20260102-030405-678'), '没有为 AGENTS.md 产生备份（确实没写它）')
+// ② 计划把写入目标指向项目记忆，而不是 AGENTS.md
+ok(String(rAppend.detail || '').indexOf('PROJECTS') > 0, 'detail 指明写入目标是项目记忆（实测：' + String(rAppend.detail || '').slice(0, 90) + '）')
+// ③ 引导条目确实落进了项目记忆
+const guideFile = join(guideHome, 'PROJECTS', '工作秘书.md')
+ok(existsSync(guideFile), '项目记忆文件已生成：PROJECTS/工作秘书.md')
+const guideText = readBytes(guideFile).toString('utf8')
+ok(guideText.indexOf('【待注入·工作区指令层】') >= 0, '含「待注入·工作区指令层」条目')
+ok(guideText.indexOf('wps:begin') >= 0, '条目里写明了标记块格式（wps:begin）')
+ok(guideText.indexOf('待注入') >= 0 && guideText.indexOf('tag:关键') >= 0, '条目带 tag:关键 与「待注入」字样')
+ok(detectBom(readBytes(guideFile)) === '', '引导文件无 BOM')
+ok(guideText.indexOf('[tag:已完成]') < 0, '引导正文不带 [tag:已完成] 方括号字样（防完成判据自我命中）')
+// ④ 已经有标记块的 AGENTS.md → 无需处理（不产生引导）
+const guideHome2 = join(TMP_ROOT, 'mem-agents2')
+writeText(agents, original + NL + blockText + NL)
+const rInjected = applyBaseDeckItem('agentsMd', opts({ dryRun: false, memoryDir: guideHome2 }))
+ok(rInjected.ok === true && rInjected.status === 'up_to_date', 'AGENTS.md 已有标记块 → up_to_date（无需处理）')
+ok(!existsSync(join(guideHome2, 'PROJECTS', '工作秘书.md')), '已注入时不再写引导条目')
+writeText(agents, original)
 
-section('[5] 幂等：第二次不写盘（mtime / size 不变）')
+section('[4b] 指令层：直接写开关（agentsMdDirectWrite: true，1.1.28 新增；默认 false = 授权式）')
+const wsDirect = makeWorkspace('direct')
+const directAgents = join(wsDirect, 'AGENTS.md')
+writeText(directAgents, original)
+const directBefore = readBytes(directAgents)
+const directPlan = planBaseDeck(opts({ workspace: wsDirect, agentsMdDirectWrite: true }))
+const directItem = directPlan.items.filter((i) => i.id === 'agentsMd')[0]
+ok(directItem.status === 'append' && directItem.target.replace(/\\/g, '/').indexOf('/AGENTS.md') > 0,
+  '直接写模式：无块 → append，target = 工作区 AGENTS.md（实测 ' + directItem.status + '）')
+const directApply = applyBaseDeckItem('agentsMd', opts({ workspace: wsDirect, dryRun: false, agentsMdDirectWrite: true }))
+ok(directApply.ok === true && directApply.status === 'append', '直接写模式：真写成功（append）')
+const directAfter = readBytes(directAgents)
+ok(directAfter.slice(0, directBefore.length).equals(directBefore), '直接写模式：块外内容逐字节保留（原内容是前缀）')
+ok(directAfter.toString('utf8').indexOf('<!-- wps:end -->') > 0, '直接写模式：标记块已写入 AGENTS.md')
+ok(directApply.backup && existsSync(directApply.backup), '直接写模式：写前备份存在')
+ok(!existsSync(join(TMP_ROOT, 'mem-direct', 'PROJECTS', '工作秘书.md')), '直接写模式：不写项目记忆引导')
+const directSnap = statSnap(directAgents)
+const backToGuide = applyBaseDeckItem('agentsMd', opts({ workspace: wsDirect, dryRun: false, memoryDir: join(TMP_ROOT, 'mem-direct') }))
+ok(sameSnap(directSnap, statSnap(directAgents)), '默认（授权式）下同一文件一字未动')
+ok(backToGuide.ok === true && backToGuide.status === 'up_to_date', '默认（授权式）判它已注入 → up_to_date')
+// BOM 在直接写模式下仍必须阻塞
+const wsDirectBom = makeWorkspace('directbom')
+writeText(join(wsDirectBom, 'AGENTS.md'), original, { bom: true })
+const directBom = applyBaseDeckItem('agentsMd', opts({ workspace: wsDirectBom, dryRun: false, agentsMdDirectWrite: true }))
+ok(directBom.ok === false && directBom.status === 'broken', '直接写模式：AGENTS.md 带 BOM → 拒绝写入')
+
+section('[4c] 引导条目的完成判据：标题与 tag 双认')
+const guideBase = '[id:0123456789ab] [2026-10-03] [tag:关键] 【待注入·工作区指令层】' + NL + '正文里有「把 tag:关键 改成 tag:已完成」一句' + NL
+ok(agentsGuideDone(guideBase) === false, '原样（待注入 + tag:关键）→ 未完成')
+ok(agentsGuideDone(guideBase.replace('【待注入·工作区指令层】', '【已注入·工作区指令层】')) === true, '标题改「已注入」→ 完成')
+ok(agentsGuideDone(guideBase.replace('[tag:关键]', '[tag:已完成]')) === true, 'tag 改「已完成」→ 完成')
+ok(agentsGuideDone(guideBase + NL + '§' + NL + '[id:aaaaaaaaaaaa] [2026-10-03] [tag:已完成] 别的条目') === false,
+  '别的条目标了 tag:已完成 不影响本条（按 § 分段比对）')
+ok(agentsGuideDone('正文里裸写 tag:已完成（无方括号）') === false, '裸写 tag:已完成 不算完成（不自我命中）')
+
+section('[5] 幂等：第二次不重复写引导')
 const snapIdle1 = statSnap(agents)
-const rIdle = applyBaseDeckItem('agentsMd', opts({ dryRun: false }))
+const rIdle = applyBaseDeckItem('agentsMd', opts({ dryRun: false, memoryDir: guideHome }))
 const snapIdle2 = statSnap(agents)
-ok(rIdle.ok === true && rIdle.status === 'up_to_date', '第二次运行 up_to_date')
-ok(rIdle.bytesWritten === 0, 'bytesWritten = 0')
+ok(rIdle.ok === true, '第二次运行 ok')
+ok(String(rIdle.detail || '').indexOf('不重复写入') >= 0, '已有未完成的引导 → 不重复写入（实测：' + String(rIdle.detail || '').slice(0, 70) + '）')
 ok(sameSnap(snapIdle1, snapIdle2), 'AGENTS.md 的 size/mtime 一字未变（真没写盘）')
+const guideSnap1 = statSnap(guideFile)
+const rIdle2 = applyBaseDeckItem('agentsMd', opts({ dryRun: false, memoryDir: guideHome }))
+ok(sameSnap(guideSnap1, statSnap(guideFile)), '引导文件也没有被重复写入（mtime/size 不变）')
 
-section('[6] 块内被手改：不覆盖原文件 + 另存候选文件')
+section('[6] 授权式：AGENTS.md 无论什么状态都不被本插件改动')
+// ① 已含标记块（即使被手改）→ 视为已注入，up_to_date；不再产生候选文件
 const wsMod = makeWorkspace('modified')
 const agentsMod = join(wsMod, 'AGENTS.md')
 writeText(agentsMod, original + NL + blockText.replace('- 主对话保持轻量。', '- 使用者自己改过。') + NL)
 const modBefore = readBytes(agentsMod)
 const modSnapBefore = statSnap(agentsMod)
-const rMod = applyBaseDeckItem('agentsMd', opts({ workspace: wsMod, dryRun: false }))
-ok(rMod.ok === true && rMod.status === 'user_modified', 'user_modified：不自动覆盖')
+const rMod = applyBaseDeckItem('agentsMd', opts({ workspace: wsMod, memoryDir: join(TMP_ROOT, 'mem-mod'), dryRun: false }))
+ok(rMod.ok === true && rMod.status === 'up_to_date', '已含标记块 → up_to_date（不再判 user_modified）')
 ok(readBytes(agentsMod).equals(modBefore) && sameSnap(modSnapBefore, statSnap(agentsMod)), '原文件一字未动（字节 + mtime 都不变）')
-const candidate = join(wsMod, AGENTS_CANDIDATE_NAME)
-assertInsideTmp(candidate, 'candidate')
-ok(existsSync(candidate), '已另存候选文件 ' + AGENTS_CANDIDATE_NAME)
-ok(detectBom(readBytes(candidate)) === '', '候选文件无 BOM')
+ok(!existsSync(join(wsMod, AGENTS_CANDIDATE_NAME)), '不再另存候选文件（已无「覆盖」这件事）')
+// ② 带 BOM 且无标记块 → 走引导（写记忆），仍不动 AGENTS.md
 const wsBom = makeWorkspace('bom')
 const agentsBom = join(wsBom, 'AGENTS.md')
+const bomMem = join(TMP_ROOT, 'mem-bom')
 writeText(agentsBom, original, { bom: true })
-const rBom = applyBaseDeckItem('agentsMd', opts({ workspace: wsBom, dryRun: false }))
-ok(rBom.ok === false && rBom.status === 'broken', 'AGENTS.md 带 BOM → 拒绝写入')
-ok(readBytes(agentsBom).equals(readBytes(agentsBom)), '带 BOM 的文件未被改写')
+const bomBefore = readBytes(agentsBom)
+const rBom = applyBaseDeckItem('agentsMd', opts({ workspace: wsBom, memoryDir: bomMem, dryRun: false }))
+ok(rBom.ok === true && rBom.status === 'update', '带 BOM 且无标记块 → 走引导（BOM 不再是阻塞）')
+ok(readBytes(agentsBom).equals(bomBefore), '带 BOM 的文件一字未动')
+ok(existsSync(join(bomMem, 'PROJECTS', '工作秘书.md')), '引导已写入记忆')
+// ③ 不完整块 / 多块：只要有 wps:begin 就算「已注入」→ 一律不动
 const wsBroken = makeWorkspace('broken')
-writeText(join(wsBroken, 'AGENTS.md'), '# x' + NL + '<!-- wps:begin foo="1" -->' + NL + '未闭合')
-const rBroken = applyBaseDeckItem('agentsMd', opts({ workspace: wsBroken, dryRun: false }))
-ok(rBroken.ok === false && rBroken.status === 'broken', '不完整块 → 拒写')
+const brokenFile = join(wsBroken, 'AGENTS.md')
+writeText(brokenFile, '# x' + NL + '<!-- wps:begin foo="1" -->' + NL + '未闭合')
+const brokenBefore = readBytes(brokenFile)
+const rBroken = applyBaseDeckItem('agentsMd', opts({ workspace: wsBroken, memoryDir: join(TMP_ROOT, 'mem-broken'), dryRun: false }))
+ok(rBroken.status === 'up_to_date', '不完整块 → 视为已注入、不动（实测 ' + rBroken.status + '）')
+ok(readBytes(brokenFile).equals(brokenBefore), '不完整块的文件一字未动')
 const wsMulti = makeWorkspace('multi')
-writeText(join(wsMulti, 'AGENTS.md'), blockText + NL + blockText + NL)
-const rMulti = applyBaseDeckItem('agentsMd', opts({ workspace: wsMulti, dryRun: false }))
-ok(rMulti.ok === false && rMulti.status === 'multiple', '多块 → 拒写')
+const multiFile = join(wsMulti, 'AGENTS.md')
+writeText(multiFile, blockText + NL + blockText + NL)
+const multiBefore = readBytes(multiFile)
+const rMulti = applyBaseDeckItem('agentsMd', opts({ workspace: wsMulti, memoryDir: join(TMP_ROOT, 'mem-multi'), dryRun: false }))
+ok(rMulti.status === 'up_to_date', '多块 → 视为已注入、不动（实测 ' + rMulti.status + '）')
+ok(readBytes(multiFile).equals(multiBefore), '多块的文件一字未动')
 
 section('[7] 记忆种子：幂等 + 不删改已有条目')
 const wsSeed = makeWorkspace('seed')
@@ -643,6 +699,11 @@ ok(dryAll.dryRun === true && defaultAll.dryRun === true, '两批都是 dryRun=tr
 ok(dryAll.results.every((r) => r.bytesWritten === 0), 'dryRun 下 bytesWritten 全为 0')
 ok(dryAll.results.every((r) => r.dryRun === true), 'dryRun 标记透传到每一项')
 ok(planClean.setupNeeded === true, 'setupNeeded：干净工作区 + 缺键 + 缺技能 → true')
+// 授权式专项：指令层「待处理」有新旧两种形态（append = 旧直接写；update = 写引导进项目记忆），
+// 两者都必须触发首用引导，否则「其余项已就绪、只差指令层」的机器看不到入口。
+ok(computeSetupNeeded([{ id: 'agentsMd', status: 'update' }]) === true, 'setupNeeded：仅指令层待处理（授权式 update）→ true')
+ok(computeSetupNeeded([{ id: 'agentsMd', status: 'up_to_date' }]) === false, 'setupNeeded：指令层已注入且无其它缺口 → false')
+ok(computeSetupNeeded([{ id: 'agentsMd', status: 'append' }]) === true, 'setupNeeded：旧语义 append → true（兼容保留）')
 
 section('[13] 路由：GET /basedeck / POST /basedeck')
 function makeMockCtx(services) {
@@ -727,14 +788,24 @@ const rPostReal = await call('POST', '/basedeck', {
 ok(rPostReal.status === 200 && rPostReal.body.ok === true, 'POST dryRun:false → 真写成功（仅夹具）')
 ok(rPostReal.body.rejected.join(',') === 'nope', '未知 id 计入 rejected（不静默跳过）')
 ok(rPostReal.body.results.map((r) => r.id).join(',') === 'dirs,migrateMemory,memorySeed,memoryDeck,knowledgeDeck,skills,settings,agentsMd', '真写按依赖顺序执行（迁移在 dirs 之后、memorySeed 之前），agentsMd 最后')
-assertInsideTmp(join(wsRoute, 'AGENTS.md'), 'route agentsMd')
-ok(existsSync(join(wsRoute, 'AGENTS.md')), '夹具工作区里的 AGENTS.md 已写入')
+// 授权式：agentsMd 不再写工作区 AGENTS.md，改为把「待注入引导」写进项目记忆
+ok(!existsSync(join(wsRoute, 'AGENTS.md')), '授权式：AGENTS.md 不由本插件创建（不在写入范围）')
+ok(existsSync(join(routeMem, 'PROJECTS', '工作秘书.md')), '引导写入项目记忆 PROJECTS/工作秘书.md')
 ok(existsSync(join(routeMem, 'MEMORY.md')), '夹具记忆库 MEMORY.md 已写入')
 ok(existsSync(join(wsRoute, '.dsh', 'skills', 'alpha', 'SKILL.md')), '夹具技能已安装')
 ok(existsSync(join(routeHome, 'settings.yaml')), '夹具 settings.yaml 已写入')
 ok(detectBom(readBytes(join(wsRoute, 'AGENTS.md'))) === '' && detectBom(readBytes(join(routeHome, 'settings.yaml'))) === '', '真写产物一律无 BOM')
 const rPostAfter = await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsRoute))
-ok(rPostAfter.body.setupNeeded === false, '装好后 setupNeeded=false（引导完成信号）')
+// 授权式：写完引导 ≠ 指令层已注入 —— AGENTS.md 仍无标记块，引导信号必须保持 true，直到真注入。
+const afterAgents = rPostAfter.body.items.filter((it) => it.id === 'agentsMd')[0]
+ok(afterAgents.status === 'update' && rPostAfter.body.setupNeeded === true,
+  '写完引导后：AGENTS.md 仍无标记块 → update 且 setupNeeded=true（等授权注入，实测 ' + afterAgents.status + '）')
+// 闭环关闭：手工注入标记块 → 重新计划应转 up_to_date 且 setupNeeded=false
+writeText(join(wsRoute, 'AGENTS.md'), '# 我的指令' + NL + NL + blockText + NL)
+const rPostInjected = await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsRoute))
+ok(rPostInjected.body.items.filter((it) => it.id === 'agentsMd')[0].status === 'up_to_date' && rPostInjected.body.setupNeeded === false,
+  '注入标记块后：agentsMd=up_to_date 且 setupNeeded=false（闭环关闭）')
+rmSync(join(wsRoute, 'AGENTS.md'), { force: true })
 
 section('[13b] 客户端契约细节：字符串预览 / wroteAny / 单 id 独立调用 / 空串 overrides')
 const shape = (await call('GET', '/basedeck?workspace=' + encodeURIComponent(wsRoute))).body
@@ -743,7 +814,8 @@ ok(shape.items.every((it) => typeof it.autoApplyable === 'boolean' && typeof it.
 ok(shape.items.every((it) => typeof it.preview.action === 'string' && typeof it.preview.blockVersion === 'string' && typeof it.preview.contentHash === 'string'), 'preview 四字段齐全且为字符串')
 ok(shape.summary.total === 8 && typeof shape.setupNeeded === 'boolean' && typeof shape.workspace === 'string', 'summary + setupNeeded + workspace 存在')
 const wsSingle = makeWorkspace('single')
-const emptyOv = { workspace: wsSingle, defaultDomain: '', identityExpert: '', memoryDir: '', obsidianSyncDir: '' }
+const singleMem = join(TMP_ROOT, 'mem-single')
+const emptyOv = { workspace: wsSingle, defaultDomain: '', identityExpert: '', memoryDir: singleMem, obsidianSyncDir: '' }
 const singleDry = await call('POST', '/basedeck', { ids: ['agentsMd'], overrides: emptyOv }, REQ_HEADERS)
 ok(singleDry.body.dryRun === true && singleDry.body.results.length === 1, '单 id + 五项空串 overrides：dry-run 正常')
 ok(singleDry.body.wroteAny === false && singleDry.body.results[0].wroteAny === false, 'dry-run 时 wroteAny=false')
@@ -751,10 +823,10 @@ ok(!existsSync(join(wsSingle, 'AGENTS.md')), 'dry-run 未创建文件')
 const singleReal = await call('POST', '/basedeck', { ids: ['agentsMd'], dryRun: false, overrides: emptyOv }, REQ_HEADERS)
 ok(singleReal.body.ok === true && singleReal.body.results.length === 1 && singleReal.body.results[0].id === 'agentsMd', '单 id 真写独立成功（不依赖其他项）')
 ok(singleReal.body.wroteAny === true && singleReal.body.results[0].wroteAny === true, '真写成功时 wroteAny=true')
-assertInsideTmp(join(wsSingle, 'AGENTS.md'), 'single agentsMd')
-ok(existsSync(join(wsSingle, 'AGENTS.md')), '单 id 写入落到指定工作区')
-const singleAgain = await call('POST', '/basedeck', { ids: ['agentsMd'], dryRun: false, overrides: { workspace: wsSingle } }, REQ_HEADERS)
-ok(singleAgain.body.wroteAny === false && singleAgain.body.results[0].status === 'up_to_date', '本来就是最新 → wroteAny=false（客户端可据此区分）')
+ok(!existsSync(join(wsSingle, 'AGENTS.md')), '单 id 真写也不碰 AGENTS.md')
+ok(existsSync(join(singleMem, 'PROJECTS', '工作秘书.md')), '单 id 真写把引导落到指定记忆库')
+const singleAgain = await call('POST', '/basedeck', { ids: ['agentsMd'], dryRun: false, overrides: { workspace: wsSingle, memoryDir: singleMem } }, REQ_HEADERS)
+ok(singleAgain.body.results[0].status === 'update' && String(singleAgain.body.results[0].detail || '').indexOf('不重复写入') >= 0, '第二次不重复写引导（幂等）')
 
 section('[17] obsidianSyncDir 哨兵（__none__）与顶层 libraryName / memoryRoot')
 const wsOv = makeWorkspace('ov')
@@ -823,7 +895,7 @@ ok(planDerived.workspaceSource === 'derived', 'settings 有 obsidianSyncDir → 
 ok(planDerived.workspace.replace(/\\/g, '/') === wsDerived.replace(/\\/g, '/'), '反推结果 = 镜像目录的父目录')
 ok(planDerived.workspaceNote.indexOf('反推') >= 0 && planDerived.workspaceNote.indexOf('请确认') >= 0, 'derived 必须给出「请确认」提示')
 ok(planDerived.items.filter((i) => i.id === 'agentsMd')[0].detail.indexOf('反推') >= 0, 'agentsMd 的 detail 带出反推提示')
-ok(planDerived.items.filter((i) => i.id === 'agentsMd')[0].target.replace(/\\/g, '/') === join(wsDerived, 'AGENTS.md').replace(/\\/g, '/'), 'agentsMd 目标落在反推出的工作区')
+ok(planDerived.items.filter((i) => i.id === 'agentsMd')[0].target.replace(/\\/g, '/').indexOf('/PROJECTS/') >= 0, 'agentsMd 写入目标指向项目记忆（不再是 <workspace>/AGENTS.md）', 'agentsMd 目标落在反推出的工作区')
 
 const wsCwd = makeWorkspace('cwd')
 writeText(join(wsCwd, 'AGENTS.md'), '# cwd 工作区' + NL)
