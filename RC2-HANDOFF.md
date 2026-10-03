@@ -180,27 +180,30 @@ curl.exe -s "http://127.0.0.1:19387/work-personal-secretary/api/basedeck"
 
 **另一项遗留口径澄清**：`knowledgeDeck: none` **无法用 profile patch 消除** —— 知识库根 `obsidianDir` 只接受 query / overrides 显式传入（`lib/basedeck.js:934-937` 注释明写"绝不从镜像目录反推"），**没有 config 键**；但它**有 UI 入口**（核心配置页 `coreFieldObsidianDir`，`client/index.js:3664`）→ 需在页面上填，不属本 patch 范围。
 
-### 🟠 P1 —— `dsh-doc-suite` 的密钥通道（功能级）
+### ✅ P1（**已闭环**，2026-10-03 核实）—— `dsh-doc-suite` 的密钥通道
 
-`modules/dsh-doc-suite/scripts/media/gen_image.py` 读 `~/.dsh/settings.yaml` 取 ARK 密钥，而 **rc.2 首启已把该文件搬为 `settings.yaml.imported`** → 走设置页填的密钥读不到，只剩 `--api-key` / `ARK_API_KEY` 环境变量。
-**修法方向**：改从 profile 的 `cordis.patch.yml`（entry `doc-suite` 的 `config.mediaArkApiKey`）读，或明确要求走环境变量。
+> 原状：`gen_image.py` 只读 `~/.dsh/settings.yaml`，rc.2 把该文件搬为 `.imported` → 设置页填的密钥读不到，只剩 `--api-key` / `ARK_API_KEY`。
 
-### 🟠 P1 —— 自定义岗位不持久化
+**现状（证据）**：密钥来源已扩为四级、按优先级取（`modules/dsh-doc-suite/scripts/media/gen_image.py:6-7`、`:152-160`）：
+`--api-key` > 环境变量 `ARK_API_KEY` > **profile 覆盖层**（`cordis.patch.yml` 的 `doc-suite.mediaArkApiKey`，`_profile_patch_value()`，`:94-119`）> 老 `settings.yaml`（路径可用 `DSH_SETTINGS_FILE` 覆盖）。
+`modules/dsh-doc-suite/scripts/media-test.mjs:309` 有「密钥来源：rc.2 profile 覆盖层」的正向断言。**本项作废。**
 
-「新建岗位」的条目只存在**前端组件内存**（`client/index.js:3312` 的 `.concat(st.custom)`），重开即消失。
-**注意**：**岗位正文没有丢** —— 它经 `POST /identity/save` 写进记忆库 `MEMORY.md` 的「使用者身份」条目（已核实 `MEMORY.md:27` 是主人最新填的内容）。
-**修法方向**：给自定义岗位加存储（settings 键 + schema，或写 workspace 下文件）。
+### ✅ P1（**已闭环**，2026-10-03 核实）—— 自定义岗位不持久化
+
+> 原状：「新建岗位」只存在前端组件内存（`.concat(st.custom)`），重开即消失。
+
+**现状（证据）**：已有两条持久化通道 —— ① 设置键 `customJobs` / `selectedDomain`（`lib/settings.js` 的 DEFAULTS + schema，落 profile 覆盖层）；② **岗位卡片化**：新建岗位 = 在 `domainsDir` 生成一张 `card:<名称>` 卡片文件（`client/index.js:3444-3453`；持久化注释见 `:2946`），删除入口随 1.1.27 上线。**本项作废。**
 
 ### 🟡 P2 —— 其他
 
 | 项 | 说明 |
 |---|---|
-| `workspace` 无 UI 入口 | 「核心配置」页只能选 `rootDir`，没有任何地方能填 `workspace`，只能靠反推；反推错了界面上也看不出来。**设计缺口** |
-| 「底座状态明细」不显示 | core 页只做检测不展示 8 项明细（`client/index.js` 注释写「五项底座计划」但 `BASEDECK_ITEMS` 实为 8 项）。用户看不到「还差几项」是哪几项 |
+| `workspace` 的 UI 入口（**部分闭环**，2026-10-03 核实） | 首用向导（P3 初始化表单）里已有**必填**的「工作区目录」（`client/index.js:496-497`、`initCandDetectedWorkspace`）；但**「核心配置」页仍只有存储根 / 记忆库 / 知识库 / 岗位四个字段**（`:263-273`、`:3686-3742`）→ 改工作区仍需重走向导或改 profile 配置。**残留缺口：核心配置页入口** |
+| 「底座状态明细」不显示（**仍有效**，2026-10-03 核实） | core 页只做检测、不展示 8 项明细（client 全文件无 `BASEDECK_ITEMS` 引用；注释仍写「五项底座计划」而 `BASEDECK_ITEMS` 实为 8 项）。用户看不到「还差几项」是哪几项 |
 | `snapshotOrder` 等 | 标了 volatile（进表单）但消费点是 apply 时读取 → **改它仍需重启**（description 已注明） |
 | `doc-suite` 的 `SETTINGS_NS` | 常量仍是包名 `dsh-doc-suite`（rc.2 不经过它；0.1.x 注册用它）。已用别名归并兜住，未改常量 |
 | `expertInjectMax` 文案 | 已改为指向 profile patch；但它不 volatile → **rc.2 设置页看不到这条文案**（0.1.x 可见） |
-| 代码未 git 提交 | 本批改动面大，主人此前定「其他会话改动复核后一起提」，**尚未提交** |
+| ~~代码未 git 提交~~ | **已提交并推送**（2026-10-03）：`cbd5037`（代码 + 随包模板 + CHANGELOG/README）、`f5b2e60`（交接文档与测试读数），远端 `main` 已同步 |
 
 ---
 
