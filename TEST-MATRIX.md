@@ -13,19 +13,20 @@
 | 专家库 | `cd modules/dsh-experts && npm test`（5 套） |
 | 桌面形象 | `cd modules/workspace-tokenpet && npm test`（**需先 `npm install`**；CI 不装依赖故不进 CI） |
 
-## 二、逐套明细（读数一律为 2026-09-18 本机实测）
+## 二、逐套明细（集成体本体读数为 2026-10-03 本机实测；子模块读数为 2026-09-18 实测）
 
 ### 集成体本体 `modules/work-personal-secretary/scripts/`
 
 | 脚本 | 覆盖 | 读数 |
 |---|---|---|
-| `smoke-load.mjs` | 装载冒烟：mock ctx 真跑 `apply()`（注册/注入/命令/设置） | **533 / 0** |
+| `smoke-load.mjs` | 装载冒烟：mock ctx 真跑 `apply()`（注册/注入/命令/设置） | **540 / 0** |
 | `probe-test.mjs` | 环境探针（依赖项识别与降级） | **151 / 0** |
-| `install-test.mjs` | 子插件安装引擎（安装/升级/卸载/残留判定） | **244 / 0** |
-| `basedeck-test.mjs` | 配置底座：目录生成、根目录派生与反推、迁移、导入引导、技巧正文写入 | **500 / 0** |
-| `settings-api-test.mjs` | 设置 API：契约形状、ns 白名单、写入校验与脱敏 | **112 / 0** |
+| `install-test.mjs` | 子插件安装引擎（安装/升级/卸载/残留判定） | **246 / 0** |
+| `basedeck-test.mjs` | 配置底座：八项契约、目录生成、根目录派生与反推、迁移、导入引导、指令层授权式 / 直接写开关、开局包核查回路 | **598 / 0** |
+| `settings-api-test.mjs` | 设置 API：契约形状、ns 白名单、写入校验与脱敏 | **115 / 0** |
 | `identity-test.mjs` | 身份写入（按正文前缀定位、逐字节校验其余内容未变） | **73 / 0** |
-| `defaults-test.mjs` | 随包说明：md ↔ HTML 逐段逐字 + 逐字节同源、敏感串过滤、`?embed=1` 片段形态 | **59 / 0** |
+| `defaults-test.mjs` | 随包说明：md ↔ HTML 逐段逐字 + 逐字节同源、敏感串过滤、`?embed=1` 片段形态 | **61 / 0** |
+| **合计（集成体本体七套）** | `npm run test` | **1784 / 0** |
 
 ### 文档能力 `modules/dsh-doc-suite/scripts/`
 

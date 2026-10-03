@@ -3,7 +3,7 @@
 > **读者**：本模块的维护者。
 > **路径约定**：本文所有相对路径以**本文件所在目录**（`modules/work-personal-secretary/`）为基准；`<DSH_HOME>` 指 DSH 的数据根（默认 `~/.dsh`）、`<profile>` 指当前 profile 目录、`<workspace>` 指会话工作区、`<memoryDir>` 指记忆库目录、`<obsidianDir>` 指知识库（vault）根目录。
 > **口径**：只写**已实现**的行为；未实现的一律标注「本版未实现」。每条结论附 `相对路径:行号`。代码与注释/文档不一致时，本文以**代码**为准，并在 4.6 节列出已核实的不一致点。
-> **版本基线**：`package.json:3` = `1.1.13`；`client/index.js:45` 的 `BUILD = 'v1.1.13'`（由 `scripts/smoke-load.mjs:2019-2027` 断言与 `package.json` 同步）。注意 CHANGELOG 里 1.1.3 与 1.2.0 两段仍标注为**未发布**（行号随新段插入而漂移，以标题搜索为准） —— 版本号不等于已发布 tag。
+> **版本基线**：`package.json:3` = `1.1.28`；`client/index.js` 的 `BUILD = 'v1.1.28'`（由 `scripts/smoke-load.mjs` 的同步断言与 `package.json` 比对）。注意 CHANGELOG 里 1.1.3 与 1.2.0 两段仍标注为**未发布**（行号随新段插入而漂移，以标题搜索为准） —— 版本号不等于已发布 tag。**本文件其余 `相对路径:行号` 引用的时点为初稿（1.1.13），未随版本全面复核；核对行为请以代码为准。**
 
 ---
 
@@ -11,7 +11,7 @@
 
 ### 1.1 这个模块是什么、替谁做什么
 
-`modules/work-personal-secretary` 是**集成体本体**（一个 Cordis 插件），不是运行时能力提供者：它在 DSH 设置里开一个独立分区「工作秘书」，用四页签（安装与检查 / 核心配置 / 配置 / 关于与致谢）**替使用者完成三类工作**——①检查本机环境并安装/覆盖安装五个子插件；②把 DSH 底层配置（`AGENTS.md` 指令块、记忆种子、技能、设置用户层、记忆体与知识库目录骨架、使用者身份条目）**分步写进磁盘**；③渲染并打开随包说明网页。运行期能力（记忆、文档、专家、图表、桌面形象）全部由子插件自己提供，本模块不替代它们。
+`modules/work-personal-secretary` 是**集成体本体**（一个 Cordis 插件），不是运行时能力提供者：它在 DSH 设置里开一个独立分区「工作秘书」，用四页签（安装与检查 / 核心配置 / 配置 / 关于与致谢）**替使用者完成三类工作**——①检查本机环境并安装/覆盖安装五个子插件；②把 DSH 底层配置（`AGENTS.md` 指令块 —— **授权式**：默认不直接写使用者的该文件，只往记忆库写「待注入引导」；另有记忆种子、技能、设置用户层、记忆体与知识库目录骨架、使用者身份条目）**分步写进磁盘**；③渲染并打开随包说明网页。运行期能力（记忆、文档、专家、图表、桌面形象）全部由子插件自己提供，本模块不替代它们。
 
 出处：`README.md:3-5`（定位）、`lib/index.js:2-11`（第一大功能=安装器，第二大功能=配置落地）、`README.md:11-16`（能力与状态表）。
 
@@ -262,7 +262,7 @@
 4. **`POST /basedeck` 缺省写八项**：`ids` 缺省 = `BASEDECK_ID_LIST`（`lib/api.js:1173`），调用方若依赖旧的 5 项缺省集合必须显式传 `ids`（`CHANGELOG.md:29`）。
 5. **`dryRun` 三处默认值**：`POST /basedeck`（`lib/api.js:1172`）、`POST /identity/save`（`lib/api.js:756`）、`POST /settings/write`（`lib/settings-api.js:263`）都默认 `true`，只有显式 `dryRun:false` 才落盘。
 6. **迁移只补缺失、不覆盖同名不同内容的文件**：冲突会留在目标侧（`lib/basedeck.js:3086`、`:3112`），并计入 `conflicts`；不要期望迁移能「覆盖修正」目标里的旧文件。
-7. **`AGENTS.md` 块被手改时不覆盖**：判定为 `user_modified` 时新版块写到同目录的 `AGENTS.wps-new.md`，由使用者人工合并（`lib/basedeck.js:99`、`:402-443`）。
+7. **`AGENTS.md` 默认不被本插件改动**（授权式，使用者 2026-10-02 定）：只检测有没有标记块；未注入时往项目记忆 `PROJECTS/工作秘书.md` 写「待注入引导」。**例外 = 直接写模式**（设置项 `agentsMdDirectWrite: true`）：此时块被手改（`user_modified`）会另存 `AGENTS.wps-new.md` 候选文件、不覆盖（`lib/basedeck.js:99`、`applyAgentsMd` 的直接写分支）。
 8. **发布件中立性是硬约束**：`cordis.patch.yml` 顶部注释要求「不含任何个人路径、称呼或凭据」（`cordis.patch.yml:1-7`）；`scripts/defaults-test.mjs:42-48` 定义了一份禁用串清单（个人路径、称呼、客户与项目名、凭据样例等），对 `defaults/*.md` 与渲染出的 HTML 做命中检查（`:88-95`、`:202`）——维护随包说明时必须先跑该脚本。
 9. **本模块不读、不写任何凭据**：探针里的 WPS 只做 COM ProgID 实例化并退出、不打开文档（`lib/probe.js:76-77`）；`settings` 枚举一律 `redactSecrets: true`（`lib/settings-api.js:360`），错误信息会把盘符绝对路径替换为 `<path>`（`:271-276`）。
 
