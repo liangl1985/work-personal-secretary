@@ -375,6 +375,8 @@ migrateMemory up_to_date     -> 无需迁移
 | 工作区（`workspace`） | **设置页新增同名 volatile 项**：优先级 = 设置用户层 > 部署配置（profile patch 的 `config.workspace`）> 按镜像目录反推 > 进程目录。`lib/api.js` 新增 `settingsWorkspace()` / `currentWorkspace()`（与 `currentObsidianDir()` 同构、实时读），三处计划器注入点由静态常量改为该函数；**改后无需重启** |
 | 底座状态可见 | 核心配置页新增「配置底座状态」卡：只读 `GET /basedeck`（dry-run），展示**工作区当前值 + 来源**（配置 / 本次填入 / 反推 / 当前目录 / 未解析）与说明、**8 项**各自名称 / 状态 / 落点 / 说明、汇总（共 N 项 · 待写 · 已是最新 · 被阻塞）与「重新检测」按钮 |
 
-**回归**：七套 **1787 / 0**（basedeck 600 · smoke 541 · install 246 · probe 151 · settings-api 115 · identity 73 · defaults 61）+ `npm run check`。
+**回归**：七套 **1790 / 0**（basedeck 600 · smoke 544 · install 246 · probe 151 · settings-api 115 · identity 73 · defaults 61）+ `npm run check`。
+
+**1.1.30（同日补丁）**：界面复核发现底座状态卡**汇总行显示字面占位符**（`共 {total} 项 …`）—— 根因是渲染误用单占位符的 `fill()`，已改用 `fillAll()` 并加数值兜底；`smoke-load` 补 3 条断言（不再出现占位符字面）。
 
 **待重启复验（1.1.28 + 1.1.29 两批一起）**：① `agentsMd` 应为 `up_to_date`（1.1.28 已实测通过）；② 设置页应出现「工作区目录」与「指令层直接写开关」两项；③ 核心配置页应出现「配置底座状态」卡（工作区来源 + 8 项明细）。

@@ -134,7 +134,9 @@
 1. **工作区进设置页**：新增 volatile 设置项 `workspace`，优先级 = **设置用户层 > 部署配置（profile patch `config.workspace`）> 按镜像目录反推 > 进程目录**；`lib/api.js` 的 `settingsWorkspace()` / `currentWorkspace()` 与既有 `currentObsidianDir()` 同构（实时读 → 改后即时生效），三处计划器注入点由静态常量改为函数。
 2. **核心配置页「配置底座状态」卡**：只读 `GET /basedeck`（dry-run，绝不写盘），展示工作区当前值与来源、8 项状态 / 落点 / 说明、汇总与「重新检测」。
 
-**回归**：七套 **1787 / 0**（basedeck 600 · smoke 541 · install 246 · probe 151 · settings-api 115 · identity 73 · defaults 61）+ `npm run check`。
+**回归**：七套 **1790 / 0**（basedeck 600 · smoke 544 · install 246 · probe 151 · settings-api 115 · identity 73 · defaults 61）+ `npm run check`。
+
+**1.1.30（同日补丁）**：修 1.1.29 的显示缺陷 —— 底座状态卡汇总行误用 `fill()`（单占位符）导致显示 `共 {total} 项 …` 字面；改用 `fillAll()` + 数值兜底，`smoke-load` 补 3 条断言。
 
 ---
 
