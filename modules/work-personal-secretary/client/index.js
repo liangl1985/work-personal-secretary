@@ -44,7 +44,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
 
     const NS = 'work-personal-secretary'
     /** 构建/界面标记：与 package.json 的 version 同步 */
-    const BUILD = 'v1.1.29'
+    const BUILD = 'v1.1.30'
 
     /** 宿主路由前缀（与宿主半 lib 注册的路径一致） */
     const API = '/work-personal-secretary/api'
@@ -3857,6 +3857,7 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
         user_modified: 'initStatusUserModified', ahead: 'initStatusAhead', broken: 'initStatusBroken',
         multiple: 'initStatusMultiple', none: 'initStatusNone',
       }
+      const bdNum = (v) => (typeof v === 'number' && isFinite(v)) ? v : 0
       const bdStatusStyle = (s) => (s === 'up_to_date' ? S.badgeOk
         : (s === 'update' || s === 'append' ? S.badgeWarn
           : (s === 'none' || s === 'user_modified' || s === 'ahead' ? S.badgeSkip : S.badgeMissing)))
@@ -3874,9 +3875,9 @@ const useRef = typeof React.useRef === 'function' ? React.useRef : function noop
             h('div', { key: 'v', style: S.itemDetail }, (bdData && bdData.workspace) ? String(bdData.workspace) : t('coreBdWorkspaceNone')),
             (bdData && bdData.workspaceNote) ? h('div', { key: 'n', style: S.labelHint }, String(bdData.workspaceNote)) : null,
           ]),
-          bdSummary ? h('div', { key: 'sum', style: S.labelHint }, fill(t('coreBdSummary'), {
-            total: bdSummary.total, toWrite: bdSummary.toWrite, upToDate: bdSummary.upToDate,
-            blocked: bdSummary.blocked, none: bdSummary.none,
+          bdSummary ? h('div', { key: 'sum', style: S.labelHint }, fillAll(t('coreBdSummary'), {
+            total: bdNum(bdSummary.total), toWrite: bdNum(bdSummary.toWrite), upToDate: bdNum(bdSummary.upToDate),
+            blocked: bdNum(bdSummary.blocked), none: bdNum(bdSummary.none),
           })) : null,
           (bd.phase === 'error' && bd.error) ? h('div', { key: 'err', style: S.warnLine }, t('coreBdFailed') + '：' + bd.error) : null,
           h('div', { key: 'list' }, bdItems.map((it) => h('div', { key: String(it && it.id), style: S.row }, [

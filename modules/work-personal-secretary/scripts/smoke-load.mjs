@@ -2079,6 +2079,34 @@ ok(cText.includes('记忆库插件') && cText.includes('Python 解释器') && cT
 ok(cText.includes('记忆库工作目录在本页填写，不作为解锁条件'), '门禁卡说明：记忆库工作目录不参与判定（设计定稿 §3.1）')
 ok(cText.includes('配置底座状态') && cText.includes('工作区目录') && cText.includes('重新检测'),
   '核心配置页新增「配置底座状态」卡（工作区来源 + 8 项明细 + 重新检测；2026-10-03）')
+
+// 汇总行必须**真填充**（2026-10-03 修：曾误用单占位符的 fill() → 界面显示字面 {total}/{toWrite}）
+const BD_SUM = Object.assign({}, BD_GET, {
+  workspace: 'E:/lina', workspaceSource: 'config', setupNeeded: false,
+  summary: { total: 5, toWrite: 2, upToDate: 1, blocked: 2, none: 0 },
+})
+globalThis.fetch = async (url, opts) => {
+  const u = String(url)
+  if (u.indexOf('/basedeck') >= 0) return jsonRes(BD_SUM)
+  if (u.indexOf('/check') >= 0) return jsonRes(OK_CHECK)
+  if (u.indexOf('/domain/list') >= 0) return jsonRes({ ok: true, prefix: '使用者身份：', maxChars: 200, items: DOMAIN_ITEMS })
+  return { ok: false, status: 404, json: async () => ({ ok: false, error: 'not found' }) }
+}
+hookSlots = []
+hookCursor = 0
+effectQueue = []
+let bdSumTree = expand(reg.render({ initialTab: 'core' }))
+for (const fn of effectQueue.slice()) { try { fn() } catch (err) { /* 断言在下面 */ } }
+await tick(60)
+hookCursor = 0
+effectQueue = []
+bdSumTree = expand(reg.render({ initialTab: 'core' }))
+const bdSumText = collect(bdSumTree, []).join(' | ')
+ok(bdSumText.indexOf('{total}') < 0 && bdSumText.indexOf('{toWrite}') < 0 && bdSumText.indexOf('{none}') < 0,
+  '底座状态卡汇总行占位符全部填充（不出现字面 {total}/{toWrite}/{none}）')
+ok(bdSumText.includes('共 5 项') && bdSumText.includes('待写 2') && bdSumText.includes('已是最新 1') && bdSumText.includes('被阻塞 2'),
+  '汇总行显示真实计数（共 5 项 / 待写 2 / 已是最新 1 / 被阻塞 2）')
+ok(bdSumText.includes('E:/lina') && bdSumText.includes('来自配置'), '工作区行显示当前值与来源（E:/lina · 来自配置）')
 const gatedBox = findAll(cTree, (x) => Boolean(x.props && x.props.style && x.props.style.pointerEvents === 'none'), [])[0]
 ok(Boolean(gatedBox), '门禁未就绪：正文容器 pointer-events:none（整页灰化）')
 
