@@ -123,7 +123,18 @@
 
 **版本与文案**：`package.json` / `client/index.js` 的 `BUILD` → `1.1.28`；`CHANGELOG.md` 加 1.1.28 段；`initSafety`（中英）、`defaults/AGENTS.zh-CN.md` 头部、`README.md`（`workspace` / P3）口径同步。
 
-**收尾（2026-10-03 使用者授权「全部按推荐来」后执行）**：① 代码与本文件**随本次提交入库**（提交信息分列「本场实现」与「复核依据」）；② 「直接写」可选开关**已实现**（默认关闭 = 授权式）；③ 真机复验需**重启 DSH**（会中断当前会话，由使用者择时执行）—— 重启后 `agentsMd` 应由 `user_modified` 转 `up_to_date`。
+**收尾（2026-10-03 使用者授权「全部按推荐来」后执行）**：① 代码与本文件**随本次提交入库**（提交信息分列「本场实现」与「复核依据」）；② 「直接写」可选开关**已实现**（默认关闭 = 授权式）；③ 真机复验**已完成**（2026-10-03 重启后实测）：`agentsMd` 由 `user_modified` 转 **`up_to_date`**、`summary` 由 `upToDate 6 / blocked 2` 变为 **`7 / 1`**、`setupNeeded=false`、`workspace=E:/lina (config)` —— 与预测一致。
+
+---
+
+## 0.5 第四批：核心配置页「看得见」+ 工作区可配置（2026-10-03，本体 1.1.29，已提交）
+
+对应另两条 P2 遗留（原 `RC2-HANDOFF.md` §3 P2）：`workspace` 无 UI 入口、底座状态明细不展示。
+
+1. **工作区进设置页**：新增 volatile 设置项 `workspace`，优先级 = **设置用户层 > 部署配置（profile patch `config.workspace`）> 按镜像目录反推 > 进程目录**；`lib/api.js` 的 `settingsWorkspace()` / `currentWorkspace()` 与既有 `currentObsidianDir()` 同构（实时读 → 改后即时生效），三处计划器注入点由静态常量改为函数。
+2. **核心配置页「配置底座状态」卡**：只读 `GET /basedeck`（dry-run，绝不写盘），展示工作区当前值与来源、8 项状态 / 落点 / 说明、汇总与「重新检测」。
+
+**回归**：七套 **1787 / 0**（basedeck 600 · smoke 541 · install 246 · probe 151 · settings-api 115 · identity 73 · defaults 61）+ `npm run check`。
 
 ---
 

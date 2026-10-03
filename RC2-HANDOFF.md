@@ -198,8 +198,8 @@ curl.exe -s "http://127.0.0.1:19387/work-personal-secretary/api/basedeck"
 
 | 项 | 说明 |
 |---|---|
-| `workspace` 的 UI 入口（**部分闭环**，2026-10-03 核实） | 首用向导（P3 初始化表单）里已有**必填**的「工作区目录」（`client/index.js:496-497`、`initCandDetectedWorkspace`）；但**「核心配置」页仍只有存储根 / 记忆库 / 知识库 / 岗位四个字段**（`:263-273`、`:3686-3742`）→ 改工作区仍需重走向导或改 profile 配置。**残留缺口：核心配置页入口** |
-| 「底座状态明细」不显示（**仍有效**，2026-10-03 核实） | core 页只做检测、不展示 8 项明细（client 全文件无 `BASEDECK_ITEMS` 引用；注释仍写「五项底座计划」而 `BASEDECK_ITEMS` 实为 8 项）。用户看不到「还差几项」是哪几项 |
+| ~~`workspace` 无 UI 入口~~ | **已闭环（1.1.29）**：① 设置页新增同名 volatile 项 `workspace` —— 优先级 = 设置用户层 > 部署配置（profile patch）> 反推 > 进程目录，改后即时生效；② 核心配置页「配置底座状态」卡显示当前解析值与来源。首用向导的必填项仍在（`client/index.js:496-497`） |
+| ~~「底座状态明细」不显示~~ | **已闭环（1.1.29）**：核心配置页新增「配置底座状态」卡 —— 只读 `GET /basedeck`（dry-run），逐项列出 8 项的名称 / 状态徽章 / 落点 / 说明，附汇总与「重新检测」按钮 |
 | `snapshotOrder` 等 | 标了 volatile（进表单）但消费点是 apply 时读取 → **改它仍需重启**（description 已注明） |
 | `doc-suite` 的 `SETTINGS_NS` | 常量仍是包名 `dsh-doc-suite`（rc.2 不经过它；0.1.x 注册用它）。已用别名归并兜住，未改常量 |
 | `expertInjectMax` 文案 | 已改为指向 profile patch；但它不 volatile → **rc.2 设置页看不到这条文案**（0.1.x 可见） |
@@ -362,4 +362,19 @@ migrateMemory up_to_date     -> 无需迁移
 1. 代码与本文件**随本次提交入库**（10+ 个文件，提交信息分列「本场实现」与「复核依据」）；
 2. 「**直接写**」已实现为**可选开关** `agentsMdDirectWrite`（默认关闭 = 授权式；旧三条路径由开关启用，不再是死代码）；
 3. 真机复验需**重启 DSH**（会中断当前会话，由使用者择时执行）；
-4. §9.6 的 P2 其余项仍然有效（`workspace` 无 UI 入口、底座明细不展示、`snapshotOrder` 需重启、doc-suite 密钥通道）。
+4. §9.6 的 P2 其余项：`workspace` 无 UI 入口与「底座明细不展示」**已在 1.1.29 闭环**（见 §11）；`snapshotOrder` 需重启、`expertInjectMax` 文案在 rc.2 不可见仍有效。
+
+---
+
+## 11. 2026-10-03 第二波补记 —— 核心配置页「看得见」+ 工作区可配置（本体 **1.1.29**，已提交）
+
+> 对应 §3 P2 的两条。使用者 2026-10-03 授权处理。
+
+| 项 | 落地 |
+|---|---|
+| 工作区（`workspace`） | **设置页新增同名 volatile 项**：优先级 = 设置用户层 > 部署配置（profile patch 的 `config.workspace`）> 按镜像目录反推 > 进程目录。`lib/api.js` 新增 `settingsWorkspace()` / `currentWorkspace()`（与 `currentObsidianDir()` 同构、实时读），三处计划器注入点由静态常量改为该函数；**改后无需重启** |
+| 底座状态可见 | 核心配置页新增「配置底座状态」卡：只读 `GET /basedeck`（dry-run），展示**工作区当前值 + 来源**（配置 / 本次填入 / 反推 / 当前目录 / 未解析）与说明、**8 项**各自名称 / 状态 / 落点 / 说明、汇总（共 N 项 · 待写 · 已是最新 · 被阻塞）与「重新检测」按钮 |
+
+**回归**：七套 **1787 / 0**（basedeck 600 · smoke 541 · install 246 · probe 151 · settings-api 115 · identity 73 · defaults 61）+ `npm run check`。
+
+**待重启复验（1.1.28 + 1.1.29 两批一起）**：① `agentsMd` 应为 `up_to_date`（1.1.28 已实测通过）；② 设置页应出现「工作区目录」与「指令层直接写开关」两项；③ 核心配置页应出现「配置底座状态」卡（工作区来源 + 8 项明细）。
