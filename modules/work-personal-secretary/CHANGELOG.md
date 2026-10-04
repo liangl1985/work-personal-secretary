@@ -1,5 +1,16 @@
 # CHANGELOG · work-personal-secretary（集成体本体）
 
+## 1.1.31 — 2026-10-04（指令层升级：总控兼读制 → Lead 制；委派默认走智能体团队）
+
+> 背景：DSH 0.2.0-rc.2 的组合里已含 `@deepseek-ai/dsh-experimental-agent-team-profile`（Agent Teams 已可用）。旧的「总控兼读制」写在没有团队能力的时期，默认"派子代理"；现按团队形态重写。使用者 2026-10-04 定原则：**单一性、小型任务更多直接触发智能体团队**。
+
+- `modules/work-personal-secretary/defaults/AGENTS.zh-CN.md`：新增《工作方式（总控兼读制 · Lead 制）》段（默认授权 / 触发判据 / **按专家库划分的 5 个常设岗位** / 派单流程 / 等待与验收 / 红线）；`template-version` 2 → 3。
+- **默认授权随包生效**：安装集成体即视为使用者同意长期授权 —— 符合判据的任务直接按团队模式派单、无需逐次询问；使用者可在工作区块外收窄或撤销。
+- **常设岗位按 `dsh-experts` 专家库制作**（5 个：`infosec` / `finance` / `invest` / `docsmith` / `verifier`，覆盖 19 位专家 / 6 域）—— 成员按岗位常设复用，规避"名字永久、单队上限 16"被小任务逐次耗尽的坑。
+- 根 `README.md`「默认约定」第 2 条改写；**第 5 条修正**为"默认一位专家都不常驻"（原文写"常驻只有一位身份专家"，与 2026-09-14 起的实际口径不符）。
+- `defaults/global-memory.seed.md` 协作方式条同步；`RELEASE-CHECKLIST.md` 第一节对应门禁项升级。
+- **未发版**：本次只改随包内容，`package.json` 版本与安装态未动（要在已装环境生效需升版本 + 重装 + 重启 DSH）。
+
 ## 1.1.30 — 2026-10-03（修 1.1.29 的显示缺陷：底座状态卡汇总行占位符未填充）
 
 > 使用者 2026-10-03 界面复核发现：卡片本身渲染正常，但**汇总行显示字面** `共 {total} 项 · 待写 {toWrite} …`。
@@ -116,7 +127,7 @@
   而 \`index.js\` 传给 \`installApi\` 的 deps 里**并没有 dshHome**，DSH 主进程也**没有** \`DSH_HOME\` 环境变量
   → 两处都空 → 返回空目录 → 卡片读不到。
 - **修**：改用 \`lib/\` 里**与配置底座同源**的 \`resolveDshHome()\`（\`deps.dshHome\` 测试注入 →
-  环境变量 → **\`~/.dsh\` 兜底**）。实测（清掉 DSH_HOME 后）返回 \`C:\\Users\\liangl\\.dsh\`，兜底生效。
+  环境变量 → **\`~/.dsh\` 兜底**）。实测（清掉 DSH_HOME 后）返回 \`<DSH_HOME>\`，兜底生效。
 - **顺带**：profile 覆盖层里 \`selectedDomain\` 的旧前缀 \`custom:\` 改为 \`card:\`（卡片 id 前缀统一），
   否则下拉按 id 找不到该项、会回退显示第一个预置岗位。改前已再备份。
 - 回归：smoke-load 536 / 0；其余见提交说明。
@@ -143,7 +154,7 @@
   卡片 id 前缀统一为 `card:`（`/setup-state` 的非预置派生同步）。
 - **迁移**：已把配置里旧 `customJobs` 的那一条写成卡片文件
   `<DSH_HOME>/data/work-personal-secretary/domains/工控信息安全售前.json`（label 已去后缀）。
-  备份：`E:\lina\backup\2026-10-02-岗位卡片化前\cordis.patch.yml.bak-*`。
+  备份：`<工作区>\backup\2026-10-02-岗位卡片化前\cordis.patch.yml.bak-*`。
 - 回归：smoke-load 536 / 0；其余见提交说明。
 
 ## 1.1.21 — 2026-10-02（岗位来源修正：读回配置里本来就有的岗位值）

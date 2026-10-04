@@ -15,13 +15,17 @@
   - [x] `modules/work-personal-secretary/defaults/global-memory.seed.md`（**全局记忆种子**）存在，含语言偏好条目（2026-09-18 由仓库根迁入模块内，确保随包）
   - [x] `modules/work-personal-secretary/defaults/AGENTS.zh-CN.md`（**工作区指令模板**）存在，含《语言》段（同批迁入）
   - [x] 根 README「默认约定」段写明该默认，并指向 `defaults/`
-- [x] **运行架构**：总控兼读制写进默认约定（主对话轻量：拆解/派单/核对/监督/纠正/对外沟通；重活交专家子代理）
+- [x] **运行架构（2026-10-04 升级为 Lead 制）**：总控兼读制写进默认约定（主对话轻量：拆解/派单/核对/监督/纠正/对外沟通；**委派优先走智能体团队**）
+  - [x] `defaults/AGENTS.zh-CN.md` **template-version 3** 含《工作方式（总控兼读制 · Lead 制）》段：默认授权、触发判据、**按专家库划分的 5 个常设岗位**、派单流程、等待与验收、红线
+  - [x] **默认授权随包生效**：安装集成体即视为使用者同意"单一小型任务直接按团队模式派单、无需逐次询问"；使用者可在工作区块外收窄或撤销
+  - [x] **成员按岗位常设复用**的口径已写明（名字永久 / 不可复用 / 单队上限 16），避免"每个小任务新建 teammate"
 - [x] **敏感行业例外**：军工/商密/烟草/数据安全类内容由主上下文直接处理、不派子代理（红线，随包默认）
 
 ## 二、中立与隐私（发布件不得夹带私人信息/身份）
 
 - [x] **不得出现任何个人化身份**：私有助手名（如本机自用名）、"主人/主人级"等私有称呼、个人邮箱/账号
   - 检索方式：`git grep -n -i -e '<私有名>' -e '主人'`，命中项须为通用表述（使用者/助手）
+  - ⚠️ **例外登记（2026-10-04）**：本文件第 26–27 行的「主人/主人级」与被检词 `主人` **是检测规则本身**（反面断言），**有意保留、不得改写**；正文叙述一律用「使用者/助手」，历史段落发现自称口径应按此改正
 - [x] **不得出现私有路径**：`E:\...` / `E:/...`（**正反斜杠两种写法都要扫**）、`~/.dsh/memories/<私有名>`、私有工作区/知识库目录名、第三方克隆目录等；默认路径必须通用（如 `~/.dsh/data/dsh-work-memory/memory`）
   - 检索方式：`git grep -n -i -E 'E:[\\/]'`、`git grep -n -i -E '\.dsh/memories/'`、`git grep -n -i '<私有名>'`（含注释与测试夹具，不只文档）
   - ✅ **2026-09-18 复查与例外登记（本次发布的整改项）**：对**随包件**（各模块 `package.json` 的 `files` 白名单，含注释、规格 `_note`、夹具与 CHANGELOG）做全量重扫 —— 私有盘符路径 **0 命中**；私有助手名与私有称呼**仅剩反面断言**，**有意保留并在下条登记**。整改明细见根 [`CHANGELOG.md`](CHANGELOG.md) v1.1.8 段第三节与各模块 patch 段。
@@ -91,7 +95,7 @@
 ### 身份专家与问题归属流程
 
 - [x] **默认一位都不常驻**（0.3.0 身份退场）：`identityExpert` **留空 = 不注入**（身份由 work-memory 记忆承担）；显式填写才常驻一位——发布件不得写成"默认常驻身份专家"
-- [x] 其余专家按**问题归属判断**补位：命中单一 → 按该专家视角原生处理；**跨领域/需独立作业 → 派子代理**（`expert_recall` 取 persona 后**内联进 `subagent.prompt`**）；未命中 → **原生处理**（宁缺勿滥，不硬套视角）
+- [x] 其余专家按**问题归属判断**补位：命中单一 → 按该专家视角原生处理；**跨领域/需独立作业 → 派团队成员**（一次性场景用 `subagent`；`expert_recall` 取 persona 后**内联进任务或 `subagent.prompt`**）；未命中 → **原生处理**（宁缺勿滥，不硬套视角）
 - [x] **匹配排序修复（0.1.4）**：排序改为「显式指定 > 任务实证 > 总分 > index 顺序」，`expertMinScore` 只卡零实证候选 —— 实测「这份采购合同的钱怎么算、税怎么处理」由投标策略师改为命中法务，上限 2 且无身份专家时「法务 + 会计」同时选中
 - [x] **提示词注入分级（0.1.4）**：默认形态 `auto` 只注入**精简卡**（464–509 字符/位）；`expertInjectDetail`（auto / card / full，**full 可回退旧行为**）与 `expertInjectBudgetChars`（0.1.4 时默认 1400，0.3.x 起默认 **2000**，超预算按序降级并标注）；`expert_recall` 与派子代理仍取全文；实测单轮 3674 → 1218 字符
 - [x] `enabledDomains` / `enabledExperts` 只**收窄**"参与自动匹配"的集合，不改变上述流程
@@ -99,7 +103,7 @@
 
 ### 注入上限与 TOKEN 提示
 
-- [x] `expertInjectMax` **写死 4**（2026-09-15 主人定：设置页不再提供该项，`settings.js` DEFAULTS = 4 / schema default = 4 / `cordis.patch.yml` base = 4 **三处一致**）；`lib/limits.js` 的 `INJECT_MAX_HARD = 4` 为硬边界（越界 clamp 到 4，绝不静默超限）
+- [x] `expertInjectMax` **写死 4**（2026-09-15 使用者定：设置页不再提供该项，`settings.js` DEFAULTS = 4 / schema default = 4 / `cordis.patch.yml` base = 4 **三处一致**）；`lib/limits.js` 的 `INJECT_MAX_HARD = 4` 为硬边界（越界 clamp 到 4，绝不静默超限）
 - [x] `expertSecondThreshold`（默认 **0.3**，2026-09-15 由 0.8 调为 0.3）确实约束域专家第 2/3 位——其**任务证据** ≥ 第 1 位 × 该值才补位（0.3.0 起为纯证据比较；通用型专家另走 `expertGeneralMinEvidence` 绝对门槛）
 - [x] **`expertMinScore` 已于 0.3.0 移除**（零命中不注入落地后无任何代码路径使用）
 - [x] 设置项齐全且默认值正确（共 **19 项**，dsh-experts 0.5.1 schema 全量）：`expertsEnabled` / `expertCatalogEnabled` / `disciplineEnabled` / `disciplineMemoryDir` / `defaultDomain` / `identityExpert` / `enabledDomains` / `enabledExperts` / `expertInjectMax`（**写死 4，设置页不提供该项**）/ `expertSecondThreshold` / `expertGeneralMax` / `expertGeneralMinEvidence` / `skillInjectEnabled` / `skillBudgetChars` / `expertInjectDetail` / `expertInjectBudgetChars` / `expertShowBanner` / `expertSetupDone`（0.4.0 新增 `expertGeneralMax` / `expertGeneralMinEvidence` 两键，16 → 18；`expertSetupDone` 由安装引导自动写入）
@@ -169,8 +173,8 @@
 
 - [x] **能力配置页**：`expertInjectMax` 显示 **2** 且无「已覆盖」徽章（甲案生效）；24+12 键可读可写；写入两次 revision 实测递增（R1→R2）；`settings.yaml` 落盘新值且**原有键与注释逐字保留**、无 `.bak-`（官方原子写路径如此）；**免重启热生效**
 - [x] **UI 打磨**（真机反馈驱动）：「重新读取」加读取中态 + 「最近读取 HH:MM:SS」（首次加载也算）；能力配置页改**插件级标签**（一次只渲染当前插件）；设置页跳转修正 —— 宿主左侧导航项实际叫 **「用量小宠物」且不本地化**，候选名收敛为 `["用量小宠物","workspace-tokenpet"]`（设置分区 id 随模块 id 更名），并修掉「硬依赖 `<nav>`」（真机面板非 nav 元素）→ **跳转真机验证成功**
-- [x] **桌宠热区收敛**（`287000e`）：外层容器改 `pointerEvents:none` / `cursor:default`，新增精确热区层只覆盖形象渲染框（等高等宽），`stageChip` 移出热区；**主人刷新后实测**：左右空白不再响应点击/拖动、点形象仍能开合、拖动正常
-- [x] **配置引导页两缺陷**（`28e398d`）：桌面版「浏览…」改走 `window.__DSH_DESKTOP_PICK_DIRECTORY__`（原走 host `pickDirectory` 必抛 native 能力错）；第 1 步「重新检查」按阶段刷新、不再自动跳步；「浏览…」按钮 `nowrap` 修竖排。**重启后主人复验通过**
+- [x] **桌宠热区收敛**（`287000e`）：外层容器改 `pointerEvents:none` / `cursor:default`，新增精确热区层只覆盖形象渲染框（等高等宽），`stageChip` 移出热区；**使用者刷新后实测**：左右空白不再响应点击/拖动、点形象仍能开合、拖动正常
+- [x] **配置引导页两缺陷**（`28e398d`）：桌面版「浏览…」改走 `window.__DSH_DESKTOP_PICK_DIRECTORY__`（原走 host `pickDirectory` 必抛 native 能力错）；第 1 步「重新检查」按阶段刷新、不再自动跳步；「浏览…」按钮 `nowrap` 修竖排。**重启后使用者复验通过**
 - [x] 提交推送：`e388985`(P4) · `4a3afe7` · `287000e` · `24c16d0` · `219e11a`(experts 升版) · `d20a648`(NOTICE)
 
 ## 三点九、构建产物同轨门禁（2026-09-14 增）
