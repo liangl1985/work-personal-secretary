@@ -128,14 +128,35 @@ for (const root of ROOTS) {
 const skills = [...byName.values()].map((x) => toCapabilityEntry(x.summary)).filter(Boolean)
   .sort((a, b) => String(a.skill).localeCompare(String(b.skill)))
 const fingerprint = createHash('sha256').update(fingerprintParts.join('|')).digest('hex').slice(0, 16)
+
+/**
+ * 绝对路径 → 可移植占位（随包件不得含个人绝对路径；见 CHANGELOG 0.5.20）。
+ * 命中顺序：projectRoot > DSH_HOME > DSH_AGENTS_HOME；都不命中时只留末级目录名。
+ */
+function portablePath(p) {
+  const s = String(p || '')
+  if (!s) return ''
+  const rules = [
+    [projectRoot, '<projectRoot>'],
+    [dshHome, '<DSH_HOME>'],
+    [agentsHome, '<DSH_AGENTS_HOME>'],
+  ]
+  for (const [base, tag] of rules) {
+    if (base && s.toLowerCase().startsWith(String(base).toLowerCase())) {
+      return tag + s.slice(String(base).length).replace(/\\/g, '/')
+    }
+  }
+  return '<external>/' + (s.split(/[\\/]/).pop() || '')
+}
+
 const payload = {
   version: 1,
   updated: new Date().toISOString().slice(0, 10),
-  note: '能力层兜底索引（运行时首选宿主 skill 注册表 ctx.skills）。由 scripts/skill-index.mjs 生成，可重建、可入库。',
-  projectRoot,
+  note: '能力层兜底索引（运行时首选宿主 skill 注册表 ctx.skills）。由 scripts/skill-index.mjs 生成，可重建、可入库。路径字段已脱敏为占位符（<projectRoot> / <DSH_HOME> / <DSH_AGENTS_HOME>）。',
+  projectRoot: portablePath(projectRoot),
   fingerprint,
-  roots: rootsMeta,
-  skills,
+  roots: rootsMeta.map((r) => ({ ...r, dir: portablePath(r.dir) })),
+  skills: skills.map((s) => ({ ...s, source: { ...s.source, path: portablePath(s.source && s.source.path) } })),
 }
 
 console.log('【能力层索引】projectRoot = ' + projectRoot)

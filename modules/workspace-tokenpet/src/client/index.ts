@@ -1164,7 +1164,7 @@ const petFixed: CSSProperties = {
   justifyContent: 'flex-end',
   // 整框不再吃事件：热区收敛到内层 petHitbox（只覆盖形象实际渲染框）。
   // 原先 auto + cursor:pointer 让预留留白（宽 +128px）也可点、可拖，
-  // 形象左侧约 128px 空白一起响应（2026-09-13 主人反馈「左右触发区偏大、近似正方形」）。
+  // 形象左侧约 128px 空白一起响应（2026-09-13 使用者反馈「左右触发区偏大、近似正方形」）。
   pointerEvents: 'none',
   userSelect: 'none',
   cursor: 'default',

@@ -14,7 +14,7 @@
   夹具默认隔离 `DSH_PROFILE_DIR` —— 修复前夹具只隔离老设置文件，会读到**真实 profile 的密钥**，
   使「无密钥 → exit 4」用例失效并**意外调用了一次云端**（exit 0）；隔离后不再触网。
 - **真机实测**：`check` → `密钥状态 : 已配置（长度 46，不回显）`，来源
-  `C:\Users\liangl\.dsh\profiles\desktop\cordis.patch.yml`（密钥值全程不回显、不入库）。
+  `<DSH_HOME>\.dsh\profiles\desktop\cordis.patch.yml`（密钥值全程不回显、不入库）。
 
 ## 0.7.19 — 2026-09-30（DSH 0.2.0-rc.2 设置迁移：具名导出 Config + volatile）
 

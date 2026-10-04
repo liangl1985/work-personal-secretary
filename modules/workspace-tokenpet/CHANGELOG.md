@@ -48,7 +48,7 @@
   `lifetime-ledger.ts` 的 refresh）→ 一条空日志不再让整次索引变 error，也不再阻塞「清空历史」。
 - **确认框不再卡住**：清空**失败**后同样收起「确认永久清空?」（此前仅成功时收起）。
 - **「模型未知」兜底**：`contextTimeline` 未带 `model` 时（新会话 / 刚重启）退回**本会话聚合里用得最多的模型**。
-- 处置留痕：那一个空日志已**备份移出**到 `E:\lina\backup\2026-09-30-空会话文件\`（移出后 `/index/status`
+- 处置留痕：那一个空日志已**备份移出**到 `<工作区>\backup\2026-09-30-空会话文件\`（移出后 `/index/status`
   立即由 `error` 转 `ready`、`failed: 0`）。
 - 复核：`npm run typecheck` 通过；`npm test` 12 pass / 0 fail；profile 已同步（SHA256 逐一致）。
 

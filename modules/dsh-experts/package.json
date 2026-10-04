@@ -1,6 +1,6 @@
 {
   "name": "dsh-experts",
-  "version": "0.5.19",
+  "version": "0.5.20",
   "description": "DSH 专家库模块（work-personal-secretary 子模块）：按行业域组织的专家 persona 库——5 个行业域（infosec 信息安全 / accounting 财务 / hr 人力资源 / coding 代码编程 / finance 金融）+ 1 个通用职能域（general：核查/排版与表述/文档/演示/设计），共 19 位。每轮由任务文本驱动：命中关键词才注入对口专家（默认上限 4），**零命中不注入**；默认只注入 L1 精简卡（约 0.4-0.6 千字符/位），派子代理时用 expert_recall 取全文内联进 prompt。0.3.0 起不再注册 /expert 命令。",
   "keywords": [
     "deepseek",
@@ -26,6 +26,7 @@
   "files": [
     "lib",
     "experts",
+    "!experts/skills.auto.json",
     "scripts",
     "cordis.patch.yml",
     "CHANGELOG.md",
@@ -40,7 +41,8 @@
     "smoke": "node scripts/smoke-load.mjs",
     "coexist": "node scripts/coexist.mjs",
     "card": "node scripts/card-preview.mjs",
-    "check": "node --check lib/index.js && node --check lib/match.js && node --check lib/store.js && node --check lib/inject.js && node --check lib/settings.js && node --check lib/limits.js && node --check lib/capability.js && node --check lib/discipline.js"
+    "check": "node --check lib/index.js && node --check lib/match.js && node --check lib/store.js && node --check lib/inject.js && node --check lib/settings.js && node --check lib/limits.js && node --check lib/capability.js && node --check lib/discipline.js",
+    "check:publish-paths": "node scripts/check-publish-paths.mjs"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

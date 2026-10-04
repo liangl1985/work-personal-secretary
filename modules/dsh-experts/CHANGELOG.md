@@ -2,6 +2,18 @@
 
 本插件的版本历史。
 
+## 0.5.20 — 2026-10-04（发布件脱敏：能力层索引与变更日志不再含个人路径）
+
+> 触发：T5 发布风险处置（复核抽检 74 条 + 一手 `npm pack --dry-run` 复现）。原 `experts/skills.auto.json`
+> 含本机个人路径（`<工作区>`、`<DSH_HOME>`），且该文件在 `files` 白名单内 → 打包必然外泄。
+
+- **生成侧脱敏**：`scripts/skill-index.mjs` 新增 `portablePath()`，`projectRoot` / `roots[].dir` / `source.path`
+  一律写占位符（`<projectRoot>` / `<DSH_HOME>` / `<DSH_AGENTS_HOME>`）；现有索引已就地脱敏（内容不变，仅路径字段）。
+- **打包白名单**：`files` 增加否定项 `"!experts/skills.auto.json"`（双保险；运行时兜底仅在该文件缺失时退化，宿主 `ctx.skills` 优先，行为不变）。
+- **新增门禁**：`scripts/check-publish-paths.mjs`（`npm run check:publish-paths`）——先打包再逐字节扫，覆盖
+  `.gitignore` 拦不住的路径与 JSON 双反斜杠转义写法（此前两次静态扫描均漏检）。
+- 影响面：运行时行为不变；发布产物少一个可重建的兜底索引文件。
+
 ## 0.5.19 — 2026-10-02（补触发关键词：桌宠 / 面板 / account / Remote / 余额 等）
 
 > 触发：真机句式「桌宠面板要改余额显示，走官方 account Remote」此前 **no-evidence**（0 命中），
