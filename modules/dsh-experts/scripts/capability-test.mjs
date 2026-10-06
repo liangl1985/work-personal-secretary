@@ -22,7 +22,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { toCapabilityEntry, capabilityLine, routeCapabilities, estimateCapabilityCost, createSkillSource } from '../lib/capability.js'
+import { toCapabilityEntry, toPortablePath, capabilityLine, routeCapabilities, estimateCapabilityCost, createSkillSource } from '../lib/capability.js'
 import { allSkills, readSkillsIndex } from '../lib/store.js'
 import { COST_SKILL_LINE, SKILL_BUDGET_DEFAULT } from '../lib/limits.js'
 
@@ -69,6 +69,8 @@ t('条目映射：已知技能走 SKILL_HINTS（中文名 + 关键词），未�
   assert.ok(unknown.when_to_use.length <= 60, '未知技能的定位应被截断：' + unknown.when_to_use.length)
   assert.equal(toCapabilityEntry({ description: 'x' }), null, '无名技能应返回 null')
   assert.equal(toCapabilityEntry(null), null, '空输入应返回 null')
+  assert.equal(toPortablePath('E:\\mock\\office-word'), '<external>/office-word', '可移植化：盘符绝对路径应转为占位')
+  assert.equal(toCapabilityEntry(summary('office-word')).source.path, '<external>/office-word', '构造侧不得原样产出本机绝对路径')
 })
 
 // ---------- 2. 指针行 ----------

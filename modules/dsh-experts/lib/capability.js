@@ -34,6 +34,18 @@ export const SKILL_HINTS = {
   vibe: { label: 'Vibe 编排（VCO）', when: '需要冻结需求、限定执行、强制验证的受治理运行时入口时', keywords: ['vibe', 'vco', '受治理', '冻结需求'] },
 }
 
+/** 个人绝对路径 → 可移植占位（随包件/日志/外发不得含个人绝对路径）。 */
+export function toPortablePath(p) {
+  const s = String(p ?? '')
+  if (!s) return ''
+  const home = String(process.env.DSH_HOME || '').replace(/[\\/]+$/, '')
+  if (home && s.toLowerCase().startsWith(home.toLowerCase())) {
+    return '<DSH_HOME>' + s.slice(home.length).replace(/\\/g, '/')
+  }
+  if (/^[A-Za-z]:[\\/]/.test(s)) return '<external>/' + (s.split(/[\\/]/).pop() || '')
+  return s.replace(/\\/g, '/')
+}
+
 /** 截断到 max 字符（超长加省略号；指针行必须短，避免吃掉预算） */
 export function shorten(text, max = 60) {
   const s = String(text ?? '').replace(/\s+/g, ' ').trim()
@@ -60,7 +72,7 @@ export function toCapabilityEntry(summary) {
     trigger_keywords: Array.isArray(hint.keywords) && hint.keywords.length > 0 ? hint.keywords : [name],
     source: {
       origin: String(summary?.provider || summary?.source || 'skills'),
-      path: summary?.resourceBase?.path || '',
+      path: toPortablePath(summary?.resourceBase?.path),
     },
   }
 }

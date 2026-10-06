@@ -42,7 +42,8 @@
     "coexist": "node scripts/coexist.mjs",
     "card": "node scripts/card-preview.mjs",
     "check": "node --check lib/index.js && node --check lib/match.js && node --check lib/store.js && node --check lib/inject.js && node --check lib/settings.js && node --check lib/limits.js && node --check lib/capability.js && node --check lib/discipline.js",
-    "check:publish-paths": "node scripts/check-publish-paths.mjs"
+    "check:publish-paths": "node scripts/check-publish-paths.mjs",
+    "prepack": "npm run check:publish-paths"
   },
   "engines": {
     "node": "^22.19.0 || >=24.0.0"

@@ -34,6 +34,11 @@
 - [x] 个性化只走**设置页用户层**（不写进包内默认层）
 - [x] 包内**不含任何记忆数据**（首装记忆为空，人设由首轮对话填充）
 - [x] README 写清：本地 / 明文 / 不联网 / 无遥测；安装、首次使用、卸载与数据留存三段齐全
+- [ ] **发布件路径门禁（每模块打包后逐字节扫）**：命中个人盘符路径或私有称呼即不发布
+  - 命令：`node modules/dsh-experts/scripts/check-publish-paths.mjs`（内部先 `npm pack`、再解包扫包内文件；手动入口 `npm run check:publish-paths`，见 `package.json:45`）
+  - 为什么不能只扫源码：`files` 白名单与 `.gitignore` 是两套规则，且 JSON 里是转义的**双反斜杠**，单反斜杠检索式会漏检
+  - 豁免（命中即预期，不得删除或改写）：`modules/work-personal-secretary/scripts/defaults-test.mjs:43-44` · `probe-test.mjs:550`（护栏词表定义）· `settings-api-test.mjs:199,442`（夹具假路径）
+  - CI 同款步骤：`.github/workflows/ci.yml` 末尾「发布件个人路径门禁」
 
 ## 三、工程门禁
 

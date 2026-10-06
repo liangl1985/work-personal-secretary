@@ -100,3 +100,15 @@ jobs:
           done
           if [ "$fail" -ne 0 ]; then exit 1; fi
           echo "子项目必需文件齐备"
+
+      # 发布路径门禁（P5）：先打包、再逐字节扫包内文件内容，命中个人盘符路径或私有称呼即红。
+      # 覆盖 .gitignore 拦不住的发布件（files 白名单优先），并兼容 JSON 双反斜杠转义写法。
+      # 门禁脚本位于各模块 scripts/check-publish-paths.mjs；新增同类生成物的模块按同路径放一份即自动纳入。
+      - name: 发布件个人路径门禁
+        run: |
+          fail=0
+          for g in $(git ls-files '*/scripts/check-publish-paths.mjs'); do
+            echo "== $g =="
+            node "$g" || fail=1
+          done
+          if [ "$fail" -ne 0 ]; then exit 1; fi
